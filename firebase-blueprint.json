@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with roles",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "displayName": { "type": "string" }
+      }
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A real estate project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Project name" },
+        "description": { "type": "string", "description": "Project description" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A marketing team",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Team name" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "BudgetRegistration": {
+      "title": "Budget Registration",
+      "description": "Monthly budget registration by a team for a project",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "teamName": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "amount": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["projectId", "teamName", "month", "amount"]
+    },
+    "WeeklyCost": {
+      "title": "Weekly Cost",
+      "description": "Actual marketing cost spent weekly",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "weekNumber": { "type": "number" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["projectId", "weekNumber", "amount"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "History of changes",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "collection": { "type": "string" },
+        "docId": { "type": "string" },
+        "data": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userEmail": { "type": "string" },
+        "userId": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Projects collection"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Teams collection"
+    },
+    "/budgets/{budgetId}": {
+      "schema": "BudgetRegistration",
+      "description": "Monthly budget registrations"
+    },
+    "/costs/{costId}": {
+      "schema": "WeeklyCost",
+      "description": "Weekly actual costs"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Audit logs for tracking changes"
+    }
+  }
+}

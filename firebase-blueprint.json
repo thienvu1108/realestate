@@ -2,12 +2,24 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile with roles",
+      "description": "User profile with roles and project assignments",
       "type": "object",
       "properties": {
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "user"] },
-        "displayName": { "type": "string" }
+        "role": { 
+          "type": "string", 
+          "enum": ["super_admin", "admin", "mod", "user"] 
+        },
+        "displayName": { "type": "string" },
+        "fullName": { "type": "string" },
+        "teamName": { "type": "string" },
+        "assignedProjects": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "List of project IDs assigned to Mod"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
     "Project": {
@@ -17,6 +29,8 @@
       "properties": {
         "name": { "type": "string", "description": "Project name" },
         "description": { "type": "string", "description": "Project description" },
+        "region": { "type": "string", "description": "Region name" },
+        "type": { "type": "string", "description": "Project type" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
@@ -81,6 +95,28 @@
         "userEmail": { "type": "string" },
         "userId": { "type": "string" }
       }
+    },
+    "Region": {
+      "title": "Region",
+      "description": "A geographic region or area",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Type": {
+      "title": "Type",
+      "description": "A project type (e.g., High-rise, Low-rise)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
     }
   },
   "firestore": {
@@ -107,6 +143,14 @@
     "/auditLogs/{logId}": {
       "schema": "AuditLog",
       "description": "Audit logs for tracking changes"
+    },
+    "/regions/{regionId}": {
+      "schema": "Region",
+      "description": "Geographic regions"
+    },
+    "/types/{typeId}": {
+      "schema": "Type",
+      "description": "Project types"
     }
   }
 }

@@ -9,12 +9,38 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "thienvu1108@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
+
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+        (getUserData().role == 'super_admin' ||
+          (request.auth.token.email == "thienvu1108@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (isSuperAdmin() || getUserData().role == 'admin');
+    }
+
+    function isMod() {
+      return isAuthenticated() && getUserData().role == 'mod';
+    }
+
+    function isGDDA() {
+      return isAuthenticated() && getUserData().role == 'gdda';
+    }
+
+    function isUser() {
+      return isAuthenticated() && getUserData().role == 'user';
+    }
+
+    function canViewProject(projectId) {
+      return isAdmin() || isMod() ||
+             (isGDDA() && projectId in getUserData().assignedProjects) ||
+             isUser();
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -23,15 +49,11 @@ service cloud.firestore {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
-    function isValidTimestamp(ts) {
-      return ts is timestamp;
-    }
-
     // ===============================================================
     // Projects
     // ===============================================================
     match /projects/{projectId} {
-      allow read: if isAuthenticated();
+      allow read: if canViewProject(projectId);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -51,40 +73,62 @@ service cloud.firestore {
     // Users
     // ===============================================================
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin();
+      allow read: if isAdmin() || isMod() || isOwner(userId);
+      // Only Super Admin can change roles or assigned projects
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role && !('assignedProjects' in request.resource.data.diff(resource.data).affectedKeys())) || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Budgets
     // ===============================================================
     match /budgets/{budgetId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() 
-        && request.resource.data.amount is number 
-        && request.resource.data.projectId is string;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow read: if canViewProject(resource.data.projectId);
+      allow create: if isUser() || isAdmin();
+      allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
+      allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Costs
     // ===============================================================
     match /costs/{costId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() 
-        && request.resource.data.amount is number 
-        && request.resource.data.projectId is string;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow read: if canViewProject(resource.data.projectId);
+      allow create: if isUser() || isAdmin();
+      allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
+      allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Audit Logs
     // ===============================================================
     match /auditLogs/{logId} {
-      allow read: if isAuthenticated();
+      allow read: if isAdmin() || isMod();
       allow create: if isAuthenticated();
+    }
+
+    // ===============================================================
+    // Regions
+    // ===============================================================
+    match /regions/{regionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Types
+    // ===============================================================
+    match /types/{typeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }

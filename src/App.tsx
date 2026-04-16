@@ -93,6 +93,7 @@ export default function App() {
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('register');
+  const [isBackingUp, setIsBackingUp] = useState(false);
 
   // Helper for Marketing Month (21st of prev month to 20th of current month)
   const getMarketingMonth = (date: Date | any) => {
@@ -154,25 +155,54 @@ export default function App() {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const budget = payload.find((p: any) => p.dataKey === 'budget' || p.name === 'Ngân sách')?.value || 0;
+      const actual = payload.find((p: any) => p.dataKey === 'actual' || p.name === 'Thực chi')?.value || 0;
+      const diff = budget - actual;
+      const percent = budget > 0 ? (actual / budget) * 100 : 0;
+
       return (
-        <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-100 min-w-[200px]">
-          <p className="text-sm font-bold text-slate-900 mb-2 border-b pb-2 border-slate-50">{label}</p>
-          <div className="space-y-1.5">
+        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[240px] animate-in fade-in zoom-in duration-200">
+          <div className="flex items-center justify-between mb-3 border-b pb-2 border-slate-100">
+            <p className="text-sm font-bold text-slate-800">{label}</p>
+            <Badge variant={percent > 100 ? "destructive" : percent > 90 ? "secondary" : "default"} className="text-[10px] px-1.5 h-5">
+              {percent.toFixed(1)}%
+            </Badge>
+          </div>
+          
+          <div className="space-y-2.5">
             {payload.map((entry: any, index: number) => (
-              <div key={index} className="flex items-center justify-between gap-4">
+              <div key={index} className="flex items-center justify-between group">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.fill }} />
-                  <span className="text-xs text-slate-500">{entry.name}:</span>
+                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: entry.fill }} />
+                  <span className="text-xs font-medium text-slate-500">{entry.name}</span>
                 </div>
-                <span className="text-xs font-bold text-slate-900">{formatCurrency(entry.value)}</span>
+                <span className="text-xs font-bold text-slate-900 tabular-nums">
+                  {formatCurrency(entry.value)}
+                </span>
               </div>
             ))}
-            {payload.length === 2 && (
-              <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between gap-4">
-                <span className="text-xs text-slate-500">Chênh lệch:</span>
-                <span className={`text-xs font-bold ${payload[0].value - payload[1].value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {formatCurrency(payload[0].value - payload[1].value)}
-                </span>
+
+            {(budget > 0 || actual > 0) && (
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chênh lệch</span>
+                  <span className={`text-xs font-bold tabular-nums ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
+                  </span>
+                </div>
+                
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${percent > 100 ? 'bg-rose-500' : percent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(percent, 100)}%` }}
+                  />
+                </div>
+                
+                <p className="text-[10px] text-center text-slate-400 italic">
+                  {percent > 100 
+                    ? `Vượt ngân sách ${formatCurrency(actual - budget)}` 
+                    : `Còn lại ${formatCurrency(budget - actual)}`}
+                </p>
               </div>
             )}
           </div>
@@ -346,6 +376,8 @@ export default function App() {
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
               role: role,
+              fullName: '',
+              teamName: '',
               assignedProjects: [],
               createdAt: serverTimestamp()
             };
@@ -493,6 +525,72 @@ export default function App() {
     }
   };
 
+  const handleGoogleBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      // 1. Get Auth URL
+      const urlRes = await fetch('/api/auth/google/url');
+      const { url } = await urlRes.json();
+
+      // 2. Open Popup
+      const authWindow = window.open(url, 'google_auth_popup', 'width=600,height=700');
+      
+      if (!authWindow) {
+        toast.error('Vui lòng cho phép popup để tiếp tục sao lưu.');
+        setIsBackingUp(false);
+        return;
+      }
+
+      // 3. Wait for success message
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+          window.removeEventListener('message', handleMessage);
+          
+          // 4. Perform Backup
+          toast.info('Đang chuẩn bị dữ liệu sao lưu...');
+          
+          const backupData = [
+            { collectionName: 'Dự án', docs: projects },
+            { collectionName: 'Vùng_KhuVực', docs: regions },
+            { collectionName: 'Loại_Hình', docs: types },
+            { collectionName: 'Team', docs: teams },
+            { collectionName: 'Ngân_Sách', docs: budgets },
+            { collectionName: 'Thực_Chi', docs: costs },
+            { collectionName: 'Nhật_Ký', docs: auditLogs },
+            { collectionName: 'Người_Dùng', docs: allUsers }
+          ];
+
+          const backupRes = await fetch('/api/backup/sheets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              data: backupData,
+              fileName: `Backup_Mayhomes_${format(new Date(), 'yyyyMMdd_HHmmss')}`
+            })
+          });
+
+          const result = await backupRes.json();
+          if (result.success) {
+            toast.success('Sao lưu thành công!');
+            if (result.spreadsheetUrl) {
+              window.open(result.spreadsheetUrl, '_blank');
+            }
+          } else {
+            toast.error('Sao lưu thất bại: ' + result.error);
+          }
+          setIsBackingUp(false);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+    } catch (error) {
+      console.error('Backup error:', error);
+      toast.error('Có lỗi xảy ra trong quá trình sao lưu.');
+      setIsBackingUp(false);
+    }
+  };
+
   const logout = () => signOut(auth);
 
   const logAction = async (action: string, collectionName: string, docId: string, data: any) => {
@@ -602,8 +700,10 @@ export default function App() {
         teamName: onboardingTeam
       }));
       
+      // Auto-fill form fields
       setImplementerName(onboardingName.trim());
       setSelectedTeamName(onboardingTeam);
+      
       setShowOnboarding(false);
       toast.success('Thông tin đã được cập nhật');
     } catch (error) {
@@ -826,11 +926,16 @@ export default function App() {
     }
   };
 
+  const [isBulkDeleteTeamsDialogOpen, setIsBulkDeleteTeamsDialogOpen] = useState(false);
+
   const handleBulkDeleteTeams = async () => {
     if (selectedTeamIds.length === 0 || isDeletingTeams) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedTeamIds.length} team đã chọn?`)) return;
-    
+    setIsBulkDeleteTeamsDialogOpen(true);
+  };
+
+  const confirmBulkDeleteTeams = async () => {
     setIsDeletingTeams(true);
+    setIsBulkDeleteTeamsDialogOpen(false);
     console.log('Bulk deleting teams:', selectedTeamIds);
     try {
       const batch = writeBatch(db);
@@ -849,10 +954,15 @@ export default function App() {
     }
   };
 
+  const [isDeleteAllTeamsDialogOpen, setIsDeleteAllTeamsDialogOpen] = useState(false);
+
   const handleDeleteAllTeams = async () => {
     if (teams.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ team? Hành động này không thể hoàn tác.')) return;
-    
+    setIsDeleteAllTeamsDialogOpen(true);
+  };
+
+  const confirmDeleteAllTeams = async () => {
+    setIsDeleteAllTeamsDialogOpen(false);
     try {
       const batch = writeBatch(db);
       teams.forEach(t => {
@@ -1237,9 +1347,10 @@ export default function App() {
       });
       await logAction('CREATE', 'budgets', docRef.id, { projectName: project?.name || 'N/A', amount: budgetAmount, implementer: implementerName });
       setBudgetAmount('');
-      setImplementerName('');
+      // Keep implementerName and selectedTeamName from profile for next entry
+      if (!userProfile?.fullName) setImplementerName('');
       setSelectedProjectId('');
-      setSelectedTeamName('');
+      if (!userProfile?.teamName) setSelectedTeamName('');
       setIsConfirmBudgetOpen(false);
       toast.success('Đã đăng ký ngân sách');
     } catch (error) {
@@ -1775,6 +1886,11 @@ export default function App() {
                   {(isAdmin || isMod) && (
                     <TabsTrigger value="audit" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                       <History className="w-4 h-4 mr-2" /> Nhật ký hệ thống
+                    </TabsTrigger>
+                  )}
+                  {isAdmin && (
+                    <TabsTrigger value="backup" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <History className="w-4 h-4 mr-2" /> Sao lưu
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -3433,6 +3549,42 @@ export default function App() {
                   </Card>
                 </TabsContent>
               )}
+              {isAdmin && (
+                <TabsContent value="backup" className="space-y-6">
+                  <Card className="border-none shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Sao lưu sang Google Sheets</CardTitle>
+                      <CardDescription>Xuất toàn bộ dữ liệu hệ thống sang một tệp Google Spreadsheet mới.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+                        <p className="font-bold mb-1">Lưu ý:</p>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Bạn cần đăng nhập bằng tài khoản Google có quyền tạo tệp trên Google Drive.</li>
+                          <li>Hệ thống sẽ tạo một tệp Spreadsheet mới với các sheet tương ứng cho từng bảng dữ liệu.</li>
+                          <li>Quá trình này có thể mất vài giây tùy thuộc vào lượng dữ liệu.</li>
+                        </ul>
+                      </div>
+                      <Button 
+                        onClick={handleGoogleBackup} 
+                        disabled={isBackingUp}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {isBackingUp ? (
+                          <>
+                            <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                            Đang sao lưu...
+                          </>
+                        ) : (
+                          <>
+                            <BarChart3 className="w-4 h-4 mr-2" /> Bắt đầu sao lưu sang Google Sheets
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
 
             {/* Delete Project Confirmation Dialog */}
@@ -3467,6 +3619,42 @@ export default function App() {
                     <div className="flex justify-end gap-3 mt-4">
                       <Button variant="outline" onClick={() => setIsDeleteTeamDialogOpen(false)}>Hủy</Button>
                       <Button variant="destructive" onClick={confirmDeleteTeam}>Xóa Team</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Bulk Delete Teams Confirmation Dialog */}
+                <Dialog open={isBulkDeleteTeamsDialogOpen} onOpenChange={setIsBulkDeleteTeamsDialogOpen}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều Team
+                      </DialogTitle>
+                      <DialogDescription>
+                        Bạn có chắc chắn muốn xóa <strong>{selectedTeamIds.length}</strong> team đã chọn? Hành động này không thể hoàn tác.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-3 mt-4">
+                      <Button variant="outline" onClick={() => setIsBulkDeleteTeamsDialogOpen(false)}>Hủy</Button>
+                      <Button variant="destructive" onClick={confirmBulkDeleteTeams}>Xác nhận xóa</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete All Teams Confirmation Dialog */}
+                <Dialog open={isDeleteAllTeamsDialogOpen} onOpenChange={setIsDeleteAllTeamsDialogOpen}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa tất cả Team
+                      </DialogTitle>
+                      <DialogDescription>
+                        Hành động này sẽ xóa <strong>TẤT CẢ</strong> team trong hệ thống và không thể hoàn tác. Bạn có chắc chắn?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-3 mt-4">
+                      <Button variant="outline" onClick={() => setIsDeleteAllTeamsDialogOpen(false)}>Hủy</Button>
+                      <Button variant="destructive" onClick={confirmDeleteAllTeams}>Xác nhận xóa TẤT CẢ</Button>
                     </div>
                   </DialogContent>
                 </Dialog>

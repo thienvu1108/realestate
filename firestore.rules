@@ -87,7 +87,9 @@ service cloud.firestore {
     // Budgets
     // ===============================================================
     match /budgets/{budgetId} {
-      allow read: if canViewProject(resource.data.projectId);
+      allow read: if isAdmin() || isMod() || 
+                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
+                    (isUser() && resource.data.userEmail == request.auth.token.email);
       allow create: if isUser() || isAdmin();
       allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
       allow delete: if isAdmin();
@@ -97,7 +99,9 @@ service cloud.firestore {
     // Costs
     // ===============================================================
     match /costs/{costId} {
-      allow read: if canViewProject(resource.data.projectId);
+      allow read: if isAdmin() || isMod() || 
+                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
+                    (isUser() && resource.data.userEmail == request.auth.token.email);
       allow create: if isUser() || isAdmin();
       allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
       allow delete: if isAdmin();

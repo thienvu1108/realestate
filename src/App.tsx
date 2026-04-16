@@ -4,6 +4,7 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
+  browserLocalPersistence,
   User
 } from 'firebase/auth';
 import { 
@@ -105,12 +106,37 @@ export default function App() {
     return format(d, 'yyyy-MM');
   };
 
+  const getReportingPeriod = (monthStr: string) => {
+    if (!monthStr) return '';
+    try {
+      const [year, month] = monthStr.split('-').map(Number);
+      const endDate = new Date(year, month - 1, 20);
+      const startDate = new Date(year, month - 2, 21);
+      return `(${format(startDate, 'dd/MM')} - ${format(endDate, 'dd/MM')})`;
+    } catch (e) {
+      return '';
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
       maximumFractionDigits: 0
     }).format(value);
+  };
+
+  const formatNumberWithCommas = (value: string | number) => {
+    if (value === undefined || value === null || value === '') return '';
+    const stringValue = value.toString().replace(/,/g, '');
+    return stringValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  const handleNumberInputChange = (setter: (val: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/,/g, '');
+    if (rawValue === '' || /^\d+$/.test(rawValue)) {
+      setter(rawValue);
+    }
   };
 
   const safeFormat = (date: any, formatStr: string) => {
@@ -255,7 +281,7 @@ export default function App() {
   const [selectedProjectIdsForType, setSelectedProjectIdsForType] = useState<string[]>([]);
 
   // Onboarding states
-  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[] } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingName, setOnboardingName] = useState('');
   const [onboardingTeam, setOnboardingTeam] = useState('');
@@ -267,6 +293,7 @@ export default function App() {
   const [reportType, setReportType] = useState('all');
   const [reportMonth, setReportMonth] = useState(getMarketingMonth(new Date()));
   const [reportWeek, setReportWeek] = useState('all');
+  const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportProjectSearch, setReportProjectSearch] = useState('');
   const [reportTeamSearch, setReportTeamSearch] = useState('');
@@ -280,8 +307,10 @@ export default function App() {
   const [isBulkUpdateRegionDialogOpen, setIsBulkUpdateRegionDialogOpen] = useState(false);
   const [isAddingRegion, setIsAddingRegion] = useState(false);
   const [isAddingTeam, setIsAddingTeam] = useState(false);
+  const [isAddingType, setIsAddingType] = useState(false);
   const [isDeletingTeams, setIsDeletingTeams] = useState(false);
   const [isDeletingRegions, setIsDeletingRegions] = useState(false);
+  const [isDeletingTypes, setIsDeletingTypes] = useState(false);
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
 
   const isAdmin = userRole === 'super_admin' || userRole === 'admin';
@@ -301,58 +330,63 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Check/Create user profile
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        let role: 'super_admin' | 'admin' | 'mod' | 'user' = 'user';
-        if (firebaseUser.email === 'thienvu1108@gmail.com') {
-          role = 'super_admin';
-        }
-
-        if (!userDoc.exists()) {
-          const initialProfile = {
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            role: role,
-            assignedProjects: [],
-            createdAt: serverTimestamp()
-          };
-          await setDoc(userDocRef, initialProfile);
-          setUserProfile(initialProfile);
-          setShowOnboarding(true);
-        } else {
-          const data = userDoc.data();
-          role = data?.role || 'user';
-          setUserProfile(data || null);
+      try {
+        if (firebaseUser) {
+          // Check/Create user profile
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
           
-          // If profile exists but missing fullName or teamName, show onboarding
-          if (!data?.fullName || !data?.teamName) {
-            setOnboardingName(data?.fullName || '');
-            setOnboardingTeam(data?.teamName || '');
+          let role: 'super_admin' | 'admin' | 'mod' | 'user' = 'user';
+          if (firebaseUser.email === 'thienvu1108@gmail.com') {
+            role = 'super_admin';
+          }
+
+          if (!userDoc.exists()) {
+            const initialProfile = {
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              role: role,
+              assignedProjects: [],
+              createdAt: serverTimestamp()
+            };
+            await setDoc(userDocRef, initialProfile);
+            setUserProfile(initialProfile);
             setShowOnboarding(true);
           } else {
-            // Auto-fill implementer name and team if profile is complete
-            setImplementerName(data.fullName);
-            setSelectedTeamName(data.teamName);
+            const data = userDoc.data();
+            role = data?.role || 'user';
+            setUserProfile(data || null);
+            
+            // If profile exists but missing fullName or teamName, show onboarding
+            if (!data?.fullName || !data?.teamName) {
+              setOnboardingName(data?.fullName || '');
+              setOnboardingTeam(data?.teamName || '');
+              setShowOnboarding(true);
+            } else {
+              // Auto-fill implementer name and team if profile is complete
+              setImplementerName(data.fullName);
+              setSelectedTeamName(data.teamName);
+            }
           }
-        }
-        
-        setUserRole(role);
-        setUser(firebaseUser);
-        if (role === 'super_admin' || role === 'admin') {
-          setActiveTab('admin');
+          
+          setUserRole(role);
+          setUser(firebaseUser);
+          if (role === 'super_admin' || role === 'admin') {
+            setActiveTab('admin');
+          } else {
+            setActiveTab('register');
+          }
         } else {
-          setActiveTab('register');
+          setUser(null);
+          setUserRole(null);
+          setUserProfile(null);
+          setShowOnboarding(false);
         }
-      } else {
-        setUser(null);
-        setUserRole(null);
-        setUserProfile(null);
-        setShowOnboarding(false);
+      } catch (error) {
+        console.error('Auth State Error:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -437,12 +471,25 @@ export default function App() {
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
+      // Ensure persistence is set to local
+      await auth.setPersistence(browserLocalPersistence);
       await signInWithPopup(auth, provider);
       toast.success('Đăng nhập thành công');
-    } catch (error) {
-      console.error(error);
-      toast.error('Đăng nhập thất bại');
+    } catch (error: any) {
+      console.error('Login Error:', error);
+      let message = 'Đăng nhập thất bại';
+      if (error.code === 'auth/popup-blocked') {
+        message = 'Trình duyệt đã chặn cửa sổ bật lên. Vui lòng cho phép bật lên để đăng nhập.';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        message = 'Yêu cầu đăng nhập đã bị hủy.';
+      } else if (error.code === 'auth/unauthorized-domain') {
+        message = 'Tên miền này chưa được ủy quyền trong Firebase Console.';
+      } else if (error.message) {
+        message = `Lỗi: ${error.message}`;
+      }
+      toast.error(message);
     }
   };
 
@@ -784,6 +831,7 @@ export default function App() {
     if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedTeamIds.length} team đã chọn?`)) return;
     
     setIsDeletingTeams(true);
+    console.log('Bulk deleting teams:', selectedTeamIds);
     try {
       const batch = writeBatch(db);
       selectedTeamIds.forEach(id => {
@@ -794,6 +842,7 @@ export default function App() {
       toast.success(`Đã xóa ${selectedTeamIds.length} team`);
       setSelectedTeamIds([]);
     } catch (error) {
+      console.error('Bulk delete teams error:', error);
       handleFirestoreError(error, OperationType.DELETE, 'teams');
     } finally {
       setIsDeletingTeams(false);
@@ -826,18 +875,19 @@ export default function App() {
     if (names.length === 0) return;
 
     setIsAddingRegion(true);
+    console.log('Adding regions:', names);
     toast.info(`Đang thêm ${names.length} vùng/khu vực...`);
     let successCount = 0;
     let duplicateCount = 0;
     const existingNames = new Set(regions.map(r => r.name.toLowerCase()));
 
-    for (const name of names) {
-      if (existingNames.has(name.toLowerCase())) {
-        duplicateCount++;
-        continue;
-      }
+    try {
+      for (const name of names) {
+        if (existingNames.has(name.toLowerCase())) {
+          duplicateCount++;
+          continue;
+        }
 
-      try {
         const docRef = await addDoc(collection(db, 'regions'), {
           name,
           createdAt: serverTimestamp(),
@@ -846,19 +896,20 @@ export default function App() {
         await logAction('CREATE', 'regions', docRef.id, { name });
         successCount++;
         existingNames.add(name.toLowerCase());
-      } catch (error) {
-        console.error('Error adding region:', error);
-        handleFirestoreError(error, OperationType.WRITE, 'regions');
       }
-    }
-    
-    setNewRegionName('');
-    setIsAddingRegion(false);
-    if (successCount > 0) {
-      toast.success(`Đã thêm ${successCount} vùng/khu vực mới`);
-    }
-    if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} vùng/khu vực đã tồn tại và bị bỏ qua`);
+      
+      setNewRegionName('');
+      if (successCount > 0) {
+        toast.success(`Đã thêm ${successCount} vùng/khu vực mới`);
+      }
+      if (duplicateCount > 0) {
+        toast.warning(`${duplicateCount} vùng/khu vực đã tồn tại và bị bỏ qua`);
+      }
+    } catch (error) {
+      console.error('Error adding region:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'regions');
+    } finally {
+      setIsAddingRegion(false);
     }
   };
 
@@ -1030,22 +1081,23 @@ export default function App() {
 
   const handleAddType = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTypeName.trim()) return;
+    if (!newTypeName.trim() || isAddingType) return;
     
     const names = newTypeName.split('\n').map(n => n.trim()).filter(n => n !== '');
     if (names.length === 0) return;
 
+    setIsAddingType(true);
     let successCount = 0;
     let duplicateCount = 0;
     const existingNames = new Set(types.map(t => t.name.toLowerCase()));
 
-    for (const name of names) {
-      if (existingNames.has(name.toLowerCase())) {
-        duplicateCount++;
-        continue;
-      }
+    try {
+      for (const name of names) {
+        if (existingNames.has(name.toLowerCase())) {
+          duplicateCount++;
+          continue;
+        }
 
-      try {
         const docRef = await addDoc(collection(db, 'types'), {
           name,
           createdAt: serverTimestamp(),
@@ -1054,17 +1106,19 @@ export default function App() {
         await logAction('CREATE', 'types', docRef.id, { name });
         successCount++;
         existingNames.add(name.toLowerCase());
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, 'types');
       }
-    }
-    
-    setNewTypeName('');
-    if (successCount > 0) {
-      toast.success(`Đã thêm ${successCount} loại hình mới`);
-    }
-    if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} loại hình đã tồn tại và bị bỏ qua`);
+      
+      setNewTypeName('');
+      if (successCount > 0) {
+        toast.success(`Đã thêm ${successCount} loại hình mới`);
+      }
+      if (duplicateCount > 0) {
+        toast.warning(`${duplicateCount} loại hình đã tồn tại và bị bỏ qua`);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'types');
+    } finally {
+      setIsAddingType(false);
     }
   };
 
@@ -1100,9 +1154,10 @@ export default function App() {
   };
 
   const handleBulkDeleteTypes = async () => {
-    if (selectedTypeIds.length === 0) return;
+    if (selectedTypeIds.length === 0 || isDeletingTypes) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedTypeIds.length} loại hình đã chọn?`)) return;
     
+    setIsDeletingTypes(true);
     try {
       const batch = writeBatch(db);
       selectedTypeIds.forEach(id => {
@@ -1114,6 +1169,8 @@ export default function App() {
       setSelectedTypeIds([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'types');
+    } finally {
+      setIsDeletingTypes(false);
     }
   };
 
@@ -1320,7 +1377,7 @@ export default function App() {
       const matchProject = reportProject === 'all' || b.projectId === reportProject;
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || b.teamName === reportTeam)
-        : (b.teamName === userProfile?.teamName);
+        : (b.userEmail === user?.email);
       const matchMonth = b.month === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
@@ -1349,7 +1406,7 @@ export default function App() {
       const matchProject = reportProject === 'all' || c.projectId === reportProject;
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || c.teamName === reportTeam)
-        : (c.teamName === userProfile?.teamName);
+        : (c.userEmail === user?.email);
       // Map cost date to marketing month
       const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
       const mMonth = costDate ? getMarketingMonth(costDate) : null;
@@ -1376,11 +1433,34 @@ export default function App() {
 
   const chartData = useMemo(() => {
     return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
-      const teamBudgets = filteredBudgets.filter(b => b.teamName === team);
-      const teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-      const teamTotalCost = filteredCosts
-        .filter(c => c.teamName === team)
-        .reduce((acc, curr) => acc + curr.amount, 0);
+      const teamBudgets = budgets.filter(b => {
+        const project = projects.find(p => p.id === b.projectId);
+        const matchProject = reportProject === 'all' || b.projectId === reportProject;
+        const matchMonth = b.month === reportMonth;
+        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+        const matchType = reportType === 'all' || (project?.type === reportType);
+        return matchProject && b.teamName === team && matchMonth && matchRegion && matchType;
+      });
+      
+      let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+      if (chartTimeType === 'week') teamTotalBudget = teamTotalBudget / 4;
+
+      let teamTotalCost = costs.filter(c => {
+        const project = projects.find(p => p.id === c.projectId);
+        const matchProject = reportProject === 'all' || c.projectId === reportProject;
+        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const matchMonth = mMonth === reportMonth;
+        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+        const matchType = reportType === 'all' || (project?.type === reportType);
+        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+        
+        return matchProject && c.teamName === team && matchMonth && matchRegion && matchType && matchWeek;
+      }).reduce((acc, curr) => acc + curr.amount, 0);
+
+      if (chartTimeType === 'week' && reportWeek === 'all') {
+        teamTotalCost = teamTotalCost / 4;
+      }
       
       return {
         name: team,
@@ -1388,139 +1468,81 @@ export default function App() {
         actual: teamTotalCost
       };
     }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [uniqueTeams, filteredBudgets, filteredCosts, reportTeam]);
+  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonth, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth]);
 
   const regionChartData = useMemo(() => {
     return uniqueRegions.map(region => {
-      const regionBudgets = filteredBudgets.filter(b => {
-        const p = projects.find(proj => proj.id === b.projectId);
-        return p?.region === region;
+      const regionBudgets = budgets.filter(b => {
+        const project = projects.find(p => p.id === b.projectId);
+        const matchProject = reportProject === 'all' || b.projectId === reportProject;
+        const matchTeam = reportTeam === 'all' || b.teamName === reportTeam;
+        const matchMonth = b.month === reportMonth;
+        return matchProject && matchTeam && project?.region === region && matchMonth;
       });
-      const regionCosts = filteredCosts.filter(c => {
-        const p = projects.find(proj => proj.id === c.projectId);
-        return p?.region === region;
-      });
+      
+      let totalBudget = regionBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+      if (chartTimeType === 'week') totalBudget = totalBudget / 4;
+
+      let totalCost = costs.filter(c => {
+        const project = projects.find(p => p.id === c.projectId);
+        const matchProject = reportProject === 'all' || c.projectId === reportProject;
+        const matchTeam = reportTeam === 'all' || c.teamName === reportTeam;
+        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const matchMonth = mMonth === reportMonth;
+        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+        
+        return matchProject && matchTeam && project?.region === region && matchMonth && matchWeek;
+      }).reduce((acc, curr) => acc + curr.amount, 0);
+
+      if (chartTimeType === 'week' && reportWeek === 'all') {
+        totalCost = totalCost / 4;
+      }
 
       return {
         name: region,
-        budget: regionBudgets.reduce((acc, curr) => acc + curr.amount, 0),
-        actual: regionCosts.reduce((acc, curr) => acc + curr.amount, 0)
+        budget: totalBudget,
+        actual: totalCost
       };
     }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [uniqueRegions, filteredBudgets, filteredCosts, projects]);
-
-  const typeChartData = useMemo(() => {
-    return uniqueTypes.map(type => {
-      const typeBudgets = filteredBudgets.filter(b => {
-        const p = projects.find(proj => proj.id === b.projectId);
-        return p?.type === type;
-      });
-      const typeCosts = filteredCosts.filter(c => {
-        const p = projects.find(proj => proj.id === c.projectId);
-        return p?.type === type;
-      });
-
-      return {
-        name: type,
-        budget: typeBudgets.reduce((acc, curr) => acc + curr.amount, 0),
-        actual: typeCosts.reduce((acc, curr) => acc + curr.amount, 0)
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [uniqueTypes, filteredBudgets, filteredCosts, projects]);
+  }, [uniqueRegions, budgets, costs, projects, reportProject, reportTeam, reportMonth, chartTimeType, reportWeek, getMarketingMonth]);
 
   const projectChartData = useMemo(() => {
     const projectIds = Array.from(new Set([
-      ...filteredBudgets.map(b => b.projectId),
-      ...filteredCosts.map(c => c.projectId)
+      ...budgets.filter(b => b.month === reportMonth).map(b => b.projectId),
+      ...costs.filter(c => {
+        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+        return costDate && getMarketingMonth(costDate) === reportMonth;
+      }).map(c => c.projectId)
     ]));
 
-    return projectIds.map(id => {
+    return projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
       const projectName = projectMap[id] || 'N/A';
-      const projectBudgets = filteredBudgets.filter(b => b.projectId === id);
-      const projectCosts = filteredCosts.filter(c => c.projectId === id);
+      const projectBudgets = budgets.filter(b => b.projectId === id && b.month === reportMonth);
+      
+      let totalBudget = projectBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+      if (chartTimeType === 'week') totalBudget = totalBudget / 4;
+
+      let totalCost = costs.filter(c => {
+        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const matchMonth = mMonth === reportMonth;
+        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+        return c.projectId === id && matchMonth && matchWeek;
+      }).reduce((acc, curr) => acc + curr.amount, 0);
+
+      if (chartTimeType === 'week' && reportWeek === 'all') {
+        totalCost = totalCost / 4;
+      }
 
       return {
         name: projectName,
-        budget: projectBudgets.reduce((acc, curr) => acc + curr.amount, 0),
-        actual: projectCosts.reduce((acc, curr) => acc + curr.amount, 0)
+        budget: totalBudget,
+        actual: totalCost
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => b.budget - a.budget);
-  }, [filteredBudgets, filteredCosts, projectMap]);
-
-  const weekChartData = useMemo(() => {
-    // Group costs by week number
-    const weekMap: { [key: number]: { budget: number, actual: number, startDate: string, endDate: string } } = {};
-    
-    // Get all unique weeks in the filtered costs
-    const weeks = Array.from(new Set(filteredCosts.map(c => c.weekNumber as number))).sort((a, b) => (a as number) - (b as number));
-    
-    // Total budget for the selected filters
-    const totalBudget = filteredBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-    // Distribute budget evenly across weeks present in costs, or default to 4 weeks
-    const weekCount = Math.max(weeks.length, 4);
-    const weeklyBudget = totalBudget / weekCount;
-
-    return weeks.map(week => {
-      const weekCosts = filteredCosts.filter(c => c.weekNumber === week);
-      const weekTotalCost = weekCosts.reduce((acc, curr) => acc + curr.amount, 0);
-      
-      // Get date range from the first cost entry of this week
-      const firstCost = weekCosts[0];
-      const dateRange = firstCost ? ` : ${safeFormat(firstCost.startDate, 'd/M')} - ${safeFormat(firstCost.endDate, 'd/M')}` : '';
-
-      return {
-        name: `Tuần ${week}${dateRange}`,
-        budget: weeklyBudget,
-        actual: weekTotalCost
-      };
-    });
-  }, [filteredCosts, filteredBudgets]);
-
-  const monthChartData = useMemo(() => {
-    const months = [
-      '01', '02', '03', '04', '05', '06', 
-      '07', '08', '09', '10', '11', '12'
-    ];
-
-    return months.map(m => {
-      const monthStr = `${reportYear}-${m}`;
-      
-      // Filter budgets for this marketing month
-      const monthBudgets = budgets.filter(b => {
-        const project = projects.find(p => p.id === b.projectId);
-        const matchProject = reportProject === 'all' || b.projectId === reportProject;
-        const matchTeam = userRole === 'admin' 
-          ? (reportTeam === 'all' || b.teamName === reportTeam)
-          : (b.teamName === userProfile?.teamName);
-        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-        const matchType = reportType === 'all' || (project?.type === reportType);
-        return b.month === monthStr && matchProject && matchTeam && matchRegion && matchType;
-      });
-
-      // Filter costs for this marketing month
-      const monthCosts = costs.filter(c => {
-        const project = projects.find(p => p.id === c.projectId);
-        const matchProject = reportProject === 'all' || c.projectId === reportProject;
-        const matchTeam = userRole === 'admin' 
-          ? (reportTeam === 'all' || c.teamName === reportTeam)
-          : (c.teamName === userProfile?.teamName);
-        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-        const matchType = reportType === 'all' || (project?.type === reportType);
-        
-        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-        const mMonth = costDate ? getMarketingMonth(costDate) : null;
-        
-        return mMonth === monthStr && matchProject && matchTeam && matchRegion && matchType;
-      });
-
-      return {
-        name: `Tháng ${m}`,
-        budget: monthBudgets.reduce((acc, curr) => acc + curr.amount, 0),
-        actual: monthCosts.reduce((acc, curr) => acc + curr.amount, 0)
-      };
-    });
-  }, [budgets, costs, projects, reportYear, reportProject, reportTeam, reportRegion, reportType, userRole, userProfile, getMarketingMonth]);
+  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth]);
 
   const getWeekRange = (weekStr: string) => {
     if (!weekStr) return '';
@@ -1550,13 +1572,27 @@ export default function App() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 p-4">
         <Card className="w-full max-w-md border-none shadow-xl bg-white/80 backdrop-blur">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-              <Building2 className="w-8 h-8 text-white" />
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="mx-auto flex flex-col items-center gap-2">
+              <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
+                <img 
+                  src="https://picsum.photos/seed/mayhomes/200/200" 
+                  alt="MAYHOMES Logo" 
+                  className="w-full h-full object-contain p-2"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-4xl font-black tracking-tighter text-slate-900">
+                  <span className="text-orange-500">MAY</span>
+                  <span className="text-blue-600">HOMES</span>
+                </h2>
+                <p className="text-[10px] font-bold text-blue-800 tracking-[0.2em] uppercase">Khơi nguồn cuộc sống tinh hoa</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <CardTitle className="text-3xl font-bold tracking-tight text-slate-900">Marketing Cost Control</CardTitle>
-              <CardDescription className="text-slate-500">Hệ thống quản lý chi phí marketing bất động sản</CardDescription>
+            <div className="pt-4 space-y-2">
+              <CardTitle className="text-xl font-bold tracking-tight text-slate-800">Marketing Cost Control</CardTitle>
+              <CardDescription className="text-slate-500">Hệ thống quản lý chi phí marketing chuyên nghiệp</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="pt-4">
@@ -1574,12 +1610,22 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
-              <Building2 className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-slate-100 overflow-hidden">
+              <img 
+                src="https://picsum.photos/seed/mayhomes/100/100" 
+                alt="MAYHOMES" 
+                className="w-full h-full object-contain p-1"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-slate-900 leading-none">Marketing Control</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-black tracking-tighter text-slate-900 leading-none">
+                  <span className="text-orange-500">MAY</span>
+                  <span className="text-blue-600">HOMES</span>
+                </h1>
+              </div>
               <div className="flex gap-1 mt-1">
                 {isSuperAdmin && <Badge variant="outline" className="text-[10px] py-0 h-4 border-purple-200 text-purple-600 bg-purple-50">SUPER ADMIN</Badge>}
                 {(userRole === 'admin') && <Badge variant="outline" className="text-[10px] py-0 h-4 border-blue-200 text-blue-600 bg-blue-50">ADMIN</Badge>}
@@ -1779,12 +1825,13 @@ export default function App() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <Dialog>
-                            <DialogTrigger render={
-                              <Button className="bg-blue-600 hover:bg-blue-700">
-                                <Plus className="w-4 h-4 mr-2" /> Thêm dự án
-                              </Button>
-                            } />
+                          {isAdmin && (
+                            <Dialog>
+                              <DialogTrigger render={
+                                <Button className="bg-blue-600 hover:bg-blue-700">
+                                  <Plus className="w-4 h-4 mr-2" /> Thêm dự án
+                                </Button>
+                              } />
                             <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
                                 <DialogTitle>Thêm dự án mới</DialogTitle>
@@ -1836,7 +1883,8 @@ export default function App() {
                               </form>
                             </DialogContent>
                           </Dialog>
-                        </div>
+                        )}
+                      </div>
                       </CardContent>
                     </Card>
 
@@ -2117,9 +2165,9 @@ export default function App() {
                                 size="sm" 
                                 className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={handleBulkDeleteRegions}
-                                disabled={selectedRegionIds.length === 0}
+                                disabled={selectedRegionIds.length === 0 || isDeletingRegions}
                               >
-                                <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedRegionIds.length})
+                                <Trash2 className="w-3 h-3 mr-1" /> {isDeletingRegions ? 'Đang xóa...' : `Xóa đã chọn (${selectedRegionIds.length})`}
                               </Button>
                               <Button 
                                 variant="destructive" 
@@ -2274,12 +2322,13 @@ export default function App() {
                               />
                             </div>
                           </div>
-                          <Dialog>
-                            <DialogTrigger render={
-                              <Button className="bg-blue-600 hover:bg-blue-700">
-                                <Plus className="w-4 h-4 mr-2" /> Thêm Loại hình
-                              </Button>
-                            } />
+                          {isAdmin && (
+                            <Dialog>
+                              <DialogTrigger render={
+                                <Button className="bg-blue-600 hover:bg-blue-700">
+                                  <Plus className="w-4 h-4 mr-2" /> Thêm Loại hình
+                                </Button>
+                              } />
                             <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
                                 <DialogTitle>Thêm Loại hình mới</DialogTitle>
@@ -2303,7 +2352,8 @@ export default function App() {
                               </form>
                             </DialogContent>
                           </Dialog>
-                        </div>
+                        )}
+                      </div>
                       </CardContent>
                     </Card>
 
@@ -2529,9 +2579,9 @@ export default function App() {
                                 size="sm" 
                                 className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={handleBulkDeleteTeams}
-                                disabled={selectedTeamIds.length === 0}
+                                disabled={selectedTeamIds.length === 0 || isDeletingTeams}
                               >
-                                <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedTeamIds.length})
+                                <Trash2 className="w-3 h-3 mr-1" /> {isDeletingTeams ? 'Đang xóa...' : `Xóa đã chọn (${selectedTeamIds.length})`}
                               </Button>
                               <Button 
                                 variant="destructive" 
@@ -2841,16 +2891,36 @@ export default function App() {
                     {/* Chart Section */}
                     <div className="space-y-4">
                       <Tabs defaultValue="team" className="w-full">
-                        <div className="flex items-center justify-between mb-4">
-                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Thực chi</Label>
-                          <TabsList className="bg-slate-100 p-1 h-8">
-                            <TabsTrigger value="team" className="text-[10px] px-3 h-6">Theo Team</TabsTrigger>
-                            <TabsTrigger value="project" className="text-[10px] px-3 h-6">Theo Dự án</TabsTrigger>
-                            <TabsTrigger value="week" className="text-[10px] px-3 h-6">Theo Tuần</TabsTrigger>
-                            <TabsTrigger value="month" className="text-[10px] px-3 h-6">Theo Tháng</TabsTrigger>
-                            <TabsTrigger value="region" className="text-[10px] px-3 h-6">Theo Miền</TabsTrigger>
-                            <TabsTrigger value="type" className="text-[10px] px-3 h-6">Theo Loại hình</TabsTrigger>
-                          </TabsList>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Thực chi</Label>
+                            <p className="text-[10px] text-slate-400">So sánh dữ liệu theo {chartTimeType === 'month' ? 'Tháng' : 'Tuần'}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                              <Button 
+                                variant={chartTimeType === 'month' ? 'secondary' : 'ghost'} 
+                                size="sm" 
+                                onClick={() => setChartTimeType('month')}
+                                className={`h-7 text-[10px] px-4 rounded-lg transition-all ${chartTimeType === 'month' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                              >
+                                Theo Tháng
+                              </Button>
+                              <Button 
+                                variant={chartTimeType === 'week' ? 'secondary' : 'ghost'} 
+                                size="sm" 
+                                onClick={() => setChartTimeType('week')}
+                                className={`h-7 text-[10px] px-4 rounded-lg transition-all ${chartTimeType === 'week' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                              >
+                                Theo Tuần
+                              </Button>
+                            </div>
+                            <TabsList className="bg-slate-100 p-1 h-9 rounded-xl border border-slate-200">
+                              <TabsTrigger value="team" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Team</TabsTrigger>
+                              <TabsTrigger value="project" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Dự án</TabsTrigger>
+                              <TabsTrigger value="region" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Khu vực</TabsTrigger>
+                            </TabsList>
+                          </div>
                         </div>
 
                         <TabsContent value="team" className="mt-0">
@@ -2921,70 +2991,6 @@ export default function App() {
                           </div>
                         </TabsContent>
 
-                        <TabsContent value="week" className="mt-0">
-                          <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={weekChartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis 
-                                  dataKey="name" 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 11 }} 
-                                  dy={15}
-                                />
-                                <YAxis 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
-                                  tickFormatter={formatYAxis}
-                                />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                <Legend 
-                                  verticalAlign="top" 
-                                  align="right" 
-                                  iconType="circle" 
-                                  wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
-                                />
-                                <Bar dataKey="budget" name="Ngân sách (Tạm tính)" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={32} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="month" className="mt-0">
-                          <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={monthChartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis 
-                                  dataKey="name" 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 11 }} 
-                                  dy={15}
-                                />
-                                <YAxis 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
-                                  tickFormatter={formatYAxis}
-                                />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                <Legend 
-                                  verticalAlign="top" 
-                                  align="right" 
-                                  iconType="circle" 
-                                  wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
-                                />
-                                <Bar dataKey="budget" name="Ngân sách" fill="#0ea5e9" radius={[6, 6, 0, 0]} barSize={24} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </TabsContent>
-
                         <TabsContent value="region" className="mt-0">
                           <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <ResponsiveContainer width="100%" height="100%">
@@ -3012,38 +3018,6 @@ export default function App() {
                                 />
                                 <Bar dataKey="budget" name="Ngân sách" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
                                 <Bar dataKey="actual" name="Thực chi" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="type" className="mt-0">
-                          <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={typeChartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis 
-                                  dataKey="name" 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
-                                  dy={15}
-                                />
-                                <YAxis 
-                                  axisLine={false} 
-                                  tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
-                                  tickFormatter={formatYAxis}
-                                />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                <Legend 
-                                  verticalAlign="top" 
-                                  align="right" 
-                                  iconType="circle" 
-                                  wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
-                                />
-                                <Bar dataKey="budget" name="Ngân sách" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#ef4444" radius={[6, 6, 0, 0]} barSize={32} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -3245,10 +3219,10 @@ export default function App() {
                               <TableCell className="text-right font-mono">
                                 {editingBudgetId === b.id ? (
                                   <Input 
-                                    type="number" 
+                                    type="text" 
                                     className="h-8 text-right" 
-                                    value={editingBudgetAmount} 
-                                    onChange={e => setEditingBudgetAmount(e.target.value)} 
+                                    value={formatNumberWithCommas(editingBudgetAmount)} 
+                                    onChange={handleNumberInputChange(setEditingBudgetAmount)} 
                                   />
                                 ) : `${b.amount.toLocaleString()} đ`}
                               </TableCell>
@@ -3297,7 +3271,7 @@ export default function App() {
               </TabsContent>
 
               {/* User Management Tab */}
-              {isSuperAdmin && (
+              {isAdmin && (
                 <TabsContent value="users" className="space-y-6">
                   <Card className="border-none shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -3510,15 +3484,20 @@ export default function App() {
               <CardContent>
                 <form onSubmit={handleAddBudget} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="space-y-2">
+                    <div className="space-y-2 lg:col-span-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Dự án</Label>
                       <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
                         <SelectTrigger className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11">
                           <SelectValue placeholder="Chọn dự án">
-                            {projectMap[selectedProjectId]}
+                            {selectedProjectId ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{projectMap[selectedProjectId]}</span>
+                                <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === selectedProjectId)?.region})</span>
+                              </div>
+                            ) : "Chọn dự án"}
                           </SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="w-[400px] md:w-[600px] max-w-[95vw]">
                           <div className="p-2 sticky top-0 bg-popover z-10 border-b">
                             <div className="relative">
                               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3535,7 +3514,14 @@ export default function App() {
                             {projects
                               .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
                               .map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                <SelectItem key={p.id} value={p.id}>
+                                  <div className="flex items-center justify-between w-full gap-4">
+                                    <span className="font-medium">{p.name}</span>
+                                    <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100 shrink-0">
+                                      {p.region}
+                                    </Badge>
+                                  </div>
+                                </SelectItem>
                               ))
                             }
                             {projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase())).length === 0 && (
@@ -3598,7 +3584,9 @@ export default function App() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ báo cáo (Tháng)</Label>
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        Kỳ báo cáo (Tháng) <span className="text-blue-600 ml-1 normal-case font-medium">{getReportingPeriod(budgetMonth)}</span>
+                      </Label>
                       <Input 
                         type="month" 
                         className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11"
@@ -3611,11 +3599,11 @@ export default function App() {
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Số tiền (VNĐ)</Label>
                       <div className="relative">
                         <Input 
-                          type="number" 
+                          type="text" 
                           placeholder="0" 
                           className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11 pr-12 font-mono font-bold text-blue-600"
-                          value={budgetAmount} 
-                          onChange={e => setBudgetAmount(e.target.value)} 
+                          value={formatNumberWithCommas(budgetAmount)} 
+                          onChange={handleNumberInputChange(setBudgetAmount)} 
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">đ</span>
                       </div>
@@ -3655,7 +3643,7 @@ export default function App() {
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right font-bold">Tháng:</Label>
-                    <div className="col-span-3">{budgetMonth}</div>
+                    <div className="col-span-3">{budgetMonth} <span className="text-blue-600 text-xs ml-1">{getReportingPeriod(budgetMonth)}</span></div>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right font-bold">Số tiền:</Label>
@@ -3743,7 +3731,9 @@ export default function App() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {budgets.slice(0, 10).map(b => (
+                      {budgets
+                        .filter(b => isAdmin || isMod || b.userEmail === user.email)
+                        .slice(0, 10).map(b => (
                         <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
                           {isAdmin && (
                             <TableCell className="py-4">
@@ -3771,9 +3761,12 @@ export default function App() {
                           </TableCell>
                           <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
                           <TableCell className="py-4">
-                            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                              {b.month}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
+                                {b.month}
+                              </span>
+                              <span className="text-[10px] text-blue-600 font-medium">{getReportingPeriod(b.month)}</span>
+                            </div>
                           </TableCell>
                           <TableCell className="py-4 text-right">
                             <span className="font-mono font-bold text-blue-600">
@@ -3862,7 +3855,7 @@ export default function App() {
                               ) : "Chọn khoản ngân sách của bạn"}
                             </SelectValue>
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="w-[400px] md:w-[600px] max-w-[95vw]">
                             <div className="p-2 sticky top-0 bg-popover z-10 border-b">
                               <div className="relative">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3877,7 +3870,20 @@ export default function App() {
                             </div>
                             <SelectGroup>
                               {budgets
-                                .filter(b => (isAdmin || b.userEmail === user.email) && b.month === getMarketingMonth(new Date()))
+                                .filter(b => {
+                                  const userEmail = user?.email?.toLowerCase();
+                                  const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                                  const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
+                                  const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+                                  
+                                  // Admin and Mod see all budgets
+                                  // GDDA sees assigned projects
+                                  // User sees their own budgets
+                                  const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
+                                  
+                                  // Filter by current marketing month
+                                  return canSee && b.month === getMarketingMonth(new Date());
+                                })
                                 .filter(b => 
                                   projectMap[b.projectId]?.toLowerCase().includes(budgetSearch.toLowerCase()) ||
                                   b.teamName.toLowerCase().includes(budgetSearch.toLowerCase()) ||
@@ -3948,23 +3954,23 @@ export default function App() {
                         <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Facebook Ads</Label>
-                            <Input type="number" className="h-9 text-xs font-mono" placeholder="0" value={fbAds} onChange={e => setFbAds(e.target.value)} />
+                            <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(fbAds)} onChange={handleNumberInputChange(setFbAds)} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Google Ads</Label>
-                            <Input type="number" className="h-9 text-xs font-mono" placeholder="0" value={googleAds} onChange={e => setGoogleAds(e.target.value)} />
+                            <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(googleAds)} onChange={handleNumberInputChange(setGoogleAds)} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Zalo Ads</Label>
-                            <Input type="number" className="h-9 text-xs font-mono" placeholder="0" value={zaloAds} onChange={e => setZaloAds(e.target.value)} />
+                            <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(zaloAds)} onChange={handleNumberInputChange(setZaloAds)} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Đăng tin</Label>
-                            <Input type="number" className="h-9 text-xs font-mono" placeholder="0" value={posting} onChange={e => setPosting(e.target.value)} />
+                            <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(posting)} onChange={handleNumberInputChange(setPosting)} />
                           </div>
                           <div className="space-y-1.5 col-span-2">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Khác</Label>
-                            <Input type="number" className="h-9 text-xs font-mono" placeholder="0" value={otherCost} onChange={e => setOtherCost(e.target.value)} />
+                            <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(otherCost)} onChange={handleNumberInputChange(setOtherCost)} />
                           </div>
                           <div className="col-span-2 pt-3 border-t border-slate-200 flex justify-between items-center">
                             <span className="text-xs font-bold text-slate-600">Tổng cộng:</span>
@@ -4055,7 +4061,7 @@ export default function App() {
                       </TableHeader>
                       <TableBody>
                         {costs
-                          .filter(c => isAdmin || c.userEmail === user.email)
+                          .filter(c => isAdmin || isMod || c.userEmail === user.email)
                           .slice(0, 15)
                           .map(c => (
                           <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
@@ -4086,10 +4092,10 @@ export default function App() {
                             <TableCell className="text-right font-mono font-medium">
                               {editingCostId === c.id ? (
                                 <Input 
-                                  type="number" 
+                                  type="text" 
                                   className="h-8 text-right w-32 ml-auto" 
-                                  value={editingCostAmount} 
-                                  onChange={e => setEditingCostAmount(e.target.value)} 
+                                  value={formatNumberWithCommas(editingCostAmount)} 
+                                  onChange={handleNumberInputChange(setEditingCostAmount)} 
                                 />
                               ) : `${c.amount.toLocaleString()} đ`}
                             </TableCell>

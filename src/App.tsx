@@ -333,6 +333,11 @@ export default function App() {
   const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
+  const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
+  const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [adminCostSearch, setAdminCostSearch] = useState('');
+  const [adminCostMonthFilter, setAdminCostMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [costBudgetMonth, setCostBudgetMonth] = useState(getMarketingMonth(new Date()));
   const [selectedRegionForBulk, setSelectedRegionForBulk] = useState('');
   const [isBulkUpdateRegionDialogOpen, setIsBulkUpdateRegionDialogOpen] = useState(false);
   const [isAddingRegion, setIsAddingRegion] = useState(false);
@@ -342,6 +347,16 @@ export default function App() {
   const [isDeletingRegions, setIsDeletingRegions] = useState(false);
   const [isDeletingTypes, setIsDeletingTypes] = useState(false);
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
+  const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
+  const [isDeletingCosts, setIsDeletingCosts] = useState(false);
+  const [isDeleteBudgetDialogOpen, setIsDeleteBudgetDialogOpen] = useState(false);
+  const [isBulkDeleteBudgetsDialogOpen, setIsBulkDeleteBudgetsDialogOpen] = useState(false);
+  const [isDeleteAllBudgetsDialogOpen, setIsDeleteAllBudgetsDialogOpen] = useState(false);
+  const [budgetToDelete, setBudgetToDelete] = useState<{id: string, name: string} | null>(null);
+  const [isDeleteCostDialogOpen, setIsDeleteCostDialogOpen] = useState(false);
+  const [isBulkDeleteCostsDialogOpen, setIsBulkDeleteCostsDialogOpen] = useState(false);
+  const [isDeleteAllCostsDialogOpen, setIsDeleteAllCostsDialogOpen] = useState(false);
+  const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
 
   const isAdmin = userRole === 'super_admin' || userRole === 'admin';
   const isSuperAdmin = userRole === 'super_admin';
@@ -1054,77 +1069,6 @@ export default function App() {
     }
   };
 
-  const handleBulkDeleteBudgets = async () => {
-    if (selectedBudgetIds.length === 0) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedBudgetIds.length} bản ghi đăng ký ngân sách đã chọn?`)) return;
-    
-    try {
-      const batch = writeBatch(db);
-      selectedBudgetIds.forEach(id => {
-        batch.delete(doc(db, 'budgets', id));
-      });
-      await batch.commit();
-      await logAction('BULK_DELETE', 'budgets', 'multiple', { count: selectedBudgetIds.length });
-      toast.success(`Đã xóa ${selectedBudgetIds.length} bản ghi`);
-      setSelectedBudgetIds([]);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'budgets');
-    }
-  };
-
-  const handleDeleteAllBudgets = async () => {
-    if (budgets.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ bản ghi đăng ký ngân sách? Hành động này không thể hoàn tác.')) return;
-    
-    try {
-      const batch = writeBatch(db);
-      budgets.forEach(b => {
-        batch.delete(doc(db, 'budgets', b.id));
-      });
-      await batch.commit();
-      await logAction('DELETE_ALL', 'budgets', 'all', { count: budgets.length });
-      toast.success('Đã xóa tất cả bản ghi đăng ký ngân sách');
-      setSelectedBudgetIds([]);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'budgets');
-    }
-  };
-
-  const handleBulkDeleteCosts = async () => {
-    if (selectedCostIds.length === 0) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedCostIds.length} bản ghi chi phí thực tế đã chọn?`)) return;
-    
-    try {
-      const batch = writeBatch(db);
-      selectedCostIds.forEach(id => {
-        batch.delete(doc(db, 'costs', id));
-      });
-      await batch.commit();
-      await logAction('BULK_DELETE', 'costs', 'multiple', { count: selectedCostIds.length });
-      toast.success(`Đã xóa ${selectedCostIds.length} bản ghi`);
-      setSelectedCostIds([]);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'costs');
-    }
-  };
-
-  const handleDeleteAllCosts = async () => {
-    if (costs.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ bản ghi chi phí thực tế? Hành động này không thể hoàn tác.')) return;
-    
-    try {
-      const batch = writeBatch(db);
-      costs.forEach(c => {
-        batch.delete(doc(db, 'costs', c.id));
-      });
-      await batch.commit();
-      await logAction('DELETE_ALL', 'costs', 'all', { count: costs.length });
-      toast.success('Đã xóa tất cả bản ghi chi phí thực tế');
-      setSelectedCostIds([]);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'costs');
-    }
-  };
   const handleBulkDeleteRegions = async () => {
     if (selectedRegionIds.length === 0 || isDeletingRegions) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedRegionIds.length} vùng/khu vực đã chọn?`)) return;
@@ -1428,25 +1372,129 @@ export default function App() {
     }
   };
 
-  const handleDeleteBudget = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa đăng ký ngân sách này?')) return;
+  const handleDeleteBudget = (id: string, projectName: string) => {
+    setBudgetToDelete({ id, name: projectName });
+    setIsDeleteBudgetDialogOpen(true);
+  };
+
+  const confirmDeleteBudget = async () => {
+    if (!budgetToDelete) return;
     try {
-      await deleteDoc(doc(db, 'budgets', id));
-      await logAction('DELETE', 'budgets', id, {});
+      await deleteDoc(doc(db, 'budgets', budgetToDelete.id));
+      await logAction('DELETE', 'budgets', budgetToDelete.id, { projectName: budgetToDelete.name });
       toast.success('Đã xóa đăng ký ngân sách');
-      setSelectedBudgetIds(prev => prev.filter(bid => bid !== id));
+      setIsDeleteBudgetDialogOpen(false);
+      setBudgetToDelete(null);
+      setSelectedBudgetIds(prev => prev.filter(bid => bid !== budgetToDelete.id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'budgets');
     }
   };
 
-  const handleDeleteCost = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bản ghi chi phí này?')) return;
+  const handleBulkDeleteBudgets = async () => {
+    if (selectedBudgetIds.length === 0 || isDeletingBudgets) return;
+    setIsBulkDeleteBudgetsDialogOpen(true);
+  };
+
+  const confirmBulkDeleteBudgets = async () => {
+    setIsDeletingBudgets(true);
+    setIsBulkDeleteBudgetsDialogOpen(false);
     try {
-      await deleteDoc(doc(db, 'costs', id));
-      await logAction('DELETE', 'costs', id, {});
+      const batch = writeBatch(db);
+      selectedBudgetIds.forEach(id => {
+        batch.delete(doc(db, 'budgets', id));
+      });
+      await batch.commit();
+      await logAction('DELETE_BULK', 'budgets', 'multiple', { count: selectedBudgetIds.length });
+      toast.success(`Đã xóa ${selectedBudgetIds.length} đăng ký ngân sách`);
+      setSelectedBudgetIds([]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'budgets');
+    } finally {
+      setIsDeletingBudgets(false);
+    }
+  };
+
+  const handleDeleteAllBudgets = async () => {
+    if (budgets.length === 0) return;
+    setIsDeleteAllBudgetsDialogOpen(true);
+  };
+
+  const confirmDeleteAllBudgets = async () => {
+    setIsDeleteAllBudgetsDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      budgets.forEach(b => {
+        batch.delete(doc(db, 'budgets', b.id));
+      });
+      await batch.commit();
+      await logAction('DELETE_ALL', 'budgets', 'all', { count: budgets.length });
+      toast.success('Đã xóa tất cả đăng ký ngân sách');
+      setSelectedBudgetIds([]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'budgets');
+    }
+  };
+
+  const handleDeleteCost = (id: string, projectName: string) => {
+    setCostToDelete({ id, name: projectName });
+    setIsDeleteCostDialogOpen(true);
+  };
+
+  const confirmDeleteCost = async () => {
+    if (!costToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'costs', costToDelete.id));
+      await logAction('DELETE', 'costs', costToDelete.id, { projectName: costToDelete.name });
       toast.success('Đã xóa bản ghi chi phí');
-      setSelectedCostIds(prev => prev.filter(cid => cid !== id));
+      setIsDeleteCostDialogOpen(false);
+      setCostToDelete(null);
+      setSelectedCostIds(prev => prev.filter(cid => cid !== costToDelete.id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'costs');
+    }
+  };
+
+  const handleBulkDeleteCosts = async () => {
+    if (selectedCostIds.length === 0 || isDeletingCosts) return;
+    setIsBulkDeleteCostsDialogOpen(true);
+  };
+
+  const confirmBulkDeleteCosts = async () => {
+    setIsDeletingCosts(true);
+    setIsBulkDeleteCostsDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      selectedCostIds.forEach(id => {
+        batch.delete(doc(db, 'costs', id));
+      });
+      await batch.commit();
+      await logAction('DELETE_BULK', 'costs', 'multiple', { count: selectedCostIds.length });
+      toast.success(`Đã xóa ${selectedCostIds.length} bản ghi chi phí`);
+      setSelectedCostIds([]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'costs');
+    } finally {
+      setIsDeletingCosts(false);
+    }
+  };
+
+  const handleDeleteAllCosts = async () => {
+    if (costs.length === 0) return;
+    setIsDeleteAllCostsDialogOpen(true);
+  };
+
+  const confirmDeleteAllCosts = async () => {
+    setIsDeleteAllCostsDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      costs.forEach(c => {
+        batch.delete(doc(db, 'costs', c.id));
+      });
+      await batch.commit();
+      await logAction('DELETE_ALL', 'costs', 'all', { count: costs.length });
+      toast.success('Đã xóa tất cả bản ghi chi phí thực tế');
+      setSelectedCostIds([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'costs');
     }
@@ -1872,6 +1920,12 @@ export default function App() {
                       </TabsTrigger>
                       <TabsTrigger value="teams" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                         <Users className="w-4 h-4 mr-2" /> Quản lý Team
+                      </TabsTrigger>
+                      <TabsTrigger value="budgets" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Wallet className="w-4 h-4 mr-2" /> Quản lý Ngân sách
+                      </TabsTrigger>
+                      <TabsTrigger value="costs" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <TrendingUp className="w-4 h-4 mr-2" /> Quản lý Thực chi
                       </TabsTrigger>
                     </>
                   )}
@@ -2813,6 +2867,304 @@ export default function App() {
                   </div>
                 </TabsContent>
 
+                {/* Budget Management Tab */}
+                <TabsContent value="budgets" className="space-y-6">
+                  <div className="space-y-6">
+                    <Card className="border-none shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle>Quản lý Ngân sách đã đăng ký</CardTitle>
+                          <CardDescription>Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
+                            onClick={handleBulkDeleteBudgets}
+                            disabled={selectedBudgetIds.length === 0}
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedBudgetIds.length})
+                          </Button>
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="h-8 text-[10px]"
+                            onClick={handleDeleteAllBudgets}
+                            disabled={budgets.length === 0}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="flex-1 min-w-[200px] relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input 
+                              placeholder="Tìm theo dự án, team, người triển khai..." 
+                              className="pl-10 bg-white border-none shadow-sm h-10"
+                              value={adminBudgetSearch}
+                              onChange={e => setAdminBudgetSearch(e.target.value)}
+                            />
+                          </div>
+                          <div className="w-[200px]">
+                            <Input 
+                              type="month" 
+                              className="bg-white border-none shadow-sm h-10"
+                              value={adminBudgetMonthFilter}
+                              onChange={e => setAdminBudgetMonthFilter(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-slate-50">
+                              <TableRow>
+                                <TableHead className="w-[40px]">
+                                  <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300"
+                                    checked={selectedBudgetIds.length === budgets.length && budgets.length > 0}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedBudgetIds(budgets.map(b => b.id));
+                                      } else {
+                                        setSelectedBudgetIds([]);
+                                      }
+                                    }}
+                                  />
+                                </TableHead>
+                                <TableHead>Dự án</TableHead>
+                                <TableHead>Team</TableHead>
+                                <TableHead>Người triển khai</TableHead>
+                                <TableHead>Kỳ</TableHead>
+                                <TableHead className="text-right">Ngân sách</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {budgets
+                                .filter(b => {
+                                  const matchesSearch = 
+                                    b.projectName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    b.teamName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    b.implementerName.toLowerCase().includes(adminBudgetSearch.toLowerCase());
+                                  const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
+                                  return matchesSearch && matchesMonth;
+                                })
+                                .sort((a, b) => {
+                                  const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+                                  const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                                  return dateB - dateA;
+                                })
+                                .map(b => (
+                                  <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
+                                    <TableCell>
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-300"
+                                        checked={selectedBudgetIds.includes(b.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedBudgetIds(prev => [...prev, b.id]);
+                                          } else {
+                                            setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium">{b.projectName}</TableCell>
+                                    <TableCell>{b.teamName}</TableCell>
+                                    <TableCell>{b.implementerName}</TableCell>
+                                    <TableCell className="text-xs">{b.month}</TableCell>
+                                    <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
+                                    <TableCell className="text-right">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                        onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              {budgets.filter(b => {
+                                  const matchesSearch = 
+                                    b.projectName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    b.teamName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    b.implementerName.toLowerCase().includes(adminBudgetSearch.toLowerCase());
+                                  const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
+                                  return matchesSearch && matchesMonth;
+                                }).length === 0 && (
+                                  <TableRow>
+                                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                                      Không tìm thấy ngân sách nào phù hợp
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+
+                {/* Cost Management Tab */}
+                <TabsContent value="costs" className="space-y-6">
+                  <div className="space-y-6">
+                    <Card className="border-none shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle>Quản lý Thực chi</CardTitle>
+                          <CardDescription>Xóa hoặc xem danh sách các bản ghi thực chi</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
+                            onClick={handleBulkDeleteCosts}
+                            disabled={selectedCostIds.length === 0}
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedCostIds.length})
+                          </Button>
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="h-8 text-[10px]"
+                            onClick={handleDeleteAllCosts}
+                            disabled={costs.length === 0}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="flex-1 min-w-[200px] relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input 
+                              placeholder="Tìm theo dự án, team, người triển khai..." 
+                              className="pl-10 bg-white border-none shadow-sm h-10"
+                              value={adminCostSearch}
+                              onChange={e => setAdminCostSearch(e.target.value)}
+                            />
+                          </div>
+                          <div className="w-[200px]">
+                            <Input 
+                              type="month" 
+                              className="bg-white border-none shadow-sm h-10"
+                              value={adminCostMonthFilter}
+                              onChange={e => setAdminCostMonthFilter(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-slate-50">
+                              <TableRow>
+                                <TableHead className="w-[40px]">
+                                  <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300"
+                                    checked={selectedCostIds.length === costs.length && costs.length > 0}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedCostIds(costs.map(c => c.id));
+                                      } else {
+                                        setSelectedCostIds([]);
+                                      }
+                                    }}
+                                  />
+                                </TableHead>
+                                <TableHead>Dự án</TableHead>
+                                <TableHead>Team</TableHead>
+                                <TableHead>Người triển khai</TableHead>
+                                <TableHead>Tuần</TableHead>
+                                <TableHead className="text-right">Thực chi</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {costs
+                                .filter(c => {
+                                  const matchesSearch = 
+                                    c.projectName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    c.teamName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    c.implementerName.toLowerCase().includes(adminCostSearch.toLowerCase());
+                                  
+                                  const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+                                  const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
+                                  
+                                  return matchesSearch && matchesMonth;
+                                })
+                                .sort((a, b) => {
+                                  const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+                                  const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                                  return dateB - dateA;
+                                })
+                                .map(c => (
+                                  <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
+                                    <TableCell>
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-300"
+                                        checked={selectedCostIds.includes(c.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedCostIds(prev => [...prev, c.id]);
+                                          } else {
+                                            setSelectedCostIds(prev => prev.filter(id => id !== c.id));
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium">{c.projectName}</TableCell>
+                                    <TableCell>{c.teamName}</TableCell>
+                                    <TableCell>{c.implementerName}</TableCell>
+                                    <TableCell className="text-xs">Tuần {c.weekNumber}</TableCell>
+                                    <TableCell className="text-right font-mono font-bold text-blue-600">{c.amount.toLocaleString()} đ</TableCell>
+                                    <TableCell className="text-right">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                        onClick={() => handleDeleteCost(c.id, c.projectName)}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              {costs.filter(c => {
+                                  const matchesSearch = 
+                                    c.projectName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    c.teamName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    c.implementerName.toLowerCase().includes(adminCostSearch.toLowerCase());
+                                  const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+                                  const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
+                                  return matchesSearch && matchesMonth;
+                                }).length === 0 && (
+                                  <TableRow>
+                                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                                      Không tìm thấy bản ghi thực chi nào phù hợp
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+
                 {/* Reports & Analytics Tab */}
                 <TabsContent value="reports" className="space-y-6">
                   <Card className="border-none shadow-sm">
@@ -3365,7 +3717,7 @@ export default function App() {
                                       }}>
                                         <Edit2 className="h-3.5 w-3.5" />
                                       </Button>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteBudget(b.id)}>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteBudget(b.id, b.projectName)}>
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </Button>
                                     </div>
@@ -4021,77 +4373,100 @@ export default function App() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <form onSubmit={handleAddCost} className="space-y-6">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
-                        <Select value={selectedBudgetId} onValueChange={(val) => {
-                          setSelectedBudgetId(val);
-                          const budget = budgets.find(b => b.id === val);
-                          if (budget) setActualProjectId(budget.projectId);
-                        }}>
-                          <SelectTrigger className="h-auto py-3 bg-slate-50 border-slate-200 focus:ring-green-500">
-                            <SelectValue placeholder="Chọn khoản ngân sách của bạn">
-                              {selectedBudgetId ? (
-                                (() => {
-                                  const b = budgets.find(b => b.id === selectedBudgetId);
-                                  return b ? (
-                                    <div className="flex flex-col items-start">
-                                      <span className="font-bold text-sm">{projectMap[b.projectId]}</span>
-                                      <span className="text-[10px] text-slate-500">{b.teamName} - {b.implementerName}</span>
-                                    </div>
-                                  ) : "Chọn khoản ngân sách của bạn";
-                                })()
-                              ) : "Chọn khoản ngân sách của bạn"}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="w-[400px] md:w-[600px] max-w-[95vw]">
-                            <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                              <div className="relative">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  placeholder="Tìm ngân sách..."
-                                  className="pl-8 h-9"
-                                  value={budgetSearch}
-                                  onChange={(e) => setBudgetSearch(e.target.value)}
-                                  onKeyDown={(e) => e.stopPropagation()}
-                                />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ ngân sách</Label>
+                          <Input 
+                            type="month" 
+                            className="bg-slate-50 border-slate-200 h-11" 
+                            value={costBudgetMonth} 
+                            onChange={e => setCostBudgetMonth(e.target.value)} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
+                          <Select value={selectedBudgetId} onValueChange={(val) => {
+                            setSelectedBudgetId(val);
+                            const budget = budgets.find(b => b.id === val);
+                            if (budget) setActualProjectId(budget.projectId);
+                          }}>
+                            <SelectTrigger className="h-auto py-3 bg-slate-50 border-slate-200 focus:ring-green-500">
+                              <SelectValue placeholder="Chọn khoản ngân sách của bạn">
+                                {selectedBudgetId ? (
+                                  (() => {
+                                    const b = budgets.find(b => b.id === selectedBudgetId);
+                                    return b ? (
+                                      <div className="flex flex-col items-start">
+                                        <span className="font-bold text-sm">{projectMap[b.projectId]}</span>
+                                        <span className="text-[10px] text-slate-500">{b.teamName} - {b.implementerName}</span>
+                                      </div>
+                                    ) : "Chọn khoản ngân sách của bạn";
+                                  })()
+                                ) : "Chọn khoản ngân sách của bạn"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="w-[400px] md:w-[600px] max-w-[95vw]">
+                              <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Tìm ngân sách..."
+                                    className="pl-8 h-9"
+                                    value={budgetSearch}
+                                    onChange={(e) => setBudgetSearch(e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                  />
+                                </div>
                               </div>
-                            </div>
-                            <SelectGroup>
-                              {budgets
-                                .filter(b => {
-                                  const userEmail = user?.email?.toLowerCase();
-                                  const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                                  const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
-                                  const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
-                                  
-                                  // Admin and Mod see all budgets
-                                  // GDDA sees assigned projects
-                                  // User sees their own budgets
-                                  const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
-                                  
-                                  // Filter by current marketing month
-                                  return canSee && b.month === getMarketingMonth(new Date());
-                                })
-                                .filter(b => 
-                                  projectMap[b.projectId]?.toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                  b.teamName.toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                  b.implementerName.toLowerCase().includes(budgetSearch.toLowerCase())
-                                )
-                                .map(b => (
-                                  <SelectItem key={b.id} value={b.id} className="py-3">
-                                    <div className="flex flex-col items-start gap-1">
-                                      <span className="font-bold">{projectMap[b.projectId]}</span>
-                                      <span className="text-xs text-slate-500">{b.teamName} - {b.implementerName}</span>
-                                      <Badge variant="secondary" className="text-[10px] mt-1">
-                                        Ngân sách: {b.amount.toLocaleString()} đ
-                                      </Badge>
-                                    </div>
-                                  </SelectItem>
-                                ))
-                              }
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
+                              <SelectGroup>
+                                {budgets
+                                  .filter(b => {
+                                    const userEmail = user?.email?.toLowerCase();
+                                    const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                                    const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
+                                    const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+                                    
+                                    // Admin and Mod see all budgets
+                                    // GDDA sees assigned projects
+                                    // User sees their own budgets
+                                    const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
+                                    
+                                    // Filter by selected cost budget month
+                                    return canSee && b.month === costBudgetMonth;
+                                  })
+                                  .filter(b => 
+                                    projectMap[b.projectId]?.toLowerCase().includes(budgetSearch.toLowerCase()) ||
+                                    b.teamName.toLowerCase().includes(budgetSearch.toLowerCase()) ||
+                                    b.implementerName.toLowerCase().includes(budgetSearch.toLowerCase())
+                                  )
+                                  .map(b => (
+                                    <SelectItem key={b.id} value={b.id} className="py-3">
+                                      <div className="flex flex-col items-start gap-1">
+                                        <span className="font-bold">{projectMap[b.projectId]}</span>
+                                        <span className="text-xs text-slate-500">{b.teamName} - {b.implementerName}</span>
+                                        <Badge variant="secondary" className="text-[10px] mt-1">
+                                          Ngân sách: {b.amount.toLocaleString()} đ
+                                        </Badge>
+                                      </div>
+                                    </SelectItem>
+                                  ))
+                                }
+                                {budgets.filter(b => {
+                                    const userEmail = user?.email?.toLowerCase();
+                                    const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                                    const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
+                                    const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+                                    const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
+                                    return canSee && b.month === costBudgetMonth;
+                                }).length === 0 && (
+                                  <div className="p-4 text-center text-xs text-slate-500">
+                                    Không tìm thấy ngân sách đăng ký cho kỳ {costBudgetMonth}
+                                  </div>
+                                )}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       
                       {selectedBudgetId && (
@@ -4316,7 +4691,7 @@ export default function App() {
                                     }}>
                                       <Edit2 className="h-3.5 w-3.5" />
                                     </Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id)}>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id, projectMap[c.projectId] || c.projectName)}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
                                   </div>
@@ -4585,6 +4960,123 @@ export default function App() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsDeleteTypeDialogOpen(false)}>Hủy</Button>
             <Button variant="destructive" onClick={confirmDeleteType}>Xác nhận xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Budget Confirmation Dialog */}
+      <Dialog open={isDeleteBudgetDialogOpen} onOpenChange={setIsDeleteBudgetDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa ngân sách
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa đăng ký ngân sách cho dự án <strong>{budgetToDelete?.name}</strong>? 
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteBudgetDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteBudget}>Xác nhận xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Budgets Confirmation Dialog */}
+      <Dialog open={isBulkDeleteBudgetsDialogOpen} onOpenChange={setIsBulkDeleteBudgetsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều bản ghi
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedBudgetIds.length}</strong> đăng ký ngân sách đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteBudgetsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteBudgets} disabled={isDeletingBudgets}>
+              {isDeletingBudgets ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Budgets Confirmation Dialog */}
+      <Dialog open={isDeleteAllBudgetsDialogOpen} onOpenChange={setIsDeleteAllBudgetsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa TẤT CẢ ngân sách
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TẤT CẢ</strong> bản ghi đăng ký ngân sách trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllBudgetsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllBudgets}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Cost Confirmation Dialog */}
+      <Dialog open={isDeleteCostDialogOpen} onOpenChange={setIsDeleteCostDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa thực chi
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa bản ghi thực chi cho dự án <strong>{costToDelete?.name}</strong>? 
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteCostDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteCost}>Xác nhận xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Costs Confirmation Dialog */}
+      <Dialog open={isBulkDeleteCostsDialogOpen} onOpenChange={setIsBulkDeleteCostsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều bản ghi
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedCostIds.length}</strong> bản ghi thực chi đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteCostsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteCosts} disabled={isDeletingCosts}>
+              {isDeletingCosts ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Costs Confirmation Dialog */}
+      <Dialog open={isDeleteAllCostsDialogOpen} onOpenChange={setIsDeleteAllCostsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa TẤT CẢ thực chi
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TẤT CẢ</strong> bản ghi thực chi trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllCostsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllCosts}>Xác nhận XÓA TẤT CẢ</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

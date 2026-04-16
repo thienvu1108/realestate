@@ -89,9 +89,10 @@ service cloud.firestore {
     match /budgets/{budgetId} {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
-                    (isUser() && resource.data.userEmail == request.auth.token.email);
-      allow create: if isUser() || isAdmin();
-      allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
+                    (resource.data.createdBy == request.auth.uid) ||
+                    (resource.data.userEmail == request.auth.token.email);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid;
       allow delete: if isAdmin();
     }
 
@@ -101,9 +102,10 @@ service cloud.firestore {
     match /costs/{costId} {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
-                    (isUser() && resource.data.userEmail == request.auth.token.email);
-      allow create: if isUser() || isAdmin();
-      allow update: if isAdmin() || (isUser() && resource.data.userEmail == request.auth.token.email);
+                    (resource.data.createdBy == request.auth.uid) ||
+                    (resource.data.userEmail == request.auth.token.email);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid;
       allow delete: if isAdmin();
     }
 

@@ -357,6 +357,15 @@ export default function App() {
   const [isBulkDeleteCostsDialogOpen, setIsBulkDeleteCostsDialogOpen] = useState(false);
   const [isDeleteAllCostsDialogOpen, setIsDeleteAllCostsDialogOpen] = useState(false);
   const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
+  
+  const [isBulkDeleteProjectsDialogOpen, setIsBulkDeleteProjectsDialogOpen] = useState(false);
+  const [isDeleteAllProjectsDialogOpen, setIsDeleteAllProjectsDialogOpen] = useState(false);
+  const [isBulkDeleteRegionsDialogOpen, setIsBulkDeleteRegionsDialogOpen] = useState(false);
+  const [isDeleteAllRegionsDialogOpen, setIsDeleteAllRegionsDialogOpen] = useState(false);
+  const [isBulkDeleteTypesDialogOpen, setIsBulkDeleteTypesDialogOpen] = useState(false);
+  const [isDeleteAllTypesDialogOpen, setIsDeleteAllTypesDialogOpen] = useState(false);
+  const [isDeleteUserDialogOpen, setIsDeleteUserDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{id: string, email: string} | null>(null);
 
   const isAdmin = userRole === 'super_admin' || userRole === 'admin';
   const isSuperAdmin = userRole === 'super_admin';
@@ -638,12 +647,19 @@ export default function App() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
+  const handleDeleteUser = (userId: string, email: string) => {
+    setUserToDelete({ id: userId, email });
+    setIsDeleteUserDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
     try {
-      await deleteDoc(doc(db, 'users', userId));
-      await logAction('DELETE_USER', 'users', userId, {});
+      await deleteDoc(doc(db, 'users', userToDelete.id));
+      await logAction('DELETE_USER', 'users', userToDelete.id, { email: userToDelete.email });
       toast.success('Đã xóa người dùng');
+      setIsDeleteUserDialogOpen(false);
+      setUserToDelete(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'users');
     }
@@ -850,9 +866,12 @@ export default function App() {
 
   const handleBulkDeleteProjects = async () => {
     if (selectedProjectIds.length === 0 || isDeletingProjects) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedProjectIds.length} dự án đã chọn?`)) return;
-    
+    setIsBulkDeleteProjectsDialogOpen(true);
+  };
+
+  const confirmBulkDeleteProjects = async () => {
     setIsDeletingProjects(true);
+    setIsBulkDeleteProjectsDialogOpen(false);
     try {
       const batch = writeBatch(db);
       selectedProjectIds.forEach(id => {
@@ -874,8 +893,11 @@ export default function App() {
       toast.error('Vui lòng chọn dự án và vùng/khu vực');
       return;
     }
-    if (!confirm(`Bạn có chắc chắn muốn cập nhật vùng/khu vực cho ${selectedProjectIds.length} dự án đã chọn?`)) return;
+    setIsBulkUpdateRegionDialogOpen(true);
+  };
 
+  const confirmBulkUpdateProjectRegion = async () => {
+    setIsBulkUpdateRegionDialogOpen(false);
     try {
       const batch = writeBatch(db);
       selectedProjectIds.forEach(id => {
@@ -885,7 +907,6 @@ export default function App() {
       await logAction('UPDATE_BULK', 'projects', 'multiple', { count: selectedProjectIds.length, region: selectedRegionForBulk });
       toast.success(`Đã cập nhật vùng/khu vực cho ${selectedProjectIds.length} dự án`);
       setSelectedProjectIds([]);
-      setIsBulkUpdateRegionDialogOpen(false);
       setSelectedRegionForBulk('');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'projects');
@@ -894,8 +915,11 @@ export default function App() {
 
   const handleDeleteAllProjects = async () => {
     if (projects.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ dự án? Hành động này không thể hoàn tác.')) return;
-    
+    setIsDeleteAllProjectsDialogOpen(true);
+  };
+
+  const confirmDeleteAllProjects = async () => {
+    setIsDeleteAllProjectsDialogOpen(false);
     try {
       const batch = writeBatch(db);
       projects.forEach(p => {
@@ -1071,9 +1095,12 @@ export default function App() {
 
   const handleBulkDeleteRegions = async () => {
     if (selectedRegionIds.length === 0 || isDeletingRegions) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedRegionIds.length} vùng/khu vực đã chọn?`)) return;
-    
+    setIsBulkDeleteRegionsDialogOpen(true);
+  };
+
+  const confirmBulkDeleteRegions = async () => {
     setIsDeletingRegions(true);
+    setIsBulkDeleteRegionsDialogOpen(false);
     try {
       const batch = writeBatch(db);
       selectedRegionIds.forEach(id => {
@@ -1092,8 +1119,11 @@ export default function App() {
 
   const handleDeleteAllRegions = async () => {
     if (regions.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ vùng/khu vực? Hành động này không thể hoàn tác.')) return;
-    
+    setIsDeleteAllRegionsDialogOpen(true);
+  };
+
+  const confirmDeleteAllRegions = async () => {
+    setIsDeleteAllRegionsDialogOpen(false);
     try {
       const batch = writeBatch(db);
       regions.forEach(r => {
@@ -1209,9 +1239,12 @@ export default function App() {
 
   const handleBulkDeleteTypes = async () => {
     if (selectedTypeIds.length === 0 || isDeletingTypes) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedTypeIds.length} loại hình đã chọn?`)) return;
-    
+    setIsBulkDeleteTypesDialogOpen(true);
+  };
+
+  const confirmBulkDeleteTypes = async () => {
     setIsDeletingTypes(true);
+    setIsBulkDeleteTypesDialogOpen(false);
     try {
       const batch = writeBatch(db);
       selectedTypeIds.forEach(id => {
@@ -1230,8 +1263,11 @@ export default function App() {
 
   const handleDeleteAllTypes = async () => {
     if (types.length === 0) return;
-    if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ loại hình? Hành động này không thể hoàn tác.')) return;
-    
+    setIsDeleteAllTypesDialogOpen(true);
+  };
+
+  const confirmDeleteAllTypes = async () => {
+    setIsDeleteAllTypesDialogOpen(false);
     try {
       const batch = writeBatch(db);
       types.forEach(t => {
@@ -1287,7 +1323,7 @@ export default function App() {
         amount: Number(budgetAmount),
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
-        userEmail: user?.email
+        userEmail: user?.email?.toLowerCase()
       });
       await logAction('CREATE', 'budgets', docRef.id, { projectName: project?.name || 'N/A', amount: budgetAmount, implementer: implementerName });
       setBudgetAmount('');
@@ -1338,7 +1374,7 @@ export default function App() {
         note: costNote,
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
-        userEmail: user?.email
+        userEmail: user?.email?.toLowerCase()
       });
       await logAction('CREATE', 'costs', docRef.id, { projectName: project?.name, amount: totalAmount, note: costNote, budgetId: selectedBudgetId });
       setFbAds('');
@@ -1534,9 +1570,13 @@ export default function App() {
       if (!hasProjectAccess) return false;
 
       const matchProject = reportProject === 'all' || b.projectId === reportProject;
+      const userEmail = user?.email?.toLowerCase();
+      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+      const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || b.teamName === reportTeam)
-        : (b.userEmail === user?.email);
+        : isOwner;
       const matchMonth = b.month === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
@@ -1563,9 +1603,13 @@ export default function App() {
       if (!hasProjectAccess) return false;
 
       const matchProject = reportProject === 'all' || c.projectId === reportProject;
+      const userEmail = user?.email?.toLowerCase();
+      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
+      const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
+
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || c.teamName === reportTeam)
-        : (c.userEmail === user?.email);
+        : isOwner;
       // Map cost date to marketing month
       const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
       const mMonth = costDate ? getMarketingMonth(costDate) : null;
@@ -2948,9 +2992,9 @@ export default function App() {
                               {budgets
                                 .filter(b => {
                                   const matchesSearch = 
-                                    b.projectName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    b.teamName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    b.implementerName.toLowerCase().includes(adminBudgetSearch.toLowerCase());
+                                    (b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
                                   const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
                                   return matchesSearch && matchesMonth;
                                 })
@@ -2994,9 +3038,9 @@ export default function App() {
                                 ))}
                               {budgets.filter(b => {
                                   const matchesSearch = 
-                                    b.projectName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    b.teamName.toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    b.implementerName.toLowerCase().includes(adminBudgetSearch.toLowerCase());
+                                    (b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
                                   const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
                                   return matchesSearch && matchesMonth;
                                 }).length === 0 && (
@@ -3095,9 +3139,9 @@ export default function App() {
                               {costs
                                 .filter(c => {
                                   const matchesSearch = 
-                                    c.projectName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    c.teamName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    c.implementerName.toLowerCase().includes(adminCostSearch.toLowerCase());
+                                    (c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (c.implementerName || '').toLowerCase().includes(adminCostSearch.toLowerCase());
                                   
                                   const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
                                   const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
@@ -3144,9 +3188,9 @@ export default function App() {
                                 ))}
                               {costs.filter(c => {
                                   const matchesSearch = 
-                                    c.projectName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    c.teamName.toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    c.implementerName.toLowerCase().includes(adminCostSearch.toLowerCase());
+                                    (c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (c.implementerName || '').toLowerCase().includes(adminCostSearch.toLowerCase());
                                   const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
                                   const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
                                   return matchesSearch && matchesMonth;
@@ -3848,7 +3892,7 @@ export default function App() {
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                    onClick={() => handleDeleteUser(u.id)}
+                                    onClick={() => handleDeleteUser(u.id, u.email)}
                                     disabled={u.email === 'thienvu1108@gmail.com'}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -4272,7 +4316,14 @@ export default function App() {
                     </TableHeader>
                     <TableBody>
                       {budgets
-                        .filter(b => isAdmin || isMod || b.userEmail === user.email)
+                        .filter(b => {
+                          const userEmail = user?.email?.toLowerCase();
+                          const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                          const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+                          const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+                          
+                          return isAdmin || isMod || isOwner || isAssignedGDDA;
+                        })
                         .slice(0, 10).map(b => (
                         <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
                           {isAdmin && (
@@ -4324,17 +4375,7 @@ export default function App() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                onClick={async () => {
-                                  if (confirm('Bạn có chắc chắn muốn xóa bản ghi này?')) {
-                                    try {
-                                      await deleteDoc(doc(db, 'budgets', b.id));
-                                      await logAction('DELETE', 'budgets', b.id, { projectName: b.projectName, amount: b.amount });
-                                      toast.success('Đã xóa bản ghi');
-                                    } catch (error) {
-                                      handleFirestoreError(error, OperationType.DELETE, 'budgets');
-                                    }
-                                  }
-                                }}
+                                onClick={() => handleDeleteBudget(b.id, b.projectName)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -4423,7 +4464,7 @@ export default function App() {
                                   .filter(b => {
                                     const userEmail = user?.email?.toLowerCase();
                                     const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                                    const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
+                                    const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
                                     const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
                                     
                                     // Admin and Mod see all budgets
@@ -4435,9 +4476,9 @@ export default function App() {
                                     return canSee && b.month === costBudgetMonth;
                                   })
                                   .filter(b => 
-                                    projectMap[b.projectId]?.toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                    b.teamName.toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                    b.implementerName.toLowerCase().includes(budgetSearch.toLowerCase())
+                                    (projectMap[b.projectId] || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
+                                    (b.teamName || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
+                                    (b.implementerName || '').toLowerCase().includes(budgetSearch.toLowerCase())
                                   )
                                   .map(b => (
                                     <SelectItem key={b.id} value={b.id} className="py-3">
@@ -4454,7 +4495,7 @@ export default function App() {
                                 {budgets.filter(b => {
                                     const userEmail = user?.email?.toLowerCase();
                                     const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                                    const isOwner = budgetEmail && userEmail && budgetEmail === userEmail;
+                                    const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
                                     const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
                                     const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
                                     return canSee && b.month === costBudgetMonth;
@@ -4963,6 +5004,163 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={isDeleteUserDialogOpen} onOpenChange={setIsDeleteUserDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa người dùng
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa người dùng <strong>{userToDelete?.email}</strong>? 
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteUserDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteUser}>Xác nhận xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Projects Confirmation Dialog */}
+      <Dialog open={isBulkDeleteProjectsDialogOpen} onOpenChange={setIsBulkDeleteProjectsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều dự án
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedProjectIds.length}</strong> dự án đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteProjectsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteProjects} disabled={isDeletingProjects}>
+              {isDeletingProjects ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Update Region Confirmation Dialog */}
+      <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <Building2 className="w-5 h-5" /> Xác nhận cập nhật vùng
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn cập nhật vùng/khu vực thành <strong>{selectedRegionForBulk}</strong> cho <strong>{selectedProjectIds.length}</strong> dự án đã chọn?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkUpdateRegionDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmBulkUpdateProjectRegion}>Xác nhận cập nhật</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Projects Confirmation Dialog */}
+      <Dialog open={isDeleteAllProjectsDialogOpen} onOpenChange={setIsDeleteAllProjectsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa TẤT CẢ dự án
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TẤT CẢ</strong> dự án trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllProjectsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllProjects}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Regions Confirmation Dialog */}
+      <Dialog open={isBulkDeleteRegionsDialogOpen} onOpenChange={setIsBulkDeleteRegionsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều vùng
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedRegionIds.length}</strong> vùng/khu vực đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteRegionsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteRegions} disabled={isDeletingRegions}>
+              {isDeletingRegions ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Regions Confirmation Dialog */}
+      <Dialog open={isDeleteAllRegionsDialogOpen} onOpenChange={setIsDeleteAllRegionsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa TẤT CẢ vùng
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TẤT CẢ</strong> vùng/khu vực trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllRegionsDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllRegions}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Types Confirmation Dialog */}
+      <Dialog open={isBulkDeleteTypesDialogOpen} onOpenChange={setIsBulkDeleteTypesDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều loại hình
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedTypeIds.length}</strong> loại hình đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteTypesDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteTypes} disabled={isDeletingTypes}>
+              {isDeletingTypes ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Types Confirmation Dialog */}
+      <Dialog open={isDeleteAllTypesDialogOpen} onOpenChange={setIsDeleteAllTypesDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CẢNH BÁO: Xóa TẤT CẢ loại hình
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TẤT CẢ</strong> loại hình trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllTypesDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllTypes}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Budget Confirmation Dialog */}
       <Dialog open={isDeleteBudgetDialogOpen} onOpenChange={setIsDeleteBudgetDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">

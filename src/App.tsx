@@ -14,6 +14,7 @@ import {
   onSnapshot, 
   orderBy, 
   where,
+  or,
   serverTimestamp,
   doc,
   getDocFromServer,
@@ -501,13 +502,27 @@ export default function App() {
     if (isAdmin || isMod) {
       qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects), orderBy('createdAt', 'desc'));
+      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
-      qBudgets = query(collection(db, 'budgets'), where('createdBy', '==', user.uid), orderBy('createdAt', 'desc'));
+      qBudgets = query(
+        collection(db, 'budgets'), 
+        or(
+          where('createdBy', '==', user.uid),
+          where('userEmail', '==', user.email?.toLowerCase())
+        )
+      );
     }
 
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
-      setBudgets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (!(isAdmin || isMod)) {
+        data.sort((a: any, b: any) => {
+          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+          return timeB - timeA;
+        });
+      }
+      setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
     // Listen to costs
@@ -515,13 +530,27 @@ export default function App() {
     if (isAdmin || isMod) {
       qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects), orderBy('createdAt', 'desc'));
+      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
-      qCosts = query(collection(db, 'costs'), where('createdBy', '==', user.uid), orderBy('createdAt', 'desc'));
+      qCosts = query(
+        collection(db, 'costs'), 
+        or(
+          where('createdBy', '==', user.uid),
+          where('userEmail', '==', user.email?.toLowerCase())
+        )
+      );
     }
 
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
-      setCosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (!(isAdmin || isMod)) {
+        data.sort((a: any, b: any) => {
+          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+          return timeB - timeA;
+        });
+      }
+      setCosts(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'costs'));
 
     // Listen to audit logs

@@ -13,6 +13,7 @@ import {
   query, 
   onSnapshot, 
   orderBy, 
+  where,
   serverTimestamp,
   doc,
   getDocFromServer,
@@ -390,7 +391,7 @@ export default function App() {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
           
-          let role: 'super_admin' | 'admin' | 'mod' | 'user' = 'user';
+          let role: 'super_admin' | 'admin' | 'mod' | 'gdda' | 'user' = 'user';
           if (firebaseUser.email === 'thienvu1108@gmail.com') {
             role = 'super_admin';
           }
@@ -463,7 +464,16 @@ export default function App() {
     testConnection();
 
     // Listen to projects
-    const qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+    let qProjects;
+    if (isAdmin || isMod || isUser) {
+      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
+    } else {
+      // If GDDA has no projects, they see nothing
+      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
+    }
+
     const unsubProjects = onSnapshot(qProjects, (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
@@ -487,22 +497,41 @@ export default function App() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
     // Listen to budgets
-    const qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
+    let qBudgets;
+    if (isAdmin || isMod) {
+      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects), orderBy('createdAt', 'desc'));
+    } else {
+      qBudgets = query(collection(db, 'budgets'), where('createdBy', '==', user.uid), orderBy('createdAt', 'desc'));
+    }
+
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       setBudgets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
     // Listen to costs
-    const qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
+    let qCosts;
+    if (isAdmin || isMod) {
+      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects), orderBy('createdAt', 'desc'));
+    } else {
+      qCosts = query(collection(db, 'costs'), where('createdBy', '==', user.uid), orderBy('createdAt', 'desc'));
+    }
+
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
       setCosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'costs'));
 
     // Listen to audit logs
-    const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'));
-    const unsubLogs = onSnapshot(qLogs, (snapshot) => {
-      setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
+    let unsubLogs = () => {};
+    if (isAdmin || isMod) {
+      const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'));
+      unsubLogs = onSnapshot(qLogs, (snapshot) => {
+        setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
+    }
 
     // Listen to all users (for Admin)
     let unsubUsers = () => {};
@@ -523,7 +552,7 @@ export default function App() {
       unsubLogs();
       unsubUsers();
     };
-  }, [user, userRole]);
+  }, [user, userRole, userProfile]);
 
   const login = async () => {
     const provider = new GoogleAuthProvider();

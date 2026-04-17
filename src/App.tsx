@@ -42,7 +42,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
 import { 
@@ -380,6 +380,8 @@ export default function App() {
   const [isDeleteBudgetDialogOpen, setIsDeleteBudgetDialogOpen] = useState(false);
   const [isBulkDeleteBudgetsDialogOpen, setIsBulkDeleteBudgetsDialogOpen] = useState(false);
   const [isDeleteAllBudgetsDialogOpen, setIsDeleteAllBudgetsDialogOpen] = useState(false);
+  const [isMigrateBudgetsDialogOpen, setIsMigrateBudgetsDialogOpen] = useState(false);
+  const [isMigratingBudgets, setIsMigratingBudgets] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<{id: string, name: string} | null>(null);
   const [isDeleteCostDialogOpen, setIsDeleteCostDialogOpen] = useState(false);
   const [isBulkDeleteCostsDialogOpen, setIsBulkDeleteCostsDialogOpen] = useState(false);
@@ -1645,6 +1647,52 @@ export default function App() {
       setSelectedBudgetIds([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'budgets');
+    }
+  };
+
+  const handleMigrateBudgets = () => {
+    const aprilBudgets = budgets.filter(b => b.month === '2026-04');
+    if (aprilBudgets.length === 0) {
+      toast.info('Không tìm thấy bản ghi tháng 4 nào để cập nhật');
+      return;
+    }
+    setIsMigrateBudgetsDialogOpen(true);
+  };
+
+  const confirmMigrateBudgets = async () => {
+    const aprilBudgets = budgets.filter(b => b.month === '2026-04');
+    const aprilCosts = costs.filter(c => c.month === '2026-04');
+    setIsMigratingBudgets(true);
+    setIsMigrateBudgetsDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      
+      // Migrate Budgets
+      aprilBudgets.forEach(b => {
+        batch.update(doc(db, 'budgets', b.id), { 
+          month: '2026-05',
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.uid
+        });
+      });
+
+      // Migrate Costs
+      aprilCosts.forEach(c => {
+        batch.update(doc(db, 'costs', c.id), {
+          month: '2026-05',
+          year: 2026, // Ensure year is also correct
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.uid
+        });
+      });
+
+      await batch.commit();
+      await logAction('MIGRATE_BUDGETS_AND_COSTS', 'budgets', 'bulk', { from: '2026-04', to: '2026-05', budgetCount: aprilBudgets.length, costCount: aprilCosts.length });
+      toast.success(`Đã chuyển thành công ${aprilBudgets.length} ngân sách và ${aprilCosts.length} thực chi sang Tháng 5`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'budgets');
+    } finally {
+      setIsMigratingBudgets(false);
     }
   };
 
@@ -3218,6 +3266,14 @@ export default function App() {
                           <CardDescription>Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={handleMigrateBudgets}
+                          >
+                            <RefreshCw className={`w-3 h-3 mr-1 ${isMigratingBudgets ? 'animate-spin' : ''}`} /> Chuyển T4 sang T5
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -5764,6 +5820,26 @@ export default function App() {
             <Button variant="outline" onClick={() => setIsEditBudgetDialogOpen(false)}>Hủy</Button>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmEditBudget}>
               Cập nhật thông tin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Migration Budget Confirmation Dialog */}
+      <Dialog open={isMigrateBudgetsDialogOpen} onOpenChange={setIsMigrateBudgetsDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <RefreshCw className="w-5 h-5" /> Xác nhận chuyển dữ liệu
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn chuyển toàn bộ bản ghi đăng ký ngân sách từ <strong>Tháng 4</strong> sang <strong>Tháng 5</strong>?
+              Hành động này sẽ cập nhật tất cả bản ghi có kỳ báo cáo "2026-04" thành "2026-05".
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsMigrateBudgetsDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmMigrateBudgets} disabled={isMigratingBudgets}>
+              {isMigratingBudgets ? "Đang xử lý..." : "Xác nhận chuyển"}
             </Button>
           </DialogFooter>
         </DialogContent>

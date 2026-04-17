@@ -98,14 +98,14 @@ export default function App() {
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
 
-  // Helper for Marketing Month (20th of prev month to 21st of current month as per user request example)
+  // Helper for Marketing Month (21st of prev month to 20th of current month)
   const getMarketingMonth = (date: Date | any) => {
     if (!date) return '';
     const d = date instanceof Date ? date : new Date(date);
     if (isNaN(d.getTime())) return '';
     const day = d.getDate();
-    // User requested Month 5 starts on 20/4
-    if (day >= 20) {
+    // Month M starts on 21/(M-1)
+    if (day >= 21) {
       d.setMonth(d.getMonth() + 1);
     }
     return format(d, 'yyyy-MM');
@@ -115,13 +115,32 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Following user example: Month 5 is 20/4 - 21/5
-      const endDate = new Date(year, month - 1, 21);
-      const startDate = new Date(year, month - 2, 20);
+      // Month M is 21/(M-1) - 20/M
+      const endDate = new Date(year, month - 1, 20);
+      const startDate = new Date(year, month - 2, 21);
       return `( ${format(startDate, 'd/M')} - ${format(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
     }
+  };
+
+  const getMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    // The current marketing month could be the "next" calendar month if we are past the 21st
+    const currentM = getMarketingMonth(now);
+    const [y, m] = currentM.split('-').map(Number);
+    
+    // Show current month and next 5 months
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(y, m - 1 + i, 1);
+      const val = format(d, 'yyyy-MM');
+      options.push({
+        value: val,
+        label: getMarketingMonthDisplayRange(val)
+      });
+    }
+    return options;
   };
 
   const formatCurrency = (value: number) => {
@@ -221,9 +240,9 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // User example: Tháng 5 ( 20/4 - 21/5 )
-      const startDate = new Date(year, month - 2, 20);
-      const endDate = new Date(year, month - 1, 21);
+      // User requested: Month M ( 21/M-1 - 20/M )
+      const startDate = new Date(year, month - 2, 21);
+      const endDate = new Date(year, month - 1, 20);
       return `Tháng ${month} ( ${safeFormat(startDate, 'd/M')} - ${safeFormat(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
@@ -241,7 +260,7 @@ export default function App() {
   const [implementerName, setImplementerName] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
   const [teamName, setTeamName] = useState('');
-  const [budgetMonth, setBudgetMonth] = useState(getMarketingMonth(new Date()));
+  const [budgetMonth, setBudgetMonth] = useState('');
   
   // Search and Confirmation states
   const [projectSearch, setProjectSearch] = useState('');
@@ -281,6 +300,8 @@ export default function App() {
   const [editingBudgetMonth, setEditingBudgetMonth] = useState(getMarketingMonth(new Date()));
   const [editingBudgetTeam, setEditingBudgetTeam] = useState('');
   const [editingBudgetProject, setEditingBudgetProject] = useState('');
+  const [editingBudgetImplementer, setEditingBudgetImplementer] = useState('');
+  const [isEditBudgetDialogOpen, setIsEditBudgetDialogOpen] = useState(false);
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
   const [editingCostAmount, setEditingCostAmount] = useState('');
   const [editingCostNote, setEditingCostNote] = useState('');
@@ -1474,16 +1495,88 @@ export default function App() {
     }
   };
 
-  const handleUpdateBudget = async (id: string) => {
+  const handleOpenEditBudget = (budget: any) => {
+    setEditingBudgetId(budget.id);
+    setEditingBudgetAmount(budget.amount.toString());
+    setEditingBudgetMonth(budget.month);
+    setEditingBudgetTeam(budget.teamName);
+    setEditingBudgetProject(budget.projectId);
+    setEditingBudgetImplementer(budget.implementerName);
+    setIsEditBudgetDialogOpen(true);
+  };
+
+  const confirmEditBudget = async () => {
+    if (!editingBudgetId || !editingBudgetAmount || !editingBudgetTeam || !editingBudgetMonth || !editingBudgetProject || !editingBudgetImplementer) {
+      toast.error('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
     try {
-      await updateDoc(doc(db, 'budgets', id), {
+      const budgetRef = doc(db, 'budgets', editingBudgetId);
+      const updateData = {
         amount: Number(editingBudgetAmount),
         month: editingBudgetMonth,
         teamName: editingBudgetTeam,
         projectId: editingBudgetProject,
-        projectName: projectMap[editingBudgetProject] || 'N/A'
-      });
-      await logAction('UPDATE', 'budgets', id, { amount: editingBudgetAmount });
+        projectName: projectMap[editingBudgetProject] || 'N/A',
+        implementerName: editingBudgetImplementer,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid
+      };
+      await updateDoc(budgetRef, updateData);
+      
+      // Update related costs
+      const relatedCosts = costs.filter(c => c.budgetId === editingBudgetId);
+      if (relatedCosts.length > 0) {
+        const batch = writeBatch(db);
+        relatedCosts.forEach(cost => {
+          const costRef = doc(db, 'costs', cost.id);
+          batch.update(costRef, {
+            projectId: editingBudgetProject,
+            projectName: projectMap[editingBudgetProject] || 'N/A'
+          });
+        });
+        await batch.commit();
+      }
+
+      await logAction('UPDATE', 'budgets', editingBudgetId, updateData);
+      setEditingBudgetId(null);
+      setIsEditBudgetDialogOpen(false);
+      toast.success('Đã cập nhật ngân sách');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'budgets');
+    }
+  };
+
+  const handleUpdateBudget = async (id: string) => {
+    try {
+      const budgetRef = doc(db, 'budgets', id);
+      const updateData = {
+        amount: Number(editingBudgetAmount),
+        month: editingBudgetMonth,
+        teamName: editingBudgetTeam,
+        projectId: editingBudgetProject,
+        projectName: projectMap[editingBudgetProject] || 'N/A',
+        implementerName: editingBudgetImplementer,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid
+      };
+      await updateDoc(budgetRef, updateData);
+      
+      // Update related costs
+      const relatedCosts = costs.filter(c => c.budgetId === id);
+      if (relatedCosts.length > 0) {
+        const batch = writeBatch(db);
+        relatedCosts.forEach(cost => {
+          const costRef = doc(db, 'costs', cost.id);
+          batch.update(costRef, {
+            projectId: editingBudgetProject,
+            projectName: projectMap[editingBudgetProject] || 'N/A'
+          });
+        });
+        await batch.commit();
+      }
+
+      await logAction('UPDATE', 'budgets', id, updateData);
       setEditingBudgetId(null);
       toast.success('Đã cập nhật ngân sách');
     } catch (error) {
@@ -1834,8 +1927,8 @@ export default function App() {
     const mMonth = getMarketingMonth(now);
     if (!mMonth) return 1;
     const [year, month] = mMonth.split('-').map(Number);
-    // Budget month M starts on 20th of month M-1
-    const startDate = new Date(year, month - 2, 20);
+    // Budget month M starts on 21st of month M-1
+    const startDate = new Date(year, month - 2, 21);
     const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
     
     if (diffDays < 7) return 1;
@@ -1848,8 +1941,8 @@ export default function App() {
     if (!monthStr || !period || period === 'all') return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Budget month M starts on 20th of month M-1
-      const startDate = new Date(year, month - 2, 20);
+      // Budget month M starts on 21st of month M-1
+      const startDate = new Date(year, month - 2, 21);
       const pNum = Number(period);
       
       const periodStart = new Date(startDate);
@@ -1859,9 +1952,9 @@ export default function App() {
         periodStart.setDate(startDate.getDate() + (pNum - 1) * 7);
         periodEnd.setDate(periodStart.getDate() + 6);
       } else {
-        // Kỳ 4: Until the end (21st of month M)
+        // Kỳ 4: Until the end (20th of month M)
         periodStart.setDate(startDate.getDate() + 21);
-        periodEnd = new Date(year, month - 1, 21);
+        periodEnd = new Date(year, month - 1, 20);
       }
       
       return `${format(periodStart, 'd/M')} - ${format(periodEnd, 'd/M')}`;
@@ -3229,14 +3322,26 @@ export default function App() {
                                     <TableCell className="text-xs">{b.month}</TableCell>
                                     <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
                                     <TableCell className="text-right">
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                        onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
+                                      <div className="flex justify-end gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                          onClick={() => handleOpenEditBudget(b)}
+                                          title="Sửa ngân sách"
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                          onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                          title="Xóa ngân sách"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -3896,73 +4001,33 @@ export default function App() {
                                   />
                                 </TableCell>
                               )}
-                              <TableCell className="font-medium">
-                                {editingBudgetId === b.id ? (
-                                  <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
-                                    <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      {teams.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                ) : b.teamName}
-                              </TableCell>
-                              <TableCell>
-                                {editingBudgetId === b.id ? (
-                                  <Input 
-                                    className="h-8" 
-                                    value={implementerName} 
-                                    onChange={e => setImplementerName(e.target.value)} 
-                                  />
-                                ) : b.implementerName}
-                              </TableCell>
-                              <TableCell>
-                                {editingBudgetId === b.id ? (
-                                  <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
-                                    <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (projectMap[b.projectId] || b.projectName || 'N/A')}
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {editingBudgetId === b.id ? (
-                                  <Input 
-                                    type="text" 
-                                    className="h-8 text-right" 
-                                    value={formatNumberWithCommas(editingBudgetAmount)} 
-                                    onChange={handleNumberInputChange(setEditingBudgetAmount)} 
-                                  />
-                                ) : `${b.amount.toLocaleString()} đ`}
-                              </TableCell>
+                               <TableCell className="font-medium">{b.teamName}</TableCell>
+                              <TableCell>{b.implementerName}</TableCell>
+                              <TableCell>{projectMap[b.projectId] || b.projectName || 'N/A'}</TableCell>
+                              <TableCell className="text-right font-mono">{b.amount.toLocaleString()} đ</TableCell>
                               <TableCell className="text-xs text-slate-500">{b.userEmail}</TableCell>
                               {isAdmin && (
                                 <TableCell className="text-right">
-                                  {editingBudgetId === b.id ? (
-                                    <div className="flex justify-end gap-1">
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateBudget(b.id)}>
-                                        <Check className="h-4 w-4" />
-                                      </Button>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingBudgetId(null)}>
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex justify-end gap-1">
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
-                                        setEditingBudgetId(b.id);
-                                        setEditingBudgetAmount(b.amount.toString());
-                                        setEditingBudgetMonth(b.month);
-                                        setEditingBudgetTeam(b.teamName);
-                                        setEditingBudgetProject(b.projectId);
-                                      }}>
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteBudget(b.id, b.projectName)}>
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </div>
-                                  )}
+                                  <div className="flex justify-end gap-1">
+                                    <Button 
+                                      size="icon" 
+                                      variant="ghost" 
+                                      className="h-8 w-8 text-slate-400 hover:text-blue-600" 
+                                      onClick={() => handleOpenEditBudget(b)}
+                                      title="Sửa ngân sách"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button 
+                                      size="icon" 
+                                      variant="ghost" 
+                                      className="h-8 w-8 text-slate-400 hover:text-red-600" 
+                                      onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                      title="Xóa ngân sách"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               )}
                             </TableRow>
@@ -4379,14 +4444,20 @@ export default function App() {
 
                     <div className="space-y-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Kỳ báo cáo (Tháng) <span className="text-blue-600 ml-1 normal-case font-medium">{getReportingPeriod(budgetMonth)}</span>
+                        Kỳ báo cáo (Tháng)
                       </Label>
-                      <Input 
-                        type="month" 
-                        className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11"
-                        value={budgetMonth} 
-                        onChange={e => setBudgetMonth(e.target.value)} 
-                      />
+                      <Select value={budgetMonth} onValueChange={setBudgetMonth}>
+                        <SelectTrigger className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11 text-xs">
+                          <SelectValue placeholder="Vui lòng chọn kỳ báo cáo mà bạn muốn đăng ký" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getMonthOptions().map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
@@ -5580,6 +5651,120 @@ export default function App() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsDeleteAllCostsDialogOpen(false)}>Hủy</Button>
             <Button variant="destructive" onClick={confirmDeleteAllCosts}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Edit Budget Dialog */}
+      <Dialog open={isEditBudgetDialogOpen} onOpenChange={setIsEditBudgetDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <Edit2 className="w-5 h-5" /> Sửa thông tin Đăng ký Ngân sách
+            </DialogTitle>
+            <DialogDescription>
+              Cập nhật các thông tin về dự án, team, người triển khai và số tiền ngân sách.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Dự án</Label>
+              <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
+                <SelectTrigger className="bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Chọn dự án" />
+                </SelectTrigger>
+                <SelectContent className="w-[400px] md:w-[550px]">
+                  <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Tìm dự án..."
+                        className="pl-8 h-9"
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  <SelectGroup className="max-h-[300px] overflow-y-auto">
+                    {projects
+                      .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                      .map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <div className="flex items-center justify-between w-full gap-4">
+                            <span className="font-medium">{p.name}</span>
+                            <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100 shrink-0">
+                              {p.region}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                    }
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Team</Label>
+              <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
+                <SelectTrigger className="bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Chọn team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {teams.map(t => (
+                      <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Người triển khai</Label>
+              <Input 
+                value={editingBudgetImplementer} 
+                onChange={e => setEditingBudgetImplementer(e.target.value)} 
+                className="bg-slate-50 border-slate-200"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Tháng báo cáo</Label>
+              <div className="space-y-1">
+                <Select value={editingBudgetMonth} onValueChange={setEditingBudgetMonth}>
+                  <SelectTrigger className="bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Chọn tháng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getMonthOptions().map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Số tiền (VNĐ)</Label>
+              <div className="relative">
+                <Input 
+                  type="text" 
+                  value={formatNumberWithCommas(editingBudgetAmount)} 
+                  onChange={handleNumberInputChange(setEditingBudgetAmount)} 
+                  className="bg-slate-50 border-slate-200 pr-8 font-mono font-bold text-blue-600"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">đ</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsEditBudgetDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmEditBudget}>
+              Cập nhật thông tin
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

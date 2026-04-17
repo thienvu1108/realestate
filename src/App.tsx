@@ -98,13 +98,14 @@ export default function App() {
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
 
-  // Helper for Marketing Month (21st of prev month to 20th of current month)
+  // Helper for Marketing Month (20th of prev month to 21st of current month as per user request example)
   const getMarketingMonth = (date: Date | any) => {
     if (!date) return '';
     const d = date instanceof Date ? date : new Date(date);
     if (isNaN(d.getTime())) return '';
     const day = d.getDate();
-    if (day >= 21) {
+    // User requested Month 5 starts on 20/4
+    if (day >= 20) {
       d.setMonth(d.getMonth() + 1);
     }
     return format(d, 'yyyy-MM');
@@ -114,9 +115,10 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      const endDate = new Date(year, month - 1, 20);
-      const startDate = new Date(year, month - 2, 21);
-      return `(${format(startDate, 'dd/MM')} - ${format(endDate, 'dd/MM')})`;
+      // Following user example: Month 5 is 20/4 - 21/5
+      const endDate = new Date(year, month - 1, 21);
+      const startDate = new Date(year, month - 2, 20);
+      return `( ${format(startDate, 'd/M')} - ${format(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
     }
@@ -219,10 +221,10 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Marketing month M is from 21st of M-1 to 20th of M
-      const startDate = new Date(year, month - 2, 21);
-      const endDate = new Date(year, month - 1, 20);
-      return `Tháng ${month} (từ ${safeFormat(startDate, 'dd/MM')} - ${safeFormat(endDate, 'dd/MM')})`;
+      // User example: Tháng 5 ( 20/4 - 21/5 )
+      const startDate = new Date(year, month - 2, 20);
+      const endDate = new Date(year, month - 1, 21);
+      return `Tháng ${month} ( ${safeFormat(startDate, 'd/M')} - ${safeFormat(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
     }
@@ -1832,28 +1834,37 @@ export default function App() {
     const mMonth = getMarketingMonth(now);
     if (!mMonth) return 1;
     const [year, month] = mMonth.split('-').map(Number);
-    // Budget month M starts on 21st of month M-1
-    const startDate = new Date(year, month - 2, 21);
+    // Budget month M starts on 20th of month M-1
+    const startDate = new Date(year, month - 2, 20);
     const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-    const period = Math.floor(diffDays / 7) + 1;
-    return Math.min(Math.max(period, 1), 4);
+    
+    if (diffDays < 7) return 1;
+    if (diffDays < 14) return 2;
+    if (diffDays < 21) return 3;
+    return 4; // Kỳ cuối là những ngày còn lại
   };
 
   const getPeriodRange = (monthStr: string, period: number | string) => {
     if (!monthStr || !period || period === 'all') return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Budget month M starts on 21st of month M-1
-      const startDate = new Date(year, month - 2, 21);
+      // Budget month M starts on 20th of month M-1
+      const startDate = new Date(year, month - 2, 20);
       const pNum = Number(period);
       
       const periodStart = new Date(startDate);
-      periodStart.setDate(startDate.getDate() + (pNum - 1) * 7);
+      let periodEnd = new Date(startDate);
+
+      if (pNum < 4) {
+        periodStart.setDate(startDate.getDate() + (pNum - 1) * 7);
+        periodEnd.setDate(periodStart.getDate() + 6);
+      } else {
+        // Kỳ 4: Until the end (21st of month M)
+        periodStart.setDate(startDate.getDate() + 21);
+        periodEnd = new Date(year, month - 1, 21);
+      }
       
-      const periodEnd = new Date(periodStart);
-      periodEnd.setDate(periodStart.getDate() + 6);
-      
-      return `${format(periodStart, 'dd/MM')} - ${format(periodEnd, 'dd/MM')}`;
+      return `${format(periodStart, 'd/M')} - ${format(periodEnd, 'd/M')}`;
     } catch (e) {
       return '';
     }
@@ -4259,6 +4270,12 @@ export default function App() {
                 <CardDescription className="text-slate-500 font-medium">Nhập ngân sách dự kiến cho các chiến dịch marketing của bạn</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-amber-800 leading-relaxed">
+                    Chú ý : Ngân sách chạy thực tế không được Vượt quá hoặc Thấp hơn 70% so với ngân sách đã đăng kí .
+                  </p>
+                </div>
                 <form onSubmit={handleAddBudget} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="space-y-2 lg:col-span-2">
@@ -4313,7 +4330,7 @@ export default function App() {
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Team</Label>
                       <Select value={selectedTeamName} onValueChange={setSelectedTeamName}>
                         <SelectTrigger className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11">
-                          <SelectValue placeholder="Chọn team" />
+                          <SelectValue placeholder="Vui lòng chọn team" />
                         </SelectTrigger>
                         <SelectContent>
                           <div className="p-2 sticky top-0 bg-popover z-10 border-b">

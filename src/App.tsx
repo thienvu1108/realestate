@@ -182,12 +182,16 @@ export default function App() {
     if (active && payload && payload.length) {
       const budget = payload.find((p: any) => p.dataKey === 'budget' || p.name === 'Ngân sách')?.value || 0;
       const actual = payload.find((p: any) => p.dataKey === 'actual' || p.name === 'Thực chi')?.value || 0;
+      const details = payload[0]?.payload?.details || [];
+      const isTeamReport = payload[0]?.payload?.isTeamReport;
+      const isProjectReport = payload[0]?.payload?.isProjectReport;
+      
       const diff = budget - actual;
       const usagePercent = budget > 0 ? (actual / budget) * 100 : 0;
       const variancePercent = budget > 0 ? ((actual / budget) - 1) * 100 : 0;
 
       return (
-        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[240px] animate-in fade-in zoom-in duration-200">
+        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[300px] animate-in fade-in zoom-in duration-200">
           <div className="flex items-center justify-between mb-3 border-b pb-2 border-slate-100">
             <p className="text-sm font-bold text-slate-800">{label}</p>
             <div className="flex flex-col items-end">
@@ -200,40 +204,56 @@ export default function App() {
             </div>
           </div>
           
-          <div className="space-y-2.5">
-            {payload.map((entry: any, index: number) => (
-              <div key={index} className="flex items-center justify-between group">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: entry.fill }} />
-                  <span className="text-xs font-medium text-slate-500">{entry.name}</span>
-                </div>
-                <span className="text-xs font-bold text-slate-900 tabular-nums">
-                  {formatCurrency(entry.value)}
-                </span>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 pb-2">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ngân sách</p>
+                <p className="text-sm font-bold text-blue-600">{formatCurrency(budget)}</p>
               </div>
-            ))}
+              <div className="space-y-1 text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chi phí</p>
+                <p className="text-sm font-bold text-emerald-600">{formatCurrency(actual)}</p>
+              </div>
+            </div>
+
+            {details.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {isTeamReport ? 'Chi tiết Dự án' : isProjectReport ? 'Chi tiết Team' : 'Chi tiết'}
+                </p>
+                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                  {details.map((detail: any, i: number) => (
+                    <div key={i} className="flex flex-col text-[11px] p-1.5 rounded-lg bg-slate-50 border border-slate-100 group">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-slate-700 truncate mr-2" title={detail.name}>{detail.name}</span>
+                        <span className={`font-bold tabular-nums ${detail.budget > 0 && detail.actual > detail.budget ? 'text-rose-500' : 'text-slate-500'}`}>
+                          {detail.budget > 0 ? Math.round((detail.actual / detail.budget) * 100) : 0}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 italic">NS:</span>
+                          <span className="font-medium text-slate-600">{formatCurrency(detail.budget)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 italic">CP:</span>
+                          <span className="font-bold text-slate-800">{formatCurrency(detail.actual)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(budget > 0 || actual > 0) && (
-              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chênh lệch</span>
-                  <span className={`text-xs font-bold tabular-nums ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
-                  </span>
-                </div>
-                
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
+                <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
                   <div 
                     className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                     style={{ width: `${Math.min(usagePercent, 100)}%` }}
                   />
                 </div>
-                
-                <p className="text-[10px] text-center text-slate-400 italic">
-                  {usagePercent > 100 
-                    ? `Vượt ngân sách ${formatCurrency(actual - budget)}` 
-                    : `Còn lại ${formatCurrency(budget - actual)}`}
-                </p>
               </div>
             )}
           </div>
@@ -259,7 +279,7 @@ export default function App() {
   // Form states
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectRegion, setNewProjectRegion] = useState('');
-  const [newProjectType, setNewProjectType] = useState('Thấp tầng');
+  const [newProjectType, setNewProjectType] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [actualProjectId, setActualProjectId] = useState('');
@@ -360,6 +380,7 @@ export default function App() {
   const [costPeriod, setCostPeriod] = useState('1');
   const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
+  const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual'>('budget');
   const [reportProjectSearch, setReportProjectSearch] = useState('');
   const [reportTeamSearch, setReportTeamSearch] = useState('');
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
@@ -376,12 +397,22 @@ export default function App() {
   const [isBudgetSelectionDialogOpen, setIsBudgetSelectionDialogOpen] = useState(false);
   const [selectedRegionForBulk, setSelectedRegionForBulk] = useState('');
   const [isBulkUpdateRegionDialogOpen, setIsBulkUpdateRegionDialogOpen] = useState(false);
+  const [selectedTypeForBulk, setSelectedTypeForBulk] = useState('');
+  const [isBulkUpdateTypeDialogOpen, setIsBulkUpdateTypeDialogOpen] = useState(false);
+  const [isGlobalProjectAssignDialogOpen, setIsGlobalProjectAssignDialogOpen] = useState(false);
+  const [selectedGlobalProjectIds, setSelectedGlobalProjectIds] = useState<string[]>([]);
+  const [targetGlobalType, setTargetGlobalType] = useState('');
+  const [isMigrateTypeDialogOpen, setIsMigrateTypeDialogOpen] = useState(false);
+  const [typeToMigrate, setTypeToMigrate] = useState<{id: string, name: string} | null>(null);
+  const [migrationTargetType, setMigrationTargetType] = useState('');
+  const [isMigratingTypes, setIsMigratingTypes] = useState(false);
   const [isAddingRegion, setIsAddingRegion] = useState(false);
   const [isAddingTeam, setIsAddingTeam] = useState(false);
   const [isAddingType, setIsAddingType] = useState(false);
   const [isDeletingTeams, setIsDeletingTeams] = useState(false);
   const [isDeletingRegions, setIsDeletingRegions] = useState(false);
   const [isDeletingTypes, setIsDeletingTypes] = useState(false);
+  const [isSyncingTypes, setIsSyncingTypes] = useState(false);
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
   const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
   const [isDeletingCosts, setIsDeletingCosts] = useState(false);
@@ -1029,6 +1060,31 @@ export default function App() {
     }
   };
 
+  const handleBulkUpdateProjectType = () => {
+    if (selectedProjectIds.length === 0 || !selectedTypeForBulk) {
+      toast.error('Vui lòng chọn dự án và loại hình');
+      return;
+    }
+    setIsBulkUpdateTypeDialogOpen(true);
+  };
+
+  const confirmBulkUpdateProjectType = async () => {
+    setIsBulkUpdateTypeDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      selectedProjectIds.forEach(id => {
+        batch.update(doc(db, 'projects', id), { type: selectedTypeForBulk });
+      });
+      await batch.commit();
+      await logAction('UPDATE_BULK', 'projects', 'multiple', { count: selectedProjectIds.length, type: selectedTypeForBulk });
+      toast.success(`Đã cập nhật loại hình cho ${selectedProjectIds.length} dự án`);
+      setSelectedProjectIds([]);
+      setSelectedTypeForBulk('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    }
+  };
+
   const handleDeleteAllProjects = async () => {
     if (projects.length === 0) return;
     setIsDeleteAllProjectsDialogOpen(true);
@@ -1325,8 +1381,26 @@ export default function App() {
   const handleUpdateType = async (id: string, newName: string) => {
     if (!newName.trim()) return;
     try {
-      await updateDoc(doc(db, 'types', id), { name: newName });
-      await logAction('UPDATE', 'types', id, { name: newName });
+      const typeRef = doc(db, 'types', id);
+      const typeDoc = await getDoc(typeRef);
+      const oldName = typeDoc.exists() ? typeDoc.data().name : null;
+
+      await updateDoc(typeRef, { name: newName });
+      
+      // Propagate change to projects
+      if (oldName && oldName !== newName) {
+        const batch = writeBatch(db);
+        const projectsToUpdate = projects.filter(p => p.type === oldName);
+        projectsToUpdate.forEach(p => {
+          batch.update(doc(db, 'projects', p.id), { type: newName });
+        });
+        if (projectsToUpdate.length > 0) {
+          await batch.commit();
+          toast.info(`Đã cập nhật loại hình cho ${projectsToUpdate.length} dự án liên quan`);
+        }
+      }
+
+      await logAction('UPDATE', 'types', id, { name: newName, oldName });
       setEditingTypeId(null);
       toast.success('Đã cập nhật loại hình');
     } catch (error) {
@@ -1356,6 +1430,102 @@ export default function App() {
   const handleBulkDeleteTypes = async () => {
     if (selectedTypeIds.length === 0 || isDeletingTypes) return;
     setIsBulkDeleteTypesDialogOpen(true);
+  };
+
+  const handleMigrateType = (type: {id: string, name: string}) => {
+    setTypeToMigrate(type);
+    setIsMigrateTypeDialogOpen(true);
+  };
+
+  const confirmMigrateType = async () => {
+    if (!typeToMigrate || !migrationTargetType || isMigratingTypes) return;
+    setIsMigratingTypes(true);
+    try {
+      const batch = writeBatch(db);
+      const targetName = migrationTargetType.trim();
+      const sourceName = typeToMigrate.name.trim();
+
+      const projectsToUpdate = projects.filter(p => (p.type || '').trim() === sourceName);
+      
+      projectsToUpdate.forEach(p => {
+        batch.update(doc(db, 'projects', p.id), { type: targetName });
+      });
+
+      await batch.commit();
+      await logAction('MIGRATE_TYPE', 'projects', 'multiple', { 
+        count: projectsToUpdate.length, 
+        from: sourceName, 
+        to: targetName 
+      });
+
+      toast.success(`Đã chuyển ${projectsToUpdate.length} dự án từ "${sourceName}" sang "${targetName}"`);
+      setIsMigrateTypeDialogOpen(false);
+      setTypeToMigrate(null);
+      setMigrationTargetType('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    } finally {
+      setIsMigratingTypes(false);
+    }
+  };
+
+  const handleSyncTypes = async () => {
+    if (isSyncingTypes) return;
+    setIsSyncingTypes(true);
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Get all unique types from projects
+      const projectTypesSet = new Set<string>();
+      projects.forEach(p => {
+        if (p.type) projectTypesSet.add(p.type.trim());
+      });
+      
+      const uniqueProjectTypes = Array.from(projectTypesSet);
+      
+      // 2. Standardize current projects (trim types)
+      const projectsToFix = projects.filter(p => p.type && (p.type !== p.type.trim()));
+      projectsToFix.forEach(p => {
+        batch.update(doc(db, 'projects', p.id), { type: p.type.trim() });
+      });
+      
+      // 3. Standardize current types (trim names)
+      const typesToFix = types.filter(t => t.name && (t.name !== t.name.trim()));
+      typesToFix.forEach(t => {
+        batch.update(doc(db, 'types', t.id), { name: t.name.trim() });
+      });
+
+      // 4. Ensure all project types exist in types collection
+      const existingTypeNames = new Set(types.map(t => (t.name || '').trim()));
+      
+      let newTypesCount = 0;
+      uniqueProjectTypes.forEach(typeName => {
+        if (!existingTypeNames.has(typeName)) {
+          const newTypeRef = doc(collection(db, 'types'));
+          batch.set(newTypeRef, {
+            name: typeName,
+            createdAt: serverTimestamp()
+          });
+          newTypesCount++;
+        }
+      });
+      
+      if (projectsToFix.length > 0 || typesToFix.length > 0 || newTypesCount > 0) {
+        await batch.commit();
+        await logAction('SYNC_TYPES', 'system', 'multiple', { 
+          fixedProjects: projectsToFix.length, 
+          fixedTypes: typesToFix.length,
+          addedTypes: newTypesCount 
+        });
+        toast.success(`Đã chuẩn hóa ${projectsToFix.length} dự án, ${typesToFix.length} loại hình và thêm ${newTypesCount} loại hình mới`);
+      } else {
+        toast.info("Dữ liệu đã đồng nhất, không cần cập nhật");
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'system');
+    } finally {
+      setIsSyncingTypes(false);
+    }
   };
 
   const confirmBulkDeleteTypes = async () => {
@@ -1398,24 +1568,77 @@ export default function App() {
     }
   };
 
+  const handleGlobalProjectAssign = async () => {
+    if (selectedGlobalProjectIds.length === 0 || !targetGlobalType) {
+      toast.error('Vui lòng chọn ít nhất một dự án và một loại hình');
+      return;
+    }
+    
+    try {
+      const batch = writeBatch(db);
+      const targetName = targetGlobalType.trim();
+      
+      selectedGlobalProjectIds.forEach(id => {
+        batch.update(doc(db, 'projects', id), { type: targetName });
+      });
+      
+      await batch.commit();
+      await logAction('BULK_ASSIGN_TYPE', 'projects', 'multiple', { 
+        count: selectedGlobalProjectIds.length, 
+        type: targetName 
+      });
+      
+      toast.success(`Đã gán loại hình "${targetName}" cho ${selectedGlobalProjectIds.length} dự án`);
+      setIsGlobalProjectAssignDialogOpen(false);
+      setSelectedGlobalProjectIds([]);
+      setSelectedProjectIds([]);
+      setTargetGlobalType('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    }
+  };
+
   const handleSetProjectsForType = async () => {
     if (!typeForProjects) return;
     
     try {
       const batch = writeBatch(db);
+      const targetTypeName = typeForProjects.name.trim();
+      
+      // 1. All currently checked projects get this type
       for (const projectId of selectedProjectIdsForType) {
-        batch.update(doc(db, 'projects', projectId), { type: typeForProjects.name });
+        batch.update(doc(db, 'projects', projectId), { type: targetTypeName });
       }
+
+      // 2. Any project that PREVIOUSLY had this type but is NOW UNCHECKED should have its type cleared
+      const projectsCurrentlyInThisType = projects.filter(p => (p.type || '').trim() === targetTypeName);
+      const checkedIds = new Set(selectedProjectIdsForType);
+      
+      projectsCurrentlyInThisType.forEach(p => {
+        if (!checkedIds.has(p.id)) {
+          batch.update(doc(db, 'projects', p.id), { type: '' });
+        }
+      });
       
       await batch.commit();
-      await logAction('UPDATE_TYPE_PROJECTS', 'projects', 'multiple', { type: typeForProjects.name, projectIds: selectedProjectIdsForType });
-      toast.success(`Đã cập nhật loại hình cho ${selectedProjectIdsForType.length} dự án`);
+      await logAction('UPDATE_TYPE_PROJECTS', 'projects', 'multiple', { 
+        type: targetTypeName, 
+        projectIds: selectedProjectIdsForType,
+        removedCount: projectsCurrentlyInThisType.length - projectsToUpdateCount(projectsCurrentlyInThisType, checkedIds)
+      });
+      toast.success(`Đã cập nhật membership loại hình "${targetTypeName}" cho các dự án`);
       setIsSetProjectsForTypeDialogOpen(false);
       setTypeForProjects(null);
       setSelectedProjectIdsForType([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'projects');
     }
+  };
+
+  const projectsToUpdateCount = (current: any[], checked: Set<any>) => {
+    let count = 0;
+    current.forEach(p => { if (checked.has(p.id)) count++; });
+    return count;
   };
 
   const handleAddBudget = (e: React.FormEvent) => {
@@ -2231,8 +2454,7 @@ export default function App() {
       let teamTotalCost = costs.filter(c => {
         const project = projects.find(p => p.id === c.projectId);
         const matchProject = reportProject === 'all' || c.projectId === reportProject;
-        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
         const matchMonth = mMonth === reportMonth;
         const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
         const matchType = reportType === 'all' || (project?.type === reportType);
@@ -2244,14 +2466,48 @@ export default function App() {
       if (chartTimeType === 'week' && reportWeek === 'all') {
         teamTotalCost = teamTotalCost / 4;
       }
+
+      // Project breakdown for team
+      const teamProjectDetails = projects.map(p => {
+        const pBudgets = teamBudgets.filter(b => b.projectId === p.id);
+        const pCosts = costs.filter(c => {
+          const project = projects.find(proj => proj.id === c.projectId);
+          const matchProject = c.projectId === p.id;
+          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+          const matchMonth = mMonth === reportMonth;
+          const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+          const matchType = reportType === 'all' || (project?.type === reportType);
+          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+          
+          return matchProject && c.teamName === team && matchMonth && matchRegion && matchType && matchWeek;
+        });
+
+        let pTotalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+        let pTotalCost = pCosts.reduce((acc, curr) => acc + curr.amount, 0);
+
+        if (chartTimeType === 'week') {
+          pTotalBudget = pTotalBudget / 4;
+          if (reportWeek === 'all') pTotalCost = pTotalCost / 4;
+        }
+
+        return {
+          name: p.name,
+          budget: pTotalBudget,
+          actual: pTotalCost
+        };
+      }).filter(d => d.budget > 0 || d.actual > 0)
+        .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
       
       return {
         name: team,
         budget: teamTotalBudget,
-        actual: teamTotalCost
+        actual: teamTotalCost,
+        details: teamProjectDetails,
+        isTeamReport: true
       };
-    }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonth, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth]);
+    }).filter(d => d.budget > 0 || d.actual > 0)
+      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonth, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const regionChartData = useMemo(() => {
     return uniqueRegions.map(region => {
@@ -2270,8 +2526,7 @@ export default function App() {
         const project = projects.find(p => p.id === c.projectId);
         const matchProject = reportProject === 'all' || c.projectId === reportProject;
         const matchTeam = reportTeam === 'all' || c.teamName === reportTeam;
-        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
         const matchMonth = mMonth === reportMonth;
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
         
@@ -2287,15 +2542,16 @@ export default function App() {
         budget: totalBudget,
         actual: totalCost
       };
-    }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [uniqueRegions, budgets, costs, projects, reportProject, reportTeam, reportMonth, chartTimeType, reportWeek, getMarketingMonth]);
+    }).filter(d => d.budget > 0 || d.actual > 0)
+      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+  }, [uniqueRegions, budgets, costs, projects, reportProject, reportTeam, reportMonth, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const projectChartData = useMemo(() => {
     const projectIds = Array.from(new Set([
       ...budgets.filter(b => b.month === reportMonth).map(b => b.projectId),
       ...costs.filter(c => {
-        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-        return costDate && getMarketingMonth(costDate) === reportMonth;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+        return mMonth === reportMonth;
       }).map(c => c.projectId)
     ]));
 
@@ -2307,8 +2563,7 @@ export default function App() {
       if (chartTimeType === 'week') totalBudget = totalBudget / 4;
 
       let totalCost = costs.filter(c => {
-        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-        const mMonth = costDate ? getMarketingMonth(costDate) : null;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
         const matchMonth = mMonth === reportMonth;
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
         return c.projectId === id && matchMonth && matchWeek;
@@ -2318,14 +2573,42 @@ export default function App() {
         totalCost = totalCost / 4;
       }
 
+      // Team breakdown for project
+      const projectTeamDetails = uniqueTeams.map(teamName => {
+        const tBudgets = projectBudgets.filter(b => b.teamName === teamName);
+        const tCosts = costs.filter(c => {
+          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+          const matchMonth = mMonth === reportMonth;
+          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+          return c.projectId === id && c.teamName === teamName && matchMonth && matchWeek;
+        });
+
+        let tTotalBudget = tBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+        let tTotalCost = tCosts.reduce((acc, curr) => acc + curr.amount, 0);
+
+        if (chartTimeType === 'week') {
+          tTotalBudget = tTotalBudget / 4;
+          if (reportWeek === 'all') tTotalCost = tTotalCost / 4;
+        }
+
+        return {
+          name: teamName,
+          budget: tTotalBudget,
+          actual: tTotalCost
+        };
+      }).filter(d => d.budget > 0 || d.actual > 0)
+        .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+
       return {
         name: projectName,
         budget: totalBudget,
-        actual: totalCost
+        actual: totalCost,
+        details: projectTeamDetails,
+        isProjectReport: true
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => b.budget - a.budget);
-  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth]);
+      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const getCurrentPeriod = () => {
     const now = new Date();
@@ -2736,8 +3019,9 @@ export default function App() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">Tất cả loại hình</SelectItem>
-                                <SelectItem value="Cao tầng">Cao tầng</SelectItem>
-                                <SelectItem value="Thấp tầng">Thấp tầng</SelectItem>
+                                {types.map(t => (
+                                  <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -2860,6 +3144,43 @@ export default function App() {
                                 </DialogContent>
                               </Dialog>
 
+                              <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
+                                <DialogTrigger asChild>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                    disabled={selectedProjectIds.length === 0}
+                                  >
+                                    <Layers className="w-3 h-3 mr-1" /> Sửa Loại hình ({selectedProjectIds.length})
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[400px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Cập nhật Loại hình</DialogTitle>
+                                    <DialogDescription>Chọn loại hình mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
+                                  </DialogHeader>
+                                  <div className="py-4 space-y-4">
+                                    <div className="space-y-2">
+                                      <Label>Loại hình</Label>
+                                      <Select value={selectedTypeForBulk} onValueChange={setSelectedTypeForBulk}>
+                                        <SelectTrigger><SelectValue placeholder="Chọn loại hình..." /></SelectTrigger>
+                                        <SelectContent>
+                                          {types.map(t => (
+                                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <DialogFooter>
+                                    <Button onClick={handleBulkUpdateProjectType} className="w-full bg-blue-600 hover:bg-blue-700">
+                                      Cập nhật cho {selectedProjectIds.length} dự án
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
+
                               <Button 
                                 variant="outline" 
                                 size="sm" 
@@ -2966,8 +3287,12 @@ export default function App() {
                                         </SelectContent>
                                       </Select>
                                     ) : (
-                                      <span className={`text-xs px-2 py-0.5 rounded-full ${p.type === 'Cao tầng' ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'}`}>
-                                        {p.type || 'Thấp tầng'}
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                        (p.type || '').trim() === 'Cao tầng' ? 'bg-indigo-50 text-indigo-600' : 
+                                        (p.type || '').trim() === 'Thấp tầng' ? 'bg-amber-50 text-amber-600' : 
+                                        p.type ? 'bg-slate-50 text-slate-600' : 'bg-red-50 text-red-600'
+                                      }`}>
+                                        {p.type || 'Chưa phân loại'}
                                       </span>
                                     )}
                                   </TableCell>
@@ -2992,7 +3317,7 @@ export default function App() {
                                               setEditingProjectId(p.id);
                                               setEditingProjectName(p.name);
                                               setEditingProjectRegion(p.region || '');
-                                              setEditingProjectType(p.type || 'Thấp tầng');
+                                              setEditingProjectType(p.type || '');
                                             }}>
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -3295,6 +3620,34 @@ export default function App() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
+                                className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                onClick={handleSyncTypes}
+                                disabled={isSyncingTypes}
+                                title="Chuẩn hóa dữ liệu & Tự động thêm loại hình còn thiếu từ danh sách dự án"
+                              >
+                                {isSyncingTypes ? (
+                                  <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="w-3 h-3 mr-1" />
+                                )}
+                                Đồng bộ Dữ liệu
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                                onClick={() => {
+                                  setSelectedGlobalProjectIds(selectedProjectIds);
+                                  setTargetGlobalType('');
+                                  setIsGlobalProjectAssignDialogOpen(true);
+                                }}
+                                title="Chọn nhiều dự án và gán 1 loại hình duy nhất"
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> Gán Loại hình cho Dự án
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
                                 className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={handleBulkDeleteTypes}
                                 disabled={selectedTypeIds.length === 0}
@@ -3352,7 +3705,7 @@ export default function App() {
                                   return a.name.localeCompare(b.name) * factor;
                                 })
                                 .map(t => {
-                                  const typeProjects = projects.filter(p => p.type === t.name);
+                                  const typeProjects = projects.filter(p => (p.type || '').trim() === (t.name || '').trim());
                                   return (
                                     <TableRow key={t.id} className={selectedTypeIds.includes(t.id) ? "bg-blue-50/30" : ""}>
                                       {isAdmin && (
@@ -3403,6 +3756,9 @@ export default function App() {
                                                 }} title="Gán dự án">
                                                   <Plus className="h-3.5 w-3.5" />
                                                 </Button>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => handleMigrateType(t)} title="Chuyển toàn bộ dự án">
+                                                  <RefreshCw className="h-3.5 w-3.5" />
+                                                </Button>
                                                 <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
                                                   setEditingTypeId(t.id);
                                                   setEditingTypeName(t.name);
@@ -3427,6 +3783,19 @@ export default function App() {
                                   </TableCell>
                                 </TableRow>
                               )}
+                              <TableRow className="bg-slate-50/50">
+                                {isAdmin && <TableCell />}
+                                <TableCell className="font-medium italic text-slate-500">
+                                  Chưa phân loại
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="font-normal border-red-100 bg-red-50 text-red-600">
+                                    {projects.filter(p => !p.type || !(p.type || '').trim()).length} dự án
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-slate-300">-</TableCell>
+                                <TableCell className="text-right italic text-xs text-slate-400">Tự động</TableCell>
+                              </TableRow>
                             </TableBody>
                           </Table>
                         </div>
@@ -4131,6 +4500,18 @@ export default function App() {
                             <SelectItem value="2">Kỳ 2 ({getPeriodRange(reportMonth, '2')})</SelectItem>
                             <SelectItem value="3">Kỳ 3 ({getPeriodRange(reportMonth, '3')})</SelectItem>
                             <SelectItem value="4">Kỳ 4 ({getPeriodRange(reportMonth, '4')})</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1 min-w-[200px] space-y-1.5">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Sắp xếp theo</Label>
+                        <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual') => setReportSortBy(v)}>
+                          <SelectTrigger className="bg-white border-none shadow-sm">
+                            <SelectValue placeholder="Chọn kiểu sắp xếp" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="budget">Ngân sách (Cao → Thấp)</SelectItem>
+                            <SelectItem value="actual">Chi phí thực tế (Cao → Thấp)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -5806,6 +6187,72 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Global Project for Type Dialog */}
+      <Dialog open={isGlobalProjectAssignDialogOpen} onOpenChange={setIsGlobalProjectAssignDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Gán Loại hình cho Dự án</DialogTitle>
+            <DialogDescription>Chọn các dự án và loại hình bạn muốn gán.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Chọn Loại hình</Label>
+              <Select value={targetGlobalType} onValueChange={setTargetGlobalType}>
+                <SelectTrigger><SelectValue placeholder="Chọn loại hình..." /></SelectTrigger>
+                <SelectContent>
+                  {types.map(t => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Chọn Dự án ({selectedGlobalProjectIds.length})</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input 
+                  placeholder="Tìm kiếm dự án..." 
+                  className="pl-10 h-9"
+                  value={projectSearch}
+                  onChange={e => setProjectSearch(e.target.value)}
+                />
+              </div>
+              <div className="max-h-[250px] overflow-y-auto border rounded-md p-2 space-y-1">
+                {projects
+                  .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                  .map(p => (
+                    <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md transition-colors">
+                      <input 
+                        type="checkbox" 
+                        id={`global-type-proj-${p.id}`}
+                        className="rounded border-slate-300"
+                        checked={selectedGlobalProjectIds.includes(p.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedGlobalProjectIds(prev => [...prev, p.id]);
+                          } else {
+                            setSelectedGlobalProjectIds(prev => prev.filter(id => id !== p.id));
+                          }
+                        }}
+                      />
+                      <Label htmlFor={`global-type-proj-${p.id}`} className="flex-1 cursor-pointer text-sm">
+                        {p.name} <span className="text-[10px] text-slate-400 ml-2">({p.type || 'Chưa phân loại'})</span>
+                      </Label>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGlobalProjectAssignDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleGlobalProjectAssign} disabled={selectedGlobalProjectIds.length === 0 || !targetGlobalType}>
+              Xác nhận gán {selectedGlobalProjectIds.length} dự án
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Set Projects for Type Dialog */}
       <Dialog open={isSetProjectsForTypeDialogOpen} onOpenChange={setIsSetProjectsForTypeDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -5929,6 +6376,66 @@ export default function App() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsBulkUpdateRegionDialogOpen(false)}>Hủy</Button>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmBulkUpdateProjectRegion}>Xác nhận cập nhật</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Update Type Confirmation Dialog */}
+      <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <Layers className="w-5 h-5" /> Xác nhận cập nhật loại hình
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn cập nhật loại hình thành <strong>{selectedTypeForBulk}</strong> cho <strong>{selectedProjectIds.length}</strong> dự án đã chọn?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkUpdateTypeDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmBulkUpdateProjectType}>Xác nhận cập nhật</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Migrate Type Confirmation Dialog */}
+      <Dialog open={isMigrateTypeDialogOpen} onOpenChange={setIsMigrateTypeDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-indigo-600 flex items-center gap-2">
+              <RefreshCw className="w-5 h-5" /> Chuyển đổi toàn bộ dự án
+            </DialogTitle>
+            <DialogDescription>
+              Di chuyển toàn bộ dự án hiện đang thuộc loại hình <strong>{typeToMigrate?.name}</strong> sang một loại hình mới.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Chọn loại hình đích</Label>
+              <Select value={migrationTargetType} onValueChange={setMigrationTargetType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn loại hình mới..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {types
+                    .filter(t => t.id !== typeToMigrate?.id)
+                    .map(t => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                  ))}
+                  <SelectItem value="">(Gỡ bỏ loại hình)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsMigrateTypeDialogOpen(false)}>Hủy</Button>
+            <Button 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white" 
+              onClick={confirmMigrateType}
+              disabled={isMigratingTypes}
+            >
+              {isMigratingTypes ? "Đang xử lý..." : "Xác nhận chuyển đổi"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

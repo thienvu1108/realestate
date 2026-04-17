@@ -42,7 +42,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle } from 'lucide-react';
+import { LogIn, LogOut, Plus, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
 import { 
@@ -95,6 +95,7 @@ export default function App() {
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('register');
+  const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
 
   // Helper for Marketing Month (21st of prev month to 20th of current month)
@@ -325,6 +326,7 @@ export default function App() {
   const [reportType, setReportType] = useState('all');
   const [reportMonth, setReportMonth] = useState(getMarketingMonth(new Date()));
   const [reportWeek, setReportWeek] = useState('all');
+  const [costPeriod, setCostPeriod] = useState('1');
   const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportProjectSearch, setReportProjectSearch] = useState('');
@@ -340,6 +342,7 @@ export default function App() {
   const [adminCostSearch, setAdminCostSearch] = useState('');
   const [adminCostMonthFilter, setAdminCostMonthFilter] = useState(getMarketingMonth(new Date()));
   const [costBudgetMonth, setCostBudgetMonth] = useState(getMarketingMonth(new Date()));
+  const [isBudgetSelectionDialogOpen, setIsBudgetSelectionDialogOpen] = useState(false);
   const [selectedRegionForBulk, setSelectedRegionForBulk] = useState('');
   const [isBulkUpdateRegionDialogOpen, setIsBulkUpdateRegionDialogOpen] = useState(false);
   const [isAddingRegion, setIsAddingRegion] = useState(false);
@@ -383,6 +386,25 @@ export default function App() {
     });
     return map;
   }, [projects]);
+
+  const filteredBudgetsForCostSelection = useMemo(() => {
+    const userEmail = user?.email?.toLowerCase();
+    
+    return budgets
+      .filter(b => {
+        const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+        const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+        const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+        
+        const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
+        return canSee && b.month === costBudgetMonth;
+      })
+      .filter(b => 
+        (projectMap[b.projectId] || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
+        (b.teamName || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
+        (b.implementerName || '').toLowerCase().includes(budgetSearch.toLowerCase())
+      );
+  }, [budgets, user, userProfile, isGDDA, isAdmin, isMod, costBudgetMonth, projectMap, budgetSearch]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -1399,7 +1421,7 @@ export default function App() {
   const handleAddCost = async (e: React.FormEvent) => {
     e.preventDefault();
     const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost);
-    if (!actualProjectId || totalAmount <= 0 || !costWeek || !selectedBudgetId) return;
+    if (!actualProjectId || totalAmount <= 0 || !costPeriod || !selectedBudgetId) return;
     const project = projects.find(p => p.id === actualProjectId);
     const budget = budgets.find(b => b.id === selectedBudgetId);
     
@@ -1408,9 +1430,9 @@ export default function App() {
       return;
     }
     
-    // Parse week string (e.g., "2024-W15")
-    const [year, weekStr] = costWeek.split('-W');
-    const weekNumber = Number(weekStr);
+    const [yearStr] = costBudgetMonth.split('-');
+    const year = Number(yearStr);
+    const periodNumber = Number(costPeriod);
 
     try {
       const docRef = await addDoc(collection(db, 'costs'), {
@@ -1419,8 +1441,9 @@ export default function App() {
         budgetId: selectedBudgetId,
         implementerName: budget.implementerName || 'N/A',
         teamName: budget.teamName || 'N/A',
-        weekNumber,
-        year: Number(year),
+        weekNumber: periodNumber, // Using weekNumber field to store periodNumber for compatibility
+        year,
+        month: costBudgetMonth,
         amount: totalAmount,
         channels: {
           fbAds: Number(fbAds),
@@ -1669,8 +1692,7 @@ export default function App() {
         ? (reportTeam === 'all' || c.teamName === reportTeam)
         : isOwner;
       // Map cost date to marketing month
-      const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-      const mMonth = costDate ? getMarketingMonth(costDate) : null;
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       const matchMonth = mMonth === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
@@ -1805,6 +1827,38 @@ export default function App() {
       .sort((a, b) => b.budget - a.budget);
   }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth]);
 
+  const getCurrentPeriod = () => {
+    const now = new Date();
+    const mMonth = getMarketingMonth(now);
+    if (!mMonth) return 1;
+    const [year, month] = mMonth.split('-').map(Number);
+    // Budget month M starts on 21st of month M-1
+    const startDate = new Date(year, month - 2, 21);
+    const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+    const period = Math.floor(diffDays / 7) + 1;
+    return Math.min(Math.max(period, 1), 4);
+  };
+
+  const getPeriodRange = (monthStr: string, period: number | string) => {
+    if (!monthStr || !period || period === 'all') return '';
+    try {
+      const [year, month] = monthStr.split('-').map(Number);
+      // Budget month M starts on 21st of month M-1
+      const startDate = new Date(year, month - 2, 21);
+      const pNum = Number(period);
+      
+      const periodStart = new Date(startDate);
+      periodStart.setDate(startDate.getDate() + (pNum - 1) * 7);
+      
+      const periodEnd = new Date(periodStart);
+      periodEnd.setDate(periodStart.getDate() + 6);
+      
+      return `${format(periodStart, 'dd/MM')} - ${format(periodEnd, 'dd/MM')}`;
+    } catch (e) {
+      return '';
+    }
+  };
+
   const getWeekRange = (weekStr: string) => {
     if (!weekStr) return '';
     try {
@@ -1869,118 +1923,121 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-30 w-full bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 h-18 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-slate-100 overflow-hidden">
+            <div className="w-11 h-11 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200/50 overflow-hidden group transition-transform hover:scale-105">
               <img 
                 src="https://picsum.photos/seed/mayhomes/100/100" 
                 alt="MAYHOMES" 
-                className="w-full h-full object-contain p-1"
+                className="w-full h-full object-contain p-1.5 brightness-0 invert"
                 referrerPolicy="no-referrer"
               />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black tracking-tighter text-slate-900 leading-none">
+                <h1 className="text-xl font-black tracking-tighter leading-none">
                   <span className="text-orange-500">MAY</span>
-                  <span className="text-blue-600">HOMES</span>
+                  <span className="text-indigo-600">HOMES</span>
                 </h1>
               </div>
-              <div className="flex gap-1 mt-1">
-                {isSuperAdmin && <Badge variant="outline" className="text-[10px] py-0 h-4 border-purple-200 text-purple-600 bg-purple-50">SUPER ADMIN</Badge>}
-                {(userRole === 'admin') && <Badge variant="outline" className="text-[10px] py-0 h-4 border-blue-200 text-blue-600 bg-blue-50">ADMIN</Badge>}
-                {isMod && <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 text-slate-600 bg-slate-50">MODERATOR</Badge>}
-                {isGDDA && <Badge variant="outline" className="text-[10px] py-0 h-4 border-emerald-200 text-emerald-600 bg-emerald-50">GDDA</Badge>}
-                {isUser && <Badge variant="outline" className="text-[10px] py-0 h-4 border-orange-200 text-orange-600 bg-orange-50">USER</Badge>}
+              <div className="flex gap-1.5 mt-1.5">
+                {isSuperAdmin && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-purple-200 text-purple-700 bg-purple-50/50">SUPER ADMIN</Badge>}
+                {(userRole === 'admin') && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
+                {isMod && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-slate-200 text-slate-700 bg-slate-50/50">MODERATOR</Badge>}
+                {isGDDA && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-emerald-200 text-emerald-700 bg-emerald-50/50">GDDA</Badge>}
+                {isUser && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-orange-200 text-orange-700 bg-orange-50/50">USER</Badge>}
               </div>
             </div>
           </div>
 
           {/* Main Navigation Menu */}
-          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl border border-slate-200/50">
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/50 shadow-inner">
             {isAdmin && (
               <Button 
                 variant={activeTab === 'admin' ? 'secondary' : 'ghost'} 
                 size="sm" 
                 onClick={() => setActiveTab('admin')}
-                className={`rounded-lg px-4 h-9 transition-all ${activeTab === 'admin' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'admin' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
               >
-                <ShieldCheck className="w-4 h-4 mr-2" /> Quản trị
+                <ShieldCheck className="w-4.5 h-4.5 mr-2" /> Quản trị
               </Button>
             )}
             <Button 
               variant={activeTab === 'register' ? 'secondary' : 'ghost'} 
               size="sm" 
               onClick={() => setActiveTab('register')}
-              className={`rounded-lg px-4 h-9 transition-all ${activeTab === 'register' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'register' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
             >
-              <Wallet className="w-4 h-4 mr-2" /> Đăng ký
+              <Wallet className="w-4.5 h-4.5 mr-2" /> Đăng ký
             </Button>
             <Button 
               variant={activeTab === 'actual' ? 'secondary' : 'ghost'} 
               size="sm" 
               onClick={() => setActiveTab('actual')}
-              className={`rounded-lg px-4 h-9 transition-all ${activeTab === 'actual' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'actual' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
             >
-              <TrendingUp className="w-4 h-4 mr-2" /> Thực chi
+              <TrendingUp className="w-4.5 h-4.5 mr-2" /> Cập nhật Chi phí
             </Button>
             <Button 
               variant={activeTab === 'history' ? 'secondary' : 'ghost'} 
               size="sm" 
               onClick={() => setActiveTab('history')}
-              className={`rounded-lg px-4 h-9 transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'history' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
             >
-              <History className="w-4 h-4 mr-2" /> Lịch sử
+              <History className="w-4.5 h-4.5 mr-2" /> Lịch sử
             </Button>
           </nav>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:block text-right">
-              <p className="text-sm font-medium text-slate-900">{user.displayName}</p>
-              <p className="text-xs text-slate-500">{user.email}</p>
+            <div className="hidden md:flex flex-col items-end">
+              <p className="text-sm font-bold text-slate-900 leading-tight">{user.displayName}</p>
+              <p className="text-[11px] font-medium text-slate-500">{user.email}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={logout} className="text-slate-500 hover:text-red-600">
+            <Button variant="ghost" size="icon" onClick={logout} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors">
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 py-10 space-y-10">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="border-none shadow-sm bg-white">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+            <div className="h-1.5 w-full bg-indigo-500" />
+            <CardHeader className="pb-4">
+              <CardDescription className="flex items-center gap-2 font-bold text-indigo-600/70 uppercase tracking-wider text-[10px]">
                 <Building2 className="w-4 h-4" /> Tổng dự án
               </CardDescription>
-              <CardTitle className="text-3xl font-bold">{projects.length}</CardTitle>
+              <CardTitle className="text-4xl font-black text-slate-900">{projects.length}</CardTitle>
             </CardHeader>
           </Card>
-          <Card className="border-none shadow-sm bg-white">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Wallet className="w-4 h-4" /> Ngân sách tháng này (21-{safeFormat(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 21), 'MM')} đến 20-{safeFormat(new Date(), 'MM')})
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+            <div className="h-1.5 w-full bg-emerald-500" />
+            <CardHeader className="pb-4">
+              <CardDescription className="flex items-center gap-2 font-bold text-emerald-600/70 uppercase tracking-wider text-[10px]">
+                <Wallet className="w-4 h-4" /> Ngân sách tháng này
               </CardDescription>
-              <CardTitle className="text-3xl font-bold">
+              <CardTitle className="text-4xl font-black text-slate-900">
                 {budgets
                   .filter(b => b.month === getMarketingMonth(new Date()))
                   .reduce((acc, curr) => acc + curr.amount, 0)
-                  .toLocaleString()} đ
+                  .toLocaleString()} <span className="text-xl font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
-          <Card className="border-none shadow-sm bg-white">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" /> Thực tế đã chi (Tuần này)
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+            <div className="h-1.5 w-full bg-orange-500" />
+            <CardHeader className="pb-4">
+              <CardDescription className="flex items-center gap-2 font-bold text-orange-600/70 uppercase tracking-wider text-[10px]">
+                <TrendingUp className="w-4 h-4" /> Thực tế đã chi (Kỳ này)
               </CardDescription>
-              <CardTitle className="text-3xl font-bold">
+              <CardTitle className="text-4xl font-black text-slate-900">
                 {costs
-                  .filter(c => c.weekNumber === getWeek(new Date()) && c.year === new Date().getFullYear())
+                  .filter(c => c.weekNumber === getCurrentPeriod() && (c.month === getMarketingMonth(new Date()) || (c.year === new Date().getFullYear() && !c.month)))
                   .reduce((acc, curr) => acc + curr.amount, 0)
-                  .toLocaleString()} đ
+                  .toLocaleString()} <span className="text-xl font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
@@ -2006,53 +2063,131 @@ export default function App() {
 
           {/* Admin Tab */}
           {(isAdmin || isMod || isGDDA) && (
-            <TabsContent value="admin" className="space-y-6">
-              <Tabs defaultValue={isGDDA ? "reports" : "projects"} className="space-y-6">
-                <TabsList className="bg-slate-100/50 p-1 rounded-xl h-auto w-full justify-start border border-slate-200">
-                  {(isAdmin || isMod) && (
-                    <>
-                      <TabsTrigger value="projects" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Building2 className="w-4 h-4 mr-2" /> Quản lý Dự án
-                      </TabsTrigger>
-                      <TabsTrigger value="regions" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Building2 className="w-4 h-4 mr-2" /> Quản lý Vùng / Khu vực
-                      </TabsTrigger>
-                      <TabsTrigger value="types" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Building2 className="w-4 h-4 mr-2" /> Quản lý Loại hình
-                      </TabsTrigger>
-                      <TabsTrigger value="teams" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Users className="w-4 h-4 mr-2" /> Quản lý Team
-                      </TabsTrigger>
-                      <TabsTrigger value="budgets" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Wallet className="w-4 h-4 mr-2" /> Quản lý Ngân sách
-                      </TabsTrigger>
-                      <TabsTrigger value="costs" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <TrendingUp className="w-4 h-4 mr-2" /> Quản lý Thực chi
-                      </TabsTrigger>
-                    </>
-                  )}
-                  <TabsTrigger value="reports" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <BarChart3 className="w-4 h-4 mr-2" /> Báo cáo & Phân tích
-                  </TabsTrigger>
-                  {isAdmin && (
-                    <TabsTrigger value="users" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <UserCircle className="w-4 h-4 mr-2" /> Quản lý Người dùng
-                    </TabsTrigger>
-                  )}
-                  {(isAdmin || isMod) && (
-                    <TabsTrigger value="audit" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <History className="w-4 h-4 mr-2" /> Nhật ký hệ thống
-                    </TabsTrigger>
-                  )}
-                  {isAdmin && (
-                    <TabsTrigger value="backup" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                      <History className="w-4 h-4 mr-2" /> Sao lưu
-                    </TabsTrigger>
-                  )}
-                </TabsList>
+            <TabsContent value="admin" className="space-y-8">
+              <div className="flex flex-col lg:flex-row gap-8">
+                {/* Admin Sidebar-like Navigation */}
+                <aside className="lg:w-64 space-y-2">
+                  <div className="px-3 py-2">
+                    <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Hệ thống</h2>
+                    <div className="space-y-1">
+                      <Button 
+                        variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
+                        className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'reports' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                        onClick={() => setAdminSubTab('reports')}
+                      >
+                        <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'reports' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        Báo cáo & Phân tích
+                      </Button>
+                      {(isAdmin || isMod) && (
+                        <>
+                          <Button 
+                            variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'projects' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('projects')}
+                          >
+                            <Building2 className={`mr-3 h-5 w-5 ${adminSubTab === 'projects' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Quản lý Dự án
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'regions' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('regions')}
+                          >
+                            <Map className={`mr-3 h-5 w-5 ${adminSubTab === 'regions' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Quản lý Vùng
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'types' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('types')}
+                          >
+                            <Layers className={`mr-3 h-5 w-5 ${adminSubTab === 'types' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Quản lý Loại hình
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'teams' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('teams')}
+                          >
+                            <Users className={`mr-3 h-5 w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Quản lý Team
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
 
-                {/* Project Management Tab */}
-                <TabsContent value="projects" className="space-y-6">
+                  <div className="px-3 py-2">
+                    <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Dữ liệu</h2>
+                    <div className="space-y-1">
+                      {(isAdmin || isMod) && (
+                        <>
+                          <Button 
+                            variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'budgets' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('budgets')}
+                          >
+                            <Wallet className={`mr-3 h-5 w-5 ${adminSubTab === 'budgets' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Ngân sách
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'costs' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('costs')}
+                          >
+                            <TrendingUp className={`mr-3 h-5 w-5 ${adminSubTab === 'costs' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Cập nhật Chi phí
+                          </Button>
+                        </>
+                      )}
+                      {isAdmin && (
+                        <Button 
+                          variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
+                          className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                          onClick={() => setAdminSubTab('users')}
+                        >
+                          <UserCircle className={`mr-3 h-5 w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          Người dùng
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {(isAdmin || isMod) && (
+                    <div className="px-3 py-2">
+                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bảo mật</h2>
+                      <div className="space-y-1">
+                        <Button 
+                          variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
+                          className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'audit' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                          onClick={() => setAdminSubTab('audit')}
+                        >
+                          <History className={`mr-3 h-5 w-5 ${adminSubTab === 'audit' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          Nhật ký
+                        </Button>
+                        {isAdmin && (
+                          <Button 
+                            variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'backup' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('backup')}
+                          >
+                            <Database className={`mr-3 h-5 w-5 ${adminSubTab === 'backup' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Sao lưu
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </aside>
+
+                {/* Admin Content Area */}
+                <div className="flex-1 min-w-0">
+                  <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
+                    {/* Hidden TabsList to keep Tabs logic working */}
+                    <TabsList className="hidden" />
+
+                    {/* Project Management Tab */}
+                    <TabsContent value="projects" className="space-y-6">
                   <div className="grid grid-cols-1 gap-6">
                     {/* Project Controls */}
                     <Card className="border-none shadow-sm">
@@ -2099,11 +2234,11 @@ export default function App() {
                           </div>
                           {isAdmin && (
                             <Dialog>
-                              <DialogTrigger render={
+                              <DialogTrigger asChild>
                                 <Button className="bg-blue-600 hover:bg-blue-700">
                                   <Plus className="w-4 h-4 mr-2" /> Thêm dự án
                                 </Button>
-                              } />
+                              </DialogTrigger>
                             <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
                                 <DialogTitle>Thêm dự án mới</DialogTitle>
@@ -2171,7 +2306,7 @@ export default function App() {
                           {isAdmin && (
                             <div className="flex gap-2 mr-4">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
-                                <DialogTrigger render={
+                                <DialogTrigger asChild>
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -2180,7 +2315,7 @@ export default function App() {
                                   >
                                     <Building2 className="w-3 h-3 mr-1" /> Sửa Vùng ({selectedProjectIds.length})
                                   </Button>
-                                } />
+                                </DialogTrigger>
                                 <DialogContent className="sm:max-w-[400px]">
                                   <DialogHeader>
                                     <DialogTitle>Cập nhật Vùng / Khu vực</DialogTitle>
@@ -3122,7 +3257,7 @@ export default function App() {
                     <Card className="border-none shadow-sm">
                       <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                          <CardTitle>Quản lý Thực chi</CardTitle>
+                          <CardTitle>Quản lý Chi phí</CardTitle>
                           <CardDescription>Xóa hoặc xem danh sách các bản ghi thực chi</CardDescription>
                         </div>
                         <div className="flex gap-2">
@@ -3188,8 +3323,8 @@ export default function App() {
                                 <TableHead>Dự án</TableHead>
                                 <TableHead>Team</TableHead>
                                 <TableHead>Người triển khai</TableHead>
-                                <TableHead>Tuần</TableHead>
-                                <TableHead className="text-right">Thực chi</TableHead>
+                                <TableHead>Kỳ</TableHead>
+                                <TableHead className="text-right">Chi phí</TableHead>
                                 <TableHead className="text-right">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -3230,7 +3365,7 @@ export default function App() {
                                     <TableCell className="font-medium">{c.projectName}</TableCell>
                                     <TableCell>{c.teamName}</TableCell>
                                     <TableCell>{c.implementerName}</TableCell>
-                                    <TableCell className="text-xs">Tuần {c.weekNumber}</TableCell>
+                                    <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
                                     <TableCell className="text-right font-mono font-bold text-blue-600">{c.amount.toLocaleString()} đ</TableCell>
                                     <TableCell className="text-right">
                                       <Button 
@@ -3395,25 +3530,17 @@ export default function App() {
                         <Input type="month" className="bg-white border-none shadow-sm" value={reportMonth} onChange={e => setReportMonth(e.target.value)} />
                       </div>
                       <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tuần báo cáo</Label>
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Kỳ báo cáo</Label>
                         <Select value={reportWeek} onValueChange={setReportWeek}>
                           <SelectTrigger className="bg-white border-none shadow-sm">
-                            <SelectValue placeholder="Tất cả tuần" />
+                            <SelectValue placeholder="Tất cả kỳ" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">Tất cả tuần</SelectItem>
-                            {/* Derive weeks from costs in the selected month */}
-                            {Array.from(new Set(costs
-                              .filter(c => {
-                                const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-                                return costDate && getMarketingMonth(costDate) === reportMonth;
-                              })
-                              .map(c => c.weekNumber)
-                            ))
-                            .sort((a, b) => (a as number) - (b as number))
-                            .map(w => (
-                              <SelectItem key={w} value={w?.toString() || ''}>Tuần {w}</SelectItem>
-                            ))}
+                            <SelectItem value="all">Tất cả kỳ</SelectItem>
+                            <SelectItem value="1">Kỳ 1 ({getPeriodRange(reportMonth, '1')})</SelectItem>
+                            <SelectItem value="2">Kỳ 2 ({getPeriodRange(reportMonth, '2')})</SelectItem>
+                            <SelectItem value="3">Kỳ 3 ({getPeriodRange(reportMonth, '3')})</SelectItem>
+                            <SelectItem value="4">Kỳ 4 ({getPeriodRange(reportMonth, '4')})</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -3463,8 +3590,8 @@ export default function App() {
                       <Tabs defaultValue="team" className="w-full">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                           <div className="space-y-1">
-                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Thực chi</Label>
-                            <p className="text-[10px] text-slate-400">So sánh dữ liệu theo {chartTimeType === 'month' ? 'Tháng' : 'Tuần'}</p>
+                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Chi phí</Label>
+                            <p className="text-[10px] text-slate-400">So sánh dữ liệu theo {chartTimeType === 'month' ? 'Tháng' : 'Kỳ'}</p>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -3482,7 +3609,7 @@ export default function App() {
                                 onClick={() => setChartTimeType('week')}
                                 className={`h-7 text-[10px] px-4 rounded-lg transition-all ${chartTimeType === 'week' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
                               >
-                                Theo Tuần
+                                Theo Kỳ
                               </Button>
                             </div>
                             <TabsList className="bg-slate-100 p-1 h-9 rounded-xl border border-slate-200">
@@ -3519,7 +3646,7 @@ export default function App() {
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
                                 <Bar dataKey="budget" name="Ngân sách" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
+                                <Bar dataKey="actual" name="Chi phí" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -3555,7 +3682,7 @@ export default function App() {
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
                                 <Bar dataKey="budget" name="Ngân sách" fill="#0ea5e9" radius={[6, 6, 0, 0]} barSize={24} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
+                                <Bar dataKey="actual" name="Chi phí" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -3587,7 +3714,7 @@ export default function App() {
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
                                 <Bar dataKey="budget" name="Ngân sách" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Thực chi" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
+                                <Bar dataKey="actual" name="Chi phí" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -3607,7 +3734,7 @@ export default function App() {
                               <TableHead className="font-bold">Team / Nhân sự</TableHead>
                               <TableHead className="font-bold">Dự án</TableHead>
                               <TableHead className="text-right font-bold">Ngân sách</TableHead>
-                              <TableHead className="text-right font-bold">Thực chi</TableHead>
+                              <TableHead className="text-right font-bold">Chi phí</TableHead>
                               <TableHead className="text-right font-bold">Chênh lệch</TableHead>
                               <TableHead className="text-center font-bold">Trạng thái</TableHead>
                             </TableRow>
@@ -3711,6 +3838,7 @@ export default function App() {
                         </div>
                       )}
                     </div>
+                    <div className="rounded-xl border border-slate-100 overflow-hidden">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -3836,9 +3964,10 @@ export default function App() {
                         </TableBody>
                       </Table>
                     </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
               {/* User Management Tab */}
               {isAdmin && (
@@ -3902,11 +4031,11 @@ export default function App() {
                                   {(u.role === 'mod' || u.role === 'gdda') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
-                                        <DialogTrigger render={
+                                        <DialogTrigger asChild>
                                           <Button variant="outline" size="sm" className="h-7 text-[10px] px-2">
                                             Gán dự án ({u.assignedProjects?.length || 0})
                                           </Button>
-                                        } />
+                                        </DialogTrigger>
                                         <DialogContent className="sm:max-w-[400px]">
                                           <DialogHeader>
                                             <DialogTitle>Gán dự án cho {u.fullName || u.email}</DialogTitle>
@@ -4039,7 +4168,6 @@ export default function App() {
                   </Card>
                 </TabsContent>
               )}
-            </Tabs>
 
             {/* Delete Project Confirmation Dialog */}
                 <Dialog open={isDeleteProjectDialogOpen} onOpenChange={setIsDeleteProjectDialogOpen}>
@@ -4112,16 +4240,23 @@ export default function App() {
                     </div>
                   </DialogContent>
                 </Dialog>
+                  </Tabs>
+                </div>
+              </div>
             </TabsContent>
           )}
 
-          {/* Budget Registration Tab */}
-          <TabsContent value="register" className="space-y-6">
-            <Card className="border-none shadow-sm bg-white overflow-hidden">
-              <div className="h-1.5 bg-blue-600 w-full" />
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl font-bold text-slate-900">Đăng ký ngân sách tháng</CardTitle>
-                <CardDescription>Nhập ngân sách dự kiến cho các chiến dịch marketing</CardDescription>
+          <TabsContent value="register" className="space-y-8">
+            <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
+              <div className="h-2 bg-gradient-to-r from-indigo-500 to-blue-600 w-full" />
+              <CardHeader className="pb-6">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="p-2 bg-indigo-50 rounded-lg">
+                    <Wallet className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">Đăng ký ngân sách tháng</CardTitle>
+                </div>
+                <CardDescription className="text-slate-500 font-medium">Nhập ngân sách dự kiến cho các chiến dịch marketing của bạn</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleAddBudget} className="space-y-6">
@@ -4461,14 +4596,19 @@ export default function App() {
           </TabsContent>
 
           {/* Actual Cost Tab */}
-          <TabsContent value="actual" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-6">
-                <Card className="border-none shadow-sm bg-white overflow-hidden">
-                  <div className="h-1.5 bg-green-600 w-full" />
-                  <CardHeader className="pb-4">
-                    <CardTitle className="text-lg font-bold text-slate-900">Cập nhật chi phí</CardTitle>
-                    <CardDescription>Chọn khoản ngân sách để nhập chi phí thực tế</CardDescription>
+          <TabsContent value="actual" className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 space-y-8">
+                <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
+                  <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-600 w-full" />
+                  <CardHeader className="pb-6">
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="p-2 bg-emerald-50 rounded-lg">
+                        <TrendingUp className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">Cập nhật chi phí</CardTitle>
+                    </div>
+                    <CardDescription className="text-slate-500 font-medium">Chọn khoản ngân sách để nhập chi phí thực tế</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <form onSubmit={handleAddCost} className="space-y-6">
@@ -4484,117 +4624,197 @@ export default function App() {
                         </div>
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
-                          <Select value={selectedBudgetId} onValueChange={(val) => {
-                            setSelectedBudgetId(val);
-                            const budget = budgets.find(b => b.id === val);
-                            if (budget) setActualProjectId(budget.projectId);
-                          }}>
-                            <SelectTrigger className="h-auto py-3 bg-slate-50 border-slate-200 focus:ring-green-500">
-                              <SelectValue placeholder="Chọn khoản ngân sách của bạn">
+                          <Dialog open={isBudgetSelectionDialogOpen} onOpenChange={setIsBudgetSelectionDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                className="w-full h-auto py-3 px-4 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 justify-start text-left focus:ring-green-500 rounded-xl transition-all"
+                              >
                                 {selectedBudgetId ? (
                                   (() => {
                                     const b = budgets.find(b => b.id === selectedBudgetId);
                                     return b ? (
-                                      <div className="flex flex-col items-start">
-                                        <span className="font-bold text-sm">{projectMap[b.projectId]}</span>
-                                        <span className="text-[10px] text-slate-500">{b.teamName} - {b.implementerName}</span>
+                                      <div className="flex items-center gap-3 w-full">
+                                        <div className="p-2 bg-emerald-100 rounded-lg shrink-0">
+                                          <Wallet className="w-4 h-4 text-emerald-600" />
+                                        </div>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                          <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
+                                          <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                            <span className="font-medium">{b.teamName}</span>
+                                            <span className="opacity-30">•</span>
+                                            <span>{b.implementerName}</span>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <span className="text-xs font-bold text-emerald-600 font-mono italic">
+                                            {b.amount.toLocaleString()} đ
+                                          </span>
+                                        </div>
                                       </div>
-                                    ) : "Chọn khoản ngân sách của bạn";
+                                    ) : (
+                                      <div className="flex items-center gap-2 text-slate-400">
+                                        <Search className="w-4 h-4" />
+                                        <span>Chọn khoản ngân sách của bạn...</span>
+                                      </div>
+                                    );
                                   })()
-                                ) : "Chọn khoản ngân sách của bạn"}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="w-[400px] md:w-[600px] max-w-[95vw]">
-                              <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                                <div className="relative">
-                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                  <Input
-                                    placeholder="Tìm ngân sách..."
-                                    className="pl-8 h-9"
-                                    value={budgetSearch}
-                                    onChange={(e) => setBudgetSearch(e.target.value)}
-                                    onKeyDown={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </div>
-                              <SelectGroup>
-                                {budgets
-                                  .filter(b => {
-                                    const userEmail = user?.email?.toLowerCase();
-                                    const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                                    const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-                                    const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
-                                    
-                                    // Admin and Mod see all budgets
-                                    // GDDA sees assigned projects
-                                    // User sees their own budgets
-                                    const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
-                                    
-                                    // Filter by selected cost budget month
-                                    return canSee && b.month === costBudgetMonth;
-                                  })
-                                  .filter(b => 
-                                    (projectMap[b.projectId] || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                    (b.teamName || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
-                                    (b.implementerName || '').toLowerCase().includes(budgetSearch.toLowerCase())
-                                  )
-                                  .map(b => (
-                                    <SelectItem key={b.id} value={b.id} className="py-3">
-                                      <div className="flex flex-col items-start gap-1">
-                                        <span className="font-bold">{projectMap[b.projectId]}</span>
-                                        <span className="text-xs text-slate-500">{b.teamName} - {b.implementerName}</span>
-                                        <Badge variant="secondary" className="text-[10px] mt-1">
-                                          Ngân sách: {b.amount.toLocaleString()} đ
-                                        </Badge>
-                                      </div>
-                                    </SelectItem>
-                                  ))
-                                }
-                                {budgets.filter(b => {
-                                    const userEmail = user?.email?.toLowerCase();
-                                    const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                                    const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-                                    const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
-                                    const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
-                                    return canSee && b.month === costBudgetMonth;
-                                }).length === 0 && (
-                                  <div className="p-4 text-center text-xs text-slate-500">
-                                    Không tìm thấy ngân sách đăng ký cho kỳ {costBudgetMonth}
+                                ) : (
+                                  <div className="flex items-center gap-2 text-slate-400">
+                                    <Search className="w-4 h-4" />
+                                    <span>Chọn khoản ngân sách của bạn...</span>
                                   </div>
                                 )}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-[95vw] sm:max-w-[600px] p-0 gap-0 overflow-hidden rounded-2xl shadow-2xl border-none">
+                              <DialogHeader className="p-6 pb-0 bg-white">
+                                <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
+                                  <Wallet className="w-5 h-5 text-emerald-500" />
+                                  Chọn Ngân Sách Đăng Ký
+                                </DialogTitle>
+                                <DialogDescription className="text-slate-500 font-medium">
+                                  Danh sách ngân sách của bạn trong kỳ {costBudgetMonth}
+                                </DialogDescription>
+                                <div className="mt-4 relative group">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors group-focus-within:text-emerald-500" />
+                                  <Input
+                                    placeholder="Tìm theo dự án, team hoặc nhân sự..."
+                                    className="pl-10 h-12 bg-slate-50 border-slate-100 focus:border-emerald-200 focus:ring-emerald-100 text-sm rounded-xl"
+                                    value={budgetSearch}
+                                    onChange={(e) => setBudgetSearch(e.target.value)}
+                                  />
+                                </div>
+                              </DialogHeader>
+                              
+                              <div className="p-4 bg-slate-50/50 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-2 mt-4">
+                                {filteredBudgetsForCostSelection.map(b => (
+                                  <button
+                                    key={b.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedBudgetId(b.id);
+                                      setActualProjectId(b.projectId);
+                                      setIsBudgetSelectionDialogOpen(false);
+                                    }}
+                                    className={`w-full p-4 rounded-xl border text-left transition-all duration-200 group flex items-start gap-4 ${
+                                      selectedBudgetId === b.id 
+                                        ? 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-500/20' 
+                                        : 'bg-white border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5'
+                                    }`}
+                                  >
+                                    <div className={`p-2 rounded-lg shrink-0 transition-colors ${
+                                      selectedBudgetId === b.id ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600'
+                                    }`}>
+                                      <Building2 className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex justify-between items-start gap-2 mb-1">
+                                        <h4 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
+                                          {projectMap[b.projectId]}
+                                        </h4>
+                                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                          {b.type}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                          <Users className="w-3 h-3 opacity-60" />
+                                          <span className="font-medium">{b.teamName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                          <UserCircle className="w-3 h-3 opacity-60" />
+                                          <span>{b.implementerName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                          <Map className="w-3 h-3 opacity-60" />
+                                          <span>{projects.find(p => p.id === b.projectId)?.region || 'N/A'}</span>
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 flex items-center justify-between border-t border-slate-50 pt-3">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ngân sách đăng ký</span>
+                                        <span className="text-sm font-black text-emerald-600 font-mono">
+                                          {b.amount.toLocaleString()} <span className="text-[10px]">đ</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))}
+                                {filteredBudgetsForCostSelection.length === 0 && (
+                                  <div className="py-12 text-center space-y-4">
+                                    <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                                      <Search className="w-8 h-8 text-slate-300" />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-slate-900 font-bold">Không tìm thấy ngân sách</p>
+                                      <p className="text-xs text-slate-500">Hãy thử tìm theo bộ lọc khác hoặc kiểm tra kỳ ngân sách</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </div>
                       
                       {selectedBudgetId && (
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                           {(() => {
                             const budget = budgets.find(b => b.id === selectedBudgetId);
+                            const project = projects.find(p => p.id === budget?.projectId);
                             const spent = costs
                               .filter(c => c.budgetId === selectedBudgetId)
                               .reduce((acc, curr) => acc + curr.amount, 0);
                             const percent = budget ? (spent / budget.amount) * 100 : 0;
+                            const remaining = budget ? budget.amount - spent : 0;
                             
                             return (
                               <>
-                                <div className="flex justify-between items-end">
+                                <div className="flex justify-between items-start border-b border-slate-50 pb-3">
                                   <div className="space-y-1">
-                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Đã chi / Ngân sách</p>
-                                    <p className="text-sm font-bold">
-                                      {spent.toLocaleString()} / {budget?.amount.toLocaleString()} đ
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="font-black text-slate-900 leading-none">{project?.name}</h3>
+                                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 font-bold uppercase border-slate-200 text-slate-400">
+                                        {project?.type}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium">
+                                      {project?.region} • {budget?.teamName}
                                     </p>
                                   </div>
-                                  <Badge className={percent > 100 ? "bg-red-100 text-red-700" : percent < 70 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}>
-                                    {percent.toFixed(1)}%
-                                  </Badge>
+                                  <div className="text-right">
+                                    <Badge className={percent > 100 ? "bg-red-500 text-white" : percent < 70 ? "bg-amber-500 text-white" : "bg-emerald-500 text-white"}>
+                                      {percent.toFixed(1)}%
+                                    </Badge>
+                                  </div>
                                 </div>
-                                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full transition-all duration-500 ${percent > 100 ? "bg-red-500" : percent < 70 ? "bg-amber-500" : "bg-green-500"}`}
-                                    style={{ width: `${Math.min(percent, 100)}%` }}
-                                  />
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Đã thực chi</p>
+                                    <p className="text-sm font-black text-slate-900 font-mono">
+                                      {spent.toLocaleString()} <span className="text-[10px]">đ</span>
+                                    </p>
+                                  </div>
+                                  <div className="space-y-1 text-right">
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Còn lại</p>
+                                    <p className={`text-sm font-black font-mono ${remaining < 0 ? 'text-red-500' : 'text-slate-900'}`}>
+                                      {remaining.toLocaleString()} <span className="text-[10px]">đ</span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                                    <span>Tiến độ ngân sách</span>
+                                    <span>{budget?.amount.toLocaleString()} đ</span>
+                                  </div>
+                                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+                                    <div 
+                                      className={`h-full transition-all duration-1000 ease-out shadow-sm ${percent > 100 ? "bg-red-500" : percent < 70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                                      style={{ width: `${Math.min(percent, 100)}%` }}
+                                    />
+                                  </div>
                                 </div>
                               </>
                             );
@@ -4605,12 +4825,22 @@ export default function App() {
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <div className="flex justify-between items-center">
-                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tuần</Label>
+                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ cập nhật</Label>
                             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                              {getWeekRange(costWeek)}
+                              {getPeriodRange(costBudgetMonth, costPeriod)}
                             </span>
                           </div>
-                          <Input type="week" className="bg-slate-50 border-slate-200 h-11" value={costWeek} onChange={e => setCostWeek(e.target.value)} />
+                          <Select value={costPeriod} onValueChange={setCostPeriod}>
+                            <SelectTrigger className="bg-slate-50 border-slate-200 h-11">
+                              <SelectValue placeholder="Chọn kỳ cập nhật" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Kỳ 1 (Ngày 21 - 27)</SelectItem>
+                              <SelectItem value="2">Kỳ 2 (Ngày 28 - 04)</SelectItem>
+                              <SelectItem value="3">Kỳ 3 (Ngày 05 - 11)</SelectItem>
+                              <SelectItem value="4">Kỳ 4 (Ngày 12 - 18)</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -4750,7 +4980,7 @@ export default function App() {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs">{c.implementerName}</TableCell>
-                            <TableCell className="text-xs">Tuần {c.weekNumber}</TableCell>
+                            <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
                             <TableCell className="text-right font-mono font-medium">
                               {editingCostId === c.id ? (
                                 <Input 

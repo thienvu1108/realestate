@@ -42,7 +42,8 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download } from 'lucide-react';
+import Papa from 'papaparse';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
 import { 
@@ -182,15 +183,21 @@ export default function App() {
       const budget = payload.find((p: any) => p.dataKey === 'budget' || p.name === 'Ngân sách')?.value || 0;
       const actual = payload.find((p: any) => p.dataKey === 'actual' || p.name === 'Thực chi')?.value || 0;
       const diff = budget - actual;
-      const percent = budget > 0 ? (actual / budget) * 100 : 0;
+      const usagePercent = budget > 0 ? (actual / budget) * 100 : 0;
+      const variancePercent = budget > 0 ? ((actual / budget) - 1) * 100 : 0;
 
       return (
         <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[240px] animate-in fade-in zoom-in duration-200">
           <div className="flex items-center justify-between mb-3 border-b pb-2 border-slate-100">
             <p className="text-sm font-bold text-slate-800">{label}</p>
-            <Badge variant={percent > 100 ? "destructive" : percent > 90 ? "secondary" : "default"} className="text-[10px] px-1.5 h-5">
-              {percent.toFixed(1)}%
-            </Badge>
+            <div className="flex flex-col items-end">
+              <Badge variant={usagePercent > 100 ? "destructive" : usagePercent > 90 ? "secondary" : "default"} className="text-[10px] px-1.5 h-5">
+                SD: {usagePercent.toFixed(1)}%
+              </Badge>
+              <span className={`text-[9px] font-bold mt-1 ${Math.abs(variancePercent) < 0.1 ? 'text-slate-400' : variancePercent > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                CL: {variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%
+              </span>
+            </div>
           </div>
           
           <div className="space-y-2.5">
@@ -217,13 +224,13 @@ export default function App() {
                 
                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full transition-all duration-500 ${percent > 100 ? 'bg-rose-500' : percent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${Math.min(percent, 100)}%` }}
+                    className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(usagePercent, 100)}%` }}
                   />
                 </div>
                 
                 <p className="text-[10px] text-center text-slate-400 italic">
-                  {percent > 100 
+                  {usagePercent > 100 
                     ? `Vượt ngân sách ${formatCurrency(actual - budget)}` 
                     : `Còn lại ${formatCurrency(budget - actual)}`}
                 </p>
@@ -256,6 +263,7 @@ export default function App() {
   const [newTeamName, setNewTeamName] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [actualProjectId, setActualProjectId] = useState('');
+  const [selectedTeamId, setSelectedTeamId] = useState('');
   const [selectedTeamName, setSelectedTeamName] = useState('');
   const [implementerName, setImplementerName] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
@@ -386,6 +394,9 @@ export default function App() {
   const [isDeleteCostDialogOpen, setIsDeleteCostDialogOpen] = useState(false);
   const [isBulkDeleteCostsDialogOpen, setIsBulkDeleteCostsDialogOpen] = useState(false);
   const [isDeleteAllCostsDialogOpen, setIsDeleteAllCostsDialogOpen] = useState(false);
+  const [isImportCostsDialogOpen, setIsImportCostsDialogOpen] = useState(false);
+  const [isImportingCosts, setIsImportingCosts] = useState(false);
+  const [isImportingBudgets, setIsImportingBudgets] = useState(false);
   const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
   
   const [isBulkDeleteProjectsDialogOpen, setIsBulkDeleteProjectsDialogOpen] = useState(false);
@@ -1418,11 +1429,13 @@ export default function App() {
 
   const confirmAddBudget = async () => {
     const project = projects.find(p => p.id === selectedProjectId);
+    const team = teams.find(t => t.id === selectedTeamId);
     try {
       const docRef = await addDoc(collection(db, 'budgets'), {
         projectId: selectedProjectId,
         projectName: project?.name || 'N/A',
-        teamName: selectedTeamName,
+        teamId: selectedTeamId,
+        teamName: team?.name || selectedTeamName,
         implementerName: implementerName,
         month: budgetMonth,
         amount: Number(budgetAmount),
@@ -1432,10 +1445,13 @@ export default function App() {
       });
       await logAction('CREATE', 'budgets', docRef.id, { projectName: project?.name || 'N/A', amount: budgetAmount, implementer: implementerName });
       setBudgetAmount('');
-      // Keep implementerName and selectedTeamName from profile for next entry
+      // Keep implementerName and selectedTeamId from profile for next entry
       if (!userProfile?.fullName) setImplementerName('');
       setSelectedProjectId('');
-      if (!userProfile?.teamName) setSelectedTeamName('');
+      if (!userProfile?.teamId) {
+        setSelectedTeamId('');
+        setSelectedTeamName('');
+      }
       setIsConfirmBudgetOpen(false);
       toast.success('Đã đăng ký ngân sách');
     } catch (error) {
@@ -1758,6 +1774,347 @@ export default function App() {
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'costs');
     }
+  };
+
+  const handleDownloadCostTemplate = () => {
+    const headers = ['ProjectID', 'TeamID', 'Month', 'Period', 'FBAds', 'Posting', 'ZaloAds', 'GoogleAds', 'OtherCost', 'Note'];
+    const sampleData = [
+      ['p_id_1', 't_id_1', '2026-03', '1', '1000000', '500000', '0', '0', '100000', 'Note sample'],
+      ['p_id_2', 't_id_2', '2026-03', '2', '2000000', '1000000', '500000', '300000', '0', 'Note sample 2']
+    ];
+    
+    const csvContent = [headers, ...sampleData].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "template_chi_phi.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportTeams = () => {
+    if (teams.length === 0) {
+      toast.error('Không có dữ liệu team để xuất');
+      return;
+    }
+
+    const headers = ['ID', 'Tên Team', 'Ngày tạo'];
+    const data = teams.map(t => [
+      t.id,
+      t.name,
+      t.createdAt ? format(t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `danh_sach_team_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Đã xuất danh sách team thành công');
+  };
+
+  const handleExportProjects = () => {
+    if (projects.length === 0) {
+      toast.error('Không có dữ liệu dự án để xuất');
+      return;
+    }
+
+    const headers = ['ID', 'Tên Dự án', 'Khu vực', 'Loại hình', 'Ngày tạo'];
+    const data = projects.map(p => [
+      p.id,
+      p.name,
+      p.region || 'N/A',
+      p.type || 'N/A',
+      p.createdAt ? format(p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `danh_sach_du_an_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Đã xuất danh sách dự án thành công');
+  };
+
+  const handleDownloadBudgetTemplate = () => {
+    const headers = ['ProjectID', 'TeamID', 'Month', 'Implementer', 'Amount'];
+    const sampleData = [
+      ['p_id_1', 't_id_1', '2026-03', 'Nguyễn Văn A', '50000000'],
+      ['p_id_2', 't_id_2', '2026-03', 'Trần Thị B', '75000000']
+    ];
+    
+    const csvContent = "\uFEFF" + [headers, ...sampleData].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "template_dang_ky_ngan_sach.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportBudgetsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingBudgets(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const batch = writeBatch(db);
+          let count = 0;
+          let errors = 0;
+
+          const parseCSVNumber = (val: any) => {
+            if (!val) return 0;
+            const cleanVal = String(val).replace(/[.,]/g, '');
+            const num = Number(cleanVal);
+            return isNaN(num) ? 0 : num;
+          };
+
+          for (const row of results.data as any[]) {
+            const pId = row.ProjectID?.trim();
+            const teamId = row.TeamID?.trim();
+            const month = row.Month?.trim();
+            const implementer = row.Implementer?.trim();
+            const amount = parseCSVNumber(row.Amount);
+
+            if (!pId || !teamId || !month || amount <= 0) {
+              console.warn('Import Budget skipped: Missing info', row);
+              errors++;
+              continue;
+            }
+
+            const project = projects.find(p => p.id === pId);
+            const team = teams.find(t => t.id === teamId);
+
+            if (!project || !team) {
+              console.warn(`Import Budget error: Project or Team ID not found`, { pId, teamId });
+              errors++;
+              continue;
+            }
+
+            // Check if budget already exists to update or create new
+            const existingBudget = budgets.find(b => 
+              b.projectId === pId && 
+              (b.teamId === teamId || b.teamName === team.name) && 
+              b.month === month
+            );
+
+            if (existingBudget) {
+              const bRef = doc(db, 'budgets', existingBudget.id);
+              batch.update(bRef, {
+                amount,
+                implementerName: implementer || existingBudget.implementerName,
+                updatedAt: serverTimestamp(),
+                updatedBy: user?.uid
+              });
+            } else {
+              const bRef = doc(collection(db, 'budgets'));
+              batch.set(bRef, {
+                projectId: pId,
+                projectName: project.name,
+                teamId: teamId,
+                teamName: team.name,
+                implementerName: implementer || 'N/A',
+                month,
+                amount,
+                createdAt: serverTimestamp(),
+                createdBy: user?.uid,
+                userEmail: user?.email?.toLowerCase()
+              });
+            }
+            count++;
+          }
+
+          if (count > 0) {
+            await batch.commit();
+            await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors });
+            toast.success(`Đã nhập/cập nhật thành open ${count} ngân sách. ${errors > 0 ? `Bỏ qua ${errors} dòng lỗi.` : ''}`);
+          } else {
+            toast.error(`Không có dữ liệu hợp lệ để nhập. Vui lòng kiểm tra ID và định dạng.`);
+          }
+        } catch (error) {
+          console.error('Import Budget error:', error);
+          toast.error('Lỗi khi xử lý file CSV');
+        } finally {
+          setIsImportingBudgets(false);
+          if (e.target) e.target.value = '';
+        }
+      }
+    });
+  };
+
+  const handleExportBudgets = () => {
+    if (budgets.length === 0) {
+      toast.error('Không có dữ liệu ngân sách để xuất');
+      return;
+    }
+
+    const headers = ['ProjectID', 'ProjectName', 'TeamID', 'TeamName', 'Month', 'Implementer', 'Amount', 'CreatedBy'];
+    const data = budgets.map(b => [
+      b.projectId,
+      b.projectName,
+      b.teamId || '',
+      b.teamName,
+      b.month,
+      b.implementerName,
+      b.amount,
+      b.userEmail || ''
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `danh_sach_ngan_sach_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Đã xuất danh sách ngân sách thành công');
+  };
+
+  const handleImportCostsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingCosts(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const batch = writeBatch(db);
+          let count = 0;
+          let errors = 0;
+
+          // Mapping for project name to ID
+          const projectNameToId: Record<string, string> = {};
+          projects.forEach(p => {
+            projectNameToId[p.name.toLowerCase()] = p.id;
+          });
+
+          const parseCSVNumber = (val: any) => {
+            if (!val) return 0;
+            // Handle strings with thousands separators like 1.205.437 or 1,205,437
+            const cleanVal = String(val).replace(/[.,]/g, '');
+            const num = Number(cleanVal);
+            return isNaN(num) ? 0 : num;
+          };
+
+          for (const row of results.data as any[]) {
+            const pId = row.ProjectID?.trim();
+            const teamId = row.TeamID?.trim();
+            const month = row.Month?.trim();
+            const period = row.Period?.trim();
+            const fbAds = parseCSVNumber(row.FBAds);
+            const posting = parseCSVNumber(row.Posting);
+            const zaloAds = parseCSVNumber(row.ZaloAds);
+            const googleAds = parseCSVNumber(row.GoogleAds);
+            const otherCost = parseCSVNumber(row.OtherCost);
+            const note = row.Note || '';
+
+            if (!pId || !teamId || !month || !period) {
+              console.warn('Import skipped: Missing basic info', row);
+              errors++;
+              continue;
+            }
+
+            const project = projects.find(p => p.id === pId);
+            if (!project) {
+              console.warn(`Import error: Project ID "${pId}" not found`, row);
+              errors++;
+              continue;
+            }
+
+            // Find matching budget to sync (đồng bộ)
+            // Match by Project ID and Team ID (if budget has it) or fallback to name if budget lacks ID
+            const matchingBudget = budgets.find(b => 
+              b.projectId === pId && 
+              (b.teamId ? b.teamId === teamId : b.teamName.toLowerCase().trim() === (teams.find(t => t.id === teamId)?.name || '').toLowerCase().trim()) && 
+              b.month === month
+            );
+
+            if (!matchingBudget) {
+              console.warn(`Import error: No matching Budget for P-ID:${pId} - T-ID:${teamId} - ${month}`, row);
+              errors++;
+              continue;
+            }
+
+            const totalAmount = fbAds + posting + zaloAds + googleAds + otherCost;
+            const [yearStr] = month.split('-');
+            const year = Number(yearStr);
+
+            const docRef = doc(collection(db, 'costs'));
+            batch.set(docRef, {
+              projectId: pId,
+              projectName: project.name,
+              budgetId: matchingBudget.id,
+              implementerName: matchingBudget.implementerName || 'N/A',
+              teamName: matchingBudget.teamName,
+              teamId: teamId,
+              weekNumber: Number(period),
+              year,
+              month,
+              amount: totalAmount,
+              channels: {
+                fbAds,
+                posting,
+                zaloAds,
+                googleAds,
+                otherCost
+              },
+              note,
+              createdAt: serverTimestamp(),
+              createdBy: user?.uid,
+              userEmail: user?.email?.toLowerCase()
+            });
+            count++;
+          }
+
+          if (count > 0) {
+            await batch.commit();
+            await logAction('IMPORT_COSTS', 'costs', 'bulk', { count, errors });
+            toast.success(`Đã nhập thành công ${count} bản ghi. ${errors > 0 ? `Bỏ qua ${errors} dòng lỗi.` : ''}`);
+          } else {
+            toast.error(`Không thể nhập dữ liệu. Có ${errors} dòng lỗi hoặc không khớp ngân sách.`);
+          }
+          
+          setIsImportCostsDialogOpen(false);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, 'costs');
+        } finally {
+          setIsImportingCosts(false);
+          e.target.value = '';
+        }
+      },
+      error: (error) => {
+        toast.error(`Lỗi đọc file: ${error.message}`);
+        setIsImportingCosts(false);
+      }
+    });
   };
 
   const handleUpdateCost = async (id: string) => {
@@ -2385,13 +2742,21 @@ export default function App() {
                             </Select>
                           </div>
                           {isAdmin && (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button className="bg-blue-600 hover:bg-blue-700">
-                                  <Plus className="w-4 h-4 mr-2" /> Thêm dự án
-                                </Button>
-                              </DialogTrigger>
-                            <DialogContent className="sm:max-w-[500px]">
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                onClick={handleExportProjects}
+                              >
+                                <Download className="w-4 h-4 mr-2" /> Xuất Excel
+                              </Button>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button className="bg-blue-600 hover:bg-blue-700">
+                                    <Plus className="w-4 h-4 mr-2" /> Thêm dự án
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
                                 <DialogTitle>Thêm dự án mới</DialogTitle>
                                 <DialogDescription>Nhập thông tin dự án bất động sản. Bạn có thể nhập nhiều dự án cùng lúc bằng cách xuống dòng.</DialogDescription>
@@ -2442,9 +2807,10 @@ export default function App() {
                               </form>
                             </DialogContent>
                           </Dialog>
-                        )}
-                      </div>
-                      </CardContent>
+                        </div>
+                      )}
+                    </div>
+                    </CardContent>
                     </Card>
 
                     {/* Project Table */}
@@ -3089,12 +3455,20 @@ export default function App() {
                             </div>
                           </div>
                           {isAdmin && (
-                            <Dialog>
-                              <DialogTrigger render={
-                                <Button className="bg-blue-600 hover:bg-blue-700">
-                                  <Plus className="w-4 h-4 mr-2" /> Thêm Team
-                                </Button>
-                              } />
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                onClick={handleExportTeams}
+                              >
+                                <Download className="w-4 h-4 mr-2" /> Xuất Excel
+                              </Button>
+                              <Dialog>
+                                <DialogTrigger render={
+                                  <Button className="bg-blue-600 hover:bg-blue-700">
+                                    <Plus className="w-4 h-4 mr-2" /> Thêm Team
+                                  </Button>
+                                } />
                               <DialogContent className="sm:max-w-[500px]">
                                 <DialogHeader>
                                   <DialogTitle>Thêm Team mới</DialogTitle>
@@ -3118,10 +3492,11 @@ export default function App() {
                                 </form>
                               </DialogContent>
                             </Dialog>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
 
                     {/* Team Table */}
                     <Card className="border-none shadow-sm">
@@ -3266,6 +3641,41 @@ export default function App() {
                           <CardDescription>Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
+                            onClick={handleExportBudgets}
+                          >
+                            <Download className="w-3 h-3 mr-1" /> Xuất Excel
+                          </Button>
+                          <div className="relative">
+                            <input
+                              type="file"
+                              accept=".csv"
+                              className="hidden"
+                              id="budget-import-input"
+                              onChange={handleImportBudgetsCSV}
+                              disabled={isImportingBudgets}
+                            />
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                              onClick={() => document.getElementById('budget-import-input')?.click()}
+                              disabled={isImportingBudgets}
+                            >
+                              <FileUp className={`w-3 h-3 mr-1 ${isImportingBudgets ? 'animate-spin' : ''}`} /> Nhập CSV
+                            </Button>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-slate-500 underline"
+                            onClick={handleDownloadBudgetTemplate}
+                          >
+                            Tải template
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -3433,6 +3843,14 @@ export default function App() {
                           <CardDescription>Xóa hoặc xem danh sách các bản ghi thực chi</CardDescription>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={() => setIsImportCostsDialogOpen(true)}
+                          >
+                            <FileUp className="w-3 h-3 mr-1" /> Nhập CSV
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -3734,20 +4152,27 @@ export default function App() {
                           </p>
                         </div>
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tỉ lệ sử dụng</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tỉ lệ chênh lệch</p>
                           {(() => {
                             const budget = filteredBudgets.reduce((acc, curr) => acc + curr.amount, 0);
                             const cost = filteredCosts.reduce((acc, curr) => acc + curr.amount, 0);
-                            const percent = budget > 0 ? (cost / budget) * 100 : 0;
+                            const variance = budget > 0 ? ((cost / budget) - 1) * 100 : 0;
+                            const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
+                            
                             return (
-                              <div className="flex items-center gap-2">
-                                <p className={`text-2xl font-bold ${percent > 100 ? 'text-red-600' : percent < 70 ? 'text-amber-600' : 'text-green-600'}`}>
-                                  {percent.toFixed(1)}%
-                                </p>
-                                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-2xl font-bold ${Math.abs(variance) < 0.01 ? 'text-slate-900' : variance > 0 ? 'text-red-600' : variance < -30 ? 'text-amber-600' : 'text-green-600'}`}>
+                                    {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
+                                  </p>
+                                  <Badge variant="outline" className="text-[9px] py-0 border-slate-200 text-slate-500">
+                                    Sử dụng: {usagePercent.toFixed(1)}%
+                                  </Badge>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
                                   <div 
-                                    className={`h-full ${percent > 100 ? 'bg-red-500' : percent < 70 ? 'bg-amber-500' : 'bg-green-500'}`}
-                                    style={{ width: `${Math.min(percent, 100)}%` }}
+                                    className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-red-500' : usagePercent < 70 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                    style={{ width: `${Math.min(usagePercent, 100)}%` }}
                                   />
                                 </div>
                               </div>
@@ -3907,7 +4332,7 @@ export default function App() {
                               <TableHead className="font-bold">Dự án</TableHead>
                               <TableHead className="text-right font-bold">Ngân sách</TableHead>
                               <TableHead className="text-right font-bold">Chi phí</TableHead>
-                              <TableHead className="text-right font-bold">Chênh lệch</TableHead>
+                              <TableHead className="text-right font-bold">Chênh lệch (%)</TableHead>
                               <TableHead className="text-center font-bold">Trạng thái</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -3945,7 +4370,12 @@ export default function App() {
                                   <TableCell className="text-right font-bold font-mono">{teamTotalBudget.toLocaleString()} đ</TableCell>
                                   <TableCell className="text-right font-bold font-mono">{teamTotalCost.toLocaleString()} đ</TableCell>
                                   <TableCell className={`text-right font-bold font-mono ${diff < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    {diff.toLocaleString()} đ
+                                    <div className="flex flex-col items-end">
+                                      <span>{diff.toLocaleString()} đ</span>
+                                      <span className="text-[10px] font-medium">
+                                        {teamTotalBudget > 0 ? (((teamTotalCost / teamTotalBudget) - 1) * 100).toFixed(1) : '0'}%
+                                      </span>
+                                    </div>
                                   </TableCell>
                                   <TableCell className="text-center">
                                     <Badge variant="outline" className={`border-none ${statusColor}`}>
@@ -3970,7 +4400,12 @@ export default function App() {
                                       <TableCell className="text-right text-xs font-mono">{budget.amount.toLocaleString()} đ</TableCell>
                                       <TableCell className="text-right text-xs font-mono">{budgetCost.toLocaleString()} đ</TableCell>
                                       <TableCell className={`text-right text-xs font-mono ${bDiff < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                        {bDiff.toLocaleString()} đ
+                                        <div className="flex flex-col items-end">
+                                          <span>{bDiff.toLocaleString()} đ</span>
+                                          <span className="text-[9px] opacity-70">
+                                            {budget.amount > 0 ? (((budgetCost / budget.amount) - 1) * 100).toFixed(1) : '0'}%
+                                          </span>
+                                        </div>
                                       </TableCell>
                                       <TableCell />
                                     </TableRow>
@@ -4449,7 +4884,11 @@ export default function App() {
 
                     <div className="space-y-2">
                       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Team</Label>
-                      <Select value={selectedTeamName} onValueChange={setSelectedTeamName}>
+                      <Select value={selectedTeamId} onValueChange={(val) => {
+                        const team = teams.find(t => t.id === val);
+                        setSelectedTeamId(val);
+                        if (team) setSelectedTeamName(team.name);
+                      }}>
                         <SelectTrigger className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11">
                           <SelectValue placeholder="Vui lòng chọn team" />
                         </SelectTrigger>
@@ -4470,7 +4909,7 @@ export default function App() {
                             {teams
                               .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                               .map(t => (
-                                <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                               ))
                             }
                             {teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
@@ -5841,6 +6280,54 @@ export default function App() {
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmMigrateBudgets} disabled={isMigratingBudgets}>
               {isMigratingBudgets ? "Đang xử lý..." : "Xác nhận chuyển"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Import Costs Dialog */}
+      <Dialog open={isImportCostsDialogOpen} onOpenChange={setIsImportCostsDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <FileUp className="w-5 h-5" /> Nhập dữ liệu chi phí từ CSV
+            </DialogTitle>
+            <DialogDescription>
+              Tải lên file CSV chứa dữ liệu chi phí để đồng bộ với các team. Bạn nên tải file mẫu để đảm bảo định dạng chính xác.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-slate-700">Tải file mẫu</p>
+                <p className="text-xs text-slate-500">Sử dụng file này để nhập dữ liệu đúng mẫu</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDownloadCostTemplate} className="h-9">
+                <Download className="w-4 h-4 mr-2" /> Tải về
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">Chọn file dữ liệu</Label>
+              <div className="relative group">
+                <Input 
+                  type="file" 
+                  accept=".csv" 
+                  onChange={handleImportCostsCSV} 
+                  disabled={isImportingCosts}
+                  className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {isImportingCosts && (
+                  <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-md">
+                    <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 italic">
+                * Lưu ý: Tên Dự án, Team, và Tháng phải khớp với dữ liệu đã đăng ký ngân sách.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportCostsDialogOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

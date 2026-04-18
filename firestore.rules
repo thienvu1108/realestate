@@ -90,9 +90,11 @@ service cloud.firestore {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
-                    (resource.data.userEmail == request.auth.token.email);
+                    (resource.data.userEmail == request.auth.token.email) ||
+                    (resource.data.assignedUserEmail == request.auth.token.email);
       allow create: if isAuthenticated();
-      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid || 
+                    (resource.data.assignedUserEmail == request.auth.token.email);
       allow delete: if isAdmin();
     }
 
@@ -103,9 +105,11 @@ service cloud.firestore {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
-                    (resource.data.userEmail == request.auth.token.email);
+                    (resource.data.userEmail == request.auth.token.email) ||
+                    (resource.data.assignedUserEmail == request.auth.token.email);
       allow create: if isAuthenticated();
-      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid ||
+                    (resource.data.assignedUserEmail == request.auth.token.email);
       allow delete: if isAdmin();
     }
 
@@ -134,6 +138,16 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAdmin();
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Efficiency Reports
+    // ===============================================================
+    match /efficiencyReports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() || isMod();
+      allow update: if isAdmin() || isMod();
       allow delete: if isAdmin();
     }
   }

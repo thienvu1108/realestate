@@ -42,21 +42,33 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy } from 'lucide-react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
 import { 
   BarChart, 
   Bar, 
+  Line,
+  ComposedChart,
+  PieChart,
+  Pie,
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
   Legend, 
   ResponsiveContainer,
-  Cell
+  Cell,
+  Tooltip as ChartTooltip
 } from 'recharts';
+import { 
+  Tooltip as UITooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 
 // Error handling for Firestore
 enum OperationType {
@@ -95,9 +107,13 @@ export default function App() {
   const [budgets, setBudgets] = useState<any[]>([]);
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('register');
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoringData, setIsRestoringData] = useState(false);
+  const [isRestoreBudgetsDialogOpen, setIsRestoreBudgetsDialogOpen] = useState(false);
+  const [selectedLogForRestore, setSelectedLogForRestore] = useState<any>(null);
 
   // Helper for Marketing Month (21st of prev month to 20th of current month)
   const getMarketingMonth = (date: Date | any) => {
@@ -173,9 +189,91 @@ export default function App() {
   };
 
   const formatYAxis = (value: number) => {
-    if (value >= 1000000000) return (value / 1000000000).toFixed(1) + ' tỷ';
-    if (value >= 1000000) return (value / 1000000).toFixed(1) + ' tr';
-    return value.toLocaleString();
+    return value.toLocaleString('vi-VN');
+  };
+
+  const EfficiencyDetailedTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-50 min-w-[320px] space-y-3">
+          <div className="border-b pb-2 flex items-center justify-between">
+            <p className="text-xs font-black text-slate-900 uppercase">{label}</p>
+            <Badge variant="outline" className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 border-blue-100">Chi tiết</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <div className="space-y-1">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ngân sách</p>
+              <p className="text-[11px] font-bold text-slate-600 font-mono">{formatCurrency(data.budget)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Chi phí</p>
+              <p className={`text-[11px] font-bold font-mono ${data.cost > data.budget ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
+                {formatCurrency(data.cost)}
+              </p>
+            </div>
+            {data.revenue > 0 && (
+              <>
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Doanh số</p>
+                  <p className="text-[11px] font-bold text-emerald-600 font-mono">{formatCurrency(data.revenue)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ROI</p>
+                  <p className="text-[11px] font-bold text-indigo-600 font-mono">{(data.cost > 0 ? data.revenue / data.cost : 0).toFixed(2)}x</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {data.cost > data.budget && (
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 flex items-center gap-2 shadow-inner">
+              <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-3 h-3 text-red-600" />
+              </div>
+              <p className="text-[10px] font-bold text-red-700 uppercase tracking-tight">Vượt ngân sách: <span className="font-black ml-1 text-red-900">{formatCurrency(data.cost - data.budget)}</span></p>
+            </div>
+          )}
+
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
+              {efficiencyGroupType === 'team' ? 'Thành phần (Xếp theo Doanh số)' : 'Đội ngũ triển khai (Xếp theo Doanh số)'}
+            </p>
+            <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
+              {data.details.map((d: any, i: number) => (
+                <div key={i} className="flex flex-col p-2.5 rounded-lg border border-slate-100 bg-white/50 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-[11px]">{d.name}</span>
+                    {d.sales > 0 && (
+                      <Badge variant="secondary" className="h-4 text-[8px] font-bold px-1.5 bg-slate-100 text-slate-600">{d.sales} căn</Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-medium">DS:</span>
+                      <span className="font-bold text-emerald-600 text-right font-mono">{formatCurrency(d.revenue)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-medium">CP:</span>
+                      <span className={`text-right font-mono font-black ${(d.budget > 0 && d.cost > d.budget) ? 'text-red-700' : 'text-slate-700'}`}>
+                        {formatCurrency(d.cost)}
+                      </span>
+                    </div>
+                  </div>
+                  {d.budget > 0 && d.cost > d.budget && (
+                    <div className="flex items-center gap-1.5 px-1 py-0.5 mt-1 bg-red-50/50 rounded-md border border-red-100/30">
+                      <AlertTriangle className="w-2.5 h-2.5 text-red-600" />
+                      <span className="text-[8px] font-black text-red-600 uppercase tracking-tighter">Vượt {formatCurrency(d.cost - d.budget)}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -326,10 +424,6 @@ export default function App() {
   const [projectSort, setProjectSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [teamSort, setTeamSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
 
-  // Editing states for projects with extra fields
-  const [editingProjectRegion, setEditingProjectRegion] = useState('');
-  const [editingProjectType, setEditingProjectType] = useState('');
-
   const [costAmount, setCostAmount] = useState('');
   const [fbAds, setFbAds] = useState('');
   const [posting, setPosting] = useState('');
@@ -355,8 +449,12 @@ export default function App() {
   // Edit states
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
+  const [editingProjectCode, setEditingProjectCode] = useState('');
+  const [editingProjectRegion, setEditingProjectRegion] = useState('');
+  const [editingProjectType, setEditingProjectType] = useState('');
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [editingTeamName, setEditingTeamName] = useState('');
+  const [editingTeamCode, setEditingTeamCode] = useState('');
 
   // Region management states
   const [newRegionName, setNewRegionName] = useState('');
@@ -400,6 +498,7 @@ export default function App() {
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual'>('budget');
   const [activeReportTab, setActiveReportTab] = useState('team');
+  const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project'>('team');
   const [reportProjectSearch, setReportProjectSearch] = useState('');
   const [reportTeamSearch, setReportTeamSearch] = useState('');
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
@@ -408,6 +507,7 @@ export default function App() {
   const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
+  const [selectedEfficiencyIds, setSelectedEfficiencyIds] = useState<string[]>([]);
   const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
   const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
   const [adminCostSearch, setAdminCostSearch] = useState('');
@@ -432,13 +532,43 @@ export default function App() {
   const [isDeletingRegions, setIsDeletingRegions] = useState(false);
   const [isDeletingTypes, setIsDeletingTypes] = useState(false);
   const [isSyncingTypes, setIsSyncingTypes] = useState(false);
+  const [isSyncingTeams, setIsSyncingTeams] = useState(false);
+  const [isSyncingProjects, setIsSyncingProjects] = useState(false);
+  const [isSyncingBudgetPermissions, setIsSyncingBudgetPermissions] = useState(false);
 
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQ892N-xRaPCmU8-OlvoEZ6aTd4a74DCvOUpiEHqQ2nCLGq_qY48dQl4WkbD3j6d_uDg/exec";
-  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1hOAZtsqgCEegOrxDSnDRWso7EUpRXNi4G-kBfcNyhBg/edit?usp=sharing"; // Thay bằng URL Google Sheet của bạn
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwjeE6fQBkPs5SaIaMO7pLwkp_XGwwuVMxEXpExlFnSzsCws3hqc5buywAToX82iRlsWw/exec";
+  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1hOAZtsqgCEegOrxDSnDRWso7EUpRXNi4G-kBfcNyhBg/edit?gid=0#gid=0"; // Link Google Sheet của bạn
 
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
   const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
   const [isDeletingCosts, setIsDeletingCosts] = useState(false);
+  const [isAddingEfficiency, setIsAddingEfficiency] = useState(false);
+  const [isDeletingEfficiency, setIsDeletingEfficiency] = useState(false);
+  const [isDeletingEfficiencyBatch, setIsDeletingEfficiencyBatch] = useState(false);
+  const [newEfficiencyProject, setNewEfficiencyProject] = useState('');
+  const [newEfficiencyTeam, setNewEfficiencyTeam] = useState('');
+  const [newEfficiencyMonth, setNewEfficiencyMonth] = useState(getMarketingMonth(new Date()));
+  const [newEfficiencySales, setNewEfficiencySales] = useState('');
+  const [newEfficiencyRevenue, setNewEfficiencyRevenue] = useState('');
+  const [newEfficiencyProjectSearch, setNewEfficiencyProjectSearch] = useState('');
+  const [newEfficiencyTeamSearch, setNewEfficiencyTeamSearch] = useState('');
+  const [adminEfficiencySearch, setAdminEfficiencySearch] = useState('');
+  const [adminEfficiencyMonthFilter, setAdminEfficiencyMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [isImportingEfficiencyUrl, setIsImportingEfficiencyUrl] = useState(false);
+  const [efficiencySheetUrl, setEfficiencySheetUrl] = useState('');
+  const [costSheetUrl, setCostSheetUrl] = useState('');
+  const [budgetSheetUrl, setBudgetSheetUrl] = useState('');
+  const [isImportingBudgetsUrl, setIsImportingBudgetsUrl] = useState(false);
+  const [isImportingCostsUrl, setIsImportingCostsUrl] = useState(false);
+  const [isDeleteEfficiencyDialogOpen, setIsDeleteEfficiencyDialogOpen] = useState(false);
+  const [isBulkDeleteEfficiencyDialogOpen, setIsBulkDeleteEfficiencyDialogOpen] = useState(false);
+  const [isDeleteAllEfficiencyDialogOpen, setIsDeleteAllEfficiencyDialogOpen] = useState(false);
+  const [efficiencyToDelete, setEfficiencyToDelete] = useState<any>(null);
+  const [isEditEfficiencyDialogOpen, setIsEditEfficiencyDialogOpen] = useState(false);
+  const [editingEfficiency, setEditingEfficiency] = useState<any>(null);
+  const [isImportEfficiencyDialogOpen, setIsImportEfficiencyDialogOpen] = useState(false);
+  const [isImportingEfficiency, setIsImportingEfficiency] = useState(false);
+
   const [isDeleteBudgetDialogOpen, setIsDeleteBudgetDialogOpen] = useState(false);
   const [isBulkDeleteBudgetsDialogOpen, setIsBulkDeleteBudgetsDialogOpen] = useState(false);
   const [isDeleteAllBudgetsDialogOpen, setIsDeleteAllBudgetsDialogOpen] = useState(false);
@@ -462,10 +592,51 @@ export default function App() {
   const [isDeleteUserDialogOpen, setIsDeleteUserDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{id: string, email: string} | null>(null);
 
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [isImportErrorsDialogOpen, setIsImportErrorsDialogOpen] = useState(false);
+
   const isAdmin = userRole === 'super_admin' || userRole === 'admin';
   const isSuperAdmin = userRole === 'super_admin';
   const isMod = userRole === 'mod';
   const isGDDA = userRole === 'gdda';
+
+  const normalizeMonth = (val: any): string => {
+    if (!val) return '';
+    if (val instanceof Date) {
+      const d = new Date(val.getTime() + 12 * 60 * 60 * 1000);
+      return format(d, 'yyyy-MM');
+    }
+    const str = String(val).trim();
+    const parts = str.split(/[-/.]/);
+    if (parts.length === 2) {
+      let year = '';
+      let month = '';
+      if (parts[0].length === 4) {
+        year = parts[0];
+        month = parts[1].padStart(2, '0');
+      } else {
+        month = parts[0].padStart(2, '0');
+        year = parts[1].length === 2 ? `20${parts[1]}` : parts[1];
+      }
+      if (year.length === 4 && (parseInt(month) >= 1 && parseInt(month) <= 12)) return `${year}-${month}`;
+    }
+    return str;
+  };
+
+  const parseVal = (val: any) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const cleanVal = String(val).replace(/[.,]/g, '');
+    const num = Number(cleanVal);
+    return isNaN(num) ? 0 : num;
+  };
+
+  const extractEmail = (text: string): string | null => {
+    if (!text) return null;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const matches = text.match(emailRegex);
+    return matches ? matches[0].toLowerCase().trim() : null;
+  };
   const isUser = userRole === 'user';
 
   // Project name lookup map
@@ -477,6 +648,14 @@ export default function App() {
     return map;
   }, [projects]);
 
+  const teamMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    teams.forEach(t => {
+      map[t.id] = t.name;
+    });
+    return map;
+  }, [teams]);
+
   const filteredBudgetsForCostSelection = useMemo(() => {
     const userEmail = user?.email?.toLowerCase();
     
@@ -484,9 +663,10 @@ export default function App() {
       .filter(b => {
         const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
         const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+        const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
         const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
         
-        const canSee = isAdmin || isMod || isOwner || isAssignedGDDA;
+        const canSee = isAdmin || isMod || isOwner || isAssigned || isAssignedGDDA;
         return canSee && b.month === costBudgetMonth;
       })
       .filter(b => 
@@ -620,7 +800,8 @@ export default function App() {
         collection(db, 'budgets'), 
         or(
           where('createdBy', '==', user.uid),
-          where('userEmail', '==', user.email?.toLowerCase())
+          where('userEmail', '==', user.email?.toLowerCase()),
+          where('assignedUserEmail', '==', user.email?.toLowerCase())
         )
       );
     }
@@ -648,7 +829,8 @@ export default function App() {
         collection(db, 'costs'), 
         or(
           where('createdBy', '==', user.uid),
-          where('userEmail', '==', user.email?.toLowerCase())
+          where('userEmail', '==', user.email?.toLowerCase()),
+          where('assignedUserEmail', '==', user.email?.toLowerCase())
         )
       );
     }
@@ -683,6 +865,12 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
     }
 
+    // Listen to efficiency reports
+    const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
+    const unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
+      setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
+
     return () => {
       unsubProjects();
       unsubTeams();
@@ -692,8 +880,759 @@ export default function App() {
       unsubCosts();
       unsubLogs();
       unsubUsers();
+      unsubEfficiency();
     };
   }, [user, userRole, userProfile]);
+
+  const handleImportEfficiency = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (projects.length === 0 || teams.length === 0) {
+      toast.error("Dữ liệu hệ thống (Dự án/Team) chưa tải xong. Vui lòng đợi giây lát.");
+      return;
+    }
+
+
+    setIsImportingEfficiency(true);
+    const reader = new FileReader();
+
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Convert to array of arrays to find headers
+        let rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        if (rows.length === 0) {
+          toast.error("File trống hoặc không tìm thấy dữ liệu");
+          setIsImportingEfficiency(false);
+          return;
+        }
+
+        // Find header row (the one containing 'ID' or 'Dự án')
+        let headerIndex = -1;
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          const row = rows[i];
+          if (row.some(cell => {
+            const str = String(cell || '').toLowerCase().replace(/\s+/g, '');
+            return str.includes('idduan') || str.includes('dựán') || str.includes('projectid');
+          })) {
+            headerIndex = i;
+            break;
+          }
+        }
+
+        if (headerIndex === -1) {
+          // Fallback to first row if no obvious header found
+          headerIndex = 0;
+        }
+
+        // Re-parse with detected header row
+        const json: any[] = XLSX.utils.sheet_to_json(worksheet, { range: headerIndex });
+
+        if (json.length === 0) {
+          toast.error("Không tìm thấy dữ liệu hợp lệ. Vui lòng kiểm tra lại cấu trúc file mẫu.");
+          setIsImportingEfficiency(false);
+          return;
+        }
+
+        const batch = writeBatch(db);
+        let count = 0;
+        let missingIds = 0;
+        let invalidData = 0;
+        const missingIdDetails: string[] = [];
+
+        for (const row of json) {
+          // Normalize row keys (remove spaces, case insensitive)
+          const normalizedRow: any = {};
+          Object.keys(row).forEach(k => {
+            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            normalizedRow[cleanKey] = row[k];
+          });
+
+          const getVal = (possibleKeys: string[]) => {
+            for (const pk of possibleKeys) {
+              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+              if (normalizedRow[cleanPK] !== undefined) return normalizedRow[cleanPK];
+            }
+            return undefined;
+          };
+
+          const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+          let month = normalizeMonth(getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']));
+          
+          const salesStr = String(getVal(['Căn bán', 'Số căn bán', 'canban', 'socan', 'salescount', 'sales', 'số căn', 'units']) || '0');
+          const revenueStr = String(getVal(['Doanh số', 'revenue', 'doanhso', 'thực đạt', 'doanh thu', 'doanhthu']) || '0');
+
+          const sales = parseInt(salesStr.replace(/[^0-9]/g, '')) || 0;
+          const revenue = parseInt(revenueStr.replace(/[^0-9]/g, '')) || 0;
+
+          if (!pRef || !tRef || !month) {
+            // Check if row is mostly empty (skip empty rows)
+            const hasData = Object.values(normalizedRow).some(v => v !== null && v !== undefined && v !== '');
+            if (hasData) invalidData++;
+            continue;
+          }
+
+          const project = projects.find(p => p.id === pRef || p.projectCode === pRef || p.name.toLowerCase() === pRef.toLowerCase());
+          const team = teams.find(t => t.id === tRef || t.teamCode === tRef || t.name.toLowerCase() === tRef.toLowerCase());
+
+          if (!project) {
+            missingIds++;
+            if (missingIdDetails.length < 3) missingIdDetails.push(`P-Ref: ${pRef}`);
+            continue;
+          }
+          if (!team) {
+            missingIds++;
+            if (missingIdDetails.length < 3) missingIdDetails.push(`T-Ref: ${tRef}`);
+            continue;
+          }
+
+          const projectId = project.id;
+          const teamId = team.id;
+
+          // Find existing record
+          const existing = efficiencyReports.find(r => 
+            r.projectId === projectId && 
+            r.teamId === teamId && 
+            r.month === month
+          );
+
+          if (existing) {
+            const docRef = doc(db, 'efficiencyReports', existing.id);
+            batch.update(docRef, {
+              salesCount: sales,
+              revenue: revenue,
+              updatedAt: serverTimestamp()
+            });
+          } else {
+            const docRef = doc(collection(db, 'efficiencyReports'));
+            batch.set(docRef, {
+              projectId,
+              projectName: projectMap[projectId] || 'N/A',
+              teamId,
+              teamName: teamMap[teamId] || 'N/A',
+              month,
+              salesCount: sales,
+              revenue: revenue,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              createdBy: user?.uid,
+              createdByEmail: user?.email
+            });
+          }
+          count++;
+        }
+
+        await batch.commit();
+        
+        if (count > 0) {
+          toast.success(`Đồng bộ thành công ${count} bản ghi.`);
+        }
+
+        if (missingIds > 0) {
+          toast.error(`${missingIds} dòng bị bỏ qua do ID dự án/team không khớp hệ thống. Ví dụ: ${missingIdDetails.join(', ')}`, { duration: 6000 });
+        }
+        
+        if (invalidData > 0) {
+          toast.error(`${invalidData} dòng không hợp lệ (thiếu thông tin bắt buộc).`, { duration: 4000 });
+        }
+
+        if (count === 0 && missingIds === 0 && invalidData === 0) {
+          toast.info("Không tìm thấy dữ liệu mới để đồng bộ.");
+        }
+
+        await logAction('IMPORT', 'efficiencyReports', 'bulk', { count, errors: missingIds + invalidData });
+      } catch (error) {
+        console.error("Import Error:", error);
+        toast.error("Lỗi xử lý file. Vui lòng đảm bảo bạn đang dùng file Excel (.xlsx) hoặc CSV chuẩn và không có bảo mật.");
+      } finally {
+        setIsImportingEfficiency(false);
+        setIsImportEfficiencyDialogOpen(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleImportBudgetsFromUrl = async () => {
+    if (!budgetSheetUrl.trim()) {
+      toast.error('Vui lòng nhập Link Google Sheet ngân sách');
+      return;
+    }
+
+    const docIdMatch = budgetSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (!docIdMatch) {
+      toast.error('Link Google Sheet không hợp lệ');
+      return;
+    }
+
+    const docId = docIdMatch[1];
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${docId}/export?format=xlsx`;
+
+    setIsImportingBudgetsUrl(true);
+    setImportErrors([]);
+    try {
+      const response = await fetch(exportUrl);
+      if (!response.ok) {
+        throw new Error("Không thể tải file từ Google Sheet. Hãy đảm bảo file đã được chia sẻ công khai.");
+      }
+      
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+      
+      let rows: any[] = [];
+      let foundHeaders = false;
+
+      // Scan all sheets to find the one with budget headers
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const rawData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        let headerIndex = -1;
+        for (let i = 0; i < Math.min(rawData.length, 20); i++) {
+          const row = rawData[i];
+          if (row && Array.isArray(row) && row.some(cell => {
+            const str = String(cell || '').toLowerCase().replace(/\s+/g, '');
+            return str.includes('ngânsách') || str.includes('amount') || str.includes('idduan') || str.includes('dựán') || str.includes('idteam');
+          })) {
+            headerIndex = i;
+            break;
+          }
+        }
+
+        if (headerIndex !== -1) {
+          rows = XLSX.utils.sheet_to_json(worksheet, { range: headerIndex });
+          if (rows.length > 0) {
+            foundHeaders = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundHeaders || rows.length === 0) {
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(firstSheet);
+      }
+
+      if (rows.length === 0) {
+        toast.error("Không tìm thấy dữ liệu trong Google Sheet.");
+        return;
+      }
+
+      const batch = writeBatch(db);
+      let count = 0;
+      let skippedCount = 0;
+      const errorDetails: string[] = [];
+
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowIndex = i + 2;
+        const normalizedRow: any = {};
+        Object.keys(row).forEach(k => {
+          const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+          normalizedRow[cleanKey] = row[k];
+        });
+
+        const getVal = (possibleKeys: string[]) => {
+          for (const pk of possibleKeys) {
+            const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+            if (normalizedRow[cleanPK] !== undefined && normalizedRow[cleanPK] !== '') return normalizedRow[cleanPK];
+          }
+          return undefined;
+        };
+
+        const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+        const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+        const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']);
+        const month = normalizeMonth(monthRaw);
+        const implementer = String(getVal(['Người triển khai', 'GDDA', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', 'phụ trách']) || '').trim();
+        const amount = parseVal(getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']));
+
+        if (!pRef || !tRef || !month) {
+          const hasData = Object.values(normalizedRow).some(v => v !== '');
+          if (hasData) {
+            errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+            skippedCount++;
+          }
+          continue;
+        }
+
+        const findProject = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return projects.find(p => 
+            p.id === ref || 
+            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const findTeam = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return teams.find(t => 
+            t.id === ref || 
+            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const project = findProject(pRef);
+        const team = findTeam(tRef);
+
+        if (!project) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+          skippedCount++;
+          continue;
+        }
+        if (!team) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+          skippedCount++;
+          continue;
+        }
+
+        const projectId = project.id;
+        const teamId = team.id;
+        const assignedUserEmail = extractEmail(implementer);
+
+        const existingBudget = budgets.find(b => 
+          b.projectId === projectId && 
+          b.teamId === teamId && 
+          b.month === month
+        );
+
+        if (existingBudget) {
+          batch.update(doc(db, 'budgets', existingBudget.id), {
+            amount,
+            implementerName: implementer || existingBudget.implementerName,
+            assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
+            userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.uid
+          });
+        } else {
+          batch.set(doc(collection(db, 'budgets')), {
+            projectId,
+            projectName: project.name,
+            teamId,
+            teamName: team.name,
+            implementerName: implementer || 'N/A',
+            assignedUserEmail: assignedUserEmail,
+            userEmail: assignedUserEmail || user?.email?.toLowerCase(), // Use implementer email if available
+            month,
+            amount,
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid,
+            // Original registered email is kept in createdByEmail if needed (though not explicit here)
+          });
+        }
+        count++;
+      }
+
+      if (count > 0) {
+        await batch.commit();
+        await logAction('IMPORT_BUDGETS_URL', 'budgets', docId, { count, errors: skippedCount });
+        
+        let msg = `Đã cập nhật ${count} ngân sách từ Google Sheet.`;
+        if (skippedCount > 0) {
+          msg += ` Bỏ qua ${skippedCount} dòng lỗi.`;
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        }
+        toast.success(msg);
+        setBudgetSheetUrl('');
+      } else {
+        if (errorDetails.length > 0) {
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        } else {
+          toast.info("Không có dữ liệu ngân sách hợp lệ để cập nhật. Vui lòng kiểm tra tiêu đề cột và nội dung.");
+        }
+      }
+    } catch (error) {
+      console.error('Import budgets error:', error);
+      toast.error('Lỗi khi tải hoặc xử lý link Google Sheet. Đảm bảo file được chia sẻ công khai.');
+    } finally {
+      setIsImportingBudgetsUrl(false);
+    }
+  };
+
+  const handleImportEfficiencyFromUrl = async () => {
+    if (!efficiencySheetUrl) {
+      toast.error("Vui lòng nhập link Google Sheet");
+      return;
+    }
+
+    // Extract Spreadsheet ID
+    const match = efficiencySheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match || !match[1]) {
+      toast.error("Link Google Sheet không đúng định dạng");
+      return;
+    }
+
+    const spreadsheetId = match[1];
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
+
+    setIsImportingEfficiencyUrl(true);
+    setIsImportingEfficiency(true);
+
+    try {
+      const response = await fetch(exportUrl);
+      if (!response.ok) {
+        throw new Error("Không thể tải file từ Google Sheet. Hãy đảm bảo file đã được chia sẻ công khai (Bất kỳ ai có liên kết đều có thể xem).");
+      }
+      
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+      
+      let rows: any[] = [];
+      let foundHeaders = false;
+      let headerIndex = -1;
+
+      // Scan all sheets to find the one with efficiency headers
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const dataArr: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        headerIndex = -1;
+        for (let i = 0; i < Math.min(dataArr.length, 20); i++) {
+          const row = dataArr[i];
+          if (row && Array.isArray(row) && row.some(cell => {
+            const str = String(cell || '').toLowerCase().replace(/\s+/g, '');
+            return str.includes('idduan') || str.includes('dựán') || str.includes('projectid') || str.includes('idteam') || str.includes('cănbán');
+          })) {
+            headerIndex = i;
+            break;
+          }
+        }
+
+        if (headerIndex !== -1) {
+          rows = XLSX.utils.sheet_to_json(worksheet, { range: headerIndex });
+          if (rows.length > 0) {
+            foundHeaders = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundHeaders || rows.length === 0) {
+        // Fallback to first sheet
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(firstSheet);
+      }
+
+      if (rows.length === 0) {
+        toast.error("Không tìm thấy dữ liệu hợp lệ trong Google Sheet.");
+        return;
+      }
+
+      const batch = writeBatch(db);
+      let count = 0;
+      let skippedCount = 0;
+      const errorDetails: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowIndex = i + 2;
+        const normalizedRow: any = {};
+        Object.keys(row).forEach(k => {
+          const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+          normalizedRow[cleanKey] = row[k];
+        });
+
+        const getVal = (possibleKeys: string[]) => {
+          for (const pk of possibleKeys) {
+            const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+            if (normalizedRow[cleanPK] !== undefined) return normalizedRow[cleanPK];
+          }
+          return undefined;
+        };
+
+        const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+        const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+        const month = normalizeMonth(getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']));
+
+        const salesStr = String(getVal(['Căn bán', 'Số căn bán', 'canban', 'socan', 'salescount', 'sales', 'số căn', 'units']) || '0');
+        const revenueStr = String(getVal(['Doanh số', 'revenue', 'doanhso', 'thực đạt', 'doanh thu', 'doanhthu']) || '0');
+
+        const sales = parseInt(salesStr.replace(/[^0-9]/g, '')) || 0;
+        const revenue = parseInt(revenueStr.replace(/[^0-9]/g, '')) || 0;
+
+        if (!pRef || !tRef || !month) {
+          const hasData = Object.values(normalizedRow).some(v => v !== null && v !== undefined && v !== '');
+          if (hasData) {
+            errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+            skippedCount++;
+          }
+          continue;
+        }
+
+        const findProject = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return projects.find(p => 
+            p.id === ref || 
+            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const findTeam = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return teams.find(t => 
+            t.id === ref || 
+            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const project = findProject(pRef);
+        const team = findTeam(tRef);
+
+        if (!project) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+          skippedCount++;
+          continue;
+        }
+        if (!team) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+          skippedCount++;
+          continue;
+        }
+
+        const projectId = project.id;
+        const teamId = team.id;
+
+        const existing = efficiencyReports.find(r => 
+          r.projectId === projectId && 
+          r.teamId === teamId && 
+          r.month === month
+        );
+
+        if (existing) {
+          const docRef = doc(db, 'efficiencyReports', existing.id);
+          batch.update(docRef, {
+            salesCount: sales,
+            revenue: revenue,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          const docRef = doc(collection(db, 'efficiencyReports'));
+          batch.set(docRef, {
+            projectId,
+            projectName: projectMap[projectId] || 'N/A',
+            teamId,
+            teamName: teamMap[teamId] || 'N/A',
+            month,
+            salesCount: sales,
+            revenue: revenue,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy: user?.uid,
+            createdByEmail: user?.email
+          });
+        }
+        count++;
+      }
+
+      if (count > 0) {
+        await batch.commit();
+        let msg = `Đồng bộ thành công ${count} bản ghi hiệu quả từ Google Sheet.`;
+        if (skippedCount > 0) {
+          msg += ` Bỏ qua ${skippedCount} dòng lỗi.`;
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        }
+        toast.success(msg);
+      } else {
+        if (errorDetails.length > 0) {
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        } else {
+          toast.error("Không tìm thấy dữ liệu hiệu quả hợp lệ để nhập.");
+        }
+      }
+
+      await logAction('IMPORT_URL', 'efficiencyReports', spreadsheetId, { count, errors: skippedCount });
+      setIsImportEfficiencyDialogOpen(false);
+      setEfficiencySheetUrl('');
+    } catch (error: any) {
+      console.error("Link Import Error:", error);
+      toast.error(error.message || "Lỗi khi kết nối với Google Sheet. Hãy kiểm tra quyền chia sẻ của file.");
+    } finally {
+      setIsImportingEfficiencyUrl(false);
+      setIsImportingEfficiency(false);
+    }
+  };
+
+  const handleDownloadEfficiencyTemplate = () => {
+    const templateData = [
+      {
+        'ID Dự án': projects[0]?.id || 'ID_DU_AN_1',
+        'ID Team': teams[0]?.id || 'ID_TEAM_1',
+        'Tháng': format(new Date(), 'yyyy-MM'),
+        'Số căn bán': 5,
+        'Doanh số': 15000000000
+      }
+    ];
+
+    const projectData = projects.map(p => ({
+      'ID Dự án': p.id,
+      'Tên Dự án': p.name,
+      'Vùng/Khu vực': p.region
+    }));
+
+    const teamData = teams.map(t => ({
+      'ID Team': t.id,
+      'Tên Team': t.name
+    }));
+
+    const wb = XLSX.utils.book_new();
+    
+    // Create sheet with only required columns
+    const wsTemplate = XLSX.utils.json_to_sheet(templateData);
+    XLSX.utils.book_append_sheet(wb, wsTemplate, "Mẫu Nhập Liệu");
+
+    const wsProjects = XLSX.utils.json_to_sheet(projectData);
+    XLSX.utils.book_append_sheet(wb, wsProjects, "DANH SÁCH ID DỰ ÁN");
+
+    const wsTeams = XLSX.utils.json_to_sheet(teamData);
+    XLSX.utils.book_append_sheet(wb, wsTeams, "DANH SÁCH ID TEAM");
+
+    XLSX.writeFile(wb, `Mau_Bao_Cao_Hieu_Qua_Sync_IDs_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    toast.success("Đã tải xuống file mẫu đồng bộ theo ID!");
+  };
+
+  const handleAddEfficiency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEfficiencyProject || !newEfficiencyTeam || !newEfficiencySales || !newEfficiencyRevenue) {
+      toast.error('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
+
+    setIsAddingEfficiency(true);
+    try {
+      const docRef = await addDoc(collection(db, 'efficiencyReports'), {
+        projectId: newEfficiencyProject,
+        projectName: projectMap[newEfficiencyProject] || 'N/A',
+        teamId: newEfficiencyTeam,
+        teamName: teamMap[newEfficiencyTeam] || 'N/A',
+        month: newEfficiencyMonth,
+        salesCount: parseInt(newEfficiencySales),
+        revenue: parseInt(newEfficiencyRevenue),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: user?.uid,
+        createdByEmail: user?.email
+      });
+      await logAction('CREATE', 'efficiencyReports', docRef.id, { 
+        project: projectMap[newEfficiencyProject], 
+        team: teamMap[newEfficiencyTeam],
+        month: newEfficiencyMonth,
+        sales: newEfficiencySales,
+        revenue: newEfficiencyRevenue
+      });
+      toast.success('Đã lưu báo cáo hiệu quả');
+      setNewEfficiencySales('');
+      setNewEfficiencyRevenue('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'efficiencyReports');
+    } finally {
+      setIsAddingEfficiency(false);
+    }
+  };
+
+  const handleUpdateEfficiency = async (id: string, sales: string, revenue: string) => {
+    try {
+      const updateData = {
+        salesCount: parseInt(sales),
+        revenue: parseInt(revenue),
+        updatedAt: serverTimestamp()
+      };
+      await updateDoc(doc(db, 'efficiencyReports', id), updateData);
+      await logAction('UPDATE', 'efficiencyReports', id, updateData);
+      toast.success('Đã cập nhật báo cáo');
+      setIsEditEfficiencyDialogOpen(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'efficiencyReports');
+    }
+  };
+
+  const handleDeleteEfficiency = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'efficiencyReports', id));
+      await logAction('DELETE', 'efficiencyReports', id, {});
+      toast.success('Đã xóa báo cáo hiệu quả');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'efficiencyReports');
+    }
+  };
+
+  const handleBulkDeleteEfficiency = async () => {
+    if (selectedEfficiencyIds.length === 0 || isDeletingEfficiencyBatch) return;
+    setIsBulkDeleteEfficiencyDialogOpen(true);
+  };
+
+  const confirmBulkDeleteEfficiency = async () => {
+    setIsDeletingEfficiencyBatch(true);
+    setIsBulkDeleteEfficiencyDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      selectedEfficiencyIds.forEach(id => {
+        batch.delete(doc(db, 'efficiencyReports', id));
+      });
+      await batch.commit();
+      await logAction('DELETE_BULK', 'efficiencyReports', 'multiple', { count: selectedEfficiencyIds.length });
+      toast.success(`Đã xóa ${selectedEfficiencyIds.length} bản ghi hiệu quả`);
+      setSelectedEfficiencyIds([]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'efficiencyReports');
+    } finally {
+      setIsDeletingEfficiencyBatch(false);
+    }
+  };
+
+  const handleDeleteAllEfficiency = async () => {
+    if (efficiencyReports.length === 0) return;
+    setIsDeleteAllEfficiencyDialogOpen(true);
+  };
+
+  const confirmDeleteAllEfficiency = async () => {
+    setIsDeleteAllEfficiencyDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      efficiencyReports.forEach(r => {
+        batch.delete(doc(db, 'efficiencyReports', r.id));
+      });
+      await batch.commit();
+      await logAction('DELETE_ALL', 'efficiencyReports', 'all', { count: efficiencyReports.length });
+      toast.success('Đã xóa tất cả bản ghi hiệu quả kinh doanh');
+      setSelectedEfficiencyIds([]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'efficiencyReports');
+    }
+  };
+
+  const filteredEfficiencyReports = useMemo(() => {
+    return efficiencyReports.filter(r => {
+      const pName = projectMap[r.projectId] || r.projectName || '';
+      const tName = teamMap[r.teamId] || r.teamName || '';
+      const matchSearch = (pName.toLowerCase().includes(adminEfficiencySearch.toLowerCase())) ||
+                        (tName.toLowerCase().includes(adminEfficiencySearch.toLowerCase()));
+      const matchMonth = !adminEfficiencyMonthFilter || r.month === adminEfficiencyMonthFilter;
+      return matchSearch && matchMonth;
+    }).sort((a, b) => {
+      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return timeB - timeA;
+    });
+  }, [efficiencyReports, adminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap]);
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
@@ -721,39 +1660,89 @@ export default function App() {
 
   const syncFullSystem = async () => {
     setIsBackingUp(true);
+    
+    // Helper function to sanitize data recursively (convert Timestamps to ISO strings)
+    const sanitizeData = (data: any[]) => {
+      if (!data || !Array.isArray(data)) return [];
+      
+      const sanitizeObj = (obj: any): any => {
+        if (obj === null || obj === undefined) return obj;
+        
+        // Handle Firestore Timestamp specifically
+        if (typeof obj === 'object' && obj.seconds !== undefined && obj.nanoseconds !== undefined) {
+          try {
+            return new Date(obj.seconds * 1000).toISOString();
+          } catch (e) {
+            return String(obj);
+          }
+        }
+        
+        if (Array.isArray(obj)) {
+          return obj.map(sanitizeObj);
+        }
+        
+        if (typeof obj === 'object') {
+          // If it's a Date object
+          if (obj instanceof Date) return obj.toISOString();
+          
+          const newObj: any = {};
+          Object.keys(obj).forEach(key => {
+            newObj[key] = sanitizeObj(obj[key]);
+          });
+          return newObj;
+        }
+        
+        return obj;
+      };
+      
+      return data.map(sanitizeObj);
+    };
 
     const masterPayload = {
-      nganSach: budgets,    // Mảng dữ liệu Ngân sách
-      chiPhi: costs,      // Mảng dữ liệu Chi phí
-      duAn: projects,        // Mảng dữ liệu Dự án
-      team: teams,           // Mảng dữ liệu Team
-      nguoiDung: allUsers,      // Mảng dữ liệu Người dùng
-      systemLog: {                        // Thông tin log
+      nganSach: sanitizeData(budgets),
+      chiPhi: sanitizeData(costs),
+      duAn: sanitizeData(projects),
+      team: sanitizeData(teams),
+      nguoiDung: sanitizeData(allUsers),
+      vungKhuVuc: sanitizeData(regions),
+      hieuQuaKinhDoanh: sanitizeData(efficiencyReports),
+      systemLog: {
         action: "Full System Backup",
         user: user?.email || "Admin_Mayhomes",
-        details: "Sao lưu định kỳ 6 hạng mục"
+        timestamp: new Date().toISOString(),
+        details: `Sao lưu ${budgets.length} ngân sách, ${costs.length} chi phí, ${projects.length} dự án`
       }
     };
 
     try {
+      console.log("Dữ liệu chuẩn hóa gửi sang Google Sheets:", masterPayload);
+      
+      // Sử dụng text/plain để tránh Preflight CORS (POST simple request)
+      // Dữ liệu được gửi dưới dạng chuỗi JSON thô
       await fetch(SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain",
+        },
         body: JSON.stringify(masterPayload)
       });
-      toast.success("Hệ thống đã sao lưu 6 hạng mục thành công!");
+      
+      toast.success("Đã gửi yêu cầu sao lưu thành công! Dữ liệu đang được xử lý trên Google Sheet.");
       await logAction('FULL_SYSTEM_BACKUP', 'system', 'all', { 
         counts: {
           budgets: budgets.length,
           costs: costs.length,
           projects: projects.length,
           teams: teams.length,
-          users: allUsers.length
+          users: allUsers.length,
+          regions: regions.length,
+          efficiency: efficiencyReports.length
         }
       });
     } catch (error) {
       console.error("Lỗi đồng bộ hệ thống:", error);
-      toast.error("Lỗi đồng bộ hệ thống. Vui lòng thử lại sau.");
+      toast.error("Lỗi đồng bộ hệ thống. Vui lòng kiểm tra lại cấu hình script.");
     } finally {
       setIsBackingUp(false);
     }
@@ -904,6 +1893,18 @@ export default function App() {
     });
   }, [projects, projectSort, projectSearch, adminProjectRegionFilter, adminProjectTypeFilter]);
 
+  const extractTeamCode = (name: string) => {
+    // Pattern MHxx.yy or MHxx
+    const match = name.match(/MH\d+(\.\d+)?/i);
+    return match ? match[0].toUpperCase() : '';
+  };
+
+  const extractProjectCode = (name: string) => {
+    // Look for uppercase blocks DA-xxx or just capitalized acronyms
+    const match = name.match(/[A-Z0-9-]{3,}/);
+    return match ? match[0].toUpperCase() : '';
+  };
+
   const sortedTeams = useMemo(() => {
     let filtered = teams.filter(t => 
       t.name.toLowerCase().includes(teamSearch.toLowerCase())
@@ -969,15 +1970,18 @@ export default function App() {
         continue;
       }
 
+      const projectCode = extractProjectCode(name);
+
       try {
         const docRef = await addDoc(collection(db, 'projects'), {
           name,
+          projectCode,
           region: newProjectRegion || 'Chưa xác định',
           type: newProjectType,
           createdAt: serverTimestamp(),
           createdBy: user?.uid
         });
-        await logAction('CREATE', 'projects', docRef.id, { name, region: newProjectRegion, type: newProjectType });
+        await logAction('CREATE', 'projects', docRef.id, { name, projectCode, region: newProjectRegion, type: newProjectType });
         successCount++;
         existingNames.add(name.toLowerCase());
       } catch (error) {
@@ -1014,13 +2018,16 @@ export default function App() {
         continue;
       }
 
+      const teamCode = extractTeamCode(name);
+
       try {
         const docRef = await addDoc(collection(db, 'teams'), {
           name,
+          teamCode,
           createdAt: serverTimestamp(),
           createdBy: user?.uid
         });
-        await logAction('CREATE', 'teams', docRef.id, { name });
+        await logAction('CREATE', 'teams', docRef.id, { name, teamCode });
         successCount++;
         existingNames.add(name.toLowerCase());
       } catch (error) {
@@ -1039,10 +2046,14 @@ export default function App() {
     }
   };
 
-  const handleUpdateProject = async (id: string, newName: string, region?: string, type?: string) => {
+  const handleUpdateProject = async (id: string, newName: string, newCode: string, region?: string, type?: string) => {
     if (!newName.trim()) return;
     try {
-      const updateData: any = { name: newName };
+      const updateData: any = { 
+        name: newName,
+        projectCode: newCode || '',
+        updatedAt: serverTimestamp()
+      };
       if (region !== undefined) updateData.region = region;
       if (type !== undefined) updateData.type = type;
       
@@ -1052,6 +2063,119 @@ export default function App() {
       toast.success('Đã cập nhật dự án');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    }
+  };
+
+  const handleSyncProjectCodes = async () => {
+    setIsSyncingProjects(true);
+    try {
+      const batch = writeBatch(db);
+      let count = 0;
+      projects.forEach(p => {
+        if (!p.projectCode) {
+          const code = extractProjectCode(p.name);
+          if (code) {
+            batch.update(doc(db, 'projects', p.id), { projectCode: code, updatedAt: serverTimestamp() });
+            count++;
+          }
+        }
+      });
+      if (count > 0) {
+        await batch.commit();
+        await logAction('SYNC_PROJECT_CODES', 'projects', 'all', { count });
+        toast.success(`Đã cập nhật mã cho ${count} dự án`);
+      } else {
+        toast.info('Tất cả dự án đã có mã hoặc không tìm thấy mã hợp lệ trong tên');
+      }
+    } catch (error) {
+      console.error('Error syncing project codes:', error);
+      toast.error('Lỗi khi đồng bộ mã dự án');
+    } finally {
+      setIsSyncingProjects(false);
+    }
+  };
+
+  const handleSyncTeamCodes = async () => {
+    setIsSyncingTeams(true);
+    try {
+      const batch = writeBatch(db);
+      let count = 0;
+      teams.forEach(t => {
+        if (!t.teamCode) {
+          const code = extractTeamCode(t.name);
+          if (code) {
+            batch.update(doc(db, 'teams', t.id), { teamCode: code, updatedAt: serverTimestamp() });
+            count++;
+          }
+        }
+      });
+      if (count > 0) {
+        await batch.commit();
+        await logAction('SYNC_TEAM_CODES', 'teams', 'all', { count });
+        toast.success(`Đã cập nhật mã cho ${count} team`);
+      } else {
+        toast.info('Tất cả team đã có mã hoặc không tìm thấy mã hợp lệ trong tên');
+      }
+    } catch (error) {
+      console.error('Error syncing team codes:', error);
+      toast.error('Lỗi khi đồng bộ mã team');
+    } finally {
+      setIsSyncingTeams(false);
+    }
+  };
+
+  const handleSyncBudgetPermissions = async () => {
+    setIsSyncingBudgetPermissions(true);
+    try {
+      const batch = writeBatch(db);
+      let count = 0;
+      
+      budgets.forEach(b => {
+        const implementer = b.implementerName || '';
+        const emailMatch = extractEmail(implementer);
+        
+        // If we found an email, we prioritize it as both assignedUserEmail AND userEmail
+        // This ensures the employee has full ownership and visibility
+        if (emailMatch && (b.assignedUserEmail !== emailMatch || b.userEmail !== emailMatch)) {
+          batch.update(doc(db, 'budgets', b.id), { 
+            assignedUserEmail: emailMatch,
+            userEmail: emailMatch, // Change the registration email to the employee's email
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.uid
+          });
+          count++;
+        }
+      });
+      
+      // Also sync costs to ensure they have the assigned email from their budget
+      costs.forEach(c => {
+        if (c.budgetId) {
+          const parentBudget = budgets.find(b => b.id === c.budgetId);
+          const budgetEmail = parentBudget?.assignedUserEmail || extractEmail(parentBudget?.implementerName || '');
+          
+          if (budgetEmail && (c.assignedUserEmail !== budgetEmail || c.userEmail !== budgetEmail)) {
+            batch.update(doc(db, 'costs', c.id), { 
+              assignedUserEmail: budgetEmail,
+              userEmail: budgetEmail, // Also update userEmail for costs to ensure total visibility
+              updatedAt: serverTimestamp()
+            });
+            count++;
+          }
+        }
+      });
+
+      if (count > 0) {
+        await batch.commit();
+        await logAction('SYNC_BUDGET_PERMISSIONS', 'budgets', 'all', { count });
+        toast.success(`Đã đồng bộ phân quyền cho ${count} bản ghi`);
+      } else {
+        toast.info('Tất cả dữ liệu đã được đồng bộ phân quyền');
+      }
+    } catch (error) {
+      console.error('Error syncing budget permissions:', error);
+      toast.error('Lỗi khi đồng bộ phân quyền ngân sách');
+    } finally {
+      setIsSyncingBudgetPermissions(false);
     }
   };
 
@@ -1169,11 +2293,15 @@ export default function App() {
     }
   };
 
-  const handleUpdateTeam = async (id: string, newName: string) => {
+  const handleUpdateTeam = async (id: string, newName: string, newCode: string) => {
     if (!newName.trim()) return;
     try {
-      await updateDoc(doc(db, 'teams', id), { name: newName });
-      await logAction('UPDATE', 'teams', id, { name: newName });
+      await updateDoc(doc(db, 'teams', id), { 
+        name: newName,
+        teamCode: newCode || '',
+        updatedAt: serverTimestamp() 
+      });
+      await logAction('UPDATE', 'teams', id, { name: newName, teamCode: newCode });
       setEditingTeamId(null);
       toast.success('Đã cập nhật team');
     } catch (error) {
@@ -1729,7 +2857,15 @@ export default function App() {
         createdBy: user?.uid,
         userEmail: user?.email?.toLowerCase()
       });
-      await logAction('CREATE', 'budgets', docRef.id, { projectName: project?.name || 'N/A', amount: budgetAmount, implementer: implementerName });
+      await logAction('CREATE', 'budgets', docRef.id, { 
+        projectId: selectedProjectId,
+        projectName: project?.name || 'N/A',
+        teamId: selectedTeamId,
+        teamName: team?.name || selectedTeamName,
+        month: budgetMonth,
+        amount: Number(budgetAmount),
+        implementerName
+      });
       setBudgetAmount('');
       // Keep implementerName and selectedTeamId from profile for next entry
       if (!userProfile?.fullName) setImplementerName('');
@@ -1768,6 +2904,7 @@ export default function App() {
         budgetId: selectedBudgetId,
         implementerName: budget.implementerName || 'N/A',
         teamName: budget.teamName || 'N/A',
+        assignedUserEmail: budget.assignedUserEmail || null,
         weekNumber: periodNumber, // Using weekNumber field to store periodNumber for compatibility
         year,
         month: costBudgetMonth,
@@ -1784,7 +2921,22 @@ export default function App() {
         createdBy: user?.uid,
         userEmail: user?.email?.toLowerCase()
       });
-      await logAction('CREATE', 'costs', docRef.id, { projectName: project?.name, amount: totalAmount, note: costNote, budgetId: selectedBudgetId });
+      await logAction('CREATE', 'costs', docRef.id, { 
+        projectId: actualProjectId,
+        projectName: project?.name || 'N/A',
+        teamId: budget?.teamId,
+        teamName: budget?.teamName,
+        month: budget?.month,
+        period: costPeriod,
+        fbAds: Number(fbAds),
+        posting: Number(posting),
+        zaloAds: Number(zaloAds),
+        googleAds: Number(googleAds),
+        otherCost: Number(otherCost),
+        totalAmount,
+        note: costNote,
+        budgetId: selectedBudgetId 
+      });
       setFbAds('');
       setPosting('');
       setZaloAds('');
@@ -1940,15 +3092,301 @@ export default function App() {
     setIsDeleteAllBudgetsDialogOpen(false);
     try {
       const batch = writeBatch(db);
+      // Save snapshot in audit log for recovery before deleting all
+      await logAction('DELETE_ALL', 'budgets', 'all', { 
+        count: budgets.length,
+        snapshot: budgets.map(b => ({
+          id: b.id,
+          projectId: b.projectId,
+          projectName: b.projectName,
+          teamId: b.teamId,
+          teamName: b.teamName,
+          month: b.month,
+          amount: b.amount,
+          implementerName: b.implementerName
+        }))
+      });
+      
       budgets.forEach(b => {
         batch.delete(doc(db, 'budgets', b.id));
       });
       await batch.commit();
-      await logAction('DELETE_ALL', 'budgets', 'all', { count: budgets.length });
-      toast.success('Đã xóa tất cả đăng ký ngân sách');
+      toast.success('Đã xóa tất cả đăng ký ngân sách. Thông tin đã được lưu vào nhật ký để khôi phục nếu cần.');
       setSelectedBudgetIds([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'budgets');
+    }
+  };
+
+  const handleRestoreBudgetsFromLogs = async (logToUse: any = null) => {
+    if (isRestoringData) return;
+    setIsRestoringData(true);
+    
+    try {
+      const budgetMap: Record<string, any> = {};
+      const sortedLogs = [...auditLogs].reverse();
+      const limitTimestamp = logToUse?.timestamp;
+      
+      sortedLogs.forEach(log => {
+        if (limitTimestamp && log.timestamp && log.timestamp.seconds > limitTimestamp.seconds) return;
+
+        if (log.collection === 'budgets' || log.collection === 'nganSach') {
+          if (log.action === 'CREATE' || log.action === 'UPDATE' || log.action === 'IMPORT_BUDGETS') {
+            if (log.data) {
+              if (log.docId && log.docId !== 'bulk') {
+                budgetMap[log.docId] = { ...(budgetMap[log.docId] || {}), ...log.data, id: log.docId };
+              } else if (log.data.snapshot) {
+                log.data.snapshot.forEach((b: any) => { budgetMap[b.id] = { ...b }; });
+              } else if (log.data.items) {
+                log.data.items.forEach((b: any) => { if (b.id) budgetMap[b.id] = { ...b }; });
+              }
+            }
+          } else if (log.action === 'DELETE') {
+            delete budgetMap[log.docId];
+          } else if (log.action === 'DELETE_ALL' || log.action === 'DELETE_BULK') {
+            if (log.data?.snapshot) {
+              log.data.snapshot.forEach((b: any) => { budgetMap[b.id] = { ...b }; });
+            }
+          }
+        } else if (log.action === 'FULL_SYSTEM_BACKUP' && log.data?.payload?.nganSach) {
+          log.data.payload.nganSach.forEach((b: any) => { budgetMap[b.id] = { ...b }; });
+        }
+      });
+
+      if (logToUse?.data?.snapshot) {
+        logToUse.data.snapshot.forEach((b: any) => { budgetMap[b.id] = { ...b }; });
+      }
+
+      const toRestore = Object.values(budgetMap);
+      if (toRestore.length === 0) {
+        toast.info('Không tìm thấy dữ liệu nào trong nhật ký để khôi phục.');
+        setIsRestoreBudgetsDialogOpen(false);
+        return;
+      }
+
+      const batch = writeBatch(db);
+      let restoreCount = 0;
+      toRestore.forEach((item: any) => {
+        if (!budgets.some(b => b.id === item.id)) {
+          const bRef = doc(db, 'budgets', item.id);
+          const { id, ...saveData } = item;
+          if (!saveData.assignedUserEmail && saveData.implementerName) {
+            saveData.assignedUserEmail = extractEmail(saveData.implementerName);
+          }
+          batch.set(bRef, {
+            ...saveData,
+            createdAt: saveData.createdAt || serverTimestamp(),
+            restoredAt: serverTimestamp(),
+            restoredBy: user?.uid,
+            restoredFromLog: true,
+            originalDocId: id
+          });
+          restoreCount++;
+        }
+      });
+
+      if (restoreCount === 0) {
+        toast.info('Tất cả dữ liệu trong nhật ký đã tồn tại trên hệ thống.');
+      } else {
+        await batch.commit();
+        await logAction('RESTORE_BUDGETS_EXECUTED', 'budgets', 'bulk', { count: restoreCount, point: logToUse?.id || 'All' });
+        toast.success(`Đã khôi phục thành công ${restoreCount} bản ghi.`);
+      }
+      setIsRestoreBudgetsDialogOpen(false);
+    } catch (error) {
+      console.error('Restore error:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'budgets');
+    } finally {
+      setIsRestoringData(false);
+    }
+  };
+
+  const [isRestoreAllDialogOpen, setIsRestoreAllDialogOpen] = useState(false);
+  const [logLimit, setLogLimit] = useState(50);
+  const [logSearch, setLogSearch] = useState('');
+  const [logTypeFilter, setLogTypeFilter] = useState('all');
+  const [logUserFilter, setLogUserFilter] = useState('all');
+
+  const uniqueLogUsers = useMemo(() => {
+    const users = new Set<string>();
+    auditLogs.forEach(log => {
+      if (log.userEmail) users.add(log.userEmail);
+    });
+    return Array.from(users).sort();
+  }, [auditLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return auditLogs.filter(log => {
+      const matchesSearch = 
+        (log.userEmail || '').toLowerCase().includes(logSearch.toLowerCase()) ||
+        (log.collection || '').toLowerCase().includes(logSearch.toLowerCase()) ||
+        (log.docId || '').toLowerCase().includes(logSearch.toLowerCase());
+      
+      const matchesType = logTypeFilter === 'all' || 
+        (logTypeFilter === 'WRITE' && (log.action === 'CREATE' || log.action === 'UPDATE' || log.action?.startsWith('IMPORT'))) ||
+        (logTypeFilter === 'DELETE' && (log.action === 'DELETE' || log.action?.startsWith('DELETE_'))) ||
+        (logTypeFilter === 'SYSTEM' && (log.action === 'FULL_SYSTEM_BACKUP' || log.action === 'DEEP_SYSTEM_RESTORE'));
+
+      const matchesUser = logUserFilter === 'all' || log.userEmail === logUserFilter;
+
+      return matchesSearch && matchesType && matchesUser;
+    });
+  }, [auditLogs, logSearch, logTypeFilter, logUserFilter]);
+
+  const RenderLogData = ({ data, action }: { data: any, action: string }) => {
+    if (!data) return null;
+    
+    // Specical cases for bulk actions
+    if (action === 'DELETE_ALL' || action === 'DELETE_BULK') {
+      return (
+        <div className="flex items-center gap-2 text-red-600 font-bold">
+          <Trash2 className="w-3 h-3" /> 
+          Đã xóa {data.count || data.snapshot?.length || 'tất cả'} bản ghi
+          {data.snapshot && <span className="text-[10px] bg-red-50 px-2 py-0.5 rounded-full">(Có snapshot khôi phục)</span>}
+        </div>
+      );
+    }
+
+    if (action === 'IMPORT_BUDGETS' || action === 'IMPORT_COSTS') {
+      return (
+        <div className="flex items-center gap-2 text-emerald-600 font-bold">
+          <FileUp className="w-3 h-3" /> 
+          Đã nhập {data.count || data.items?.length || data.snapshot?.length || 'nhiều'} bản ghi từ {data.source || 'tệp CSV'}
+        </div>
+      );
+    }
+
+    if (action === 'FULL_SYSTEM_BACKUP') {
+      return (
+        <div className="flex items-center gap-2 text-indigo-600 font-bold">
+          <Database className="w-3 h-3" /> 
+          Bản sao lưu hệ thống toàn diện
+        </div>
+      );
+    }
+
+    // Standard recursive renderer for small objects
+    const renderObject = (obj: any, depth = 0) => {
+      if (depth > 2) return <span className="text-slate-400">...</span>;
+      if (typeof obj !== 'object' || obj === null) return <span>{String(obj)}</span>;
+      
+      return (
+        <div className="pl-2 space-y-0.5 border-l border-slate-100">
+          {Object.entries(obj).map(([key, val]) => {
+            if (key === 'snapshot' || key === 'payload' || key === 'items') return null; // Too big
+            return (
+              <div key={key} className="flex flex-wrap gap-x-2">
+                <span className="font-bold text-slate-500">{key}:</span>
+                <span className="text-slate-900">
+                  {typeof val === 'object' ? renderObject(val, depth + 1) : String(val)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    return <div className="mt-1">{renderObject(data)}</div>;
+  };
+
+  const handleRestoreFullDatabase = async () => {
+    if (isRestoringData) return;
+    setIsRestoringData(true);
+    toast.info('Đang phân tích dữ liệu lịch sử để khôi phục toàn hệ thống...');
+
+    try {
+      const dbMaps: Record<string, Record<string, any>> = {
+        'budgets': {}, 'costs': {}, 'projects': {}, 'teams': {},
+        'regions': {}, 'types': {}, 'efficiencyReports': {}
+      };
+
+      const collMap: Record<string, string> = {
+        'budgets': 'budgets', 'nganSach': 'budgets',
+        'costs': 'costs', 'chiPhi': 'costs',
+        'projects': 'projects', 'duAn': 'projects', 'du_an': 'projects',
+        'teams': 'teams', 'team': 'teams',
+        'regions': 'regions', 'vungKhuVuc': 'regions',
+        'types': 'types', 'projectTypes': 'types', 'loai_hinh': 'types',
+        'efficiencyReports': 'efficiencyReports', 'hieuQuaKinhDoanh': 'efficiencyReports'
+      };
+
+      const sortedLogs = [...auditLogs].reverse();
+
+      sortedLogs.forEach(log => {
+        const targetColl = collMap[log.collection];
+        if (!targetColl) {
+          if (log.action === 'FULL_SYSTEM_BACKUP' && log.data?.payload) {
+            const p = log.data.payload;
+            if (p.nganSach) p.nganSach.forEach((i: any) => dbMaps['budgets'][i.id] = i);
+            if (p.chiPhi) p.chiPhi.forEach((i: any) => dbMaps['costs'][i.id] = i);
+            if (p.duAn) p.duAn.forEach((i: any) => dbMaps['projects'][i.id] = i);
+            if (p.team) p.team.forEach((i: any) => dbMaps['teams'][i.id] = i);
+            if (p.vungKhuVuc) p.vungKhuVuc.forEach((i: any) => dbMaps['regions'][i.id] = i);
+            if (p.hieuQuaKinhDoanh) p.hieuQuaKinhDoanh.forEach((i: any) => dbMaps['efficiencyReports'][i.id] = i);
+          }
+          return;
+        }
+
+        const map = dbMaps[targetColl];
+        if (log.action === 'CREATE' || log.action === 'UPDATE' || log.action?.startsWith('IMPORT')) {
+          if (log.data) {
+            if (log.docId && log.docId !== 'bulk' && log.docId !== 'all') {
+              map[log.docId] = { ...(map[log.docId] || {}), ...log.data, id: log.docId };
+            } else if (log.data.snapshot) {
+              log.data.snapshot.forEach((b: any) => map[b.id] = { ...b });
+            } else if (log.data.items) {
+              log.data.items.forEach((b: any) => { if (b.id) map[b.id] = { ...b }; });
+            }
+          }
+        } else if (log.action === 'DELETE') {
+          delete map[log.docId];
+        } else if (log.action?.startsWith('DELETE_')) {
+          if (log.data?.snapshot) {
+            log.data.snapshot.forEach((b: any) => map[b.id] = { ...b });
+          }
+        }
+      });
+
+      const batch = writeBatch(db);
+      let totalRestored = 0;
+
+      const currentStates: Record<string, any[]> = {
+        'budgets': budgets, 'costs': costs, 'projects': projects, 'teams': teams,
+        'regions': regions, 'types': types, 'efficiencyReports': efficiencyReports
+      };
+
+      Object.entries(dbMaps).forEach(([collName, itemsMap]) => {
+        const currentList = currentStates[collName] || [];
+        Object.values(itemsMap).forEach((item: any) => {
+          if (!currentList.some(cl => cl.id === item.id)) {
+            const docRef = doc(db, collName, item.id);
+            const { id, ...dataToSave } = item;
+            batch.set(docRef, {
+              ...dataToSave,
+              createdAt: dataToSave.createdAt || serverTimestamp(),
+              restoredAt: serverTimestamp(),
+              restoredFromDeepScan: true,
+              restoredBy: user?.uid
+            });
+            totalRestored++;
+          }
+        });
+      });
+
+      if (totalRestored === 0) {
+        toast.info('Không tìm thấy thêm dữ liệu nào bị thiếu để khôi phục.');
+      } else {
+        await batch.commit();
+        await logAction('DEEP_SYSTEM_RESTORE', 'system', 'all', { count: totalRestored });
+        toast.success(`Đã khôi phục thành công ${totalRestored} bản ghi cho toàn hệ thống.`);
+      }
+      setIsRestoreAllDialogOpen(false);
+    } catch (error) {
+      console.error('Deep restore error:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'system');
+    } finally {
+      setIsRestoringData(false);
     }
   };
 
@@ -2087,9 +3525,10 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID', 'Tên Team', 'Ngày tạo'];
+    const headers = ['ID', 'Mã Team', 'Tên Team', 'Ngày tạo'];
     const data = teams.map(t => [
       t.id,
+      t.teamCode || '',
       t.name,
       t.createdAt ? format(t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
     ]);
@@ -2114,9 +3553,10 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID', 'Tên Dự án', 'Khu vực', 'Loại hình', 'Ngày tạo'];
+    const headers = ['ID', 'Mã Dự án', 'Tên Dự án', 'Khu vực', 'Loại hình', 'Ngày tạo'];
     const data = projects.map(p => [
       p.id,
+      p.projectCode || '',
       p.name,
       p.region || 'N/A',
       p.type || 'N/A',
@@ -2137,8 +3577,76 @@ export default function App() {
     toast.success('Đã xuất danh sách dự án thành công');
   };
 
+  const handleExportBudgets = () => {
+    if (budgets.length === 0) {
+      toast.error('Không có dữ liệu ngân sách để xuất');
+      return;
+    }
+
+    const headers = ['ID Dự án', 'Tên Dự án', 'ID Team', 'Tên Team', 'Tháng', 'Người triển khai', 'Ngân sách'];
+    const data = budgets.map(b => [
+      b.projectId,
+      b.projectName || '',
+      b.teamId,
+      b.teamName || '',
+      b.month,
+      b.implementerName || 'N/A',
+      b.amount.toString()
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `danh_sach_ngan_sach_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Đã xuất danh sách ngân sách thành công');
+  };
+
+  const handleExportCosts = () => {
+    if (costs.length === 0) {
+      toast.error('Không có dữ liệu chi phí để xuất');
+      return;
+    }
+
+    const headers = ['ID Dự án', 'Tên Dự án', 'Team', 'Tháng', 'Tuần', 'Người triển khai', 'FB Ads', 'Posting', 'Zalo Ads', 'Google Ads', 'Khác', 'Tổng chi phí', 'Ghi chú'];
+    const data = costs.map(c => [
+      c.projectId,
+      c.projectName || '',
+      c.teamName || '',
+      c.month,
+      c.weekNumber.toString(),
+      c.implementerName || 'N/A',
+      c.channels?.fbAds?.toString() || '0',
+      c.channels?.posting?.toString() || '0',
+      c.channels?.zaloAds?.toString() || '0',
+      c.channels?.googleAds?.toString() || '0',
+      c.channels?.otherCost?.toString() || '0',
+      c.amount.toString(),
+      c.note || ''
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `chi_phi_chi_tiet_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Đã xuất danh sách chi phí thành công');
+  };
+
   const handleDownloadBudgetTemplate = () => {
-    const headers = ['ProjectID', 'TeamID', 'Month', 'Implementer', 'Amount'];
+    const headers = ['ID Dự án', 'ID Team', 'Tháng', 'Người triển khai', 'Ngân sách'];
     const sampleData = [
       ['p_id_1', 't_id_1', '2026-03', 'Nguyễn Văn A', '50000000'],
       ['p_id_2', 't_id_2', '2026-03', 'Trần Thị B', '75000000']
@@ -2161,6 +3669,7 @@ export default function App() {
     if (!file) return;
 
     setIsImportingBudgets(true);
+    setImportErrors([]);
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -2168,41 +3677,86 @@ export default function App() {
         try {
           const batch = writeBatch(db);
           let count = 0;
-          let errors = 0;
+          let errorsCount = 0;
+          const errorDetails: string[] = [];
 
-          const parseCSVNumber = (val: any) => {
-            if (!val) return 0;
-            const cleanVal = String(val).replace(/[.,]/g, '');
-            const num = Number(cleanVal);
-            return isNaN(num) ? 0 : num;
-          };
+          for (let i = 0; i < results.data.length; i++) {
+            const rawRow = results.data[i] as any;
+            const rowIndex = i + 2;
+            const row: any = {};
+            Object.keys(rawRow).forEach(k => {
+              const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+              row[cleanKey] = rawRow[k];
+            });
 
-          for (const row of results.data as any[]) {
-            const pId = row.ProjectID?.trim();
-            const teamId = row.TeamID?.trim();
-            const month = row.Month?.trim();
-            const implementer = row.Implementer?.trim();
-            const amount = parseCSVNumber(row.Amount);
+            const getVal = (possibleKeys: string[]) => {
+              for (const pk of possibleKeys) {
+                const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+                if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
+              }
+              return undefined;
+            };
 
-            if (!pId || !teamId || !month || amount <= 0) {
-              console.warn('Import Budget skipped: Missing info', row);
-              errors++;
+            const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+            const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'teamid', 'id team', 'mã team']) || '').trim();
+            const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'ky', 'kỳ']);
+            const month = normalizeMonth(monthRaw);
+            const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
+            const amountRaw = getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']);
+            const amountDecimal = String(amountRaw || '0').replace(/[.,]/g, '');
+            const amount = Number(amountDecimal);
+
+            if (!pRef || !tRef || !month || amount <= 0) {
+              const hasData = Object.values(row).some(v => v !== '');
+              if (hasData) {
+                errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ`);
+                errorsCount++;
+              }
               continue;
             }
 
-            const project = projects.find(p => p.id === pId);
-            const team = teams.find(t => t.id === teamId);
+            const findProject = (ref: string) => {
+              const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+              if (!cleanRef) return null;
+              return projects.find(p => 
+                p.id === ref || 
+                (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+                p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+              );
+            };
 
-            if (!project || !team) {
-              console.warn(`Import Budget error: Project or Team ID not found`, { pId, teamId });
-              errors++;
+            const findTeam = (ref: string) => {
+              const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+              if (!cleanRef) return null;
+              return teams.find(t => 
+                t.id === ref || 
+                (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+                t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+              );
+            };
+
+            const project = findProject(pRef);
+            const team = findTeam(tRef);
+
+            if (!project) {
+              errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+              errorsCount++;
               continue;
             }
+            if (!team) {
+              errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+              errorsCount++;
+              continue;
+            }
+
+            const pId = project.id;
+            const teamId = team.id;
+            const assignedUserEmail = extractEmail(implementer);
 
             // Check if budget already exists to update or create new
             const existingBudget = budgets.find(b => 
               b.projectId === pId && 
-              (b.teamId === teamId || b.teamName === team.name) && 
+              b.teamId === teamId && 
               b.month === month
             );
 
@@ -2211,6 +3765,8 @@ export default function App() {
               batch.update(bRef, {
                 amount,
                 implementerName: implementer || existingBudget.implementerName,
+                assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
+                userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
                 updatedAt: serverTimestamp(),
                 updatedBy: user?.uid
               });
@@ -2222,11 +3778,12 @@ export default function App() {
                 teamId: teamId,
                 teamName: team.name,
                 implementerName: implementer || 'N/A',
+                assignedUserEmail: assignedUserEmail,
+                userEmail: assignedUserEmail || user?.email?.toLowerCase(), // Override registration email
                 month,
                 amount,
                 createdAt: serverTimestamp(),
-                createdBy: user?.uid,
-                userEmail: user?.email?.toLowerCase()
+                createdBy: user?.uid
               });
             }
             count++;
@@ -2234,52 +3791,29 @@ export default function App() {
 
           if (count > 0) {
             await batch.commit();
-            await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors });
-            toast.success(`Đã nhập/cập nhật thành open ${count} ngân sách. ${errors > 0 ? `Bỏ qua ${errors} dòng lỗi.` : ''}`);
+            await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors: errorsCount });
+            toast.success(`Đã cập nhật ${count} ngân sách. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
+            if (errorsCount > 0) {
+              setImportErrors(errorDetails);
+              setIsImportErrorsDialogOpen(true);
+            }
           } else {
-            toast.error(`Không có dữ liệu hợp lệ để nhập. Vui lòng kiểm tra ID và định dạng.`);
+            if (errorDetails.length > 0) {
+              setImportErrors(errorDetails);
+              setIsImportErrorsDialogOpen(true);
+            } else {
+              toast.error(`Không có dữ liệu hợp lệ để nhập.`);
+            }
           }
         } catch (error) {
-          console.error('Import Budget error:', error);
-          toast.error('Lỗi khi xử lý file CSV');
+          console.error(error);
+          toast.error('Lỗi khi nhập dữ liệu');
         } finally {
           setIsImportingBudgets(false);
-          if (e.target) e.target.value = '';
+          e.target.value = '';
         }
       }
     });
-  };
-
-  const handleExportBudgets = () => {
-    if (budgets.length === 0) {
-      toast.error('Không có dữ liệu ngân sách để xuất');
-      return;
-    }
-
-    const headers = ['ProjectID', 'ProjectName', 'TeamID', 'TeamName', 'Month', 'Implementer', 'Amount', 'CreatedBy'];
-    const data = budgets.map(b => [
-      b.projectId,
-      b.projectName,
-      b.teamId || '',
-      b.teamName,
-      b.month,
-      b.implementerName,
-      b.amount,
-      b.userEmail || ''
-    ]);
-
-    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `danh_sach_ngan_sach_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success('Đã xuất danh sách ngân sách thành công');
   };
 
   const handleImportCostsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2287,6 +3821,29 @@ export default function App() {
     if (!file) return;
 
     setIsImportingCosts(true);
+    setImportErrors([]);
+
+
+    const findProject = (ref: string) => {
+      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!cleanRef) return null;
+      return projects.find(p => 
+        p.id === ref || 
+        (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+      );
+    };
+
+    const findTeam = (ref: string) => {
+      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!cleanRef) return null;
+      return teams.find(t => 
+        t.id === ref || 
+        (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+      );
+    };
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -2294,58 +3851,78 @@ export default function App() {
         try {
           const batch = writeBatch(db);
           let count = 0;
-          let errors = 0;
+          let errorsCount = 0;
+          const errorDetailsList: string[] = [];
 
-          // Mapping for project name to ID
-          const projectNameToId: Record<string, string> = {};
-          projects.forEach(p => {
-            projectNameToId[p.name.toLowerCase()] = p.id;
-          });
+          const data = results.data as any[];
+          for (let i = 0; i < data.length; i++) {
+            const rawRow = data[i];
+            const rowIndex = i + 2;
+            // Unify header access
+            const row: any = {};
+            Object.keys(rawRow).forEach(k => {
+              const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+              row[cleanKey] = rawRow[k];
+            });
 
-          const parseCSVNumber = (val: any) => {
-            if (!val) return 0;
-            // Handle strings with thousands separators like 1.205.437 or 1,205,437
-            const cleanVal = String(val).replace(/[.,]/g, '');
-            const num = Number(cleanVal);
-            return isNaN(num) ? 0 : num;
-          };
+            const getVal = (possibleKeys: string[]) => {
+              for (const pk of possibleKeys) {
+                const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+                if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
+              }
+              return undefined;
+            };
 
-          for (const row of results.data as any[]) {
-            const pId = row.ProjectID?.trim();
-            const teamId = row.TeamID?.trim();
-            const month = row.Month?.trim();
-            const period = row.Period?.trim();
-            const fbAds = parseCSVNumber(row.FBAds);
-            const posting = parseCSVNumber(row.Posting);
-            const zaloAds = parseCSVNumber(row.ZaloAds);
-            const googleAds = parseCSVNumber(row.GoogleAds);
-            const otherCost = parseCSVNumber(row.OtherCost);
-            const note = row.Note || '';
+            const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+            const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+            const monthRaw = getVal(['Tháng', 'Kỳ tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'kỳ']);
+            const month = normalizeMonth(monthRaw);
+            const period = String(getVal(['Tuần', 'Kỳ tuần', 'Week', 'Period', 'tuan', 'tuần', 'ky']) || '').trim();
+            
+            // Cost values
+            const fbAds = parseVal(getVal(['FBAds', 'FB Ads', 'Facebook Ads', 'Facebook', 'Chi phí FB', 'QC Facebook', 'Ads FB', 'chiphi fb', 'facebook ads', 'ads facebook', 'facebook ads']));
+            const posting = parseVal(getVal(['Posting', 'Đăng bài', 'Content', 'Content & Design', 'Content/Design', 'dangbai', 'chiphi content', 'posting/content', 'posting & content']));
+            const zaloAds = parseVal(getVal(['ZaloAds', 'Zalo Ads', 'Zalo', 'Chi phí Zalo', 'QC Zalo', 'Ads Zalo', 'chiphi zalo', 'zalo ads', 'ads zalo']));
+            const googleAds = parseVal(getVal(['GoogleAds', 'Google Ads', 'Google', 'Chi phí Google', 'QC Google', 'SEM', 'Ads Google', 'chiphi google', 'google ads', 'ads google', 'sem/google']));
+            const otherCost = parseVal(getVal(['OtherCost', 'Chi phí khác', 'Khác', 'Phát sinh', 'Khác (Phát sinh)', 'chiphikhac', 'phatsinh', 'chi phi khac']));
+            const note = String(getVal(['Note', 'Ghi chú', 'Ghi chú thêm', 'ghichu']) || '');
 
-            if (!pId || !teamId || !month || !period) {
-              console.warn('Import skipped: Missing basic info', row);
-              errors++;
+            if (!pRef || !tRef || !month) {
+              const hasData = Object.values(row).some(v => v !== '');
+              if (hasData) {
+                errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+                errorsCount++;
+              }
               continue;
             }
 
-            const project = projects.find(p => p.id === pId);
+            const project = findProject(pRef);
+            const team = findTeam(tRef);
+
             if (!project) {
-              console.warn(`Import error: Project ID "${pId}" not found`, row);
-              errors++;
+              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+              errorsCount++;
               continue;
             }
+            if (!team) {
+              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+              errorsCount++;
+              continue;
+            }
+
+            const pId = project.id;
+            const teamId = team.id;
 
             // Find matching budget to sync (đồng bộ)
-            // Match by Project ID and Team ID (if budget has it) or fallback to name if budget lacks ID
             const matchingBudget = budgets.find(b => 
               b.projectId === pId && 
-              (b.teamId ? b.teamId === teamId : b.teamName.toLowerCase().trim() === (teams.find(t => t.id === teamId)?.name || '').toLowerCase().trim()) && 
+              b.teamId === teamId && 
               b.month === month
             );
 
             if (!matchingBudget) {
-              console.warn(`Import error: No matching Budget for P-ID:${pId} - T-ID:${teamId} - ${month}`, row);
-              errors++;
+              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy ngân sách đã duyệt cho [${project.name}] - [${team.name}] tháng ${month}`);
+              errorsCount++;
               continue;
             }
 
@@ -2359,19 +3936,13 @@ export default function App() {
               projectName: project.name,
               budgetId: matchingBudget.id,
               implementerName: matchingBudget.implementerName || 'N/A',
-              teamName: matchingBudget.teamName,
+              teamName: team.name,
               teamId: teamId,
-              weekNumber: Number(period),
+              weekNumber: Number(period) || 1,
               year,
               month,
               amount: totalAmount,
-              channels: {
-                fbAds,
-                posting,
-                zaloAds,
-                googleAds,
-                otherCost
-              },
+              channels: { fbAds, posting, zaloAds, googleAds, otherCost },
               note,
               createdAt: serverTimestamp(),
               createdBy: user?.uid,
@@ -2382,10 +3953,19 @@ export default function App() {
 
           if (count > 0) {
             await batch.commit();
-            await logAction('IMPORT_COSTS', 'costs', 'bulk', { count, errors });
-            toast.success(`Đã nhập thành công ${count} bản ghi. ${errors > 0 ? `Bỏ qua ${errors} dòng lỗi.` : ''}`);
+            await logAction('IMPORT_COSTS', 'costs', 'bulk', { count, errors: errorsCount });
+            toast.success(`Đã nhập thành công ${count} bản ghi. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
+            if (errorsCount > 0) {
+              setImportErrors(errorDetailsList);
+              setIsImportErrorsDialogOpen(true);
+            }
           } else {
-            toast.error(`Không thể nhập dữ liệu. Có ${errors} dòng lỗi hoặc không khớp ngân sách.`);
+            if (errorDetailsList.length > 0) {
+              setImportErrors(errorDetailsList);
+              setIsImportErrorsDialogOpen(true);
+            } else {
+              toast.error(`Không thể nhập dữ liệu. Kiểm tra định dạng file.`);
+            }
           }
           
           setIsImportCostsDialogOpen(false);
@@ -2401,6 +3981,270 @@ export default function App() {
         setIsImportingCosts(false);
       }
     });
+  };
+
+  const handleImportCostsFromUrl = async () => {
+    if (!costSheetUrl) {
+      toast.error("Vui lòng nhập link Google Sheet");
+      return;
+    }
+
+    // Extract Spreadsheet ID
+    const match = costSheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match || !match[1]) {
+      toast.error("Link Google Sheet không đúng định dạng");
+      return;
+    }
+
+    const spreadsheetId = match[1];
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
+
+    setIsImportingCostsUrl(true);
+    setIsImportingCosts(true);
+    setImportErrors([]);
+
+    try {
+      const response = await fetch(exportUrl);
+      if (!response.ok) {
+        throw new Error("Không thể tải file từ Google Sheet. Hãy đảm bảo file đã được chia sẻ công khai.");
+      }
+      
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+      
+      let finalRows: any[] = [];
+      let foundHeaders = false;
+
+      // Scan all sheets to find the one with cost/efficiency headers
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const dataArr: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        let headerIndex = -1;
+        for (let i = 0; i < Math.min(dataArr.length, 20); i++) {
+          const row = dataArr[i];
+          if (row && Array.isArray(row) && row.some(cell => {
+            const str = String(cell || '').toLowerCase().replace(/\s+/g, '');
+            return str.includes('chiphi') || str.includes('fbads') || str.includes('zalo') || str.includes('idduan') || str.includes('cănbán') || str.includes('idteam') || str.includes('dựán');
+          })) {
+            headerIndex = i;
+            break;
+          }
+        }
+
+        if (headerIndex !== -1) {
+          finalRows = XLSX.utils.sheet_to_json(worksheet, { range: headerIndex });
+          if (finalRows.length > 0) {
+            foundHeaders = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundHeaders || finalRows.length === 0) {
+        // Fallback to first sheet
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        finalRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+      }
+
+      if (finalRows.length === 0) {
+        toast.error("Không tìm thấy dữ liệu hợp lệ trong Google Sheet.");
+        return;
+      }
+
+      const batch = writeBatch(db);
+      let costCount = 0;
+      let efficiencyCount = 0;
+      let skippedCount = 0;
+      const errorDetails: string[] = [];
+
+
+      for (let i = 0; i < finalRows.length; i++) {
+        const row = finalRows[i];
+        const rowIndex = i + 2; // Assuming header is at some index, this is relative
+        
+        // Normalize keys
+        const normalizedRow: any = {};
+        Object.keys(row).forEach(k => {
+          const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+          normalizedRow[cleanKey] = row[k];
+        });
+
+        const getVal = (possibleKeys: string[]) => {
+          for (const pk of possibleKeys) {
+            const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+            if (normalizedRow[cleanPK] !== undefined && normalizedRow[cleanPK] !== '') return normalizedRow[cleanPK];
+          }
+          return undefined;
+        };
+
+        const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'tên dự án', 'mã dự án']) || '').trim();
+        const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team', 'tên team']) || '').trim();
+        const monthRaw = getVal(['Tháng', 'Kỳ tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']);
+        const month = normalizeMonth(monthRaw);
+        const period = String(getVal(['Tuần', 'Kỳ tuần', 'Week', 'Period', 'tuan', 'tuần', 'kỳ']) || '').trim();
+        
+        // Cost values with even more expanded aliases
+        const fbAds = parseVal(getVal(['FBAds', 'FB Ads', 'Facebook Ads', 'Facebook', 'Chi phí FB', 'QC Facebook', 'Ads FB', 'chiphi fb', 'facebook ads', 'ads facebook']));
+        const posting = parseVal(getVal(['Posting', 'Đăng bài', 'Content', 'Content & Design', 'Content/Design', 'dangbai', 'chiphi content', 'posting/content', 'chi phí content']));
+        const zaloAds = parseVal(getVal(['ZaloAds', 'Zalo Ads', 'Zalo', 'Chi phí Zalo', 'QC Zalo', 'Ads Zalo', 'chiphi zalo', 'zalo ads', 'ads zalo']));
+        const googleAds = parseVal(getVal(['GoogleAds', 'Google Ads', 'Google', 'Chi phí Google', 'QC Google', 'SEM', 'Ads Google', 'chiphi google', 'google ads', 'ads google', 'sem/google']));
+        const otherCost = parseVal(getVal(['OtherCost', 'Chi phí khác', 'Khác', 'Phát sinh', 'Khác (Phát sinh)', 'chiphikhac', 'phatsinh', 'chi phí phát sinh']));
+        const note = String(getVal(['Note', 'Ghi chú', 'Ghi chú thêm', 'ghichu', 'ghi chú']) || '');
+
+        // Efficiency values
+        const salesCount = parseVal(getVal(['Căn bán', 'Số căn bán', 'Sales Count', 'Sales', 'Số căn', 'Căn', 'canban', 'socanban', 'units', 'số lượng']));
+        const revenue = parseVal(getVal(['Doanh số', 'Revenue', 'Doanh thu', 'Thực đạt', 'Tổng doanh thu', 'Doanh thu thực', 'doanhso', 'doanhthu', 'thực thu']));
+
+        if (!pRef || !tRef || !month) {
+          // Skip truly empty rows without error
+          const hasAnyData = Object.values(normalizedRow).some(v => v !== '');
+          if (hasAnyData) {
+            errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+            skippedCount++;
+          }
+          continue;
+        }
+
+        const findProject = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return projects.find(p => 
+            p.id === ref || 
+            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const findTeam = (ref: string) => {
+          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return teams.find(t => 
+            t.id === ref || 
+            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+          );
+        };
+
+        const project = findProject(pRef);
+        const team = findTeam(tRef);
+
+        if (!project) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+          skippedCount++;
+          continue;
+        }
+        if (!team) {
+          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+          skippedCount++;
+          continue;
+        }
+
+        const projectId = project.id;
+        const teamId = team.id;
+        const [yearStr] = month.split('-');
+        const year = Number(yearStr);
+
+        // 1. Process Costs (if cost values exist and match a budget)
+        const totalAmount = fbAds + posting + zaloAds + googleAds + otherCost;
+        if (totalAmount > 0) {
+          const matchingBudget = budgets.find(b => 
+            b.projectId === projectId && 
+            b.teamId === teamId && 
+            b.month === month
+          );
+
+          if (matchingBudget) {
+            const weekNum = Number(period) || 1;
+            const docRef = doc(collection(db, 'costs'));
+            batch.set(docRef, {
+              projectId,
+              projectName: project.name,
+              budgetId: matchingBudget.id,
+              implementerName: matchingBudget.implementerName || 'N/A',
+              teamName: team.name,
+              teamId: teamId,
+              weekNumber: weekNum,
+              year,
+              month,
+              amount: totalAmount,
+              channels: { fbAds, posting, zaloAds, googleAds, otherCost },
+              note,
+              createdAt: serverTimestamp(),
+              createdBy: user?.uid,
+              userEmail: user?.email?.toLowerCase()
+            });
+            costCount++;
+          } else {
+            errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Ngân sách cho [${project.name}] - [${team.name}] vào tháng ${month}. Vui lòng đăng ký ngân sách trước.`);
+            skippedCount++;
+          }
+        }
+
+        // 2. Process Efficiency (always process if values exist)
+        if (salesCount > 0 || revenue > 0) {
+          const existingEfficiency = efficiencyReports.find(r => 
+            r.projectId === projectId && 
+            r.teamId === teamId && 
+            r.month === month
+          );
+
+          if (existingEfficiency) {
+            const docRef = doc(db, 'efficiencyReports', existingEfficiency.id);
+            batch.update(docRef, {
+              salesCount,
+              revenue,
+              updatedAt: serverTimestamp()
+            });
+          } else {
+            const docRef = doc(collection(db, 'efficiencyReports'));
+            batch.set(docRef, {
+              projectId,
+              projectName: project.name,
+              teamId,
+              teamName: team.name,
+              month,
+              salesCount,
+              revenue,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              createdBy: user?.uid,
+              createdByEmail: user?.email
+            });
+          }
+          efficiencyCount++;
+        }
+      }
+
+      if (costCount > 0 || efficiencyCount > 0) {
+        await batch.commit();
+        await logAction('IMPORT_UNIFIED_URL', 'multiple', spreadsheetId, { costCount, efficiencyCount, errors: skippedCount });
+        
+        let msg = `Nhập thành công: ${costCount} chi phí, ${efficiencyCount} hiệu quả.`;
+        if (skippedCount > 0) {
+          msg += ` Bỏ qua ${skippedCount} dòng không hợp lệ.`;
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        }
+        toast.success(msg);
+        
+        setIsImportCostsDialogOpen(false);
+        setCostSheetUrl('');
+      } else {
+        if (errorDetails.length > 0) {
+          setImportErrors(errorDetails);
+          setIsImportErrorsDialogOpen(true);
+        } else {
+          toast.error(`Không tìm thấy dữ liệu hợp lệ để nhập.`);
+        }
+      }
+    } catch (error) {
+      console.error("Unified Import Error:", error);
+      toast.error("Lỗi khi nhập dữ liệu. Hãy kiểm tra lại link và định dạng file.");
+    } finally {
+      setIsImportingCostsUrl(false);
+      setIsImportingCosts(false);
+    }
   };
 
   const handleUpdateCost = async (id: string) => {
@@ -2440,10 +4284,11 @@ export default function App() {
       const userEmail = user?.email?.toLowerCase();
       const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+      const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
 
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || b.teamName === reportTeam)
-        : isOwner;
+        : (isOwner || isAssigned);
       const matchMonth = b.month === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
@@ -2473,10 +4318,12 @@ export default function App() {
       const userEmail = user?.email?.toLowerCase();
       const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
       const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
+      const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
+      const isOwnerOrAssigned = isOwner || isAssigned;
 
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || c.teamName === reportTeam)
-        : isOwner;
+        : isOwnerOrAssigned;
       // Map cost date to marketing month
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       const matchMonth = mMonth === reportMonth;
@@ -2571,6 +4418,163 @@ export default function App() {
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
   }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonth, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
+
+  const efficiencyChartData = useMemo(() => {
+    // rawData structure: rawData[mainKey][detailKey] = { budget, cost, revenue, sales }
+    const rawData: { [key: string]: { [detailKey: string]: { budget: number, cost: number, revenue: number, sales: number } } } = {};
+
+    const getTarget = (mainKey: string, detailKey: string) => {
+      if (!mainKey || !detailKey) return null;
+      if (!rawData[mainKey]) rawData[mainKey] = {};
+      if (!rawData[mainKey][detailKey]) rawData[mainKey][detailKey] = { budget: 0, cost: 0, revenue: 0, sales: 0 };
+      return rawData[mainKey][detailKey];
+    };
+
+    // Budgets
+    budgets.forEach(b => {
+      if (reportMonth && reportMonth !== 'all' && b.month !== reportMonth) return;
+      if (reportProject !== 'all' && b.projectId !== reportProject) return;
+      if (reportTeam !== 'all' && b.teamName !== reportTeam) return;
+
+      const tId = teams.find(t => t.name === b.teamName)?.id || b.teamName;
+      const mainKey = efficiencyGroupType === 'project' ? b.projectId : tId;
+      const detailKey = efficiencyGroupType === 'project' ? tId : b.projectId;
+      
+      const target = getTarget(mainKey, detailKey);
+      if (target) target.budget += b.amount || 0;
+    });
+
+    // Costs
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (reportMonth && reportMonth !== 'all' && mMonth !== reportMonth) return;
+      if (reportProject !== 'all' && c.projectId !== reportProject) return;
+      if (reportTeam !== 'all' && c.teamName !== reportTeam) return;
+
+      const tId = teams.find(t => t.name === c.teamName)?.id || c.teamName;
+      const mainKey = efficiencyGroupType === 'project' ? c.projectId : tId;
+      const detailKey = efficiencyGroupType === 'project' ? tId : c.projectId;
+
+      const target = getTarget(mainKey, detailKey);
+      if (target) target.cost += c.amount || 0;
+    });
+
+    // Efficiency Reports
+    efficiencyReports.forEach(r => {
+      if (reportMonth && reportMonth !== 'all' && r.month !== reportMonth) return;
+      if (reportProject !== 'all' && r.projectId !== reportProject) return;
+      const currentTeamName = teamMap[r.teamId] || r.teamName;
+      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
+
+      const mainKey = efficiencyGroupType === 'project' ? r.projectId : r.teamId;
+      const detailKey = efficiencyGroupType === 'project' ? r.teamId : r.projectId;
+
+      const target = getTarget(mainKey, detailKey);
+      if (target) {
+        target.sales += r.salesCount || 0;
+        target.revenue += r.revenue || 0;
+      }
+    });
+
+    return Object.keys(rawData).map(mainKey => {
+      const name = efficiencyGroupType === 'project' ? (projectMap[mainKey] || mainKey) : (teamMap[mainKey] || mainKey);
+      
+      const details = Object.keys(rawData[mainKey]).map(detailKey => {
+        const detailName = efficiencyGroupType === 'project' ? (teamMap[detailKey] || detailKey) : (projectMap[detailKey] || detailKey);
+        return {
+          name: detailName,
+          ...rawData[mainKey][detailKey]
+        };
+      }).sort((a, b) => b.revenue - a.revenue || b.cost - a.cost);
+
+      const totals = details.reduce((acc, curr) => ({
+        sales: acc.sales + curr.sales,
+        revenue: acc.revenue + curr.revenue,
+        cost: acc.cost + curr.cost,
+        budget: acc.budget + curr.budget
+      }), { sales: 0, revenue: 0, cost: 0, budget: 0 });
+
+      return {
+        name,
+        ...totals,
+        details
+      };
+    }).sort((a, b) => {
+      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      return b.cost - a.cost;
+    });
+  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth]);
+
+  const overBudgetStats = useMemo(() => {
+    const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
+    return {
+      count: overItems.length,
+      totalExcess: overItems.reduce((acc, curr) => acc + (curr.cost - curr.budget), 0),
+      items: overItems
+    };
+  }, [efficiencyChartData]);
+
+  const salesGeneratingData = useMemo(() => 
+    efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
+      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      return b.cost - a.cost;
+    }), 
+    [efficiencyChartData]
+  );
+
+  const noSalesData = useMemo(() => 
+    efficiencyChartData.filter(d => d.revenue === 0).sort((a, b) => b.cost - a.cost), 
+    [efficiencyChartData]
+  );
+
+  const efficiencyPieData = useMemo(() => {
+    const costWithSales = salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0);
+    const costWithoutSales = noSalesData.reduce((acc, curr) => acc + curr.cost, 0);
+    
+    return [
+      { name: 'Phát sinh doanh số', value: costWithSales, color: '#10b981' },
+      { name: 'Không phát sinh doanh số', value: costWithoutSales, color: '#f87171' }
+    ];
+  }, [salesGeneratingData, noSalesData]);
+
+  const efficiencyTrendData = useMemo(() => {
+    const monthlyMap: { [key: string]: { month: string, sales: number, revenue: number, cost: number, roi: number } } = {};
+    
+    // Fill all months for the selected year
+    const year = reportYear || new Date().getFullYear().toString();
+    for (let m = 1; m <= 12; m++) {
+      const monthStr = `${year}-${m.toString().padStart(2, '0')}`;
+      monthlyMap[monthStr] = { month: monthStr, sales: 0, revenue: 0, cost: 0, roi: 0 };
+    }
+
+    efficiencyReports.forEach(r => {
+      if (!r.month || !r.month.startsWith(year)) return;
+      if (reportProject !== 'all' && r.projectId !== reportProject) return;
+      const currentTeamName = teamMap[r.teamId] || r.teamName;
+      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
+
+      if (monthlyMap[r.month]) {
+        monthlyMap[r.month].sales += r.salesCount || 0;
+        monthlyMap[r.month].revenue += r.revenue || 0;
+      }
+    });
+
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (!mMonth || !mMonth.startsWith(year)) return;
+      if (reportProject !== 'all' && c.projectId !== reportProject) return;
+      if (reportTeam !== 'all' && c.teamName !== reportTeam) return;
+
+      if (monthlyMap[mMonth]) {
+        monthlyMap[mMonth].cost += c.amount || 0;
+      }
+    });
+
+    return Object.values(monthlyMap).map(d => ({
+      ...d,
+      roi: d.cost > 0 ? Number((d.revenue / d.cost).toFixed(2)) : 0
+    }));
+  }, [efficiencyReports, costs, reportYear, reportProject, reportTeam, teamMap, getMarketingMonth]);
 
   const regionChartData = useMemo(() => {
     return uniqueRegions.map(region => {
@@ -3088,6 +5092,14 @@ export default function App() {
                             <Users className={`mr-3 h-5 w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
                             Quản lý Team
                           </Button>
+                          <Button 
+                            variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('efficiency')}
+                          >
+                            <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Hiệu quả Kinh doanh
+                          </Button>
                         </>
                       )}
                     </div>
@@ -3161,6 +5173,315 @@ export default function App() {
                   <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
                     {/* Hidden TabsList to keep Tabs logic working */}
                     <TabsList className="hidden" />
+
+                    {/* Efficiency Management Tab */}
+                    {adminSubTab === 'efficiency' && (
+                      <div className="space-y-6">
+                        <Card className="border-none shadow-sm overflow-hidden">
+                          <div className="h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 w-full" />
+                          <CardHeader className="pb-6">
+                            <div className="flex items-center gap-3 mb-1">
+                              <div className="p-2 bg-blue-50 rounded-lg">
+                                <TrendingUp className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">Cập nhật hiệu quả kinh doanh</CardTitle>
+                            </div>
+                            <CardDescription className="text-slate-500 font-medium">Cập nhật số căn bán và doanh số thực tế của từng team theo dự án</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <form onSubmit={handleAddEfficiency} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                              <div className="lg:col-span-2 space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Kỳ báo cáo</Label>
+                                <Input 
+                                  type="month" 
+                                  className="bg-slate-50 border-none h-11 rounded-xl" 
+                                  value={newEfficiencyMonth}
+                                  onChange={e => setNewEfficiencyMonth(e.target.value)}
+                                />
+                              </div>
+                              <div className="lg:col-span-2 space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dự án</Label>
+                                <Select value={newEfficiencyProject} onValueChange={setNewEfficiencyProject}>
+                                  <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
+                                    <SelectValue placeholder="Chọn dự án..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                                      <div className="relative">
+                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                          placeholder="Tìm dự án..."
+                                          className="pl-8 h-9 border-none bg-slate-50"
+                                          value={newEfficiencyProjectSearch}
+                                          onChange={(e) => setNewEfficiencyProjectSearch(e.target.value)}
+                                          onKeyDown={(e) => e.stopPropagation()}
+                                        />
+                                      </div>
+                                    </div>
+                                    {projects
+                                      .filter(p => p.name.toLowerCase().includes(newEfficiencyProjectSearch.toLowerCase()) || p.id.toLowerCase().includes(newEfficiencyProjectSearch.toLowerCase()))
+                                      .map(p => (
+                                        <SelectItem key={p.id} value={p.id}>
+                                          <div className="flex flex-col">
+                                            <span className="font-medium text-slate-900">{p.name}</span>
+                                            <span className="text-[9px] text-slate-400 font-mono">ID: {p.id}</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="lg:col-span-2 space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Team</Label>
+                                <Select value={newEfficiencyTeam} onValueChange={setNewEfficiencyTeam}>
+                                  <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
+                                    <SelectValue placeholder="Chọn team..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                                      <div className="relative">
+                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                          placeholder="Tìm team..."
+                                          className="pl-8 h-9 border-none bg-slate-50"
+                                          value={newEfficiencyTeamSearch}
+                                          onChange={(e) => setNewEfficiencyTeamSearch(e.target.value)}
+                                          onKeyDown={(e) => e.stopPropagation()}
+                                        />
+                                      </div>
+                                    </div>
+                                    {teams
+                                      .filter(t => t.name.toLowerCase().includes(newEfficiencyTeamSearch.toLowerCase()) || t.id.toLowerCase().includes(newEfficiencyTeamSearch.toLowerCase()))
+                                      .map(t => (
+                                        <SelectItem key={t.id} value={t.id}>
+                                          <div className="flex flex-col">
+                                            <span className="font-medium text-slate-900">{t.name}</span>
+                                            <span className="text-[9px] text-slate-400 font-mono">ID: {t.id}</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="lg:col-span-2 space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Số căn bán</Label>
+                                <Input 
+                                  type="number"
+                                  placeholder="VD: 5"
+                                  className="bg-slate-50 border-none h-11 rounded-xl" 
+                                  value={newEfficiencySales}
+                                  onChange={e => setNewEfficiencySales(e.target.value)}
+                                />
+                              </div>
+                              <div className="lg:col-span-2 space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Doanh số (VND)</Label>
+                                <Input 
+                                  type="text"
+                                  placeholder="VD: 15,000,000,000"
+                                  className="bg-slate-50 border-none h-11 rounded-xl" 
+                                  value={formatNumberWithCommas(newEfficiencyRevenue)}
+                                  onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/,/g, ''))}
+                                />
+                              </div>
+                              <div className="lg:col-span-2">
+                                <Button 
+                                  type="submit" 
+                                  className="w-full h-11 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 rounded-xl"
+                                  disabled={isAddingEfficiency}
+                                >
+                                  {isAddingEfficiency ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                                  Lưu kết quả
+                                </Button>
+                              </div>
+                            </form>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-none shadow-sm overflow-hidden">
+                          <CardHeader className="pb-4">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <FileSpreadsheet className="w-5 h-5 text-blue-500" />
+                                Danh sách hiệu quả kinh doanh
+                              </CardTitle>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-10 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl"
+                                  onClick={() => setIsImportEfficiencyDialogOpen(true)}
+                                >
+                                  <FileUp className="w-4 h-4 mr-2" /> Nhập từ Excel
+                                </Button>
+                                {isAdmin && (
+                                  <>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-10 text-xs text-red-600 border-red-200 hover:bg-red-50 rounded-xl"
+                                      onClick={handleBulkDeleteEfficiency}
+                                      disabled={selectedEfficiencyIds.length === 0 || isDeletingEfficiencyBatch}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" /> {isDeletingEfficiencyBatch ? 'Đang xóa...' : `Xóa (${selectedEfficiencyIds.length})`}
+                                    </Button>
+                                    <Button 
+                                      variant="destructive" 
+                                      size="sm" 
+                                      className="h-10 text-xs rounded-xl"
+                                      onClick={handleDeleteAllEfficiency}
+                                      disabled={efficiencyReports.length === 0}
+                                    >
+                                      <AlertTriangle className="w-4 h-4 mr-2" /> Xóa tất cả
+                                    </Button>
+                                  </>
+                                )}
+                                <div className="relative w-64">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                  <Input 
+                                    placeholder="Tìm dự án, team..." 
+                                    className="pl-10 bg-slate-50 border-none h-10 text-xs rounded-xl"
+                                    value={adminEfficiencySearch}
+                                    onChange={e => setAdminEfficiencySearch(e.target.value)}
+                                  />
+                                </div>
+                                <div className="relative">
+                                  <Input 
+                                    type="month" 
+                                    className="w-40 bg-slate-50 border-none h-10 text-xs rounded-xl pr-10"
+                                    value={adminEfficiencyMonthFilter}
+                                    onChange={e => setAdminEfficiencyMonthFilter(e.target.value)}
+                                  />
+                                  {adminEfficiencyMonthFilter && (
+                                    <button 
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-full transition-colors"
+                                      onClick={() => setAdminEfficiencyMonthFilter('')}
+                                    >
+                                      <X className="w-3 h-3 text-slate-400" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            <div className="bg-blue-50/50 px-6 py-3 border-b border-slate-100 flex items-center justify-between font-mono">
+                              <div className="flex items-center gap-4">
+                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Database Info</span>
+                                <div className="h-4 w-px bg-slate-200" />
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="bg-white text-blue-700 border-blue-100 font-black text-[10px]">
+                                    {efficiencyReports.length} TOTAL RECORDS
+                                  </Badge>
+                                  <Badge variant="secondary" className="bg-white text-emerald-700 border-emerald-100 font-black text-[10px]">
+                                    {filteredEfficiencyReports.length} FILTERED
+                                  </Badge>
+                                </div>
+                              </div>
+                              {adminEfficiencyMonthFilter && (
+                                <p className="text-[9px] text-slate-400 font-bold italic">
+                                  <Info className="w-3 h-3 inline mr-1" /> Viewing month: {adminEfficiencyMonthFilter}. Use X to show all.
+                                </p>
+                              )}
+                            </div>
+                            <Table>
+                              <TableHeader className="bg-slate-50/50">
+                                <TableRow>
+                                  <TableHead className="w-10 pl-4">
+                                    <input 
+                                      type="checkbox" 
+                                      className="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                                      checked={filteredEfficiencyReports.length > 0 && selectedEfficiencyIds.length === filteredEfficiencyReports.length}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedEfficiencyIds(filteredEfficiencyReports.map(r => r.id));
+                                        } else {
+                                          setSelectedEfficiencyIds([]);
+                                        }
+                                      }}
+                                    />
+                                  </TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Dự án / Team</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Tháng</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Số căn</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Doanh số</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-[120px]">Thao tác</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredEfficiencyReports.map((report) => (
+                                  <TableRow key={report.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <TableCell className="w-10 pl-4">
+                                      <input 
+                                        type="checkbox" 
+                                        className="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                                        checked={selectedEfficiencyIds.includes(report.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedEfficiencyIds(prev => [...prev, report.id]);
+                                          } else {
+                                            setSelectedEfficiencyIds(prev => prev.filter(id => id !== report.id));
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="pl-2">
+                                      <div className="space-y-0.5">
+                                        <div className="font-bold text-slate-900">{projectMap[report.projectId] || report.projectName}</div>
+                                        <div className="text-[10px] text-slate-500 font-medium">{teamMap[report.teamId] || report.teamName}</div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-center font-medium text-slate-600">{report.month}</TableCell>
+                                    <TableCell className="text-center">
+                                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 font-bold px-3">
+                                        {report.salesCount} căn
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right font-black text-slate-900 font-mono">
+                                      {formatCurrency(report.revenue)}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center justify-center gap-2">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                                          onClick={() => {
+                                            setEditingEfficiency(report);
+                                            setNewEfficiencySales(report.salesCount.toString());
+                                            setNewEfficiencyRevenue(report.revenue.toString());
+                                            setIsEditEfficiencyDialogOpen(true);
+                                          }}
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                          onClick={() => {
+                                            setEfficiencyToDelete(report);
+                                            setIsDeleteEfficiencyDialogOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                {filteredEfficiencyReports.length === 0 && (
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="h-32 text-center text-slate-400 italic">
+                                      Chưa có dữ liệu hiệu quả kinh doanh cho kỳ này
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
 
                     {/* Project Management Tab */}
                     <TabsContent value="projects" className="space-y-6">
@@ -3368,6 +5689,15 @@ export default function App() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
+                                className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                                onClick={handleSyncProjectCodes}
+                                disabled={isSyncingProjects}
+                              >
+                                <RefreshCw className={`w-3 h-3 mr-1 ${isSyncingProjects ? 'animate-spin' : ''}`} /> Đồng bộ Mã Dự án
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
                                 className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={handleBulkDeleteProjects}
                                 disabled={selectedProjectIds.length === 0}
@@ -3409,6 +5739,9 @@ export default function App() {
                                     />
                                   </TableHead>
                                 )}
+                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'projectCode', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2">Mã Dự án <ArrowUpDown className="w-3 h-3" /></div>
+                                </TableHead>
                                 <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'name', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2">Tên dự án <ArrowUpDown className="w-3 h-3" /></div>
                                 </TableHead>
@@ -3441,9 +5774,19 @@ export default function App() {
                                       />
                                     </TableCell>
                                   )}
+                                  <TableCell className="font-mono text-xs font-bold text-blue-600">
+                                    {editingProjectId === p.id ? (
+                                      <Input value={editingProjectCode} onChange={e => setEditingProjectCode(e.target.value)} className="h-8 font-mono" />
+                                    ) : (p.projectCode || '-')}
+                                  </TableCell>
                                   <TableCell className="font-medium">
                                     {editingProjectId === p.id ? (
-                                      <Input value={editingProjectName} onChange={e => setEditingProjectName(e.target.value)} className="h-8" />
+                                      <Input value={editingProjectName} onChange={e => {
+                                        setEditingProjectName(e.target.value);
+                                        if (!editingProjectCode) {
+                                          setEditingProjectCode(extractProjectCode(e.target.value));
+                                        }
+                                      }} className="h-8" />
                                     ) : p.name}
                                   </TableCell>
                                   <TableCell>
@@ -3488,7 +5831,7 @@ export default function App() {
                                       <div className="flex justify-end gap-1">
                                         {editingProjectId === p.id ? (
                                           <>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateProject(p.id, editingProjectName, editingProjectRegion, editingProjectType)}>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateProject(p.id, editingProjectName, editingProjectCode, editingProjectRegion, editingProjectType)}>
                                               <Check className="h-4 w-4" />
                                             </Button>
                                             <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingProjectId(null)}>
@@ -3500,6 +5843,7 @@ export default function App() {
                                             <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
                                               setEditingProjectId(p.id);
                                               setEditingProjectName(p.name);
+                                               setEditingProjectCode(p.projectCode || extractProjectCode(p.name));
                                               setEditingProjectRegion(p.region || '');
                                               setEditingProjectType(p.type || '');
                                             }}>
@@ -4064,6 +6408,15 @@ export default function App() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
+                                className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                                onClick={handleSyncTeamCodes}
+                                disabled={isSyncingTeams}
+                              >
+                                <RefreshCw className={`w-3 h-3 mr-1 ${isSyncingTeams ? 'animate-spin' : ''}`} /> Đồng bộ Mã Team
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
                                 className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={handleBulkDeleteTeams}
                                 disabled={selectedTeamIds.length === 0 || isDeletingTeams}
@@ -4105,6 +6458,9 @@ export default function App() {
                                     />
                                   </TableHead>
                                 )}
+                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'teamCode', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2">Mã Team <ArrowUpDown className="w-3 h-3" /></div>
+                                </TableHead>
                                 <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'name', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2">Tên Team <ArrowUpDown className="w-3 h-3" /></div>
                                 </TableHead>
@@ -4131,9 +6487,20 @@ export default function App() {
                                       />
                                     </TableCell>
                                   )}
+                                  <TableCell className="font-mono text-xs font-bold text-indigo-600">
+                                    {editingTeamId === t.id ? (
+                                      <Input value={editingTeamCode} onChange={e => setEditingTeamCode(e.target.value)} className="h-8 font-mono" />
+                                    ) : (t.teamCode || '-')}
+                                  </TableCell>
                                   <TableCell className="font-medium">
                                     {editingTeamId === t.id ? (
-                                      <Input value={editingTeamName} onChange={e => setEditingTeamName(e.target.value)} className="h-8" />
+                                      <Input value={editingTeamName} onChange={e => {
+                                        setEditingTeamName(e.target.value);
+                                        // Auto-extract if code is empty
+                                        if (!editingTeamCode) {
+                                          setEditingTeamCode(extractTeamCode(e.target.value));
+                                        }
+                                      }} className="h-8" />
                                     ) : t.name}
                                   </TableCell>
                                   <TableCell className="text-xs text-slate-500">
@@ -4144,7 +6511,7 @@ export default function App() {
                                       <div className="flex justify-end gap-1">
                                         {editingTeamId === t.id ? (
                                           <>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateTeam(t.id, editingTeamName)}>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateTeam(t.id, editingTeamName, editingTeamCode)}>
                                               <Check className="h-4 w-4" />
                                             </Button>
                                             <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingTeamId(null)}>
@@ -4156,6 +6523,7 @@ export default function App() {
                                             <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
                                               setEditingTeamId(t.id);
                                               setEditingTeamName(t.name);
+                                               setEditingTeamCode(t.teamCode || extractTeamCode(t.name));
                                             }}>
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -4194,6 +6562,29 @@ export default function App() {
                           <CardDescription>Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={handleSyncBudgetPermissions}
+                            disabled={isSyncingBudgetPermissions}
+                          >
+                            <ShieldCheck className={`w-3 h-3 mr-1 ${isSyncingBudgetPermissions ? 'animate-spin' : ''}`} /> Đồng bộ phân quyền
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                            onClick={() => setIsRestoreBudgetsDialogOpen(true)}
+                            disabled={isRestoringData}
+                          >
+                            {isRestoringData ? (
+                              <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full mr-2" />
+                            ) : (
+                              <History className="w-3 h-3 mr-1" />
+                            )}
+                            Khôi phục từ Nhật ký
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -4258,6 +6649,27 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-2">
+                          <div className="flex-1 relative">
+                            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                            <Input 
+                              placeholder="Dán link Google Sheet Ngân sách tại đây..." 
+                              className="pl-10 bg-white border-none shadow-sm h-10"
+                              value={budgetSheetUrl}
+                              onChange={e => setBudgetSheetUrl(e.target.value)}
+                              disabled={isImportingBudgetsUrl}
+                            />
+                          </div>
+                          <Button 
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white h-10 px-6 rounded-lg font-bold"
+                            onClick={handleImportBudgetsFromUrl}
+                            disabled={isImportingBudgetsUrl || !budgetSheetUrl}
+                          >
+                            {isImportingBudgetsUrl ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+                            Đồng bộ Ngân sách
+                          </Button>
+                        </div>
+                        
                         <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
                           <div className="flex-1 min-w-[200px] relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -4552,9 +6964,26 @@ export default function App() {
                       <CardTitle className="flex items-center gap-2">
                         <BarChart3 className="w-5 h-5 text-blue-600" /> Báo cáo & Phân tích chuyên sâu
                       </CardTitle>
-                      <CardDescription>Theo dõi hiệu quả sử dụng ngân sách theo Team và Dự án</CardDescription>
+                      <CardDescription>Theo dõi hiệu quả sử dụng ngân sách & Hiệu quả kinh doanh thực tế</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
+                    {/* Alert for Over Budget */}
+                    {overBudgetStats.count > 0 && (
+                      <div className="mx-6 mt-2 p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
+                        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200">
+                          <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Cảnh báo vượt ngân sách ({overBudgetStats.count} mục)</h4>
+                          <p className="text-xs text-red-700/80 font-medium leading-relaxed mt-1">
+                            Tổng chi phí thực tế đã vượt ngân sách đăng ký của <strong>{overBudgetStats.count}</strong> đơn vị với tổng số tiền vượt là 
+                            <span className="font-black ml-1 text-red-800">{formatCurrency(overBudgetStats.totalExcess)}</span>. 
+                            Vui lòng kiểm tra lại các mục được đánh dấu màu đỏ dưới bảng.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Filters Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8">
                       <div className="space-y-2">
@@ -4683,14 +7112,24 @@ export default function App() {
 
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tháng báo cáo'}
+                          <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tất cả các tháng'}
                         </Label>
-                        <Input 
-                          type="month" 
-                          className="bg-white border-slate-200 shadow-sm h-10 cursor-pointer transition-all hover:border-blue-300" 
-                          value={reportMonth} 
-                          onChange={e => setReportMonth(e.target.value)} 
-                        />
+                        <div className="relative">
+                          <Input 
+                            type="month" 
+                            className="bg-white border-slate-200 shadow-sm h-10 cursor-pointer transition-all hover:border-blue-300 pr-10" 
+                            value={reportMonth} 
+                            onChange={e => setReportMonth(e.target.value)} 
+                          />
+                          {reportMonth && (
+                            <button 
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full transition-colors"
+                              onClick={() => setReportMonth('')}
+                            >
+                              <X className="w-3 h-3 text-slate-400" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -4729,7 +7168,7 @@ export default function App() {
 
                     {/* Summary Cards - Only visible to Admin */}
                     {isAdmin && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tổng ngân sách</p>
                           <p className="text-2xl font-bold text-slate-900">
@@ -4743,7 +7182,19 @@ export default function App() {
                           </p>
                         </div>
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tỉ lệ chênh lệch</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sản lượng bán</p>
+                          <p className="text-2xl font-bold text-emerald-600">
+                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)} <span className="text-xs font-medium text-slate-400">căn</span>
+                          </p>
+                        </div>
+                        <div className="p-5 rounded-2xl bg-indigo-600 border border-indigo-700 shadow-lg shadow-indigo-100 flex flex-col gap-1 lg:col-span-2">
+                          <p className="text-[10px] text-indigo-100 font-black uppercase tracking-wider">Doanh số tổng hệ thống</p>
+                          <p className="text-4xl font-black text-white">
+                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-lg font-medium text-indigo-100">đ</span>
+                          </p>
+                        </div>
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tỉ lệ ngân sách</p>
                           {(() => {
                             const budget = filteredBudgets.reduce((acc, curr) => acc + curr.amount, 0);
                             const cost = filteredCosts.reduce((acc, curr) => acc + curr.amount, 0);
@@ -4753,14 +7204,14 @@ export default function App() {
                             return (
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
-                                  <p className={`text-2xl font-bold ${Math.abs(variance) < 0.01 ? 'text-slate-900' : variance > 0 ? 'text-red-600' : variance < -30 ? 'text-amber-600' : 'text-green-600'}`}>
+                                  <p className={`text-xl font-bold ${Math.abs(variance) < 0.01 ? 'text-slate-900' : variance > 0 ? 'text-red-600' : variance < -30 ? 'text-amber-600' : 'text-green-600'}`}>
                                     {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
                                   </p>
-                                  <Badge variant="outline" className="text-[9px] py-0 border-slate-200 text-slate-500">
-                                    Sử dụng: {usagePercent.toFixed(1)}%
+                                  <Badge variant="outline" className="text-[8px] py-0 border-slate-200 text-slate-500 px-1">
+                                    Dùng: {usagePercent.toFixed(0)}%
                                   </Badge>
                                 </div>
-                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                                <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
                                   <div 
                                     className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-red-500' : usagePercent < 70 ? 'bg-amber-500' : 'bg-green-500'}`}
                                     style={{ width: `${Math.min(usagePercent, 100)}%` }}
@@ -4804,6 +7255,7 @@ export default function App() {
                               <TabsTrigger value="team" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Team</TabsTrigger>
                               <TabsTrigger value="project" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Dự án</TabsTrigger>
                               <TabsTrigger value="region" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Khu vực</TabsTrigger>
+                              <TabsTrigger value="efficiency" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Hiệu quả</TabsTrigger>
                             </TabsList>
                           </div>
                         </div>
@@ -4826,7 +7278,7 @@ export default function App() {
                                   tick={{ fill: '#64748b', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                                 <Legend 
                                   verticalAlign="top" 
                                   align="right" 
@@ -4862,7 +7314,7 @@ export default function App() {
                                   tick={{ fill: '#64748b', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                                 <Legend 
                                   verticalAlign="top" 
                                   align="right" 
@@ -4894,7 +7346,7 @@ export default function App() {
                                   tick={{ fill: '#64748b', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                                 <Legend 
                                   verticalAlign="top" 
                                   align="right" 
@@ -4907,114 +7359,423 @@ export default function App() {
                             </ResponsiveContainer>
                           </div>
                         </TabsContent>
+
+                        <TabsContent value="efficiency" className="mt-0 space-y-8">
+                          {/* Efficiency Controls */}
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-50/80 rounded-2xl border border-slate-200/60 shadow-inner">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Phân nhóm:</span>
+                              <div className="flex p-0.5 bg-slate-200/50 rounded-lg">
+                                <Button 
+                                  variant={efficiencyGroupType === 'team' ? 'secondary' : 'ghost'} 
+                                  size="sm" 
+                                  onClick={() => setEfficiencyGroupType('team')}
+                                  className={`h-7 text-[10px] px-4 rounded-md transition-all ${efficiencyGroupType === 'team' ? 'bg-white shadow-sm text-blue-600 font-bold' : 'text-slate-500'}`}
+                                >
+                                  Theo Team
+                                </Button>
+                                <Button 
+                                  variant={efficiencyGroupType === 'project' ? 'secondary' : 'ghost'} 
+                                  size="sm" 
+                                  onClick={() => setEfficiencyGroupType('project')}
+                                  className={`h-7 text-[10px] px-4 rounded-md transition-all ${efficiencyGroupType === 'project' ? 'bg-white shadow-sm text-blue-600 font-bold' : 'text-slate-500'}`}
+                                >
+                                  Theo Dự án
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 pr-2">
+                               <Info className="w-3.5 h-3.5 text-blue-500" />
+                               <span className="text-[10px] text-slate-500 font-medium italic">Biểu đồ & bảng sẽ thay đổi theo cách phân nhóm này</span>
+                            </div>
+                          </div>
+
+                          {/* Summary KPI Cards */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+                                <TrendingUp className="w-12 h-12 text-blue-600" />
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng căn đã bán</p>
+                              <div className="flex items-baseline gap-2">
+                                <p className="text-3xl font-black text-slate-900 leading-none">
+                                  {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)}
+                                </p>
+                                <span className="text-xs font-bold text-slate-400">căn</span>
+                              </div>
+                              <div className="mt-2 text-[10px] text-slate-400 italic">
+                                * Tổng số lượng sản phẩm được chốt trong kỳ
+                              </div>
+                            </div>
+
+                            <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+                                <Wallet className="w-12 h-12 text-emerald-600" />
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Hiệu quả doanh số</p>
+                              <p className="text-2xl font-black text-emerald-600 leading-none">
+                                {formatCurrency(efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0))}
+                              </p>
+                              <div className="mt-2 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" /> Doanh số thực tế ghi nhận
+                              </div>
+                            </div>
+
+                            <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+                                <Wallet className="w-12 h-12 text-blue-600" />
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách</p>
+                              <p className="text-2xl font-black text-blue-600 leading-none">
+                                {formatCurrency(efficiencyChartData.reduce((acc, curr) => acc + (curr.budget || 0), 0))}
+                              </p>
+                              <div className="mt-2 text-[10px] text-blue-500 font-bold">
+                                Tổng vốn đầu tư dự kiến
+                              </div>
+                            </div>
+
+                            <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+                                <BarChart3 className="w-12 h-12 text-amber-600" />
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cost/Sale (TB)</p>
+                              <p className="text-2xl font-black text-amber-600 leading-none">
+                                {(() => {
+                                  const totalSales = efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0);
+                                  const totalCost = efficiencyChartData.reduce((acc, curr) => acc + (curr.cost || 0), 0);
+                                  return totalSales > 0 ? formatCurrency(Math.round(totalCost / totalSales)) : '0 đ';
+                                })()}
+                              </p>
+                              <div className="mt-2 text-[10px] text-amber-500 font-bold">
+                                Chi phí trung bình / 1 căn
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Charts Grid */}
+                          <div className="space-y-12">
+                            {/* Distribution Pie Chart */}
+                            <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8">
+                              <div className="flex-1 space-y-4">
+                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phân bổ chi phí theo hiệu quả doanh số</Label>
+                                <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                                  Biểu đồ thể hiện sự tương quan giữa ngân đầu tư cho các nhóm <span className="text-emerald-600 font-bold border-b-2 border-emerald-100">có kết quả</span> và nhóm <span className="text-red-500 font-bold border-b-2 border-red-100">chưa có kết quả</span>.
+                                </p>
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                  {efficiencyPieData.map((d, i) => (
+                                    <div key={i} className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                      <p className="text-[9px] font-black text-slate-400 uppercase">{d.name}</p>
+                                      <p className="text-base font-black text-slate-900">{formatCurrency(d.value)}</p>
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase">
+                                        Chiếm {((d.value / (efficiencyPieData.reduce((a,b) => a+b.value, 0) || 1)) * 100).toFixed(1)}%
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="h-[240px] w-full md:w-[240px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={efficiencyPieData}
+                                      innerRadius={60}
+                                      outerRadius={80}
+                                      paddingAngle={8}
+                                      dataKey="value"
+                                    >
+                                      {efficiencyPieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                      ))}
+                                    </Pie>
+                                    <ChartTooltip 
+                                      content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                          return (
+                                            <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-100">
+                                              <p className="text-xs font-black uppercase text-slate-400 mb-1">{payload[0].name}</p>
+                                              <p className="text-sm font-black text-slate-900">{formatCurrency(payload[0].value)}</p>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+
+                            {/* Sales Generating Entities Chart */}
+                            <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6">
+                              <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    {efficiencyGroupType === 'team' ? 'Các Team phát sinh doanh số' : 'Các Dự án phát sinh doanh số'}
+                                  </Label>
+                                  <p className="text-[10px] text-emerald-600 font-bold italic">Top các đơn vị có kết quả kinh doanh tốt nhất</p>
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-slate-200" />
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Ngân sách</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Doanh số</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-red-400" />
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Chi phí</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="h-[400px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <ComposedChart data={salesGeneratingData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                      dataKey="name" 
+                                      axisLine={false} 
+                                      tickLine={false} 
+                                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
+                                      dy={10}
+                                    />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
+                                    <ChartTooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
+                                    <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="cost" fill="#f87171" radius={[4, 4, 0, 0]} barSize={20} />
+                                  </ComposedChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+
+                            {/* Non-Sales Generating Entities Chart */}
+                            <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6">
+                              <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    {efficiencyGroupType === 'team' ? 'Các Team chưa phát sinh doanh số' : 'Các Dự án chưa phát sinh doanh số'}
+                                  </Label>
+                                  <p className="text-[10px] text-red-400 font-bold italic">Danh sách cần rà soát lại phương án triển khai</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-slate-200" />
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Ngân sách</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-red-400" />
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase">Chi phí</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="h-[350px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={noSalesData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                      dataKey="name" 
+                                      axisLine={false} 
+                                      tickLine={false} 
+                                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
+                                      dy={10}
+                                    />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
+                                    <Tooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
+                                    <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={24} />
+                                    <Bar dataKey="cost" fill="#f87171" radius={[4, 4, 0, 0]} barSize={24} />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Split Tables */}
+                          <div className="space-y-12 mt-12 pb-12">
+                            {/* Table 1: Sales Generating */}
+                            <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
+                              <CardHeader className="pb-4 bg-emerald-50/50 border-b border-emerald-100">
+                                <div className="flex items-center justify-between">
+                                  <CardTitle className="text-lg font-black flex items-center gap-2 text-emerald-900">
+                                    <TrendingUp className="w-5 h-5 text-emerald-600" />
+                                    Bảng chi tiết đơn vị phát sinh doanh số
+                                  </CardTitle>
+                                  <Badge className="bg-emerald-600 text-white border-none text-[9px] font-black uppercase">
+                                    {salesGeneratingData.length} đơn vị
+                                  </Badge>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="p-0">
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader className="bg-slate-50/50">
+                                      <TableRow className="hover:bg-transparent">
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12">Đối tượng</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Ngân sách</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Chi phí thực</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center h-12">Sản lượng</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Doanh số</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12">Chỉ số ROI</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {salesGeneratingData.map((item, idx) => {
+                                        const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
+                                        const isOverBudget = item.cost > item.budget;
+                                        return (
+                                          <TableRow key={idx} className={`group transition-colors border-b-slate-50 ${isOverBudget ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-emerald-50/30'}`}>
+                                            <TableCell className="pl-8 py-4">
+                                              <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                                  {idx + 1}
+                                                </div>
+                                                <div>
+                                                  <div className="flex items-center gap-2">
+                                                    <p className="font-black text-slate-900 transition-colors uppercase tracking-tight">{item.name}</p>
+                                                    {isOverBudget && (
+                                                      <TooltipProvider>
+                                                        <UITooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
+                                                            Vượt ngân sách {formatCurrency(item.cost - item.budget)}
+                                                          </TooltipContent>
+                                                        </UITooltip>
+                                                      </TooltipProvider>
+                                                    )}
+                                                  </div>
+                                                  <p className="text-[10px] text-slate-400 font-medium lowercase">
+                                                    {efficiencyGroupType === 'project' ? `${item.details.length} teams tham gia` : `${item.details.length} dự án triển khai`}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(item.budget)}</TableCell>
+                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] ${isOverBudget ? 'text-red-600 scale-110 shadow-sm' : 'text-slate-900 opacity-80'}`}>
+                                              {formatCurrency(item.cost)}
+                                            </TableCell>
+                                            <TableCell className="text-center py-4">
+                                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-2 h-5 text-[9px]">
+                                                {item.sales} căn
+                                              </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right py-4 font-black text-emerald-600 font-mono text-[11px]">{formatCurrency(item.revenue)}</TableCell>
+                                            <TableCell className="text-right pr-8 py-4">
+                                              <div className="text-xs font-black font-mono text-emerald-600">{roi}x</div>
+                                              <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Doanh thu/Vốn</div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            {/* Table 2: No Sales */}
+                            <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
+                              <CardHeader className="pb-4 bg-red-50/50 border-b border-red-100">
+                                <div className="flex items-center justify-between">
+                                  <CardTitle className="text-lg font-black flex items-center gap-2 text-red-900">
+                                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                                    Bảng chi tiết đơn vị chưa phát sinh doanh số
+                                  </CardTitle>
+                                  <Badge className="bg-red-600 text-white border-none text-[9px] font-black uppercase">
+                                    {noSalesData.length} đơn vị
+                                  </Badge>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="p-0">
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader className="bg-slate-50/50">
+                                      <TableRow className="hover:bg-transparent">
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12">Đối tượng</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Ngân sách</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Chi phí thực</TableHead>
+                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12">Số dự án/team liên quan</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {noSalesData.map((item, idx) => {
+                                        const isOverBudget = item.cost > item.budget;
+                                        return (
+                                          <TableRow key={idx} className={`group transition-colors border-b-slate-50 ${isOverBudget ? 'bg-red-50/50 hover:bg-red-100/40' : 'hover:bg-red-50/30'}`}>
+                                            <TableCell className="pl-8 py-4">
+                                              <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-200 text-red-700' : 'bg-red-100 text-red-600'}`}>
+                                                  {idx + 1}
+                                                </div>
+                                                <div>
+                                                  <div className="flex items-center gap-2">
+                                                    <p className="font-black text-slate-900 uppercase tracking-tight">{item.name}</p>
+                                                    {isOverBudget && (
+                                                      <TooltipProvider>
+                                                        <UITooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
+                                                            Vượt ngân sách {formatCurrency(item.cost - item.budget)}
+                                                          </TooltipContent>
+                                                        </UITooltip>
+                                                      </TooltipProvider>
+                                                    )}
+                                                  </div>
+                                                  <p className="text-[10px] text-slate-400 font-medium">Chưa ghi nhận doanh số</p>
+                                                </div>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(item.budget)}</TableCell>
+                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] ${isOverBudget ? 'text-red-700 scale-110' : 'text-red-600/60 font-medium'}`}>{formatCurrency(item.cost)}</TableCell>
+                                          <TableCell className="text-right pr-8 py-4">
+                                            <Badge variant="outline" className="text-[9px] font-bold text-slate-500">
+                                              {item.details.length} {efficiencyGroupType === 'project' ? 'đội tham gia' : 'dự án triển khai'}
+                                            </Badge>
+                                          </TableCell>
+                                        </TableRow>
+                                        );
+                                      })}
+                                      {noSalesData.length === 0 && (
+                                        <TableRow>
+                                          <TableCell colSpan={4} className="h-24 text-center text-slate-400 italic text-[10px]">
+                                            Tất cả các đơn vị đều đã phát sinh doanh số
+                                          </TableCell>
+                                        </TableRow>
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </TabsContent>
                       </Tabs>
                     </div>
 
-                    {/* Detailed Table */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                          Bảng chi tiết theo {activeReportTab === 'project' ? 'Dự án' : activeReportTab === 'region' ? 'Khu vực' : 'Team'}
-                        </Label>
-                      </div>
-                      <div className="rounded-2xl border border-slate-100 overflow-hidden">
-                        <Table>
-                          <TableHeader className="bg-slate-50">
-                            <TableRow>
-                              <TableHead className="font-bold">{activeReportTab === 'project' ? 'Dự án' : 'Team / Nhân sự'}</TableHead>
-                              <TableHead className="font-bold">{activeReportTab === 'project' ? 'Các Team' : 'Các Dự án'}</TableHead>
-                              <TableHead className="text-right font-bold">Ngân sách</TableHead>
-                              <TableHead className="text-right font-bold">Chi phí</TableHead>
-                              <TableHead className="text-right font-bold">Chênh lệch (%)</TableHead>
-                              <TableHead className="text-center font-bold">Trạng thái</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                          {(activeReportTab === 'project' ? reportTableData.projects : reportTableData.teams).map(row => {
-                            const diff = (row.budget || 0) - (row.actual || 0);
-                            
-                            let status = "Bình thường";
-                            let statusColor = "text-green-600 bg-green-50";
-                            
-                            if ((row.actual || 0) > (row.budget || 0)) {
-                              status = "Vượt ngân sách";
-                              statusColor = "text-red-600 bg-red-50";
-                            } else if ((row.actual || 0) < (row.budget || 0) * 0.7) {
-                              status = "Chi thấp (<70%)";
-                              statusColor = "text-amber-600 bg-amber-50";
-                            }
-
-                            return (
-                              <React.Fragment key={row.id}>
-                                <TableRow className="bg-slate-50/50 hover:bg-slate-100/50 transition-colors">
-                                  <TableCell className="font-bold text-blue-700">{row.name} (Tổng)</TableCell>
-                                  <TableCell className="text-xs text-slate-500">
-                                    {(activeReportTab === 'project' ? (row as any).teams : (row as any).projects).join(', ')}
-                                  </TableCell>
-                                  <TableCell className="text-right font-bold font-mono">{(row.budget || 0).toLocaleString()} đ</TableCell>
-                                  <TableCell className="text-right font-bold font-mono">{(row.actual || 0).toLocaleString()} đ</TableCell>
-                                  <TableCell className={`text-right font-bold font-mono ${diff < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    <div className="flex flex-col items-end">
-                                      <span>{diff.toLocaleString()} đ</span>
-                                      <span className="text-[10px] font-medium">
-                                        {(row.budget || 0) > 0 ? ((((row.actual || 0) / (row.budget || 0)) - 1) * 100).toFixed(1) : '0'}%
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <Badge variant="outline" className={`border-none ${statusColor}`}>
-                                      {status}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                                {(row.items || []).map((item: any) => {
-                                  const bCost = item.actual || 0;
-                                  const bDiff = (item.amount || 0) - bCost;
-                                  const isSummary = item.userEmail === 'Team Summary' || item.userEmail === 'Project Summary';
-                                  
-                                  return (
-                                    <TableRow key={item.id} className="border-l-4 border-l-blue-200 hover:bg-slate-50 transition-colors">
-                                      <TableCell className="pl-8 text-xs text-slate-600 flex flex-col">
-                                        <span className="font-bold text-slate-700">{item.implementerName || 'N/A'}</span>
-                                        {!isSummary && <span className="text-[10px] text-slate-400">{item.userEmail}</span>}
-                                      </TableCell>
-                                      <TableCell className="text-xs">
-                                        {activeReportTab === 'project' ? 'Phần của ' + item.teamName : projectMap[item.projectId]}
-                                      </TableCell>
-                                      <TableCell className="text-right text-xs font-mono">{(item.amount || 0).toLocaleString()} đ</TableCell>
-                                      <TableCell className="text-right text-xs font-mono">{bCost.toLocaleString()} đ</TableCell>
-                                      <TableCell className={`text-right text-xs font-mono ${bDiff < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                        <div className="flex flex-col items-end">
-                                          <span>{bDiff.toLocaleString()} đ</span>
-                                          <span className="text-[9px] opacity-70 font-bold">
-                                            {(item.amount || 0) > 0 ? ((((bCost / (item.amount || 0))) - 1) * 100).toFixed(1) : '0'}%
-                                          </span>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell />
-                                    </TableRow>
-                                  );
-                                })}
-                              </React.Fragment>
-                            );
-                          })}
-                          {(activeReportTab === 'project' ? reportTableData.projects : reportTableData.teams).length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={6} className="text-center py-12 text-slate-400 italic">
-                                Không có dữ liệu chi phí cho lựa chọn này
-                              </TableCell>
-                            </TableRow>
-                          )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
 
                     <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-slate-500 uppercase">Chi tiết ngân sách đăng ký</Label>
                       {isAdmin && (
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                            onClick={() => setIsRestoreBudgetsDialogOpen(true)}
+                            disabled={isRestoringData}
+                          >
+                            {isRestoringData ? (
+                              <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full mr-2" />
+                            ) : (
+                              <History className="w-3 h-3 mr-1" />
+                            )}
+                            Khôi phục từ Nhật ký
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -5233,8 +7994,23 @@ export default function App() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Button 
-                                    variant="ghost" 
+                                  <div className="flex justify-end gap-1">
+                                    <Button 
+                                      size="icon" 
+                                      variant="ghost" 
+                                      className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                      onClick={() => {
+                                        setActiveTab('admin');
+                                        setAdminSubTab('audit');
+                                        setLogUserFilter(u.email);
+                                        setLogSearch('');
+                                      }}
+                                      title="Xem nhật ký hoạt động"
+                                    >
+                                      <History className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
                                     size="icon" 
                                     className="h-8 w-8 text-slate-400 hover:text-red-600"
                                     onClick={() => handleDeleteUser(u.id, u.email)}
@@ -5242,7 +8018,8 @@ export default function App() {
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
-                                </TableCell>
+                                </div>
+                              </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -5256,34 +8033,104 @@ export default function App() {
               {(isAdmin || isMod) && (
                 <TabsContent value="audit" className="space-y-6">
                   <Card className="border-none shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Nhật ký hệ thống</CardTitle>
-                      <CardDescription>Theo dõi các thay đổi và người thực hiện</CardDescription>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-xl font-black text-slate-900">Nhật ký hệ thống</CardTitle>
+                        <CardDescription className="text-slate-500 font-medium font-inter">Theo dõi chi tiết các thay đổi dữ liệu và lịch sử hoạt động</CardDescription>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input 
+                            placeholder="Tìm Email, ID, Collection..." 
+                            className="pl-10 h-10 w-[250px] bg-slate-50 border-none rounded-xl"
+                            value={logSearch}
+                            onChange={e => setLogSearch(e.target.value)}
+                          />
+                        </div>
+                        <Select value={logUserFilter} onValueChange={setLogUserFilter}>
+                          <SelectTrigger className="h-10 w-[200px] bg-slate-50 border-none rounded-xl">
+                            <SelectValue placeholder="Người thực hiện" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Tất cả người dùng</SelectItem>
+                            {uniqueLogUsers.map(email => (
+                              <SelectItem key={email} value={email}>{email}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
+                          <SelectTrigger className="h-10 w-[150px] bg-slate-50 border-none rounded-xl">
+                            <SelectValue placeholder="Loại bộ lọc" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Tất cả hành động</SelectItem>
+                            <SelectItem value="WRITE">Tạo & Cập nhật</SelectItem>
+                            <SelectItem value="DELETE">Xóa dữ liệu</SelectItem>
+                            <SelectItem value="SYSTEM">Hệ thống</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {auditLogs.slice(0, 50).map(log => (
-                          <div key={log.id} className="flex items-start gap-4 p-4 rounded-lg bg-slate-50 border border-slate-100">
-                            <div className="mt-1">
-                              <Badge variant={log.action === 'CREATE' ? 'default' : log.action === 'DELETE' ? 'destructive' : 'secondary'}>
-                                {log.action}
+                    <CardContent className="p-0">
+                      <div className="max-h-[700px] overflow-y-auto px-6 py-4 space-y-3 custom-scrollbar">
+                        {filteredLogs.slice(0, logLimit).map(log => (
+                          <div key={log.id} className="group relative flex items-start gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all">
+                            <div className="mt-1 shrink-0">
+                              <Badge className={`text-[10px] font-black border-none uppercase h-5 px-2 ${
+                                log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-700' : 
+                                log.action === 'DELETE' || log.action?.startsWith('DELETE_') ? 'bg-red-100 text-red-700' : 
+                                log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                                'bg-slate-100 text-slate-700'
+                              }`}>
+                                {log.action === 'CREATE' ? 'Thêm mới' : 
+                                 log.action === 'DELETE' ? 'Xóa' : 
+                                 log.action === 'UPDATE' ? 'Cập nhật' : 
+                                 log.action === 'DELETE_ALL' ? 'Xóa hết' :
+                                 log.action === 'IMPORT_BUDGETS' ? 'Nhập CSV' :
+                                 log.action === 'DEEP_SYSTEM_RESTORE' ? 'Khôi phục' : log.action}
                               </Badge>
                             </div>
-                            <div className="flex-1 space-y-1">
-                              <p className="text-sm font-medium">
-                                <span className="text-blue-600 font-bold">{log.userEmail}</span> đã {log.action === 'CREATE' ? 'thêm mới' : log.action === 'DELETE' ? 'xóa' : 'cập nhật'} dữ liệu trong <span className="font-bold">{log.collection}</span>
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                ID: {log.docId} | {log.timestamp?.toDate ? safeFormat(log.timestamp.toDate(), 'HH:mm dd/MM/yyyy') : '...'}
-                              </p>
-                              <div className="mt-2 text-xs bg-white p-2 rounded border border-slate-200 font-mono overflow-x-auto">
-                                {JSON.stringify(log.data)}
+                            <div className="flex-1 space-y-2 min-w-0">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-bold text-slate-900 truncate">
+                                  <span className="text-indigo-600">{log.userEmail}</span> 
+                                  <span className="mx-1 text-slate-400 font-medium">→</span>
+                                  <span className="text-slate-700">{log.collection}</span>
+                                </p>
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
+                                  {log.timestamp?.toDate ? safeFormat(log.timestamp.toDate(), 'HH:mm:ss dd/MM/yyyy') : '...'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded">ID: {log.docId}</span>
+                              </div>
+                              
+                              <div className="p-3 rounded-xl bg-slate-50/50 border border-slate-100/50 text-xs">
+                                <RenderLogData data={log.data} action={log.action} />
                               </div>
                             </div>
                           </div>
                         ))}
-                        {auditLogs.length === 0 && (
-                          <div className="text-center py-12 text-slate-400">Chưa có lịch sử hoạt động</div>
+                        
+                        {filteredLogs.length > logLimit && (
+                          <div className="py-6 flex justify-center">
+                            <Button 
+                              variant="ghost" 
+                              className="text-indigo-600 font-bold hover:bg-indigo-50"
+                              onClick={() => setLogLimit(prev => prev + 50)}
+                            >
+                              Xem thêm nhật ký ({filteredLogs.length - logLimit} còn lại)
+                            </Button>
+                          </div>
+                        )}
+
+                        {filteredLogs.length === 0 && (
+                          <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                            <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                            <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Không tìm thấy lịch sử phù hợp</p>
+                          </div>
                         )}
                       </div>
                     </CardContent>
@@ -5306,38 +8153,172 @@ export default function App() {
                           <li>Quá trình này có thể mất vài giây tùy thuộc vào lượng dữ liệu.</li>
                         </ul>
                       </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Button 
-                          onClick={syncFullSystem} 
-                          disabled={isBackingUp}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          {isBackingUp ? (
-                            <>
-                              <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                              Đang sao lưu...
-                            </>
-                          ) : (
-                            <>
-                              <BarChart3 className="w-4 h-4 mr-2" /> Sao lưu dữ liệu (Sync All)
-                            </>
-                          )}
-                        </Button>
-                        <a 
-                          href={GOOGLE_SHEET_URL}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all border border-green-600 text-green-700 hover:bg-green-50 h-10 px-4 py-2"
-                        >
-                          <FileSpreadsheet className="w-4 h-4 mr-2" /> Mở Google Sheet đồng bộ
-                        </a>
-                      </div>
+                          <div className="flex flex-wrap gap-3">
+                            <Button 
+                              onClick={syncFullSystem} 
+                              disabled={isBackingUp}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              {isBackingUp ? (
+                                <>
+                                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                  Đang sao lưu...
+                                </>
+                              ) : (
+                                <>
+                                  <BarChart3 className="w-4 h-4 mr-2" /> Sao lưu dữ liệu (Sync All)
+                                </>
+                              )}
+                            </Button>
+                            <a 
+                              href={GOOGLE_SHEET_URL}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all border border-green-600 text-green-700 hover:bg-green-50 h-10 px-4 py-2"
+                            >
+                              <FileSpreadsheet className="w-4 h-4 mr-2" /> Mở Google Sheet đồng bộ
+                            </a>
+                            <Button 
+                              variant="outline"
+                              onClick={() => setIsRestoreAllDialogOpen(true)}
+                              className="border-indigo-600 text-indigo-700 hover:bg-indigo-50"
+                            >
+                              <History className="w-4 h-4 mr-2" /> Khôi phục toàn bộ (Deep Scan)
+                            </Button>
+                          </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
               )}
 
-            {/* Delete Project Confirmation Dialog */}
+                {/* Restore Budgets Dialog */}
+                <Dialog open={isRestoreBudgetsDialogOpen} onOpenChange={setIsRestoreBudgetsDialogOpen}>
+                  <DialogContent className="sm:max-w-2xl bg-white border-none shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-indigo-900 text-xl font-black">
+                        <History className="w-6 h-6 text-indigo-600" />
+                        Khôi phục Ngân sách từ Nhật ký
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-500 font-medium">
+                        Hệ thống sẽ tái hiện lại dữ liệu từ các bản ghi hoạt động. Vui lòng chọn mốc thời điểm hoặc sự kiện xóa.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="max-h-[450px] overflow-y-auto space-y-3 py-4 pr-2 custom-scrollbar">
+                      <div 
+                        className={`p-4 rounded-2xl border-2 transition-all cursor-pointer group ${!selectedLogForRestore ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-100' : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
+                        onClick={() => setSelectedLogForRestore(null)}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-black text-slate-900 text-sm block">Toàn bộ dữ liệu từ Nhật ký (Replay All)</span>
+                            <p className="text-[10px] text-slate-500 mt-1 font-medium italic">Khôi phục tất cả các bản ghi tìm thấy trong lịch sử hoạt động từ trước đến nay.</p>
+                          </div>
+                          {!selectedLogForRestore && <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center"><Check className="w-3 h-3 text-white" /></div>}
+                        </div>
+                      </div>
+
+                      <div className="py-2">
+                        <div className="h-px bg-slate-100 w-full flex items-center justify-center">
+                          <span className="bg-white px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Các mốc sự kiện quan trọng</span>
+                        </div>
+                      </div>
+
+                      {auditLogs
+                        .filter(log => (log.collection === 'budgets' || log.collection === 'nganSach') && (log.action === 'DELETE_ALL' || log.action === 'DELETE_BULK' || log.action === 'IMPORT_BUDGETS' || log.action === 'RESTORE_BUDGETS'))
+                        .slice(0, 15)
+                        .map(log => (
+                        <div 
+                          key={log.id}
+                          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer group ${selectedLogForRestore?.id === log.id ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-100' : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-slate-50'}`}
+                          onClick={() => setSelectedLogForRestore(log)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Badge className={`text-[9px] font-black border-none uppercase ${
+                                  log.action === 'DELETE_ALL' ? 'bg-red-100 text-red-700' : 
+                                  log.action === 'IMPORT_BUDGETS' ? 'bg-emerald-100 text-emerald-700' : 
+                                  'bg-indigo-100 text-indigo-700'
+                                }`}>
+                                  {log.action === 'DELETE_ALL' ? 'Xóa tất cả' : log.action === 'DELETE_BULK' ? 'Xóa nhiều' : log.action === 'IMPORT_BUDGETS' ? 'Dữ liệu Nhập' : 'Khôi phục'}
+                                </Badge>
+                                <span className="text-[11px] font-black text-slate-900">{log.timestamp?.toDate ? format(log.timestamp.toDate(), 'HH:mm dd/MM/yyyy') : ''}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                <span className="font-bold text-slate-700">{log.userEmail}</span> | 
+                                Quy mô: <span className="font-bold text-indigo-600">{log.data?.count || log.data?.snapshot?.length || 'N/A'} bản ghi</span>
+                              </p>
+                              {log.data?.snapshot && (
+                                <div className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit">
+                                  <ShieldCheck className="w-3 h-3" /> Chứa Bản Sao (Snapshot An toàn)
+                                </div>
+                              )}
+                            </div>
+                            {selectedLogForRestore?.id === log.id && <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-white" /></div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <DialogFooter className="gap-3 mt-6 border-t pt-4">
+                      <Button variant="ghost" onClick={() => setIsRestoreBudgetsDialogOpen(false)} className="rounded-xl font-bold text-slate-500">Hủy bỏ</Button>
+                      <Button 
+                        disabled={isRestoringData}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black px-6 shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
+                        onClick={() => handleRestoreBudgetsFromLogs(selectedLogForRestore)}
+                      >
+                        {isRestoringData ? (
+                          <>
+                            <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                            Đang xử lý khôi phục...
+                          </>
+                        ) : (
+                          'Bắt đầu khôi phục dữ liệu'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Deep Restoration Dialog */}
+                <Dialog open={isRestoreAllDialogOpen} onOpenChange={setIsRestoreAllDialogOpen}>
+                  <DialogContent className="sm:max-w-md bg-white border-none shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-indigo-900 text-xl font-black">
+                        <History className="w-6 h-6 text-indigo-600" />
+                        Xác nhận Khôi phục Toàn diện
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-500 font-medium py-2">
+                        Tính năng này sẽ quét toàn bộ nhật ký hệ thống (Audit Logs) và các bản sao lưu để tìm kiếm mọi dữ liệu đã bị xóa (Dự án, Team, Ngân sách, Chi phí, v.v.) và đưa chúng trở lại.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 space-y-2">
+                      <p className="font-bold">Hệ thống sẽ thử khôi phục:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Dự án & Loại hình dự án</li>
+                        <li>Teams & Vùng/Khu vực</li>
+                        <li>Ngân sách đã đăng ký</li>
+                        <li>Chi phí Marketing thực tế</li>
+                        <li>Báo cáo hiệu quả kinh doanh</li>
+                      </ul>
+                    </div>
+
+                    <DialogFooter className="gap-3 mt-4">
+                      <Button variant="ghost" onClick={() => setIsRestoreAllDialogOpen(false)}>Hủy bỏ</Button>
+                      <Button 
+                        onClick={handleRestoreFullDatabase}
+                        disabled={isRestoringData}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                      >
+                        {isRestoringData ? 'Đang xử lý...' : 'Bắt đầu quét & khôi phục'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete Project Confirmation Dialog */}
                 <Dialog open={isDeleteProjectDialogOpen} onOpenChange={setIsDeleteProjectDialogOpen}>
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
@@ -5697,9 +8678,10 @@ export default function App() {
                           const userEmail = user?.email?.toLowerCase();
                           const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
                           const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+                          const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
                           const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
                           
-                          return isAdmin || isMod || isOwner || isAssignedGDDA;
+                          return isAdmin || isMod || isOwner || isAssigned || isAssignedGDDA;
                         })
                         .slice(0, 10).map(b => (
                         <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
@@ -6582,6 +9564,78 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk Delete Efficiency Confirmation Dialog */}
+      <Dialog open={isBulkDeleteEfficiencyDialogOpen} onOpenChange={setIsBulkDeleteEfficiencyDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa nhiều bản ghi
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{selectedEfficiencyIds.length}</strong> bản ghi hiệu quả kinh doanh đã chọn?
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsBulkDeleteEfficiencyDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmBulkDeleteEfficiency} disabled={isDeletingEfficiencyBatch}>
+              {isDeletingEfficiencyBatch ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Efficiency Confirmation Dialog */}
+      <Dialog open={isDeleteAllEfficiencyDialogOpen} onOpenChange={setIsDeleteAllEfficiencyDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> Xác nhận xóa TẤT CẢ
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>TOÀN BỘ {efficiencyReports.length}</strong> bản ghi hiệu quả kinh doanh trong hệ thống?
+              Hành động này cực kỳ nguy hiểm và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteAllEfficiencyDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteAllEfficiency}>Xác nhận xóa tất cả</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Errors Log Dialog */}
+      <Dialog open={isImportErrorsDialogOpen} onOpenChange={setIsImportErrorsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <FileWarning className="w-5 h-5" /> Nhật ký lỗi nhập dữ liệu
+            </DialogTitle>
+            <DialogDescription>
+              Hệ thống tìm thấy <strong>{importErrors.length}</strong> dòng không thể xử lý trong file của bạn.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto my-4 p-4 bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] space-y-2">
+            {importErrors.map((err, idx) => (
+              <div key={idx} className="flex gap-3 text-slate-700 bg-white p-2 rounded border border-slate-200 shadow-sm">
+                <span className="text-red-400 font-bold shrink-0">{idx + 1}.</span>
+                <span className="break-words">{err}</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="flex justify-between items-center sm:justify-between w-full">
+            <Button variant="outline" size="sm" onClick={() => {
+              const text = importErrors.join('\n');
+              navigator.clipboard.writeText(text);
+              toast.success("Đã sao chép danh sách lỗi!");
+            }}>
+              <Copy className="w-3.5 h-3.5 mr-2" /> Sao chép lỗi
+            </Button>
+            <Button className="bg-slate-900" onClick={() => setIsImportErrorsDialogOpen(false)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Bulk Update Region Confirmation Dialog */}
       <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
@@ -7010,18 +10064,17 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Import Costs Dialog */}
       <Dialog open={isImportCostsDialogOpen} onOpenChange={setIsImportCostsDialogOpen}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle className="text-blue-600 flex items-center gap-2">
-              <FileUp className="w-5 h-5" /> Nhập dữ liệu chi phí từ CSV
+              <FileUp className="w-5 h-5" /> Nhập dữ liệu chi phí
             </DialogTitle>
             <DialogDescription>
-              Tải lên file CSV chứa dữ liệu chi phí để đồng bộ với các team. Bạn nên tải file mẫu để đảm bảo định dạng chính xác.
+              Tải lên file CSV hoặc nhập link Google Sheet để đồng bộ dữ liệu chi phí.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
               <div className="space-y-1">
                 <p className="text-sm font-bold text-slate-700">Tải file mẫu</p>
@@ -7032,29 +10085,240 @@ export default function App() {
               </Button>
             </div>
             
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-500 uppercase">Chọn file dữ liệu</Label>
-              <div className="relative group">
-                <Input 
-                  type="file" 
-                  accept=".csv" 
-                  onChange={handleImportCostsCSV} 
-                  disabled={isImportingCosts}
-                  className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {isImportingCosts && (
-                  <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-md">
-                    <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+            <Tabs defaultValue="file" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 h-10 p-1 bg-slate-100 rounded-xl mb-4">
+                <TabsTrigger value="file" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                  <FileText className="w-3.5 h-3.5 mr-2" /> File CSV
+                </TabsTrigger>
+                <TabsTrigger value="url" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                  <Link className="w-3.5 h-3.5 mr-2" /> Google Sheet
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="file" className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Chọn file dữ liệu (.csv)</Label>
+                  <div className="relative group">
+                    <Input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={handleImportCostsCSV} 
+                      disabled={isImportingCosts}
+                      className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    {isImportingCosts && !isImportingCostsUrl && (
+                      <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-md">
+                        <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <p className="text-[10px] text-slate-400 italic">
-                * Lưu ý: Tên Dự án, Team, và Tháng phải khớp với dữ liệu đã đăng ký ngân sách.
-              </p>
-            </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="url" className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Link Google Sheet công khai</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        placeholder="https://docs.google.com/spreadsheets/d/..." 
+                        value={costSheetUrl}
+                        onChange={(e) => setCostSheetUrl(e.target.value)}
+                        className="bg-slate-50 border-slate-200 h-10 text-xs"
+                      />
+                      <Button 
+                        onClick={handleImportCostsFromUrl} 
+                        disabled={isImportingCostsUrl || !costSheetUrl}
+                        className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 h-10"
+                      >
+                        {isImportingCostsUrl ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Nhập"}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100/50">
+                    <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
+                      Hãy đảm bảo file đã được <strong>Chia sẻ công khai</strong> (Bất kỳ ai có liên kết đều có thể xem) để hệ thống có thể đọc dữ liệu.
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            <p className="text-[10px] text-slate-400 italic text-center px-4">
+              * Lưu ý: Tên Dự án, Team, và Tháng phải khớp với dữ liệu đã đăng ký ngân sách để đồng bộ chính xác.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsImportCostsDialogOpen(false)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Efficiency Edit Dialog */}
+      <Dialog open={isEditEfficiencyDialogOpen} onOpenChange={setIsEditEfficiencyDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa báo cáo hiệu quả</DialogTitle>
+            <DialogDescription>
+              Cập nhật kết quả kinh doanh cho dự án <strong>{editingEfficiency?.projectName}</strong> - Team <strong>{editingEfficiency?.teamName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Số căn bán</Label>
+              <Input 
+                type="number"
+                value={newEfficiencySales}
+                onChange={e => setNewEfficiencySales(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Doanh số (VND)</Label>
+              <Input 
+                type="text"
+                value={formatNumberWithCommas(newEfficiencyRevenue)}
+                onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/,/g, ''))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditEfficiencyDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => handleUpdateEfficiency(editingEfficiency?.id, newEfficiencySales, newEfficiencyRevenue)}>Lưu thay đổi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Efficiency Delete Dialog */}
+      <Dialog open={isDeleteEfficiencyDialogOpen} onOpenChange={setIsDeleteEfficiencyDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Xác nhận xóa
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa bản ghi hiệu quả của <strong>{efficiencyToDelete?.projectName}</strong> - {efficiencyToDelete?.teamName}?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteEfficiencyDialogOpen(false)}>Hủy</Button>
+            <Button variant="destructive" onClick={() => {
+              handleDeleteEfficiency(efficiencyToDelete?.id);
+              setIsDeleteEfficiencyDialogOpen(false);
+            }}>Xác nhận xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Efficiency Dialog */}
+      <Dialog open={isImportEfficiencyDialogOpen} onOpenChange={setIsImportEfficiencyDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-600 flex items-center gap-2 text-xl font-black">
+              <FileUp className="w-5 h-5" /> Nhập hiệu quả từ Excel
+            </DialogTitle>
+            <DialogDescription className="font-medium">
+              Chỉ đồng bộ dữ liệu thông qua <strong>ID Dự án</strong> và <strong>ID Team</strong>. Hệ thống sẽ bỏ qua tên dự án/team trong file và tự động lấy tên từ cơ sở dữ liệu.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6 space-y-6">
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                <Link className="w-3 h-3" /> Nhập từ Link Google Sheet
+              </Label>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Dán link Google Sheet tại đây..." 
+                  className="bg-slate-50 border-slate-200 h-11 rounded-xl"
+                  value={efficiencySheetUrl}
+                  onChange={e => setEfficiencySheetUrl(e.target.value)}
+                  disabled={isImportingEfficiencyUrl}
+                />
+                <Button 
+                  className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white min-w-[100px]"
+                  onClick={handleImportEfficiencyFromUrl}
+                  disabled={isImportingEfficiencyUrl || !efficiencySheetUrl}
+                >
+                  {isImportingEfficiencyUrl ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Đồng bộ'}
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400 italic ml-1">
+                * Lưu ý: File Google Sheet phải được chia sẻ "Bất kỳ ai có liên kết đều có thể xem".
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-slate-100" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest text-slate-300">
+                <span className="bg-white px-3">Hoặc tải lên file</span>
+              </div>
+            </div>
+
+            <div className={`p-8 border-2 border-dashed rounded-2xl text-center transition-all group ${isImportingEfficiency && !isImportingEfficiencyUrl ? 'bg-slate-50 border-slate-200' : 'bg-emerald-50/30 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
+              <input 
+                type="file" 
+                accept=".xlsx, .xls" 
+                className="hidden" 
+                id="efficiency-upload" 
+                onChange={handleImportEfficiency}
+                disabled={isImportingEfficiency}
+              />
+              <label 
+                htmlFor="efficiency-upload" 
+                className={`cursor-pointer flex flex-col items-center gap-4 ${isImportingEfficiency ? 'cursor-not-allowed' : ''}`}
+              >
+                {isImportingEfficiency ? (
+                  <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin" />
+                ) : (
+                  <div className="p-4 bg-emerald-100 rounded-full text-emerald-600 group-hover:scale-110 transition-transform">
+                    <FileSpreadsheet className="w-8 h-8" />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="font-bold text-slate-900 text-base">{isImportingEfficiency ? 'Đang xử lý dữ liệu...' : 'Nhấn để chọn file Excel'}</p>
+                  <p className="text-xs text-slate-500">Hỗ trợ định dạng .xlsx và .xls</p>
+                </div>
+              </label>
+            </div>
+            
+            <div className="space-y-3 bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+              <h4 className="text-[10px] font-black text-blue-700 uppercase tracking-[0.2em] flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5" /> Định dạng yêu cầu
+              </h4>
+              <div className="space-y-2">
+                <p className="text-[11px] text-blue-600 font-medium italic">Lưu ý: Tên cột phải khớp chính xác tuyệt đối.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/60 p-2 rounded border border-blue-100/50">
+                    <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Cột Định danh (Bắt buộc)</p>
+                    <div className="flex flex-wrap gap-1">
+                      <code className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded text-blue-700 font-bold">ID Dự án</code>
+                      <code className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded text-blue-700 font-bold">ID Team</code>
+                      <code className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded text-blue-700 font-bold">Tháng</code>
+                    </div>
+                  </div>
+                  <div className="bg-white/60 p-2 rounded border border-blue-100/50">
+                    <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Cột dữ liệu</p>
+                    <div className="flex flex-wrap gap-1">
+                      <code className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded text-blue-700 font-bold">Số căn bán</code>
+                      <code className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded text-blue-700 font-bold">Doanh số</code>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-blue-500 italic mt-2">* Hệ thống sử dụng ID để đối soát. Tên dự án/team sẽ được tự động cập nhật theo database hiện tại.</p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-between items-center sm:justify-between w-full">
+            <Button 
+              variant="outline" 
+              className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 rounded-xl text-xs h-9"
+              onClick={handleDownloadEfficiencyTemplate}
+            >
+              <Download className="w-4 h-4 mr-2" /> Tải file mẫu (.xlsx)
+            </Button>
+            <Button variant="ghost" onClick={() => setIsImportEfficiencyDialogOpen(false)} className="rounded-xl text-xs h-9">Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

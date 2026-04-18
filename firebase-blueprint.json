@@ -28,6 +28,7 @@
       "type": "object",
       "properties": {
         "name": { "type": "string", "description": "Project name" },
+        "projectCode": { "type": "string", "description": "Project unique code (e.g., DA-VLP)" },
         "description": { "type": "string", "description": "Project description" },
         "region": { "type": "string", "description": "Region name" },
         "type": { "type": "string", "description": "Project type" },
@@ -42,6 +43,7 @@
       "type": "object",
       "properties": {
         "name": { "type": "string", "description": "Team name" },
+        "teamCode": { "type": "string", "description": "Team unique code (e.g., MH01.1)" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
@@ -60,7 +62,8 @@
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" },
-        "userEmail": { "type": "string" }
+        "userEmail": { "type": "string" },
+        "assignedUserEmail": { "type": "string", "description": "Email of user assigned to handle this budget" }
       },
       "required": ["projectId", "teamName", "month", "amount"]
     },
@@ -78,7 +81,8 @@
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" },
-        "userEmail": { "type": "string" }
+        "userEmail": { "type": "string" },
+        "assignedUserEmail": { "type": "string", "description": "Email of user assigned to handle the related budget" }
       },
       "required": ["projectId", "weekNumber", "amount"]
     },
@@ -117,6 +121,25 @@
         "createdBy": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "EfficiencyReport": {
+      "title": "Efficiency Report",
+      "description": "Actual sales and revenue performance by team and project",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "salesCount": { "type": "number" },
+        "revenue": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "createdByEmail": { "type": "string" }
+      },
+      "required": ["projectId", "teamId", "month"]
     }
   },
   "firestore": {
@@ -131,6 +154,10 @@
     "/teams/{teamId}": {
       "schema": "Team",
       "description": "Teams collection"
+    },
+    "/efficiencyReports/{reportId}": {
+      "schema": "EfficiencyReport",
+      "description": "Actual sales efficiency reports"
     },
     "/budgets/{budgetId}": {
       "schema": "BudgetRegistration",

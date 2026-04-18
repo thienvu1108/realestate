@@ -434,7 +434,7 @@ export default function App() {
   const [isSyncingTypes, setIsSyncingTypes] = useState(false);
 
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQ892N-xRaPCmU8-OlvoEZ6aTd4a74DCvOUpiEHqQ2nCLGq_qY48dQl4WkbD3j6d_uDg/exec";
-  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1X6Gq8_R7Bv2p_w9_N95c-YV8V4m_W77yExG1zI-Vw6o/edit"; // Thay bằng URL Google Sheet của bạn
+  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1hOAZtsqgCEegOrxDSnDRWso7EUpRXNi4G-kBfcNyhBg/edit?gid=651935839#gid=651935839"; // Thay bằng URL Google Sheet của bạn
 
   const handleOpenSheet = () => window.open(GOOGLE_SHEET_URL, "_blank");
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);

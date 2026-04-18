@@ -42,7 +42,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet } from 'lucide-react';
 import Papa from 'papaparse';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
@@ -230,7 +230,7 @@ export default function App() {
                           {detail.budget > 0 ? Math.round((detail.actual / detail.budget) * 100) : 0}%
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center justify-between text-[10px] mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <span className="text-slate-400 italic">NS:</span>
                           <span className="font-medium text-slate-600">{formatCurrency(detail.budget)}</span>
@@ -240,6 +240,18 @@ export default function App() {
                           <span className="font-bold text-slate-800">{formatCurrency(detail.actual)}</span>
                         </div>
                       </div>
+                      <div className="w-full bg-slate-200/50 h-1 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-700 bg-gradient-to-r ${
+                            detail.budget > 0 && detail.actual > detail.budget 
+                              ? 'from-rose-400 to-rose-600' 
+                              : detail.budget > 0 && detail.actual / detail.budget > 0.8 
+                                ? 'from-amber-400 to-amber-600' 
+                                : 'from-indigo-400 to-blue-600'
+                          }`}
+                          style={{ width: `${Math.min(detail.budget > 0 ? (detail.actual / detail.budget) * 100 : 0, 100)}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -248,9 +260,15 @@ export default function App() {
 
             {(budget > 0 || actual > 0) && (
               <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
-                <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    className={`h-full transition-all duration-500 bg-gradient-to-r ${
+                      usagePercent > 100 
+                        ? 'from-rose-500 to-red-600' 
+                        : usagePercent > 80 
+                          ? 'from-amber-500 to-orange-600' 
+                          : 'from-emerald-500 to-teal-600'
+                    }`}
                     style={{ width: `${Math.min(usagePercent, 100)}%` }}
                   />
                 </div>
@@ -381,6 +399,7 @@ export default function App() {
   const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual'>('budget');
+  const [activeReportTab, setActiveReportTab] = useState('team');
   const [reportProjectSearch, setReportProjectSearch] = useState('');
   const [reportTeamSearch, setReportTeamSearch] = useState('');
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
@@ -413,6 +432,11 @@ export default function App() {
   const [isDeletingRegions, setIsDeletingRegions] = useState(false);
   const [isDeletingTypes, setIsDeletingTypes] = useState(false);
   const [isSyncingTypes, setIsSyncingTypes] = useState(false);
+
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQ892N-xRaPCmU8-OlvoEZ6aTd4a74DCvOUpiEHqQ2nCLGq_qY48dQl4WkbD3j6d_uDg/exec";
+  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1X6Gq8_R7Bv2p_w9_N95c-YV8V4m_W77yExG1zI-Vw6o/edit"; // Thay bằng URL Google Sheet của bạn
+
+  const handleOpenSheet = () => window.open(GOOGLE_SHEET_URL, "_blank");
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
   const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
   const [isDeletingCosts, setIsDeletingCosts] = useState(false);
@@ -693,6 +717,46 @@ export default function App() {
         message = `Lỗi: ${error.message}`;
       }
       toast.error(message);
+    }
+  };
+
+  const syncFullSystem = async () => {
+    setIsBackingUp(true);
+
+    const masterPayload = {
+      nganSach: budgets,    // Mảng dữ liệu Ngân sách
+      chiPhi: costs,      // Mảng dữ liệu Chi phí
+      duAn: projects,        // Mảng dữ liệu Dự án
+      team: teams,           // Mảng dữ liệu Team
+      nguoiDung: allUsers,      // Mảng dữ liệu Người dùng
+      systemLog: {                        // Thông tin log
+        action: "Full System Backup",
+        user: user?.email || "Admin_Mayhomes",
+        details: "Sao lưu định kỳ 6 hạng mục"
+      }
+    };
+
+    try {
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        body: JSON.stringify(masterPayload)
+      });
+      toast.success("Hệ thống đã sao lưu 6 hạng mục thành công!");
+      await logAction('FULL_SYSTEM_BACKUP', 'system', 'all', { 
+        counts: {
+          budgets: budgets.length,
+          costs: costs.length,
+          projects: projects.length,
+          teams: teams.length,
+          users: allUsers.length
+        }
+      });
+    } catch (error) {
+      console.error("Lỗi đồng bộ hệ thống:", error);
+      toast.error("Lỗi đồng bộ hệ thống. Vui lòng thử lại sau.");
+    } finally {
+      setIsBackingUp(false);
     }
   };
 
@@ -2610,6 +2674,127 @@ export default function App() {
       .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
   }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
+  const reportTableData = useMemo(() => {
+    const teams = uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
+       const teamBudgets = filteredBudgets.filter(b => b.teamName === team);
+       let totalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+       
+       let totalCost = filteredCosts.filter(c => {
+         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+         return c.teamName === team && matchWeek;
+       }).reduce((acc, curr) => acc + curr.amount, 0);
+
+       if (chartTimeType === 'week') {
+         totalBudget = totalBudget / 4;
+         if (reportWeek === 'all') totalCost = totalCost / 4;
+       }
+
+       const projectsInTeam = Array.from(new Set(teamBudgets.map(b => projectMap[b.projectId])));
+
+       const aggregatedProjects = projectsInTeam.map(projectId => {
+         const pBudgets = teamBudgets.filter(b => b.projectId === projectId);
+         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+         
+         let pTotalCost = filteredCosts.filter(c => {
+           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+           return c.teamName === team && c.projectId === projectId && matchWeek;
+         }).reduce((acc, curr) => acc + curr.amount, 0);
+
+         if (chartTimeType === 'week') {
+           pTotalBudget = pTotalBudget / 4;
+           if (reportWeek === 'all') pTotalCost = pTotalCost / 4;
+         }
+
+         return {
+           id: `${team}-${projectId}`,
+           teamName: team,
+           projectId,
+           projectName: projectMap[projectId] || 'N/A',
+           implementerName: projectMap[projectId] || 'N/A',
+           userEmail: 'Project Summary',
+           amount: pTotalBudget,
+           actual: pTotalCost
+         };
+       }).filter(d => d.amount > 0 || d.actual > 0)
+         .sort((a, b) => {
+            if (reportSortBy === 'budget') return (b.amount || 0) - (a.amount || 0);
+            return (b.actual || 0) - (a.actual || 0);
+         });
+
+       return {
+         id: team,
+         name: team,
+         budget: totalBudget,
+         actual: totalCost,
+         projects: projectsInTeam,
+         items: aggregatedProjects
+       };
+    }).filter(d => d.budget > 0 || d.actual > 0)
+      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
+
+    const projectIds = Array.from(new Set([
+      ...filteredBudgets.map(b => b.projectId),
+      ...filteredCosts.map(c => c.projectId)
+    ]));
+
+    const projectsData = projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
+       const pBudgets = filteredBudgets.filter(b => b.projectId === id);
+       let totalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+       
+       let totalCost = filteredCosts.filter(c => {
+         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+         return c.projectId === id && matchWeek;
+       }).reduce((acc, curr) => acc + curr.amount, 0);
+
+       if (chartTimeType === 'week') {
+         totalBudget = totalBudget / 4;
+         if (reportWeek === 'all') totalCost = totalCost / 4;
+       }
+
+       const teamsInProject = Array.from(new Set(pBudgets.map(b => b.teamName)));
+
+       const aggregatedTeams = uniqueTeams.map(teamName => {
+         const tBudgets = pBudgets.filter(b => b.teamName === teamName);
+         let tTotalBudget = tBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+         
+         let tTotalCost = filteredCosts.filter(c => {
+           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+           return c.projectId === id && c.teamName === teamName && matchWeek;
+         }).reduce((acc, curr) => acc + curr.amount, 0);
+
+         if (chartTimeType === 'week') {
+           tTotalBudget = tTotalBudget / 4;
+           if (reportWeek === 'all') tTotalCost = tTotalCost / 4;
+         }
+
+         return {
+           id: `${id}-${teamName}`,
+           teamName,
+           implementerName: teamName,
+           userEmail: 'Team Summary',
+           amount: tTotalBudget,
+           actual: tTotalCost
+         };
+       }).filter(d => d.amount > 0 || d.actual > 0)
+         .sort((a, b) => {
+            if (reportSortBy === 'budget') return (b.amount || 0) - (a.amount || 0);
+            return (b.actual || 0) - (a.actual || 0);
+         });
+
+       return {
+         id,
+         name: projectMap[id] || 'N/A',
+         budget: totalBudget,
+         actual: totalCost,
+         teams: teamsInProject,
+         items: aggregatedTeams
+       };
+    }).filter(d => d.budget > 0 || d.actual > 0)
+      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
+
+    return { teams, projects: projectsData };
+  }, [uniqueTeams, reportTeam, reportProject, filteredBudgets, filteredCosts, chartTimeType, reportWeek, reportSortBy, projectMap]);
+
   const getCurrentPeriod = () => {
     const now = new Date();
     const mMonth = getMarketingMonth(now);
@@ -4372,11 +4557,13 @@ export default function App() {
                     </CardHeader>
                     <CardContent className="space-y-8">
                     {/* Filters Row */}
-                    <div className="flex flex-wrap gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dự án</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Building2 className="w-3 h-3" /> Dự án
+                        </Label>
                         <Select value={reportProject} onValueChange={setReportProject}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Tất cả dự án">
                               {reportProject === 'all' ? 'Tất cả dự án' : projectMap[reportProject]}
                             </SelectValue>
@@ -4407,11 +4594,14 @@ export default function App() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       {isAdmin && (
-                        <div className="flex-1 min-w-[200px] space-y-1.5">
-                          <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Đội (Team)</Label>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                            <Users className="w-3 h-3" /> Đội (Team)
+                          </Label>
                           <Select value={reportTeam} onValueChange={setReportTeam}>
-                            <SelectTrigger className="bg-white border-none shadow-sm">
+                            <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                               <SelectValue placeholder="Tất cả đội" />
                             </SelectTrigger>
                             <SelectContent>
@@ -4441,10 +4631,13 @@ export default function App() {
                           </Select>
                         </div>
                       )}
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Miền / Vùng</Label>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Map className="w-3 h-3" /> Miền / Vùng
+                        </Label>
                         <Select value={reportRegion} onValueChange={setReportRegion}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Tất cả miền" />
                           </SelectTrigger>
                           <SelectContent>
@@ -4455,10 +4648,13 @@ export default function App() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Loại hình</Label>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Layers className="w-3 h-3" /> Loại hình
+                        </Label>
                         <Select value={reportType} onValueChange={setReportType}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Tất cả loại hình" />
                           </SelectTrigger>
                           <SelectContent>
@@ -4469,10 +4665,13 @@ export default function App() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Năm báo cáo</Label>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <TrendingUp className="w-3 h-3" /> Năm báo cáo
+                        </Label>
                         <Select value={reportYear} onValueChange={setReportYear}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Chọn năm" />
                           </SelectTrigger>
                           <SelectContent>
@@ -4482,16 +4681,25 @@ export default function App() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
-                          {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Kỳ báo cáo'}
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tháng báo cáo'}
                         </Label>
-                        <Input type="month" className="bg-white border-none shadow-sm" value={reportMonth} onChange={e => setReportMonth(e.target.value)} />
+                        <Input 
+                          type="month" 
+                          className="bg-white border-slate-200 shadow-sm h-10 cursor-pointer transition-all hover:border-blue-300" 
+                          value={reportMonth} 
+                          onChange={e => setReportMonth(e.target.value)} 
+                        />
                       </div>
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Kỳ báo cáo</Label>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Filter className="w-3 h-3" /> Kỳ báo cáo
+                        </Label>
                         <Select value={reportWeek} onValueChange={setReportWeek}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Tất cả kỳ" />
                           </SelectTrigger>
                           <SelectContent>
@@ -4503,10 +4711,13 @@ export default function App() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex-1 min-w-[200px] space-y-1.5">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Sắp xếp theo</Label>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <ArrowUpDown className="w-3 h-3" /> Sắp xếp theo
+                        </Label>
                         <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual') => setReportSortBy(v)}>
-                          <SelectTrigger className="bg-white border-none shadow-sm">
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Chọn kiểu sắp xếp" />
                           </SelectTrigger>
                           <SelectContent>
@@ -4565,7 +4776,7 @@ export default function App() {
 
                     {/* Chart Section */}
                     <div className="space-y-4">
-                      <Tabs defaultValue="team" className="w-full">
+                      <Tabs value={activeReportTab} onValueChange={setActiveReportTab} className="w-full">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                           <div className="space-y-1">
                             <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Chi phí</Label>
@@ -4703,14 +4914,16 @@ export default function App() {
                     {/* Detailed Table */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Bảng chi tiết theo Team</Label>
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                          Bảng chi tiết theo {activeReportTab === 'project' ? 'Dự án' : activeReportTab === 'region' ? 'Khu vực' : 'Team'}
+                        </Label>
                       </div>
                       <div className="rounded-2xl border border-slate-100 overflow-hidden">
                         <Table>
                           <TableHeader className="bg-slate-50">
                             <TableRow>
-                              <TableHead className="font-bold">Team / Nhân sự</TableHead>
-                              <TableHead className="font-bold">Dự án</TableHead>
+                              <TableHead className="font-bold">{activeReportTab === 'project' ? 'Dự án' : 'Team / Nhân sự'}</TableHead>
+                              <TableHead className="font-bold">{activeReportTab === 'project' ? 'Các Team' : 'Các Dự án'}</TableHead>
                               <TableHead className="text-right font-bold">Ngân sách</TableHead>
                               <TableHead className="text-right font-bold">Chi phí</TableHead>
                               <TableHead className="text-right font-bold">Chênh lệch (%)</TableHead>
@@ -4718,43 +4931,34 @@ export default function App() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                          {uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
-                            const teamBudgets = filteredBudgets.filter(b => b.teamName === team);
-                            const teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-                            
-                            const teamTotalCost = filteredCosts
-                              .filter(c => c.teamName === team)
-                              .reduce((acc, curr) => acc + curr.amount, 0);
-
-                            if (teamTotalBudget === 0 && teamTotalCost === 0) return null;
-
-                            const diff = teamTotalBudget - teamTotalCost;
+                          {(activeReportTab === 'project' ? reportTableData.projects : reportTableData.teams).map(row => {
+                            const diff = (row.budget || 0) - (row.actual || 0);
                             
                             let status = "Bình thường";
                             let statusColor = "text-green-600 bg-green-50";
                             
-                            if (teamTotalCost > teamTotalBudget) {
+                            if ((row.actual || 0) > (row.budget || 0)) {
                               status = "Vượt ngân sách";
                               statusColor = "text-red-600 bg-red-50";
-                            } else if (teamTotalCost < teamTotalBudget * 0.7) {
+                            } else if ((row.actual || 0) < (row.budget || 0) * 0.7) {
                               status = "Chi thấp (<70%)";
                               statusColor = "text-amber-600 bg-amber-50";
                             }
 
                             return (
-                              <React.Fragment key={team}>
-                                <TableRow className="bg-slate-50/50">
-                                  <TableCell className="font-bold text-blue-700">{team} (Tổng)</TableCell>
+                              <React.Fragment key={row.id}>
+                                <TableRow className="bg-slate-50/50 hover:bg-slate-100/50 transition-colors">
+                                  <TableCell className="font-bold text-blue-700">{row.name} (Tổng)</TableCell>
                                   <TableCell className="text-xs text-slate-500">
-                                    {Array.from(new Set(teamBudgets.map(b => projectMap[b.projectId]))).join(', ')}
+                                    {(activeReportTab === 'project' ? (row as any).teams : (row as any).projects).join(', ')}
                                   </TableCell>
-                                  <TableCell className="text-right font-bold font-mono">{teamTotalBudget.toLocaleString()} đ</TableCell>
-                                  <TableCell className="text-right font-bold font-mono">{teamTotalCost.toLocaleString()} đ</TableCell>
+                                  <TableCell className="text-right font-bold font-mono">{(row.budget || 0).toLocaleString()} đ</TableCell>
+                                  <TableCell className="text-right font-bold font-mono">{(row.actual || 0).toLocaleString()} đ</TableCell>
                                   <TableCell className={`text-right font-bold font-mono ${diff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     <div className="flex flex-col items-end">
                                       <span>{diff.toLocaleString()} đ</span>
                                       <span className="text-[10px] font-medium">
-                                        {teamTotalBudget > 0 ? (((teamTotalCost / teamTotalBudget) - 1) * 100).toFixed(1) : '0'}%
+                                        {(row.budget || 0) > 0 ? ((((row.actual || 0) / (row.budget || 0)) - 1) * 100).toFixed(1) : '0'}%
                                       </span>
                                     </div>
                                   </TableCell>
@@ -4764,27 +4968,27 @@ export default function App() {
                                     </Badge>
                                   </TableCell>
                                 </TableRow>
-                                {/* Implementer breakdown */}
-                                {teamBudgets.map(budget => {
-                                  const budgetCost = filteredCosts
-                                    .filter(c => c.budgetId === budget.id)
-                                    .reduce((acc, curr) => acc + curr.amount, 0);
-                                  const bDiff = budget.amount - budgetCost;
+                                {(row.items || []).map((item: any) => {
+                                  const bCost = item.actual || 0;
+                                  const bDiff = (item.amount || 0) - bCost;
+                                  const isSummary = item.userEmail === 'Team Summary' || item.userEmail === 'Project Summary';
                                   
                                   return (
-                                    <TableRow key={budget.id} className="border-l-4 border-l-blue-200">
+                                    <TableRow key={item.id} className="border-l-4 border-l-blue-200 hover:bg-slate-50 transition-colors">
                                       <TableCell className="pl-8 text-xs text-slate-600 flex flex-col">
-                                        <span className="font-medium">{budget.implementerName}</span>
-                                        <span className="text-[10px] text-slate-400">{budget.userEmail}</span>
+                                        <span className="font-bold text-slate-700">{item.implementerName || 'N/A'}</span>
+                                        {!isSummary && <span className="text-[10px] text-slate-400">{item.userEmail}</span>}
                                       </TableCell>
-                                      <TableCell className="text-xs">{projectMap[budget.projectId]}</TableCell>
-                                      <TableCell className="text-right text-xs font-mono">{budget.amount.toLocaleString()} đ</TableCell>
-                                      <TableCell className="text-right text-xs font-mono">{budgetCost.toLocaleString()} đ</TableCell>
+                                      <TableCell className="text-xs">
+                                        {activeReportTab === 'project' ? 'Phần của ' + item.teamName : projectMap[item.projectId]}
+                                      </TableCell>
+                                      <TableCell className="text-right text-xs font-mono">{(item.amount || 0).toLocaleString()} đ</TableCell>
+                                      <TableCell className="text-right text-xs font-mono">{bCost.toLocaleString()} đ</TableCell>
                                       <TableCell className={`text-right text-xs font-mono ${bDiff < 0 ? 'text-red-500' : 'text-green-500'}`}>
                                         <div className="flex flex-col items-end">
                                           <span>{bDiff.toLocaleString()} đ</span>
-                                          <span className="text-[9px] opacity-70">
-                                            {budget.amount > 0 ? (((budgetCost / budget.amount) - 1) * 100).toFixed(1) : '0'}%
+                                          <span className="text-[9px] opacity-70 font-bold">
+                                            {(item.amount || 0) > 0 ? ((((bCost / (item.amount || 0))) - 1) * 100).toFixed(1) : '0'}%
                                           </span>
                                         </div>
                                       </TableCell>
@@ -4795,12 +4999,19 @@ export default function App() {
                               </React.Fragment>
                             );
                           })}
-                        </TableBody>
-                      </Table>
+                          {(activeReportTab === 'project' ? reportTableData.projects : reportTableData.teams).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-12 text-slate-400 italic">
+                                Không có dữ liệu chi phí cho lựa chọn này
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
+                    <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-slate-500 uppercase">Chi tiết ngân sách đăng ký</Label>
                       {isAdmin && (
@@ -5096,22 +5307,31 @@ export default function App() {
                           <li>Quá trình này có thể mất vài giây tùy thuộc vào lượng dữ liệu.</li>
                         </ul>
                       </div>
-                      <Button 
-                        onClick={handleGoogleBackup} 
-                        disabled={isBackingUp}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {isBackingUp ? (
-                          <>
-                            <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                            Đang sao lưu...
-                          </>
-                        ) : (
-                          <>
-                            <BarChart3 className="w-4 h-4 mr-2" /> Bắt đầu sao lưu sang Google Sheets
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex flex-wrap gap-3">
+                        <Button 
+                          onClick={syncFullSystem} 
+                          disabled={isBackingUp}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          {isBackingUp ? (
+                            <>
+                              <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                              Đang sao lưu...
+                            </>
+                          ) : (
+                            <>
+                              <BarChart3 className="w-4 h-4 mr-2" /> Sao lưu dữ liệu (Sync All)
+                            </>
+                          )}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => handleOpenSheet()}
+                          className="border-green-600 text-green-700 hover:bg-green-50"
+                        >
+                          <FileSpreadsheet className="w-4 h-4 mr-2" /> Mở Google Sheet đồng bộ
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>

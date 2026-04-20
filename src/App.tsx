@@ -44,7 +44,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -615,6 +615,9 @@ export default function App() {
     try {
       const groups: Record<string, any[]> = {};
       budgets.forEach(b => {
+        // ONLY group and merge if we have valid IDs
+        if (!b.projectId || !b.teamId || !b.month) return;
+        
         const key = `${b.projectId}_${b.teamId}_${b.month}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(b);
@@ -742,6 +745,7 @@ export default function App() {
   const [isImportBudgetsDialogOpen, setIsImportBudgetsDialogOpen] = useState(false);
   const [isImportingCosts, setIsImportingCosts] = useState(false);
   const [isImportingBudgets, setIsImportingBudgets] = useState(false);
+  const [isImportingProjects, setIsImportingProjects] = useState(false);
   const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
   
   const [isBulkDeleteProjectsDialogOpen, setIsBulkDeleteProjectsDialogOpen] = useState(false);
@@ -767,7 +771,7 @@ export default function App() {
       const d = new Date(val.getTime() + 12 * 60 * 60 * 1000);
       return format(d, 'yyyy-MM');
     }
-    const str = String(val).trim();
+    const str = String(val).trim().normalize('NFC').replace(/^\uFEFF/, '');
     const parts = str.split(/[-/.]/);
     if (parts.length === 2) {
       let year = '';
@@ -1312,21 +1316,28 @@ export default function App() {
           return undefined;
         };
 
-        const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
-        const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
-        const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']);
-        const month = normalizeMonth(monthRaw);
-        const amount = parseVal(getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']));
-        const implementer = String(getVal(['Người triển khai', 'GDDA', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', 'phụ trách']) || '').trim();
+          const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+          const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']);
+          const month = normalizeMonth(monthRaw);
+          const amount = parseVal(getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']));
+          const implementer = String(getVal(['Người triển khai', 'GDDA', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', 'phụ trách']) || '').trim();
 
-        if (pRef && tRef && month && amount >= 0) {
-          const key = `${pRef}_${tRef}_${month}`;
-          if (consolidatedDataMap.has(key)) {
-            consolidatedDataMap.get(key).amount += amount;
-          } else {
-            consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer });
+          if (pRef && tRef && month && (amount >= 0 || !isNaN(amount))) {
+            const key = `${pRef}_${tRef}_${month}`;
+            if (consolidatedDataMap.has(key)) {
+              consolidatedDataMap.get(key).amount += amount;
+            } else {
+              consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer });
+            }
+          } else if (Object.values(normalizedRow).some(v => v !== '')) {
+            skippedCount++;
+            const missing = [];
+            if (!pRef) missing.push('Dự án');
+            if (!tRef) missing.push('Team');
+            if (!month) missing.push('Tháng');
+            errorDetails.push(`Dòng ${count + skippedCount}: Thiếu ${missing.join(', ')}`);
           }
-        }
       }
 
       const consolidatedItems = Array.from(consolidatedDataMap.values()) as any[];
@@ -1365,8 +1376,8 @@ export default function App() {
         const assignedUserEmail = extractEmail(item.implementer);
 
         const existingBudgetsForMatch = budgets.filter(b => 
-          b.projectId === projectId && 
-          b.teamId === teamId && 
+          b.projectId && b.projectId === projectId && 
+          b.teamId && b.teamId === teamId && 
           b.month === item.month
         );
 
@@ -1374,18 +1385,22 @@ export default function App() {
           const targetBudget = existingBudgetsForMatch[0];
           const duplicates = existingBudgetsForMatch.slice(1);
           
+          // PRESERVE the total existing amount when merging duplicates
+          const totalExistingAmount = existingBudgetsForMatch.reduce((sum, b) => sum + b.amount, 0);
+
           batch.update(doc(db, 'budgets', targetBudget.id), {
-            amount: item.amount,
+            amount: item.amount, // Set to Excel amount (if we want to replace existing with Excel value)
             implementerName: item.implementer || targetBudget.implementerName,
             assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
             userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
             updatedAt: serverTimestamp(),
             updatedBy: user?.uid,
             editHistory: arrayUnion({
-              action: 'URL_IMPORT_UPDATE',
+              action: 'URL_IMPORT_UPDATE_MERGE',
               editorName: implementerName,
               timestamp: new Date().toISOString(),
-              newAmount: item.amount,
+              prevTotalInDb: totalExistingAmount,
+              newImportAmount: item.amount,
               duplicatesFixed: duplicates.length
             })
           });
@@ -2254,6 +2269,112 @@ export default function App() {
     if (duplicateCount > 0) {
       toast.warning(`${duplicateCount} dự án đã tồn tại và bị bỏ qua`);
     }
+  };
+
+  const handleImportProjectsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingProjects(true);
+    setImportErrors([]);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+        if (rawJson.length === 0) {
+          toast.error("File Excel không có dữ liệu.");
+          return;
+        }
+
+        const batch = writeBatch(db);
+        let count = 0;
+        let errorsCount = 0;
+        const errorDetailsList: string[] = [];
+        const existingNames = new Set(projects.map(p => p.name.toLowerCase()));
+
+        for (let i = 0; i < rawJson.length; i++) {
+          const rowData = rawJson[i];
+          const rowIndex = i + 2;
+          const row: any = {};
+          Object.keys(rowData).forEach(k => {
+            const cleanKey = k.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
+            row[cleanKey] = rowData[k];
+          });
+
+          const getVal = (possibleKeys: string[]) => {
+            for (const pk of possibleKeys) {
+              const cleanPK = pk.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
+              if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
+            }
+            return undefined;
+          };
+
+          const name = String(getVal(['Tên dự án', 'Dự án', 'Project', 'Project Name', 'tenduan', 'tên dự án']) || '').trim();
+          const code = String(getVal(['Mã Dự án', 'Mã', 'Code', 'Project Code', 'maduan', 'mã dự án']) || '').trim();
+          const region = String(getVal(['Miền', 'Khu vực', 'Vùng', 'Region', 'mien', 'khuvuc', 'vùng']) || '').trim();
+          const type = String(getVal(['Loại hình', 'Type', 'loaihinh', 'loại hình']) || '').trim();
+
+          if (!name) {
+            if (Object.values(row).some(v => v !== '')) {
+              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu tên dự án.`);
+              errorsCount++;
+            }
+            continue;
+          }
+
+          if (existingNames.has(name.toLowerCase())) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Dự án "${name}" đã tồn tại.`);
+            errorsCount++;
+            continue;
+          }
+
+          const projectCode = code || extractProjectCode(name);
+          
+          const docRef = doc(collection(db, 'projects'));
+          batch.set(docRef, {
+            name,
+            projectCode,
+            region: region || 'Chưa xác định',
+            type: type || 'Chưa phân loại',
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid
+          });
+          
+          existingNames.add(name.toLowerCase());
+          count++;
+          
+          if (count >= 450) break; // Firestore batch limit
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          await logAction('IMPORT_PROJECTS', 'projects', 'bulk', { count, errors: errorsCount });
+          toast.success(`Đã thêm ${count} dự án mới từ Excel.`);
+        }
+
+        if (errorsCount > 0) {
+          setImportErrors(errorDetailsList);
+          setIsImportErrorsDialogOpen(true);
+        }
+
+        if (count === 0 && errorsCount > 0) {
+          toast.error("Không có dự án hợp lệ nào được thêm.");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Lỗi khi xử lý file Excel.");
+      } finally {
+        setIsImportingProjects(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const handleAddTeam = async (e: React.FormEvent) => {
@@ -3163,16 +3284,20 @@ export default function App() {
       }, []);
 
       for (const item of mergedItems) {
+        // ONLY merge if project/team IDs are present
+        if (!item.projectId || !item.teamId || !item.month) continue;
+
         // Find ALL existing budgets for same Project, Team, and Month from the main budgets list
         const existingBudgetsForMatch = budgets.filter(b => 
-          b.projectId === item.projectId && 
-          b.teamId === item.teamId && 
+          b.projectId && b.projectId === item.projectId && 
+          b.teamId && b.teamId === item.teamId && 
           b.month === item.month
         );
 
         if (existingBudgetsForMatch.length > 0) {
           // Merge everything into the FIRST one
           const targetBudget = existingBudgetsForMatch[0];
+          const targetRef = doc(db, 'budgets', targetBudget.id);
           const duplicates = existingBudgetsForMatch.slice(1);
           
           const batch = writeBatch(db);
@@ -4241,17 +4366,17 @@ export default function App() {
 
         // Pre-consolidate the incoming data by projectId_teamId_month
         const consolidatedDataMap = new Map();
-        for (const row of data) {
-          const processedRow = row as any;
+        for (const rowData of data) {
+          const processedRow = rowData as any;
           const normalizedRow: any = {};
           Object.keys(processedRow).forEach(k => {
-            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            const cleanKey = k.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
             normalizedRow[cleanKey] = processedRow[k];
           });
 
           const getVal = (possibleKeys: string[]) => {
             for (const pk of possibleKeys) {
-              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+              const cleanPK = pk.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
               if (normalizedRow[cleanPK] !== undefined && normalizedRow[cleanPK] !== '') return normalizedRow[cleanPK];
             }
             return undefined;
@@ -4266,7 +4391,7 @@ export default function App() {
           const amount = Number(amountDecimal);
           const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
 
-          if (pRef && tRef && month && amount >= 0) {
+          if (pRef && tRef && month && (amount >= 0 || !isNaN(amount))) {
             const key = `${pRef}_${tRef}_${month}`;
             if (consolidatedDataMap.has(key)) {
               consolidatedDataMap.get(key).amount += amount;
@@ -4274,7 +4399,12 @@ export default function App() {
               consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer, rawRow: processedRow });
             }
           } else if (Object.values(normalizedRow).some(v => v !== '')) {
-             errorDetailsList.push(`Dòng lỗi: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ cho "${pRef}"`);
+             const missing = [];
+             if (!pRef) missing.push('Dự án');
+             if (!tRef) missing.push('Team');
+             if (!month) missing.push('Tháng/Kỳ');
+             if (isNaN(amount)) missing.push('Ngân sách (không phải số)');
+             errorDetailsList.push(`Dòng lỗi: Thiếu hoặc sai định dạng: ${missing.join(', ')} (Dự án: "${pRef || '?'}")`);
              errorsCount++;
           }
         }
@@ -4321,8 +4451,8 @@ export default function App() {
           const assignedUserEmail = extractEmail(item.implementer);
 
           const existingBudgetsForMatch = budgets.filter(b => 
-            b.projectId === pId && 
-            b.teamId === teamId && 
+            b.projectId && b.projectId === pId && 
+            b.teamId && b.teamId === teamId && 
             b.month === item.month
           );
 
@@ -4331,24 +4461,24 @@ export default function App() {
             const duplicates = existingBudgetsForMatch.slice(1);
             const bRef = doc(db, 'budgets', targetBudget.id);
             
-            // For import, we typically REPLACE the amount with the one in Excel
-            // but we also need to merge any existing duplicates into this one
-            const totalExistingOtherAmount = duplicates.reduce((sum, b) => sum + b.amount, 0);
+            // Calculate total existing amount before merge
+            const totalExistingAmount = existingBudgetsForMatch.reduce((sum, b) => sum + b.amount, 0);
             
             batch.update(bRef, {
-              amount: item.amount, // Set to Excel amount
+              amount: totalExistingAmount + item.amount, // Add to existing total
               implementerName: item.implementer || targetBudget.implementerName,
               assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
               userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
               updatedAt: serverTimestamp(),
               updatedBy: user?.uid,
               editHistory: arrayUnion({
-                action: 'IMPORT_UPDATE',
+                action: 'IMPORT_ADD_MERGE',
                 editorName: userProfile?.fullName || user?.displayName || 'Admin',
                 editorEmail: user?.email,
                 timestamp: new Date().toISOString(),
-                newAmount: item.amount,
-                previousAmount: targetBudget.amount,
+                addedAmount: item.amount,
+                prevTotalInDb: totalExistingAmount,
+                newTotal: totalExistingAmount + item.amount,
                 duplicatesMerged: duplicates.length
               })
             });
@@ -4390,17 +4520,17 @@ export default function App() {
           await batch.commit();
           await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors: errorsCount });
           toast.success(`Đã cập nhật ${count} ngân sách. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
-          if (errorsCount > 0) {
-            setImportErrors(errorDetailsList);
-            setIsImportErrorsDialogOpen(true);
-          }
-        } else {
-          if (errorDetailsList.length > 0) {
-            setImportErrors(errorDetailsList);
-            setIsImportErrorsDialogOpen(true);
-          } else {
-            toast.error(`Không có dữ liệu hợp lệ để nhập.`);
-          }
+        }
+
+        if (count === 0 && errorsCount > 0) {
+          toast.error(`Không có dữ liệu hợp lệ để nhập. Có ${errorsCount} dòng lỗi.`);
+        } else if (count === 0) {
+          toast.error(`Không có dữ liệu hợp lệ để nhập. Vui lòng kiểm tra tiêu đề cột và nội dung.`);
+        }
+
+        if (errorsCount > 0 || errorDetailsList.length > 0) {
+          setImportErrors(errorDetailsList);
+          setIsImportErrorsDialogOpen(true);
         }
       } catch (error) {
         console.error(error);
@@ -4483,13 +4613,13 @@ export default function App() {
           const rowIndex = i + 2;
           const row: any = {};
           Object.keys(rawRow).forEach(k => {
-            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            const cleanKey = k.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
             row[cleanKey] = rawRow[k];
           });
 
           const getVal = (possibleKeys: string[]) => {
             for (const pk of possibleKeys) {
-              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+              const cleanPK = pk.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
               if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
             }
             return undefined;
@@ -5158,7 +5288,11 @@ export default function App() {
           name: detailName,
           ...rawData[mainKey][detailKey]
         };
-      }).sort((a, b) => b.revenue - a.revenue || b.cost - a.cost);
+      }).sort((a, b) => {
+        if (reportSortBy === 'budget') return b.budget - a.budget;
+        if (reportSortBy === 'actual') return b.cost - a.cost;
+        return b.revenue - a.revenue || b.cost - a.cost;
+      });
 
       const totals = details.reduce((acc, curr) => ({
         sales: acc.sales + curr.sales,
@@ -5173,10 +5307,12 @@ export default function App() {
         details
       };
     }).sort((a, b) => {
+      if (reportSortBy === 'budget') return b.budget - a.budget;
+      if (reportSortBy === 'actual') return b.cost - a.cost;
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     });
-  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, reportUser, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth]);
+  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, reportUser, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth, reportSortBy]);
 
   const overBudgetStats = useMemo(() => {
     const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
@@ -5189,15 +5325,20 @@ export default function App() {
 
   const salesGeneratingData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
+      if (reportSortBy === 'budget') return b.budget - a.budget;
+      if (reportSortBy === 'actual') return b.cost - a.cost;
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     }), 
-    [efficiencyChartData]
+    [efficiencyChartData, reportSortBy]
   );
 
   const noSalesData = useMemo(() => 
-    efficiencyChartData.filter(d => d.revenue === 0).sort((a, b) => b.cost - a.cost), 
-    [efficiencyChartData]
+    efficiencyChartData.filter(d => d.revenue === 0).sort((a, b) => {
+      if (reportSortBy === 'budget') return b.budget - a.budget;
+      return b.cost - a.cost;
+    }), 
+    [efficiencyChartData, reportSortBy]
   );
 
   const efficiencyPieData = useMemo(() => {
@@ -6494,6 +6635,27 @@ export default function App() {
                               >
                                 <Download className="w-4 h-4 mr-2" /> Xuất Excel
                               </Button>
+                              <Button 
+                                variant="outline" 
+                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 relative"
+                                disabled={isImportingProjects}
+                                asChild
+                              >
+                                <label className="cursor-pointer flex items-center h-10 px-4">
+                                  {isImportingProjects ? (
+                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <FileUp className="w-4 h-4 mr-2" />
+                                  )}
+                                  Nhập Excel
+                                  <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept=".xlsx,.xls,.csv" 
+                                    onChange={handleImportProjectsCSV}
+                                  />
+                                </label>
+                              </Button>
                               <Dialog>
                                 <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
                                   <Plus className="w-4 h-4 mr-2" /> Thêm dự án
@@ -7536,6 +7698,24 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
+                            className="h-8 text-[10px] text-amber-600 border-amber-200 hover:bg-amber-50"
+                            onClick={() => {
+                              const orphans = budgets.filter(b => !projects.find(p => p.id === b.projectId));
+                              if (orphans.length === 0) {
+                                toast.success("Tất cả ngân sách đều hợp lệ!");
+                              } else {
+                                const orphanIds = Array.from(new Set(orphans.map(o => o.projectId)));
+                                toast.warning(`Tìm thấy ID Dự án không tồn tại!`, { duration: 5000 });
+                                setImportErrors(orphanIds.map(id => `Dự án ID "${id}" không tồn tại trong danh sách Dự án (${orphans.filter(o=>o.projectId===id).length} bản ghi)`));
+                                setIsImportErrorsDialogOpen(true);
+                              }
+                            }}
+                          >
+                            <Target className="w-3 h-3 mr-1" /> Kiểm tra dữ liệu lạc
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
                             className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
                             onClick={handleExportBudgets}
                           >
@@ -7920,9 +8100,7 @@ export default function App() {
                         </Label>
                         <Select value={reportProject} onValueChange={setReportProject}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả dự án">
-                              {reportProject === 'all' ? 'Tất cả dự án' : projectMap[reportProject]}
-                            </SelectValue>
+                            <SelectValue placeholder="Tất cả dự án" />
                           </SelectTrigger>
                           <SelectContent>
                             <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -8343,6 +8521,7 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
+                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
                                 <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
                                 <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                               </ComposedChart>
@@ -8388,6 +8567,7 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
+                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
                                 <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
                                 <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                               </ComposedChart>
@@ -8429,6 +8609,7 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
+                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
                                 <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
                                 <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                               </ComposedChart>

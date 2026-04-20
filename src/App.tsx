@@ -42,7 +42,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -108,11 +108,13 @@ export default function App() {
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState('register');
+  const [activeTab, setActiveTab] = useState('home');
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoringData, setIsRestoringData] = useState(false);
   const [isRestoreBudgetsDialogOpen, setIsRestoreBudgetsDialogOpen] = useState(false);
+  const [isRestoreCheckpointDialogOpen, setIsRestoreCheckpointDialogOpen] = useState(false);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<any>(null);
   const [selectedLogForRestore, setSelectedLogForRestore] = useState<any>(null);
 
   // Helper for Marketing Month (21st of prev month to 20th of current month)
@@ -195,77 +197,91 @@ export default function App() {
   const EfficiencyDetailedTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const roi = data.cost > 0 ? (data.revenue / data.cost).toFixed(2) : '0';
+      const isOverBudget = data.cost > data.budget;
+      const usagePercent = data.budget > 0 ? (data.cost / data.budget) * 100 : 0;
+
       return (
-        <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-50 min-w-[320px] space-y-3">
-          <div className="border-b pb-2 flex items-center justify-between">
-            <p className="text-xs font-black text-slate-900 uppercase">{label}</p>
-            <Badge variant="outline" className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 border-blue-100">Chi tiết</Badge>
-          </div>
-          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ngân sách</p>
-              <p className="text-[11px] font-bold text-slate-600 font-mono">{formatCurrency(data.budget)}</p>
+        <div className="bg-white p-5 rounded-[24px] shadow-2xl border border-slate-100 min-w-[340px] space-y-4 animate-in fade-in zoom-in duration-200">
+          <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-3.5 h-3.5 text-indigo-500" />
+              <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{label}</p>
             </div>
-            <div className="space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Chi phí</p>
-              <p className={`text-[11px] font-bold font-mono ${data.cost > data.budget ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
-                {formatCurrency(data.cost)}
-              </p>
-            </div>
-            {data.revenue > 0 && (
-              <>
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Doanh số</p>
-                  <p className="text-[11px] font-bold text-emerald-600 font-mono">{formatCurrency(data.revenue)}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ROI</p>
-                  <p className="text-[11px] font-bold text-indigo-600 font-mono">{(data.cost > 0 ? data.revenue / data.cost : 0).toFixed(2)}x</p>
-                </div>
-              </>
-            )}
+            <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 border-none text-[8px] font-black uppercase">Hiệu quả kỳ này</Badge>
           </div>
 
-          {data.cost > data.budget && (
-            <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 flex items-center gap-2 shadow-inner">
-              <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-3 h-3 text-red-600" />
-              </div>
-              <p className="text-[10px] font-bold text-red-700 uppercase tracking-tight">Vượt ngân sách: <span className="font-black ml-1 text-red-900">{formatCurrency(data.cost - data.budget)}</span></p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1 p-3 bg-slate-50/50 rounded-2xl border border-slate-100/50">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <Wallet className="w-2.5 h-2.5" /> Ngân sách
+              </p>
+              <p className="text-xs font-black text-slate-700 font-mono">{formatCurrency(data.budget)}</p>
             </div>
-          )}
+            <div className={`space-y-1 p-3 rounded-2xl border ${isOverBudget ? 'bg-red-50 border-red-100' : 'bg-slate-50/50 border-slate-100/50'}`}>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <TrendingUp className="w-2.5 h-2.5" /> Chi phí
+              </p>
+              <p className={`text-xs font-black font-mono ${isOverBudget ? 'text-red-600' : 'text-slate-700'}`}>
+                {formatCurrency(data.cost)}
+              </p>
+              {isOverBudget && <p className="text-[8px] font-bold text-red-500 italic">Vượt {usagePercent.toFixed(0)}%</p>}
+            </div>
+          </div>
+
+          <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100 space-y-3">
+            <div className="flex items-center justify-between border-b border-indigo-400/30 pb-2">
+              <div className="space-y-0.5">
+                <p className="text-[8px] font-black text-indigo-200 uppercase tracking-widest">Sản lượng bán</p>
+                <p className="text-lg font-black text-white leading-none">{data.sales || 0} <span className="text-[10px] font-bold opacity-80 uppercase">Căn</span></p>
+              </div>
+              <div className="h-8 w-[1px] bg-indigo-400/30" />
+              <div className="space-y-0.5 text-right">
+                <p className="text-[8px] font-black text-indigo-200 uppercase tracking-widest">Doanh số</p>
+                <p className="text-sm font-black text-white leading-none">{formatCurrency(data.revenue || 0)}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-[8px] font-black text-indigo-100 uppercase tracking-widest opacity-80">ROI (Doanh thu/Vốn)</p>
+                  <p className="text-xs font-black text-white uppercase">{roi}x lần</p>
+                </div>
+              </div>
+              <div className="px-3 py-1 bg-white/20 rounded-lg backdrop-blur-md">
+                <p className="text-[9px] font-black text-white">{data.cost > 0 ? ((data.revenue/data.cost)*100).toFixed(0) : 0}% Lợi điểm</p>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-1.5 pt-1">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
               {efficiencyGroupType === 'team' ? 'Thành phần (Xếp theo Doanh số)' : 'Đội ngũ triển khai (Xếp theo Doanh số)'}
             </p>
-            <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200">
               {data.details.map((d: any, i: number) => (
-                <div key={i} className="flex flex-col p-2.5 rounded-lg border border-slate-100 bg-white/50 space-y-1">
+                <div key={i} className="flex flex-col p-2.5 rounded-lg border border-slate-100 bg-slate-50/30 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 text-[11px]">{d.name}</span>
+                    <span className="font-bold text-slate-800 text-[10px] uppercase tracking-tight">{d.name}</span>
                     {d.sales > 0 && (
-                      <Badge variant="secondary" className="h-4 text-[8px] font-bold px-1.5 bg-slate-100 text-slate-600">{d.sales} căn</Badge>
+                      <Badge variant="secondary" className="h-4 text-[7px] font-black px-1.5 bg-emerald-50 text-emerald-600 border-none">{d.sales} căn</Badge>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">DS:</span>
-                      <span className="font-bold text-emerald-600 text-right font-mono">{formatCurrency(d.revenue)}</span>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px]">
+                    <div className="flex justify-between border-r border-slate-100 pr-2">
+                      <span className="text-slate-400 font-bold uppercase tracking-tighter">Doanh số:</span>
+                      <span className="font-black text-emerald-600 font-mono">{formatCurrency(d.revenue)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">CP:</span>
-                      <span className={`text-right font-mono font-black ${(d.budget > 0 && d.cost > d.budget) ? 'text-red-700' : 'text-slate-700'}`}>
+                    <div className="flex justify-between pl-1">
+                      <span className="text-slate-400 font-bold uppercase tracking-tighter">Chi phí:</span>
+                      <span className={`font-mono font-black ${(d.budget > 0 && d.cost > d.budget) ? 'text-red-600' : 'text-slate-600'}`}>
                         {formatCurrency(d.cost)}
                       </span>
                     </div>
                   </div>
-                  {d.budget > 0 && d.cost > d.budget && (
-                    <div className="flex items-center gap-1.5 px-1 py-0.5 mt-1 bg-red-50/50 rounded-md border border-red-100/30">
-                      <AlertTriangle className="w-2.5 h-2.5 text-red-600" />
-                      <span className="text-[8px] font-black text-red-600 uppercase tracking-tighter">Vượt {formatCurrency(d.cost - d.budget)}</span>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -279,96 +295,123 @@ export default function App() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const budget = payload.find((p: any) => p.dataKey === 'budget' || p.name === 'Ngân sách')?.value || 0;
-      const actual = payload.find((p: any) => p.dataKey === 'actual' || p.name === 'Thực chi')?.value || 0;
+      const actual = payload.find((p: any) => p.dataKey === 'actual' || p.name === 'Chi phí' || p.name === 'Thực chi')?.value || 0;
+      const revenue = payload.find((p: any) => p.dataKey === 'revenue' || p.name === 'Doanh số')?.value || 0;
       const details = payload[0]?.payload?.details || [];
       const isTeamReport = payload[0]?.payload?.isTeamReport;
       const isProjectReport = payload[0]?.payload?.isProjectReport;
       
-      const diff = budget - actual;
       const usagePercent = budget > 0 ? (actual / budget) * 100 : 0;
       const variancePercent = budget > 0 ? ((actual / budget) - 1) * 100 : 0;
+      
+      const romi = actual > 0 ? (revenue / actual).toFixed(2) : '0';
+      const costRatio = revenue > 0 ? ((actual / revenue) * 100).toFixed(1) : '0';
 
       return (
-        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[300px] animate-in fade-in zoom-in duration-200">
+        <div className="bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-2xl border border-slate-100 min-w-[320px] animate-in fade-in zoom-in duration-200">
           <div className="flex items-center justify-between mb-3 border-b pb-2 border-slate-100">
             <p className="text-sm font-bold text-slate-800">{label}</p>
             <div className="flex flex-col items-end">
-              <Badge variant={usagePercent > 100 ? "destructive" : usagePercent > 90 ? "secondary" : "default"} className="text-[10px] px-1.5 h-5">
-                SD: {usagePercent.toFixed(1)}%
-              </Badge>
-              <span className={`text-[9px] font-bold mt-1 ${Math.abs(variancePercent) < 0.1 ? 'text-slate-400' : variancePercent > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                CL: {variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%
-              </span>
+              {revenue > 0 ? (
+                <div className="flex flex-col items-end gap-0.5">
+                  <Badge className="text-[10px] px-1.5 h-5 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none">
+                    ROMI: {romi}x
+                  </Badge>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">CP/Doanh số: {costRatio}%</span>
+                </div>
+              ) : (
+                <>
+                  <Badge variant={usagePercent > 100 ? "destructive" : usagePercent > 90 ? "secondary" : "default"} className="text-[10px] px-1.5 h-5">
+                    SD: {usagePercent.toFixed(1)}%
+                  </Badge>
+                  <span className={`text-[9px] font-bold mt-1 ${Math.abs(variancePercent) < 0.1 ? 'text-slate-400' : variancePercent > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                    CL: {variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%
+                  </span>
+                </>
+              )}
             </div>
           </div>
           
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 pb-2">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ngân sách</p>
-                <p className="text-sm font-bold text-blue-600">{formatCurrency(budget)}</p>
-              </div>
-              <div className="space-y-1 text-right">
+            <div className={`grid ${revenue > 0 && budget > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-2 pb-2`}>
+              {budget > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ngân sách</p>
+                  <p className="text-sm font-bold text-blue-600">{formatCurrency(budget)}</p>
+                </div>
+              )}
+              <div className={`space-y-1 ${!revenue && budget ? 'text-right' : ''}`}>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chi phí</p>
                 <p className="text-sm font-bold text-emerald-600">{formatCurrency(actual)}</p>
               </div>
+              {revenue > 0 && (
+                <div className="space-y-1 text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Doanh số</p>
+                  <p className="text-sm font-bold text-indigo-600">{formatCurrency(revenue)}</p>
+                </div>
+              )}
             </div>
 
             {details.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {isTeamReport ? 'Chi tiết Dự án' : isProjectReport ? 'Chi tiết Team' : 'Chi tiết'}
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>{isTeamReport ? 'Chi tiết Dự án' : isProjectReport ? 'Chi tiết Team' : 'Chi tiết'}</span>
+                  {revenue > 0 && <span className="text-[9px] font-medium italic text-slate-400">Ưu tiên theo doanh số</span>}
                 </p>
                 <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-                  {details.map((detail: any, i: number) => (
-                    <div key={i} className="flex flex-col text-[11px] p-1.5 rounded-lg bg-slate-50 border border-slate-100 group">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-slate-700 truncate mr-2" title={detail.name}>{detail.name}</span>
-                        <span className={`font-bold tabular-nums ${detail.budget > 0 && detail.actual > detail.budget ? 'text-rose-500' : 'text-slate-500'}`}>
-                          {detail.budget > 0 ? Math.round((detail.actual / detail.budget) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-400 italic">NS:</span>
-                          <span className="font-medium text-slate-600">{formatCurrency(detail.budget)}</span>
+                  {details.map((detail: any, i: number) => {
+                    const dUsage = detail.budget > 0 ? (detail.actual / detail.budget) * 100 : 0;
+                    const dRomi = detail.actual > 0 ? (detail.revenue / detail.actual).toFixed(1) : '0';
+                    return (
+                      <div key={i} className="flex flex-col text-[11px] p-1.5 rounded-lg bg-slate-50 border border-slate-100 group">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-700 truncate mr-2" title={detail.name}>{detail.name}</span>
+                          {detail.revenue > 0 ? (
+                            <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1 rounded">R: {dRomi}x</span>
+                          ) : (
+                            <span className={`font-bold tabular-nums ${dUsage > 100 ? 'text-rose-500' : 'text-slate-500'}`}>
+                              {dUsage.toFixed(0)}%
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-400 italic">CP:</span>
-                          <span className="font-bold text-slate-800">{formatCurrency(detail.actual)}</span>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400 italic">CP:</span>
+                            <span className="font-bold text-slate-800">{formatCurrency(detail.actual)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 justify-end">
+                            {detail.revenue > 0 ? (
+                              <>
+                                <span className="text-slate-400 italic">DS:</span>
+                                <span className="font-bold text-indigo-600">{formatCurrency(detail.revenue)}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-slate-400 italic">NS:</span>
+                                <span className="font-medium text-slate-600">{formatCurrency(detail.budget)}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
+                        {detail.budget > 0 && !detail.revenue && (
+                          <div className="w-full bg-slate-200/50 h-0.5 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-700 ${dUsage > 100 ? 'bg-rose-500' : dUsage > 80 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                              style={{ width: `${Math.min(dUsage, 100)}%` }}
+                            />
+                          </div>
+                        )}
+                        {detail.revenue > 0 && (
+                          <div className="w-full bg-slate-200/50 h-0.5 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-emerald-400 to-indigo-600"
+                              style={{ width: `${Math.min((detail.revenue / (revenue || 1)) * 100, 100)}%` }}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="w-full bg-slate-200/50 h-1 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all duration-700 bg-gradient-to-r ${
-                            detail.budget > 0 && detail.actual > detail.budget 
-                              ? 'from-rose-400 to-rose-600' 
-                              : detail.budget > 0 && detail.actual / detail.budget > 0.8 
-                                ? 'from-amber-400 to-amber-600' 
-                                : 'from-indigo-400 to-blue-600'
-                          }`}
-                          style={{ width: `${Math.min(detail.budget > 0 ? (detail.actual / detail.budget) * 100 : 0, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(budget > 0 || actual > 0) && (
-              <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 bg-gradient-to-r ${
-                      usagePercent > 100 
-                        ? 'from-rose-500 to-red-600' 
-                        : usagePercent > 80 
-                          ? 'from-amber-500 to-orange-600' 
-                          : 'from-emerald-500 to-teal-600'
-                    }`}
-                    style={{ width: `${Math.min(usagePercent, 100)}%` }}
-                  />
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -491,12 +534,14 @@ export default function App() {
   const [reportTeam, setReportTeam] = useState('all');
   const [reportRegion, setReportRegion] = useState('all');
   const [reportType, setReportType] = useState('all');
+  const [reportUser, setReportUser] = useState('all');
+  const [reportUserSearch, setReportUserSearch] = useState('');
   const [reportMonth, setReportMonth] = useState(getMarketingMonth(new Date()));
   const [reportWeek, setReportWeek] = useState('all');
   const [costPeriod, setCostPeriod] = useState('1');
   const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
-  const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual'>('budget');
+  const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual' | 'revenue'>('budget');
   const [activeReportTab, setActiveReportTab] = useState('team');
   const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project'>('team');
   const [reportProjectSearch, setReportProjectSearch] = useState('');
@@ -539,6 +584,7 @@ export default function App() {
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwjeE6fQBkPs5SaIaMO7pLwkp_XGwwuVMxEXpExlFnSzsCws3hqc5buywAToX82iRlsWw/exec";
   const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1hOAZtsqgCEegOrxDSnDRWso7EUpRXNi4G-kBfcNyhBg/edit?gid=0#gid=0"; // Link Google Sheet của bạn
 
+  const [isSyncingLogs, setIsSyncingLogs] = useState(false);
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
   const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
   const [isDeletingCosts, setIsDeletingCosts] = useState(false);
@@ -579,6 +625,7 @@ export default function App() {
   const [isBulkDeleteCostsDialogOpen, setIsBulkDeleteCostsDialogOpen] = useState(false);
   const [isDeleteAllCostsDialogOpen, setIsDeleteAllCostsDialogOpen] = useState(false);
   const [isImportCostsDialogOpen, setIsImportCostsDialogOpen] = useState(false);
+  const [isImportBudgetsDialogOpen, setIsImportBudgetsDialogOpen] = useState(false);
   const [isImportingCosts, setIsImportingCosts] = useState(false);
   const [isImportingBudgets, setIsImportingBudgets] = useState(false);
   const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
@@ -1706,6 +1753,7 @@ export default function App() {
       nguoiDung: sanitizeData(allUsers),
       vungKhuVuc: sanitizeData(regions),
       hieuQuaKinhDoanh: sanitizeData(efficiencyReports),
+      nhatKyHeThong: sanitizeData(auditLogs.slice(0, 500)), // Include logs in backup (capped to avoid payload issues)
       systemLog: {
         action: "Full System Backup",
         user: user?.email || "Admin_Mayhomes",
@@ -1816,9 +1864,63 @@ export default function App() {
 
   const logout = () => signOut(auth);
 
+  const handleSyncAllLogs = async () => {
+    if (isSyncingLogs || auditLogs.length === 0) return;
+    setIsSyncingLogs(true);
+    try {
+      // Logic for automatic sanitization is already in syncFullSystem, we'll replicate simplified version here
+      const sanitizeLogs = (logs: any[]) => {
+        return logs.map(log => ({
+          ...log,
+          timestamp: log.timestamp?.toDate ? log.timestamp.toDate().toISOString() : new Date().toISOString(),
+          data: typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data)
+        }));
+      };
+
+      const payload = {
+        nhatKyHanhDong: sanitizeLogs(auditLogs.slice(0, 1000)) // Cap to 1000 latest logs for performance
+      };
+
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      });
+      
+      toast.success(`Đã đồng bộ ${Math.min(auditLogs.length, 1000)} nhật ký lên Google Sheet.`);
+    } catch (error) {
+      console.error("Sync All Logs Error:", error);
+      toast.error("Lỗi khi đồng bộ toàn bộ nhật ký");
+    } finally {
+      setIsSyncingLogs(false);
+    }
+  };
+
+  const syncLogToGoogleSheets = async (logEntry: any) => {
+    try {
+      const payload = {
+        nhatKyHanhDong: [{
+          ...logEntry,
+          timestamp: new Date().toISOString(),
+          data: typeof logEntry.data === 'object' ? JSON.stringify(logEntry.data) : String(logEntry.data)
+        }]
+      };
+      
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Google Sheets Auto-Sync Error:", e);
+    }
+  };
+
   const logAction = async (action: string, collectionName: string, docId: string, data: any) => {
     try {
-      await addDoc(collection(db, 'auditLogs'), {
+      const logData = {
         action,
         collection: collectionName,
         docId,
@@ -1826,6 +1928,17 @@ export default function App() {
         timestamp: serverTimestamp(),
         userEmail: user?.email,
         userId: user?.uid
+      };
+      
+      await addDoc(collection(db, 'auditLogs'), logData);
+      
+      // Tự động đồng bộ Nhật ký này sang Google Sheet ngay lập tức
+      syncLogToGoogleSheets({
+        action,
+        collection: collectionName,
+        docId,
+        data,
+        userEmail: user?.email
       });
     } catch (error) {
       console.error('Audit log error:', error);
@@ -1894,9 +2007,13 @@ export default function App() {
   }, [projects, projectSort, projectSearch, adminProjectRegionFilter, adminProjectTypeFilter]);
 
   const extractTeamCode = (name: string) => {
-    // Pattern MHxx.yy or MHxx
-    const match = name.match(/MH\d+(\.\d+)?/i);
-    return match ? match[0].toUpperCase() : '';
+    // Pattern MH follow by digits and dots (e.g., MH17, MH79.28, MH04.1)
+    const match = name.match(/MH[0-9.]+/i);
+    if (match) {
+      // Return and trim any trailing dots if they were just punctuation
+      return match[0].toUpperCase().replace(/\.+$/, '');
+    }
+    return '';
   };
 
   const extractProjectCode = (name: string) => {
@@ -2101,20 +2218,21 @@ export default function App() {
       const batch = writeBatch(db);
       let count = 0;
       teams.forEach(t => {
-        if (!t.teamCode) {
-          const code = extractTeamCode(t.name);
-          if (code) {
-            batch.update(doc(db, 'teams', t.id), { teamCode: code, updatedAt: serverTimestamp() });
-            count++;
-          }
+        const accurateCode = extractTeamCode(t.name);
+        if (accurateCode && t.teamCode !== accurateCode) {
+          batch.update(doc(db, 'teams', t.id), { 
+            teamCode: accurateCode, 
+            updatedAt: serverTimestamp() 
+          });
+          count++;
         }
       });
       if (count > 0) {
         await batch.commit();
         await logAction('SYNC_TEAM_CODES', 'teams', 'all', { count });
-        toast.success(`Đã cập nhật mã cho ${count} team`);
+        toast.success(`Đã chuẩn hóa mã cho ${count} team`);
       } else {
-        toast.info('Tất cả team đã có mã hoặc không tìm thấy mã hợp lệ trong tên');
+        toast.info('Tất cả mã team đã được chuẩn hóa hoặc không tìm thấy mã hợp lệ');
       }
     } catch (error) {
       console.error('Error syncing team codes:', error);
@@ -3290,6 +3408,133 @@ export default function App() {
     return <div className="mt-1">{renderObject(data)}</div>;
   };
 
+  const handleCreateCheckpoint = async (customNote: string = '') => {
+    if (isBackingUp) return;
+    setIsBackingUp(true);
+    const toastId = toast.loading('Đang chuẩn bị bản sao hệ thống...');
+    
+    try {
+      // Helper function to sanitize data for storage (limited to avoid huge payloads if needed, but let's try full)
+      const prepareSnapshot = (data: any[]) => {
+        if (!data || !Array.isArray(data)) return [];
+        return data.map(item => {
+          const newItem = { ...item };
+          // Convert any complex objects to strings if they aren't standard
+          return newItem;
+        });
+      };
+
+      const snapshot = {
+        budgets: prepareSnapshot(budgets),
+        costs: prepareSnapshot(costs),
+        projects: prepareSnapshot(projects),
+        teams: prepareSnapshot(teams),
+        efficiencyReports: prepareSnapshot(efficiencyReports),
+        regions: prepareSnapshot(regions),
+        types: prepareSnapshot(types)
+      };
+
+      await logAction('SYSTEM_CHECKPOINT', 'system', 'checkpoint', { 
+        snapshot, 
+        note: customNote || `Checkpoint tự động tạo bởi ${user?.email}`,
+        counts: {
+          budgets: budgets.length,
+          costs: costs.length,
+          projects: projects.length,
+          teams: teams.length,
+          efficiency: efficiencyReports.length
+        }
+      });
+
+      toast.success('Đã lưu điểm khôi phục hệ thống thành công!', { id: toastId });
+    } catch (error) {
+      console.error('Checkpoint error:', error);
+      toast.error('Lỗi khi tạo điểm khôi phục.', { id: toastId });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestoreCheckpoint = async (checkpoint: any) => {
+    if (!checkpoint || !checkpoint.data?.snapshot) {
+      toast.error('Dữ liệu khôi phục không hợp lệ hoặc bị thiếu snapshot');
+      return;
+    }
+
+    if (isRestoringData) return;
+    setIsRestoringData(true);
+    const loadingToastId = toast.loading('Đang khởi động tiến trình khôi phục điểm thời gian...');
+
+    try {
+      const snapshot = checkpoint.data.snapshot;
+      const collections = [
+        { name: 'budgets', key: 'budgets' },
+        { name: 'costs', key: 'costs' },
+        { name: 'projects', key: 'projects' },
+        { name: 'teams', key: 'teams' },
+        { name: 'efficiencyReports', key: 'hieuQuaKinhDoanh' },
+        { name: 'regions', key: 'regions' },
+        { name: 'types', key: 'types' }
+      ];
+
+      // Deep Restore Logic:
+      // We want to make the current state match the snapshot exactly.
+      // However, to avoid massive bulk deletion that could hit limits or be irreversible, 
+      // we'll use a "Synchronized Merge" approach:
+      // 1. Restore anything missing from the snapshot.
+      // 2. Update anything that differs.
+      
+      let totalOps = 0;
+      let batch = writeBatch(db);
+
+      const commitBatchAndReset = async () => {
+        if (totalOps > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          totalOps = 0;
+        }
+      };
+
+      for (const coll of collections) {
+        const snapshotData = snapshot[coll.key] || snapshot[coll.name] || [];
+        
+        for (const item of snapshotData) {
+          if (!item.id) continue;
+          
+          const docRef = doc(db, coll.name, item.id);
+          const { id, ...dataToSave } = item;
+          
+          batch.set(docRef, {
+            ...dataToSave,
+            restoredAt: serverTimestamp(),
+            restoredBy: user?.uid,
+            restoredFromCheckpoint: checkpoint.id
+          });
+          
+          totalOps++;
+          if (totalOps >= 450) await commitBatchAndReset();
+        }
+      }
+
+      await commitBatchAndReset();
+      
+      await logAction('RESTORE_CHECKPOINT_EXECUTED', 'system', checkpoint.id, { 
+        checkpointId: checkpoint.id,
+        timestamp: checkpoint.timestamp
+      });
+
+      toast.success('Hệ thống đã được khôi phục về phiên bản đã chọn!', { id: loadingToastId });
+      setIsRestoreCheckpointDialogOpen(false);
+      setSelectedCheckpoint(null);
+    } catch (error) {
+      console.error('Point in time restore error:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'system');
+      toast.error('Lỗi trong quá trình khôi phục.', { id: loadingToastId });
+    } finally {
+      setIsRestoringData(false);
+    }
+  };
+
   const handleRestoreFullDatabase = async () => {
     if (isRestoringData) return;
     setIsRestoringData(true);
@@ -3525,25 +3770,17 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID', 'Mã Team', 'Tên Team', 'Ngày tạo'];
-    const data = teams.map(t => [
-      t.id,
-      t.teamCode || '',
-      t.name,
-      t.createdAt ? format(t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
-    ]);
+    const data = teams.map(t => ({
+      'ID': t.id,
+      'Mã Team': t.teamCode || '',
+      'Tên Team': t.name,
+      'Ngày tạo': t.createdAt ? format(t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+    }));
 
-    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `danh_sach_team_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Teams");
+    XLSX.writeFile(workbook, `danh_sach_team_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
     toast.success('Đã xuất danh sách team thành công');
   };
 
@@ -3553,27 +3790,19 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID', 'Mã Dự án', 'Tên Dự án', 'Khu vực', 'Loại hình', 'Ngày tạo'];
-    const data = projects.map(p => [
-      p.id,
-      p.projectCode || '',
-      p.name,
-      p.region || 'N/A',
-      p.type || 'N/A',
-      p.createdAt ? format(p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
-    ]);
+    const data = projects.map(p => ({
+      'ID': p.id,
+      'Mã Dự án': p.projectCode || '',
+      'Tên Dự án': p.name,
+      'Khu vực': p.region || 'N/A',
+      'Loại hình': p.type || 'N/A',
+      'Ngày tạo': p.createdAt ? format(p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+    }));
 
-    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `danh_sach_du_an_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Projects");
+    XLSX.writeFile(workbook, `danh_sach_du_an_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
     toast.success('Đã xuất danh sách dự án thành công');
   };
 
@@ -3583,29 +3812,21 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID Dự án', 'Tên Dự án', 'ID Team', 'Tên Team', 'Tháng', 'Người triển khai', 'Ngân sách'];
-    const data = budgets.map(b => [
-      b.projectId,
-      b.projectName || '',
-      b.teamId,
-      b.teamName || '',
-      b.month,
-      b.implementerName || 'N/A',
-      b.amount.toString()
-    ]);
+    const data = budgets.map(b => ({
+      'ID Dự án': b.projectId,
+      'Tên Dự án': b.projectName || '',
+      'ID Team': b.teamId,
+      'Tên Team': b.teamName || '',
+      'Tháng': b.month,
+      'Người triển khai': b.implementerName || 'N/A',
+      'Ngân sách': b.amount
+    }));
 
-    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `danh_sach_ngan_sach_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success('Đã xuất danh sách ngân sách thành công');
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Budgets");
+    XLSX.writeFile(workbook, `danh_sach_ngan_sach_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    toast.success('Đã xuất danh sách ngân sách (Excel) thành công');
   };
 
   const handleExportCosts = () => {
@@ -3614,35 +3835,27 @@ export default function App() {
       return;
     }
 
-    const headers = ['ID Dự án', 'Tên Dự án', 'Team', 'Tháng', 'Tuần', 'Người triển khai', 'FB Ads', 'Posting', 'Zalo Ads', 'Google Ads', 'Khác', 'Tổng chi phí', 'Ghi chú'];
-    const data = costs.map(c => [
-      c.projectId,
-      c.projectName || '',
-      c.teamName || '',
-      c.month,
-      c.weekNumber.toString(),
-      c.implementerName || 'N/A',
-      c.channels?.fbAds?.toString() || '0',
-      c.channels?.posting?.toString() || '0',
-      c.channels?.zaloAds?.toString() || '0',
-      c.channels?.googleAds?.toString() || '0',
-      c.channels?.otherCost?.toString() || '0',
-      c.amount.toString(),
-      c.note || ''
-    ]);
+    const data = costs.map(c => ({
+      'ID Dự án': c.projectId,
+      'Tên Dự án': c.projectName || '',
+      'Team': c.teamName || '',
+      'Tháng': c.month,
+      'Tuần': c.weekNumber,
+      'Người triển khai': c.implementerName || 'N/A',
+      'FB Ads': c.channels?.fbAds || 0,
+      'Posting': c.channels?.posting || 0,
+      'Zalo Ads': c.channels?.zaloAds || 0,
+      'Google Ads': c.channels?.googleAds || 0,
+      'Khác': c.channels?.otherCost || 0,
+      'Tổng chi phí': c.amount,
+      'Ghi chú': c.note || ''
+    }));
 
-    const csvContent = "\uFEFF" + [headers, ...data].map(e => e.map(val => `"${val}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `chi_phi_chi_tiet_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success('Đã xuất danh sách chi phí thành công');
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Costs");
+    XLSX.writeFile(workbook, `chi_phi_chi_tiet_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    toast.success('Đã xuất danh sách chi phí (Excel) thành công');
   };
 
   const handleDownloadBudgetTemplate = () => {
@@ -3670,150 +3883,178 @@ export default function App() {
 
     setIsImportingBudgets(true);
     setImportErrors([]);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const batch = writeBatch(db);
-          let count = 0;
-          let errorsCount = 0;
-          const errorDetails: string[] = [];
 
-          for (let i = 0; i < results.data.length; i++) {
-            const rawRow = results.data[i] as any;
-            const rowIndex = i + 2;
-            const row: any = {};
-            Object.keys(rawRow).forEach(k => {
-              const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
-              row[cleanKey] = rawRow[k];
-            });
+    const processBudgetData = async (data: any[]) => {
+      try {
+        const batch = writeBatch(db);
+        let count = 0;
+        let errorsCount = 0;
+        const errorDetailsList: string[] = [];
 
-            const getVal = (possibleKeys: string[]) => {
-              for (const pk of possibleKeys) {
-                const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
-                if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
-              }
-              return undefined;
-            };
+        for (let i = 0; i < data.length; i++) {
+          const rawRow = data[i] as any;
+          const rowIndex = i + 2;
+          const row: any = {};
+          Object.keys(rawRow).forEach(k => {
+            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            row[cleanKey] = rawRow[k];
+          });
 
-            const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
-            const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'teamid', 'id team', 'mã team']) || '').trim();
-            const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'ky', 'kỳ']);
-            const month = normalizeMonth(monthRaw);
-            const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
-            const amountRaw = getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']);
-            const amountDecimal = String(amountRaw || '0').replace(/[.,]/g, '');
-            const amount = Number(amountDecimal);
-
-            if (!pRef || !tRef || !month || amount <= 0) {
-              const hasData = Object.values(row).some(v => v !== '');
-              if (hasData) {
-                errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ`);
-                errorsCount++;
-              }
-              continue;
+          const getVal = (possibleKeys: string[]) => {
+            for (const pk of possibleKeys) {
+              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+              if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
             }
+            return undefined;
+          };
 
-            const findProject = (ref: string) => {
-              const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-              if (!cleanRef) return null;
-              return projects.find(p => 
-                p.id === ref || 
-                (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-                p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
-              );
-            };
+          const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'teamid', 'id team', 'mã team']) || '').trim();
+          const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'ky', 'kỳ']);
+          const month = normalizeMonth(monthRaw);
+          const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
+          const amountRaw = getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']);
+          const amountDecimal = String(amountRaw || '0').replace(/[.,]/g, '');
+          const amount = Number(amountDecimal);
 
-            const findTeam = (ref: string) => {
-              const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-              if (!cleanRef) return null;
-              return teams.find(t => 
-                t.id === ref || 
-                (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-                t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
-              );
-            };
-
-            const project = findProject(pRef);
-            const team = findTeam(tRef);
-
-            if (!project) {
-              errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+          if (!pRef || !tRef || !month || amount <= 0) {
+            const hasData = Object.values(row).some(v => v !== '');
+            if (hasData) {
+              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ`);
               errorsCount++;
-              continue;
             }
-            if (!team) {
-              errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
-              errorsCount++;
-              continue;
-            }
+            continue;
+          }
 
-            const pId = project.id;
-            const teamId = team.id;
-            const assignedUserEmail = extractEmail(implementer);
-
-            // Check if budget already exists to update or create new
-            const existingBudget = budgets.find(b => 
-              b.projectId === pId && 
-              b.teamId === teamId && 
-              b.month === month
+          const findProjectAddress = (ref: string) => {
+            const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (!cleanRef) return null;
+            return projects.find(p => 
+              p.id === ref || 
+              (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+              p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
             );
+          };
 
-            if (existingBudget) {
-              const bRef = doc(db, 'budgets', existingBudget.id);
-              batch.update(bRef, {
-                amount,
-                implementerName: implementer || existingBudget.implementerName,
-                assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
-                userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
-                updatedAt: serverTimestamp(),
-                updatedBy: user?.uid
-              });
-            } else {
-              const bRef = doc(collection(db, 'budgets'));
-              batch.set(bRef, {
-                projectId: pId,
-                projectName: project.name,
-                teamId: teamId,
-                teamName: team.name,
-                implementerName: implementer || 'N/A',
-                assignedUserEmail: assignedUserEmail,
-                userEmail: assignedUserEmail || user?.email?.toLowerCase(), // Override registration email
-                month,
-                amount,
-                createdAt: serverTimestamp(),
-                createdBy: user?.uid
-              });
-            }
-            count++;
+          const findTeamAddress = (ref: string) => {
+            const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (!cleanRef) return null;
+            return teams.find(t => 
+              t.id === ref || 
+              (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+              t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            );
+          };
+
+          const project = findProjectAddress(pRef);
+          const team = findTeamAddress(tRef);
+
+          if (!project) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+            errorsCount++;
+            continue;
+          }
+          if (!team) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+            errorsCount++;
+            continue;
           }
 
-          if (count > 0) {
-            await batch.commit();
-            await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors: errorsCount });
-            toast.success(`Đã cập nhật ${count} ngân sách. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
-            if (errorsCount > 0) {
-              setImportErrors(errorDetails);
-              setIsImportErrorsDialogOpen(true);
-            }
+          const pId = project.id;
+          const teamId = team.id;
+          const assignedUserEmail = extractEmail(implementer);
+
+          const existingBudget = budgets.find(b => 
+            b.projectId === pId && 
+            b.teamId === teamId && 
+            b.month === month
+          );
+
+          if (existingBudget) {
+            const bRef = doc(db, 'budgets', existingBudget.id);
+            batch.update(bRef, {
+              amount,
+              implementerName: implementer || existingBudget.implementerName,
+              assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
+              userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.uid
+            });
           } else {
-            if (errorDetails.length > 0) {
-              setImportErrors(errorDetails);
-              setIsImportErrorsDialogOpen(true);
-            } else {
-              toast.error(`Không có dữ liệu hợp lệ để nhập.`);
-            }
+            const bRef = doc(collection(db, 'budgets'));
+            batch.set(bRef, {
+              projectId: pId,
+              projectName: project.name,
+              teamId: teamId,
+              teamName: team.name,
+              implementerName: implementer || 'N/A',
+              assignedUserEmail: assignedUserEmail,
+              userEmail: assignedUserEmail || user?.email?.toLowerCase(),
+              month,
+              amount,
+              createdAt: serverTimestamp(),
+              createdBy: user?.uid
+            });
           }
+          count++;
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          await logAction('IMPORT_BUDGETS', 'budgets', 'bulk', { count, errors: errorsCount });
+          toast.success(`Đã cập nhật ${count} ngân sách. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
+          if (errorsCount > 0) {
+            setImportErrors(errorDetailsList);
+            setIsImportErrorsDialogOpen(true);
+          }
+        } else {
+          if (errorDetailsList.length > 0) {
+            setImportErrors(errorDetailsList);
+            setIsImportErrorsDialogOpen(true);
+          } else {
+            toast.error(`Không có dữ liệu hợp lệ để nhập.`);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error('Lỗi khi nhập dữ liệu');
+      } finally {
+        setIsImportingBudgets(false);
+        e.target.value = '';
+      }
+    };
+
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const buffer = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(firstSheet);
+          await processBudgetData(json);
         } catch (error) {
           console.error(error);
-          toast.error('Lỗi khi nhập dữ liệu');
-        } finally {
+          toast.error('Lỗi khi đọc file Excel');
           setIsImportingBudgets(false);
-          e.target.value = '';
         }
-      }
-    });
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          await processBudgetData(results.data);
+        },
+        error: (error) => {
+          toast.error('Lỗi khi đọc file CSV');
+          setIsImportingBudgets(false);
+        }
+      });
+    }
   };
 
   const handleImportCostsCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3823,8 +4064,7 @@ export default function App() {
     setIsImportingCosts(true);
     setImportErrors([]);
 
-
-    const findProject = (ref: string) => {
+    const findProjectInternal = (ref: string) => {
       const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return projects.find(p => 
@@ -3834,7 +4074,7 @@ export default function App() {
       );
     };
 
-    const findTeam = (ref: string) => {
+    const findTeamInternal = (ref: string) => {
       const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return teams.find(t => 
@@ -3844,143 +4084,163 @@ export default function App() {
       );
     };
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const batch = writeBatch(db);
-          let count = 0;
-          let errorsCount = 0;
-          const errorDetailsList: string[] = [];
+    const processCostData = async (data: any[]) => {
+      try {
+        const batch = writeBatch(db);
+        let count = 0;
+        let errorsCount = 0;
+        const errorDetailsList: string[] = [];
 
-          const data = results.data as any[];
-          for (let i = 0; i < data.length; i++) {
-            const rawRow = data[i];
-            const rowIndex = i + 2;
-            // Unify header access
-            const row: any = {};
-            Object.keys(rawRow).forEach(k => {
-              const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
-              row[cleanKey] = rawRow[k];
-            });
+        for (let i = 0; i < data.length; i++) {
+          const rawRow = data[i];
+          const rowIndex = i + 2;
+          const row: any = {};
+          Object.keys(rawRow).forEach(k => {
+            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            row[cleanKey] = rawRow[k];
+          });
 
-            const getVal = (possibleKeys: string[]) => {
-              for (const pk of possibleKeys) {
-                const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
-                if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
-              }
-              return undefined;
-            };
-
-            const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
-            const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
-            const monthRaw = getVal(['Tháng', 'Kỳ tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'kỳ']);
-            const month = normalizeMonth(monthRaw);
-            const period = String(getVal(['Tuần', 'Kỳ tuần', 'Week', 'Period', 'tuan', 'tuần', 'ky']) || '').trim();
-            
-            // Cost values
-            const fbAds = parseVal(getVal(['FBAds', 'FB Ads', 'Facebook Ads', 'Facebook', 'Chi phí FB', 'QC Facebook', 'Ads FB', 'chiphi fb', 'facebook ads', 'ads facebook', 'facebook ads']));
-            const posting = parseVal(getVal(['Posting', 'Đăng bài', 'Content', 'Content & Design', 'Content/Design', 'dangbai', 'chiphi content', 'posting/content', 'posting & content']));
-            const zaloAds = parseVal(getVal(['ZaloAds', 'Zalo Ads', 'Zalo', 'Chi phí Zalo', 'QC Zalo', 'Ads Zalo', 'chiphi zalo', 'zalo ads', 'ads zalo']));
-            const googleAds = parseVal(getVal(['GoogleAds', 'Google Ads', 'Google', 'Chi phí Google', 'QC Google', 'SEM', 'Ads Google', 'chiphi google', 'google ads', 'ads google', 'sem/google']));
-            const otherCost = parseVal(getVal(['OtherCost', 'Chi phí khác', 'Khác', 'Phát sinh', 'Khác (Phát sinh)', 'chiphikhac', 'phatsinh', 'chi phi khac']));
-            const note = String(getVal(['Note', 'Ghi chú', 'Ghi chú thêm', 'ghichu']) || '');
-
-            if (!pRef || !tRef || !month) {
-              const hasData = Object.values(row).some(v => v !== '');
-              if (hasData) {
-                errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
-                errorsCount++;
-              }
-              continue;
+          const getVal = (possibleKeys: string[]) => {
+            for (const pk of possibleKeys) {
+              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
+              if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
             }
+            return undefined;
+          };
 
-            const project = findProject(pRef);
-            const team = findTeam(tRef);
-
-            if (!project) {
-              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
-              errorsCount++;
-              continue;
-            }
-            if (!team) {
-              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
-              errorsCount++;
-              continue;
-            }
-
-            const pId = project.id;
-            const teamId = team.id;
-
-            // Find matching budget to sync (đồng bộ)
-            const matchingBudget = budgets.find(b => 
-              b.projectId === pId && 
-              b.teamId === teamId && 
-              b.month === month
-            );
-
-            if (!matchingBudget) {
-              errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy ngân sách đã duyệt cho [${project.name}] - [${team.name}] tháng ${month}`);
-              errorsCount++;
-              continue;
-            }
-
-            const totalAmount = fbAds + posting + zaloAds + googleAds + otherCost;
-            const [yearStr] = month.split('-');
-            const year = Number(yearStr);
-
-            const docRef = doc(collection(db, 'costs'));
-            batch.set(docRef, {
-              projectId: pId,
-              projectName: project.name,
-              budgetId: matchingBudget.id,
-              implementerName: matchingBudget.implementerName || 'N/A',
-              teamName: team.name,
-              teamId: teamId,
-              weekNumber: Number(period) || 1,
-              year,
-              month,
-              amount: totalAmount,
-              channels: { fbAds, posting, zaloAds, googleAds, otherCost },
-              note,
-              createdAt: serverTimestamp(),
-              createdBy: user?.uid,
-              userEmail: user?.email?.toLowerCase()
-            });
-            count++;
-          }
-
-          if (count > 0) {
-            await batch.commit();
-            await logAction('IMPORT_COSTS', 'costs', 'bulk', { count, errors: errorsCount });
-            toast.success(`Đã nhập thành công ${count} bản ghi. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
-            if (errorsCount > 0) {
-              setImportErrors(errorDetailsList);
-              setIsImportErrorsDialogOpen(true);
-            }
-          } else {
-            if (errorDetailsList.length > 0) {
-              setImportErrors(errorDetailsList);
-              setIsImportErrorsDialogOpen(true);
-            } else {
-              toast.error(`Không thể nhập dữ liệu. Kiểm tra định dạng file.`);
-            }
-          }
+          const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+          const monthRaw = getVal(['Tháng', 'Kỳ tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'kỳ']);
+          const month = normalizeMonth(monthRaw);
+          const periodValue = String(getVal(['Tuần', 'Kỳ tuần', 'Week', 'Period', 'tuan', 'tuần', 'ky']) || '').trim();
           
-          setIsImportCostsDialogOpen(false);
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, 'costs');
-        } finally {
-          setIsImportingCosts(false);
-          e.target.value = '';
+          const fbAds = parseVal(getVal(['FBAds', 'FB Ads', 'Facebook Ads', 'Facebook', 'Chi phí FB', 'QC Facebook', 'Ads FB', 'chiphi fb', 'facebook ads', 'ads facebook', 'facebook ads']));
+          const posting = parseVal(getVal(['Posting', 'Đăng bài', 'Content', 'Content & Design', 'Content/Design', 'dangbai', 'chiphi content', 'posting/content', 'posting & content']));
+          const zaloAds = parseVal(getVal(['ZaloAds', 'Zalo Ads', 'Zalo', 'Chi phí Zalo', 'QC Zalo', 'Ads Zalo', 'chiphi zalo', 'zalo ads', 'ads zalo']));
+          const googleAds = parseVal(getVal(['GoogleAds', 'Google Ads', 'Google', 'Chi phí Google', 'QC Google', 'SEM', 'Ads Google', 'chiphi google', 'google ads', 'ads google', 'sem/google']));
+          const otherCost = parseVal(getVal(['OtherCost', 'Chi phí khác', 'Khác', 'Phát sinh', 'Khác (Phát sinh)', 'chiphikhac', 'phatsinh', 'chi phi khac']));
+          const note = String(getVal(['Note', 'Ghi chú', 'Ghi chú thêm', 'ghichu']) || '');
+
+          if (!pRef || !tRef || !month) {
+            const hasData = Object.values(row).some(v => v !== '');
+            if (hasData) {
+              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+              errorsCount++;
+            }
+            continue;
+          }
+
+          const project = findProjectInternal(pRef);
+          const team = findTeamInternal(tRef);
+
+          if (!project) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+            errorsCount++;
+            continue;
+          }
+          if (!team) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+            errorsCount++;
+            continue;
+          }
+
+          const pId = project.id;
+          const teamId = team.id;
+
+          const matchingBudget = budgets.find(b => 
+            b.projectId === pId && 
+            b.teamId === teamId && 
+            b.month === month
+          );
+
+          if (!matchingBudget) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy ngân sách đã duyệt cho [${project.name}] - [${team.name}] tháng ${month}`);
+            errorsCount++;
+            continue;
+          }
+
+          const totalAmount = fbAds + posting + zaloAds + googleAds + otherCost;
+          const [yearStr] = month.split('-');
+          const year = Number(yearStr);
+
+          const docRef = doc(collection(db, 'costs'));
+          batch.set(docRef, {
+            projectId: pId,
+            projectName: project.name,
+            budgetId: matchingBudget.id,
+            implementerName: matchingBudget.implementerName || 'N/A',
+            teamName: team.name,
+            teamId: teamId,
+            weekNumber: Number(periodValue) || 1,
+            year,
+            month,
+            amount: totalAmount,
+            channels: { fbAds, posting, zaloAds, googleAds, otherCost },
+            note,
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid,
+            userEmail: user?.email?.toLowerCase()
+          });
+          count++;
         }
-      },
-      error: (error) => {
-        toast.error(`Lỗi đọc file: ${error.message}`);
+
+        if (count > 0) {
+          await batch.commit();
+          await logAction('IMPORT_COSTS', 'costs', 'bulk', { count, errors: errorsCount });
+          toast.success(`Đã nhập thành công ${count} bản ghi. ${errorsCount > 0 ? `Bỏ qua ${errorsCount} dòng lỗi.` : ''}`);
+          if (errorsCount > 0) {
+            setImportErrors(errorDetailsList);
+            setIsImportErrorsDialogOpen(true);
+          }
+        } else {
+           if (errorDetailsList.length > 0) {
+            setImportErrors(errorDetailsList);
+            setIsImportErrorsDialogOpen(true);
+          } else {
+            toast.error(`Không thể nhập dữ liệu. Kiểm tra định dạng file.`);
+          }
+        }
+        
+        setIsImportCostsDialogOpen(false);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, 'costs');
+      } finally {
         setIsImportingCosts(false);
+        e.target.value = '';
       }
-    });
+    };
+
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const buffer = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(firstSheet);
+          await processCostData(json);
+        } catch (error) {
+          console.error(error);
+          toast.error('Lỗi khi đọc file Excel');
+          setIsImportingCosts(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          await processCostData(results.data);
+        },
+        error: (error) => {
+          toast.error('Lỗi khi đọc file CSV');
+          setIsImportingCosts(false);
+        }
+      });
+    }
   };
 
   const handleImportCostsFromUrl = async () => {
@@ -4286,14 +4546,16 @@ export default function App() {
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
       const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
 
+      const matchUser = reportUser === 'all' || budgetEmail === reportUser.toLowerCase();
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || b.teamName === reportTeam)
         : (isOwner || isAssigned);
+      
       const matchMonth = b.month === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
       
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType;
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchUser;
     }).map(b => {
       // If a specific week is selected, return 1/4 of the budget as an estimate
       if (reportWeek !== 'all') {
@@ -4301,7 +4563,7 @@ export default function App() {
       }
       return b;
     });
-  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek]);
+  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser]);
 
   const filteredCosts = useMemo(() => {
     return costs.filter(c => {
@@ -4321,6 +4583,7 @@ export default function App() {
       const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
       const isOwnerOrAssigned = isOwner || isAssigned;
 
+      const matchUser = reportUser === 'all' || costEmail === reportUser.toLowerCase();
       const matchTeam = (isAdmin || isMod || isGDDA)
         ? (reportTeam === 'all' || c.teamName === reportTeam)
         : isOwnerOrAssigned;
@@ -4331,9 +4594,9 @@ export default function App() {
       const matchType = reportType === 'all' || (project?.type === reportType);
       const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
       
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek;
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek && matchUser;
     });
-  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek]);
+  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser]);
 
   const uniqueTeams = useMemo(() => {
     return Array.from(new Set(teams.map(t => t.name)));
@@ -4400,18 +4663,28 @@ export default function App() {
           if (reportWeek === 'all') pTotalCost = pTotalCost / 4;
         }
 
+        const pRevenue = efficiencyReports
+          .filter(r => r.projectId === p.id && (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth))
+          .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
         return {
           name: p.name,
           budget: pTotalBudget,
-          actual: pTotalCost
+          actual: pTotalCost,
+          revenue: pRevenue
         };
       }).filter(d => d.budget > 0 || d.actual > 0)
         .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+
+      const teamRevenue = efficiencyReports
+        .filter(r => (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth) && (reportProject === 'all' || r.projectId === reportProject))
+        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
       
       return {
         name: team,
         budget: teamTotalBudget,
         actual: teamTotalCost,
+        revenue: teamRevenue,
         details: teamProjectDetails,
         isTeamReport: true
       };
@@ -4465,6 +4738,7 @@ export default function App() {
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
       const currentTeamName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
+      if (reportUser !== 'all' && r.createdByEmail?.toLowerCase() !== reportUser.toLowerCase()) return;
 
       const mainKey = efficiencyGroupType === 'project' ? r.projectId : r.teamId;
       const detailKey = efficiencyGroupType === 'project' ? r.teamId : r.projectId;
@@ -4503,7 +4777,7 @@ export default function App() {
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     });
-  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth]);
+  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, reportUser, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth]);
 
   const overBudgetStats = useMemo(() => {
     const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
@@ -4604,10 +4878,19 @@ export default function App() {
         totalCost = totalCost / 4;
       }
 
+      const regionRevenue = efficiencyReports.filter(r => {
+        const project = projects.find(p => p.id === r.projectId);
+        const matchProject = reportProject === 'all' || r.projectId === reportProject;
+        const matchTeam = reportTeam === 'all' || (teamMap[r.teamId] === reportTeam || r.teamName === reportTeam);
+        const matchMonth = reportMonth === 'all' || r.month === reportMonth;
+        return matchProject && matchTeam && project?.region === region && matchMonth;
+      }).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
       return {
         name: region,
         budget: totalBudget,
-        actual: totalCost
+        actual: totalCost,
+        revenue: regionRevenue
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
@@ -4658,18 +4941,28 @@ export default function App() {
           if (reportWeek === 'all') tTotalCost = tTotalCost / 4;
         }
 
+        const tRevenue = efficiencyReports
+          .filter(r => r.projectId === id && (teamMap[r.teamId] === teamName || r.teamName === teamName) && (reportMonth === 'all' || r.month === reportMonth))
+          .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
         return {
           name: teamName,
           budget: tTotalBudget,
-          actual: tTotalCost
+          actual: tTotalCost,
+          revenue: tRevenue
         };
       }).filter(d => d.budget > 0 || d.actual > 0)
         .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+
+      const projectRevenue = efficiencyReports
+        .filter(r => r.projectId === id && (reportMonth === 'all' || r.month === reportMonth) && (reportTeam === 'all' || (teamMap[r.teamId] === reportTeam || r.teamName === reportTeam)))
+        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
       return {
         name: projectName,
         budget: totalBudget,
         actual: totalCost,
+        revenue: projectRevenue,
         details: projectTeamDetails,
         isProjectReport: true
       };
@@ -4931,44 +5224,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Main Navigation Menu */}
-          <nav className="hidden lg:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/50 shadow-inner">
-            {isAdmin && (
-              <Button 
-                variant={activeTab === 'admin' ? 'secondary' : 'ghost'} 
-                size="sm" 
-                onClick={() => setActiveTab('admin')}
-                className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'admin' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
-              >
-                <ShieldCheck className="w-4.5 h-4.5 mr-2" /> Quản trị
-              </Button>
-            )}
-            <Button 
-              variant={activeTab === 'register' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              onClick={() => setActiveTab('register')}
-              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'register' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
-            >
-              <Wallet className="w-4.5 h-4.5 mr-2" /> Đăng ký
-            </Button>
-            <Button 
-              variant={activeTab === 'actual' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              onClick={() => setActiveTab('actual')}
-              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'actual' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
-            >
-              <TrendingUp className="w-4.5 h-4.5 mr-2" /> Cập nhật Chi phí
-            </Button>
-            <Button 
-              variant={activeTab === 'history' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              onClick={() => setActiveTab('history')}
-              className={`rounded-xl px-5 h-10 transition-all duration-300 ${activeTab === 'history' ? 'bg-white shadow-md text-indigo-600 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'}`}
-            >
-              <History className="w-4.5 h-4.5 mr-2" /> Lịch sử
-            </Button>
-          </nav>
-
+          {/* Removed Duplicated Navigation Menu */}
+          
           <div className="flex items-center gap-4">
             <div className="hidden md:flex flex-col items-end">
               <p className="text-sm font-bold text-slate-900 leading-tight">{user.displayName}</p>
@@ -4983,48 +5240,114 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-10 space-y-10">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
           <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
             <div className="h-1.5 w-full bg-indigo-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-indigo-600/70 uppercase tracking-wider text-[10px]">
                 <Building2 className="w-4 h-4" /> Tổng dự án
               </CardDescription>
-              <CardTitle className="text-4xl font-black text-slate-900">{projects.length}</CardTitle>
+              <CardTitle className="text-3xl font-black text-slate-900">{projects.length}</CardTitle>
             </CardHeader>
           </Card>
+          
           <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
             <div className="h-1.5 w-full bg-emerald-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-emerald-600/70 uppercase tracking-wider text-[10px]">
                 <Wallet className="w-4 h-4" /> Ngân sách tháng này
               </CardDescription>
-              <CardTitle className="text-4xl font-black text-slate-900">
+              <CardTitle className="text-3xl font-black text-slate-900">
                 {budgets
-                  .filter(b => b.month === getMarketingMonth(new Date()))
+                  .filter(b => {
+                    const matchMonth = b.month === getMarketingMonth(new Date());
+                    if (!isAdmin && !isMod) {
+                      const userEmail = user?.email?.toLowerCase();
+                      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                      return matchMonth && (budgetEmail === userEmail || b.createdBy === user?.uid);
+                    }
+                    return matchMonth;
+                  })
                   .reduce((acc, curr) => acc + curr.amount, 0)
-                  .toLocaleString()} <span className="text-xl font-medium text-slate-400">đ</span>
+                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
+
           <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
             <div className="h-1.5 w-full bg-orange-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-orange-600/70 uppercase tracking-wider text-[10px]">
                 <TrendingUp className="w-4 h-4" /> Thực tế đã chi (Kỳ này)
               </CardDescription>
-              <CardTitle className="text-4xl font-black text-slate-900">
+              <CardTitle className="text-3xl font-black text-slate-900">
                 {costs
-                  .filter(c => c.weekNumber === getCurrentPeriod() && (c.month === getMarketingMonth(new Date()) || (c.year === new Date().getFullYear() && !c.month)))
+                  .filter(c => {
+                    const matchMonth = c.month === getMarketingMonth(new Date()) || (c.year === new Date().getFullYear() && !c.month);
+                    const matchWeek = c.weekNumber === getCurrentPeriod();
+                    const isMatchTime = matchMonth && matchWeek;
+                    
+                    if (!isAdmin && !isMod) {
+                      const userEmail = user?.email?.toLowerCase();
+                      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
+                      return isMatchTime && (costEmail === userEmail || c.createdBy === user?.uid);
+                    }
+                    return isMatchTime;
+                  })
                   .reduce((acc, curr) => acc + curr.amount, 0)
-                  .toLocaleString()} <span className="text-xl font-medium text-slate-400">đ</span>
+                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+            <div className="h-1.5 w-full bg-blue-500" />
+            <CardHeader className="pb-4">
+              <CardDescription className="flex items-center gap-2 font-bold text-blue-600/70 uppercase tracking-wider text-[10px]">
+                <Building2 className="w-4 h-4" /> Căn bán (Tháng này)
+              </CardDescription>
+              <CardTitle className="text-3xl font-black text-slate-900">
+                {efficiencyReports
+                  .filter(r => {
+                    const matchMonth = r.month === getMarketingMonth(new Date());
+                    if (!isAdmin && !isMod) {
+                      return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
+                    }
+                    return matchMonth;
+                  })
+                  .reduce((acc, curr) => acc + (curr.salesCount || 0), 0)
+                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">Căn</span>
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-300 shadow-indigo-200/50">
+            <div className="h-1.5 w-full bg-white opacity-20" />
+            <CardHeader className="pb-4">
+              <CardDescription className="flex items-center gap-2 font-bold text-indigo-100 uppercase tracking-wider text-[10px]">
+                <TrendingUp className="w-4 h-4" /> Tổng Doanh số (Tháng này)
+              </CardDescription>
+              <CardTitle className="text-3xl font-black text-white">
+                {efficiencyReports
+                  .filter(r => {
+                    const matchMonth = r.month === getMarketingMonth(new Date());
+                    if (!isAdmin && !isMod) {
+                      return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
+                    }
+                    return matchMonth;
+                  })
+                  .reduce((acc, curr) => acc + (curr.revenue || 0), 0)
+                  .toLocaleString()} <span className="text-lg font-medium text-indigo-300">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto flex-wrap sm:flex-nowrap lg:hidden">
+          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto flex-wrap sm:flex-nowrap lg:flex mb-2">
+            <TabsTrigger value="home" className="rounded-lg py-2 px-4 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-none font-bold">
+              <LayoutDashboard className="w-4 h-4 mr-2" /> Trang chủ
+            </TabsTrigger>
             {(isAdmin || isMod || isGDDA) && (
               <TabsTrigger value="admin" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
                 <ShieldCheck className="w-4 h-4 mr-2" /> Quản trị
@@ -5040,6 +5363,231 @@ export default function App() {
               <History className="w-4 h-4 mr-2" /> Lịch sử
             </TabsTrigger>
           </TabsList>
+
+          {/* Home / Dashboard Tab */}
+          <TabsContent value="home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  Phân tích Hiệu quả Kinh doanh
+                </h2>
+                <p className="text-slate-500 text-sm mt-1 font-medium italic">Tháng marketing: {getMarketingMonth(new Date())} {getReportingPeriod(getMarketingMonth(new Date()))}</p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setActiveTab('admin')} 
+                className="hidden md:flex rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-10 px-5 font-bold text-slate-600"
+              >
+                Chi tiết báo cáo <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Main Visual Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 bg-white p-8 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-100/50 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
+                  <TrendingUp className="w-64 h-64 text-indigo-600" />
+                </div>
+                <div className="flex items-center justify-between mb-8 relative z-10">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tương quan Hiệu quả</Label>
+                    <h3 className="text-xl font-black text-slate-900">Chi phí vs Doanh số thực tế</h3>
+                  </div>
+                  <div className="flex items-center gap-6">
+                     <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 rounded-full bg-indigo-100 border-2 border-indigo-500" />
+                       <span className="text-[10px] font-black text-slate-500 uppercase">Doanh số</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 rounded-full bg-rose-500" />
+                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Chi phí</span>
+                     </div>
+                  </div>
+                </div>
+                <div className="h-[350px] w-full relative z-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={efficiencyChartData.slice(0, 10)}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
+                        dy={10}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
+                      <ChartTooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
+                      <Bar dataKey="cost" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={32} />
+                      <Line type="monotone" dataKey="revenue" name="Doanh số" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', strokeWidth: 3, stroke: '#fff' }} activeDot={{ r: 8, stroke: '#fff', strokeWidth: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <Card className="border-none shadow-xl shadow-slate-100 bg-indigo-600 p-8 rounded-[32px] text-white overflow-hidden relative group">
+                  <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                  <div className="relative z-10 space-y-4">
+                    <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.2em]">ROI Trung bình kỳ này</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-5xl font-black italic tracking-tighter">
+                        {(() => {
+                          const totalCost = efficiencyChartData.reduce((acc, curr) => acc + curr.cost, 0);
+                          const totalRevenue = efficiencyChartData.reduce((acc, curr) => acc + curr.revenue, 0);
+                          return totalCost > 0 ? (totalRevenue / totalCost).toFixed(2) : '0';
+                        })()}
+                      </p>
+                      <span className="text-xl font-black text-indigo-300">x</span>
+                    </div>
+                    <div className="pt-2 border-t border-indigo-400/30">
+                      <p className="text-[11px] font-medium text-indigo-100 leading-relaxed italic opacity-80">
+                        "Cứ 1 đồng chi phí bỏ ra, hệ thống mang về {(() => {
+                          const totalCost = efficiencyChartData.reduce((acc, curr) => acc + curr.cost, 0);
+                          const totalRevenue = efficiencyChartData.reduce((acc, curr) => acc + curr.revenue, 0);
+                          return totalCost > 0 ? (totalRevenue / totalCost).toFixed(2) : '0';
+                        })()} đồng doanh số."
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
+                <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-100/50 space-y-4">
+                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-2">Phân bổ Top {efficiencyGroupType === 'team' ? 'Team' : 'Dự án'}</p>
+                  <div className="h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={efficiencyPieData}
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={8}
+                          dataKey="value"
+                        >
+                          {efficiencyPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                             return (
+                               <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-50 min-w-[150px]">
+                                 <p className="text-[10px] font-black uppercase text-slate-400 mb-1">{payload[0].name}</p>
+                                 <p className="text-sm font-black text-slate-900">{formatCurrency(payload[0].value)}</p>
+                               </div>
+                             );
+                          }
+                          return null;
+                        }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                     {efficiencyPieData.map((d, i) => (
+                       <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/50 border border-slate-100/50">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-slate-400 uppercase truncate max-w-[80px]">{d.name}</span>
+                            <span className="text-[10px] font-black text-slate-700">{((d.value / (efficiencyPieData.reduce((a,b) => a+b.value, 0) || 1)) * 100).toFixed(0)}%</span>
+                          </div>
+                       </div>
+                     ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Table Section */}
+            <Card className="border-none shadow-xl shadow-slate-200/50 overflow-hidden bg-white/80 backdrop-blur-md rounded-[32px]">
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Chi tiết Hiệu quả Kinh doanh</CardTitle>
+                  <p className="text-slate-500 text-[10px] font-medium uppercase tracking-widest mt-1">Sắp xếp theo doanh số thực nhận</p>
+                </div>
+                <div className="flex p-0.5 bg-slate-100 rounded-xl border border-slate-200">
+                  <Button 
+                    variant={efficiencyGroupType === 'team' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    onClick={() => setEfficiencyGroupType('team')}
+                    className={`h-8 text-[10px] px-4 rounded-lg transition-all ${efficiencyGroupType === 'team' ? 'bg-white shadow-sm text-indigo-600 font-black' : 'text-slate-500 font-bold'}`}
+                  >
+                    Đội ngũ
+                  </Button>
+                  <Button 
+                    variant={efficiencyGroupType === 'project' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    onClick={() => setEfficiencyGroupType('project')}
+                    className={`h-8 text-[10px] px-4 rounded-lg transition-all ${efficiencyGroupType === 'project' ? 'bg-white shadow-sm text-indigo-600 font-black' : 'text-slate-500 font-bold'}`}
+                  >
+                    Dự án
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-slate-50/80">
+                    <TableRow className="hover:bg-transparent border-none">
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 h-12">Đối tượng</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Ngân sách</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Thực chi</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center h-12">Căn bán</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Doanh số</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-8 h-12">ROI</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {efficiencyChartData.slice(0, 10).map((item, idx) => {
+                      const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
+                      const isOverBudget = item.cost > item.budget;
+                      return (
+                        <TableRow key={idx} className="group hover:bg-indigo-50/20 transition-colors border-b-slate-100/50 h-20">
+                          <TableCell className="pl-8">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${item.revenue > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                {idx + 1}
+                              </div>
+                              <div>
+                                <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{item.name}</p>
+                                <p className="text-[10px] text-slate-400 font-medium lowercase italic">
+                                  {efficiencyGroupType === 'project' ? `${item.details.length} teams tham gia` : `${item.details.length} dự án triển khai`}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-slate-400 font-mono text-xs">{formatCurrency(item.budget)}</TableCell>
+                          <TableCell className={`text-right font-black font-mono text-xs ${isOverBudget ? 'text-rose-500' : 'text-slate-700 opacity-70'}`}>
+                            {formatCurrency(item.cost)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-3 h-6 text-[10px] rounded-lg">
+                              {item.sales} căn
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-black text-indigo-600 font-mono text-sm">{formatCurrency(item.revenue)}</TableCell>
+                          <TableCell className="text-right pr-8">
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-black text-indigo-700 italic">{roi}x</span>
+                              {parseFloat(roi) >= 5 && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded font-black uppercase">Hiệu quả cao</span>}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {efficiencyChartData.length > 10 && (
+                <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex justify-center">
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab('admin')} className="text-indigo-600 font-black text-[10px] uppercase tracking-widest gap-2">
+                    Xem toàn bộ {efficiencyChartData.length} đơn vị tại trang báo cáo <ArrowRight className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
 
           {/* Admin Tab */}
           {(isAdmin || isMod || isGDDA) && (
@@ -5092,14 +5640,6 @@ export default function App() {
                             <Users className={`mr-3 h-5 w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
                             Quản lý Team
                           </Button>
-                          <Button 
-                            variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('efficiency')}
-                          >
-                            <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Hiệu quả Kinh doanh
-                          </Button>
                         </>
                       )}
                     </div>
@@ -5125,6 +5665,14 @@ export default function App() {
                           >
                             <TrendingUp className={`mr-3 h-5 w-5 ${adminSubTab === 'costs' ? 'text-indigo-600' : 'text-slate-400'}`} />
                             Cập nhật Chi phí
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('efficiency')}
+                          >
+                            <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Hiệu quả Kinh doanh
                           </Button>
                         </>
                       )}
@@ -5540,10 +6088,8 @@ export default function App() {
                                 <Download className="w-4 h-4 mr-2" /> Xuất Excel
                               </Button>
                               <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button className="bg-blue-600 hover:bg-blue-700">
-                                    <Plus className="w-4 h-4 mr-2" /> Thêm dự án
-                                  </Button>
+                                <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
+                                  <Plus className="w-4 h-4 mr-2" /> Thêm dự án
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[500px]">
                               <DialogHeader>
@@ -5613,15 +6159,15 @@ export default function App() {
                           {isAdmin && (
                             <div className="flex gap-2 mr-4">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
-                                <DialogTrigger asChild>
+                                <DialogTrigger render={
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
                                     className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
                                     disabled={selectedProjectIds.length === 0}
-                                  >
-                                    <Building2 className="w-3 h-3 mr-1" /> Sửa Vùng ({selectedProjectIds.length})
-                                  </Button>
+                                  />
+                                }>
+                                  <Building2 className="w-3 h-3 mr-1" /> Sửa Vùng ({selectedProjectIds.length})
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[400px]">
                                   <DialogHeader>
@@ -5650,15 +6196,15 @@ export default function App() {
                               </Dialog>
 
                               <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
-                                <DialogTrigger asChild>
+                                <DialogTrigger render={
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
                                     className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                                     disabled={selectedProjectIds.length === 0}
-                                  >
-                                    <Layers className="w-3 h-3 mr-1" /> Sửa Loại hình ({selectedProjectIds.length})
-                                  </Button>
+                                  />
+                                }>
+                                  <Layers className="w-3 h-3 mr-1" /> Sửa Loại hình ({selectedProjectIds.length})
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[400px]">
                                   <DialogHeader>
@@ -6574,59 +7120,18 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                            onClick={() => setIsRestoreBudgetsDialogOpen(true)}
-                            disabled={isRestoringData}
-                          >
-                            {isRestoringData ? (
-                              <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full mr-2" />
-                            ) : (
-                              <History className="w-3 h-3 mr-1" />
-                            )}
-                            Khôi phục từ Nhật ký
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
                             className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
                             onClick={handleExportBudgets}
                           >
                             <Download className="w-3 h-3 mr-1" /> Xuất Excel
                           </Button>
-                          <div className="relative">
-                            <input
-                              type="file"
-                              accept=".csv"
-                              className="hidden"
-                              id="budget-import-input"
-                              onChange={handleImportBudgetsCSV}
-                              disabled={isImportingBudgets}
-                            />
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                              onClick={() => document.getElementById('budget-import-input')?.click()}
-                              disabled={isImportingBudgets}
-                            >
-                              <FileUp className={`w-3 h-3 mr-1 ${isImportingBudgets ? 'animate-spin' : ''}`} /> Nhập CSV
-                            </Button>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-slate-500 underline"
-                            onClick={handleDownloadBudgetTemplate}
-                          >
-                            Tải template
-                          </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
-                            onClick={handleMigrateBudgets}
+                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                            onClick={() => setIsImportBudgetsDialogOpen(true)}
                           >
-                            <RefreshCw className={`w-3 h-3 mr-1 ${isMigratingBudgets ? 'animate-spin' : ''}`} /> Chuyển T4 sang T5
+                            <FileUp className="w-3 h-3 mr-1" /> Nhập File
                           </Button>
                           <Button 
                             variant="outline" 
@@ -6649,27 +7154,6 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 mb-2">
-                          <div className="flex-1 relative">
-                            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
-                            <Input 
-                              placeholder="Dán link Google Sheet Ngân sách tại đây..." 
-                              className="pl-10 bg-white border-none shadow-sm h-10"
-                              value={budgetSheetUrl}
-                              onChange={e => setBudgetSheetUrl(e.target.value)}
-                              disabled={isImportingBudgetsUrl}
-                            />
-                          </div>
-                          <Button 
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white h-10 px-6 rounded-lg font-bold"
-                            onClick={handleImportBudgetsFromUrl}
-                            disabled={isImportingBudgetsUrl || !budgetSheetUrl}
-                          >
-                            {isImportingBudgetsUrl ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-                            Đồng bộ Ngân sách
-                          </Button>
-                        </div>
-                        
                         <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
                           <div className="flex-1 min-w-[200px] relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -6811,10 +7295,18 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                            className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
+                            onClick={handleExportCosts}
+                          >
+                            <Download className="w-3 h-3 mr-1" /> Xuất Excel
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                             onClick={() => setIsImportCostsDialogOpen(true)}
                           >
-                            <FileUp className="w-3 h-3 mr-1" /> Nhập CSV
+                            <FileUp className="w-3 h-3 mr-1" /> Nhập File
                           </Button>
                           <Button 
                             variant="outline" 
@@ -7154,82 +7646,194 @@ export default function App() {
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <ArrowUpDown className="w-3 h-3" /> Sắp xếp theo
                         </Label>
-                        <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual') => setReportSortBy(v)}>
+                        <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual' | 'revenue') => setReportSortBy(v)}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Chọn kiểu sắp xếp" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="budget">Ngân sách (Cao → Thấp)</SelectItem>
                             <SelectItem value="actual">Chi phí thực tế (Cao → Thấp)</SelectItem>
+                            <SelectItem value="revenue">Doanh số (Cao → Thấp)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
 
-                    {/* Summary Cards - Only visible to Admin */}
-                    {isAdmin && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tổng ngân sách</p>
-                          <p className="text-2xl font-bold text-slate-900">
-                            {filteredBudgets.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} đ
-                          </p>
-                        </div>
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tổng thực chi</p>
-                          <p className="text-2xl font-bold text-blue-600">
-                            {filteredCosts.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} đ
-                          </p>
-                        </div>
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sản lượng bán</p>
-                          <p className="text-2xl font-bold text-emerald-600">
-                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)} <span className="text-xs font-medium text-slate-400">căn</span>
-                          </p>
-                        </div>
-                        <div className="p-5 rounded-2xl bg-indigo-600 border border-indigo-700 shadow-lg shadow-indigo-100 flex flex-col gap-1 lg:col-span-2">
-                          <p className="text-[10px] text-indigo-100 font-black uppercase tracking-wider">Doanh số tổng hệ thống</p>
-                          <p className="text-4xl font-black text-white">
-                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-lg font-medium text-indigo-100">đ</span>
-                          </p>
-                        </div>
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tỉ lệ ngân sách</p>
-                          {(() => {
-                            const budget = filteredBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-                            const cost = filteredCosts.reduce((acc, curr) => acc + curr.amount, 0);
-                            const variance = budget > 0 ? ((cost / budget) - 1) * 100 : 0;
-                            const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
-                            
-                            return (
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <p className={`text-xl font-bold ${Math.abs(variance) < 0.01 ? 'text-slate-900' : variance > 0 ? 'text-red-600' : variance < -30 ? 'text-amber-600' : 'text-green-600'}`}>
-                                    {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
-                                  </p>
-                                  <Badge variant="outline" className="text-[8px] py-0 border-slate-200 text-slate-500 px-1">
-                                    Dùng: {usagePercent.toFixed(0)}%
-                                  </Badge>
-                                </div>
-                                <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
-                                  <div 
-                                    className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-red-500' : usagePercent < 70 ? 'bg-amber-500' : 'bg-green-500'}`}
-                                    style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                      {isAdmin && (
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                            <UserCircle className="w-3 h-3" /> Nhân viên
+                          </Label>
+                          <Select value={reportUser} onValueChange={setReportUser}>
+                            <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
+                              <SelectValue placeholder="Tất cả nhân viên" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                                <div className="relative">
+                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Tìm nhân viên..."
+                                    className="pl-8 h-9"
+                                    value={reportUserSearch}
+                                    onChange={(e) => setReportUserSearch(e.target.value)}
+                                    onKeyDown={(e) => e.stopPropagation()}
                                   />
                                 </div>
                               </div>
-                            );
-                          })()}
+                              <SelectItem value="all">Tất cả nhân viên</SelectItem>
+                              {allUsers
+                                .filter(u => u.email.toLowerCase().includes(reportUserSearch.toLowerCase()) || (u.displayName || '').toLowerCase().includes(reportUserSearch.toLowerCase()))
+                                .map(u => (
+                                  <SelectItem key={u.id} value={u.email}>{u.fullName || u.email}</SelectItem>
+                                ))
+                              }
+                            </SelectContent>
+                          </Select>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Summary Cards - Viewable by all but tailored by role */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
+                      {/* 0. Tổng dự án (Admin only) */}
+                      {isAdmin && (
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng dự án</p>
+                            <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                              <Building2 className="w-3 h-3 text-blue-500" />
+                            </span>
+                          </div>
+                          <p className="text-xl font-black text-slate-900 leading-none">
+                            {projects.length} <span className="text-[10px] font-bold text-slate-400">Dự án</span>
+                          </p>
+                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 w-full" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 1. Tổng ngân sách */}
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách</p>
+                            <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                              <Wallet className="w-3 h-3 text-blue-500" />
+                            </span>
+                          </div>
+                          <p className="text-xl font-black text-slate-900 leading-none">
+                            {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-slate-400">đ</span>
+                          </p>
+                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 w-full" />
+                          </div>
+                        </div>
+
+                        {/* 2. Tổng chi phí thực tế */}
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-emerald-200 group">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng thực chi</p>
+                            <span className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
+                              <Wallet className="w-3 h-3 text-emerald-500" />
+                            </span>
+                          </div>
+                          <p className="text-xl font-black text-emerald-600 leading-none">
+                            {filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-slate-400">đ</span>
+                          </p>
+                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 w-3/4 opacity-50" />
+                          </div>
+                        </div>
+
+                        {/* 3. Căn bán (Units) */}
+                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-indigo-200 group">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Căn bán (Units)</p>
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center">
+                              <Building2 className="w-3 h-3 text-indigo-500" />
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <p className="text-xl font-black text-slate-900 leading-none">
+                              {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)}
+                            </p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Căn</span>
+                          </div>
+                          <p className="text-[8px] font-bold text-slate-400 mt-2 italic">Dữ liệu từ hiệu quả kinh doanh</p>
+                        </div>
+
+                        {/* 4. Tổng doanh số (Sales) */}
+                        <div className="p-5 rounded-2xl bg-indigo-600 border border-indigo-700 shadow-lg shadow-indigo-100 flex flex-col gap-1 transition-all hover:translate-y-[-2px]">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] text-indigo-100 font-black uppercase tracking-widest">Doanh số (Sales)</p>
+                            <TrendingUp className="w-3 h-3 text-indigo-200" />
+                          </div>
+                          <p className="text-xl font-black text-white leading-none">
+                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-indigo-200">đ</span>
+                          </p>
+                          <div className="mt-2 text-[9px] font-bold text-indigo-200/80">
+                            Hiệu quả doanh thu thực tế
+                          </div>
+                        </div>
+
+                        {/* 5. ROMI / Cost Ratio */}
+                        {(() => {
+                           const totalRevenue = efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+                           const totalCost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           const romi = totalCost > 0 ? (totalRevenue / totalCost).toFixed(2) : '0';
+                           const costRatio = totalRevenue > 0 ? (totalCost / totalRevenue * 100).toFixed(1) : '0';
+                           
+                           return (
+                             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-amber-200">
+                               <div className="flex items-center justify-between mb-1">
+                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">ROMI / CP Marketing</p>
+                                 <BarChart3 className="w-3 h-3 text-amber-500" />
+                               </div>
+                               <div className="flex items-baseline gap-2">
+                                 <p className="text-xl font-black text-amber-600 leading-none">{romi}x</p>
+                                 <span className="text-[10px] font-bold text-slate-400 border-l pl-2 border-slate-200">{costRatio}%</span>
+                               </div>
+                               <p className="text-[8px] font-bold text-slate-400 mt-2 uppercase">ROMI | CP/Doanh thu</p>
+                             </div>
+                           );
+                        })()}
+
+                        {/* 6. Tỉ lệ Thực chi / Ngân sách */}
+                        {(() => {
+                          const budget = filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                          const cost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                          const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
+                          const variance = usagePercent - 100;
+                          
+                          return (
+                            <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-purple-200">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">CP / Ngân sách</p>
+                                <RefreshCw className={`w-3 h-3 ${usagePercent > 100 ? 'text-rose-500' : 'text-purple-500'}`} />
+                              </div>
+                              <div className="flex items-baseline gap-2">
+                                <p className={`text-xl font-black leading-none ${usagePercent > 100 ? 'text-rose-600' : usagePercent > 90 ? 'text-amber-600' : 'text-slate-900'}`}>{usagePercent.toFixed(1)}%</p>
+                                <span className={`text-[8px] font-bold px-1 rounded-sm ${variance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-green-50 text-green-600'}`}>
+                                  {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                  style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
-                    )}
 
                     {/* Chart Section */}
                     <div className="space-y-4">
                       <Tabs value={activeReportTab} onValueChange={setActiveReportTab} className="w-full">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                           <div className="space-y-1">
-                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Ngân sách vs Chi phí</Label>
+                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Chi phí vs Doanh số</Label>
                             <p className="text-[10px] text-slate-400">So sánh dữ liệu theo {chartTimeType === 'month' ? 'Tháng' : 'Kỳ'}</p>
                           </div>
                           <div className="flex items-center gap-4">
@@ -7263,19 +7867,36 @@ export default function App() {
                         <TabsContent value="team" className="mt-0">
                           <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
+                              <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 40, bottom: 80 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis 
                                   dataKey="name" 
                                   axisLine={false} 
                                   tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
-                                  dy={15}
+                                  tick={{ fill: '#64748b', fontSize: 10 }} 
+                                  interval={0}
+                                  angle={-70}
+                                  textAnchor="end"
+                                  height={80}
+                                  tickFormatter={(val) => {
+                                    const code = extractTeamCode(val);
+                                    return code || val.split(' ')[0];
+                                  }}
+                                  dx={-5}
                                 />
                                 <YAxis 
+                                  yAxisId="left"
                                   axisLine={false} 
                                   tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
+                                  tick={{ fill: '#10b981', fontSize: 12 }} 
+                                  tickFormatter={formatYAxis}
+                                />
+                                <YAxis 
+                                  yAxisId="right"
+                                  orientation="right"
+                                  axisLine={false} 
+                                  tickLine={false} 
+                                  tick={{ fill: '#8b5cf6', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
                                 <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
@@ -7285,9 +7906,9 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Bar dataKey="budget" name="Ngân sách" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Chi phí" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-                              </BarChart>
+                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
+                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              </ComposedChart>
                             </ResponsiveContainer>
                           </div>
                         </TabsContent>
@@ -7295,7 +7916,7 @@ export default function App() {
                         <TabsContent value="project" className="mt-0">
                           <div className="h-[500px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={projectChartData} margin={{ top: 20, right: 30, left: 40, bottom: 100 }}>
+                              <ComposedChart data={projectChartData} margin={{ top: 20, right: 30, left: 40, bottom: 100 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis 
                                   dataKey="name" 
@@ -7309,9 +7930,18 @@ export default function App() {
                                   height={120}
                                 />
                                 <YAxis 
+                                  yAxisId="left"
                                   axisLine={false} 
                                   tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
+                                  tick={{ fill: '#8b5cf6', fontSize: 12 }} 
+                                  tickFormatter={formatYAxis}
+                                />
+                                <YAxis 
+                                  yAxisId="right"
+                                  orientation="right"
+                                  axisLine={false} 
+                                  tickLine={false} 
+                                  tick={{ fill: '#f59e0b', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
                                 <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
@@ -7321,9 +7951,9 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Bar dataKey="budget" name="Ngân sách" fill="#0ea5e9" radius={[6, 6, 0, 0]} barSize={24} />
-                                <Bar dataKey="actual" name="Chi phí" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
-                              </BarChart>
+                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
+                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              </ComposedChart>
                             </ResponsiveContainer>
                           </div>
                         </TabsContent>
@@ -7331,7 +7961,7 @@ export default function App() {
                         <TabsContent value="region" className="mt-0">
                           <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                             <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={regionChartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
+                              <ComposedChart data={regionChartData} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis 
                                   dataKey="name" 
@@ -7341,9 +7971,18 @@ export default function App() {
                                   dy={15}
                                 />
                                 <YAxis 
+                                  yAxisId="left"
                                   axisLine={false} 
                                   tickLine={false} 
-                                  tick={{ fill: '#64748b', fontSize: 12 }} 
+                                  tick={{ fill: '#ec4899', fontSize: 12 }} 
+                                  tickFormatter={formatYAxis}
+                                />
+                                <YAxis 
+                                  yAxisId="right"
+                                  orientation="right"
+                                  axisLine={false} 
+                                  tickLine={false} 
+                                  tick={{ fill: '#3b82f6', fontSize: 12 }} 
                                   tickFormatter={formatYAxis}
                                 />
                                 <ChartTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
@@ -7353,9 +7992,9 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Bar dataKey="budget" name="Ngân sách" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Bar dataKey="actual" name="Chi phí" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
-                              </BarChart>
+                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
+                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              </ComposedChart>
                             </ResponsiveContainer>
                           </div>
                         </TabsContent>
@@ -7490,10 +8129,18 @@ export default function App() {
                                     <ChartTooltip 
                                       content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
+                                          const total = efficiencyPieData.reduce((a, b) => a + b.value, 0);
+                                          const percent = ((payload[0].value / (total || 1)) * 100).toFixed(1);
                                           return (
-                                            <div className="bg-white p-3 rounded-xl shadow-xl border border-slate-100">
-                                              <p className="text-xs font-black uppercase text-slate-400 mb-1">{payload[0].name}</p>
-                                              <p className="text-sm font-black text-slate-900">{formatCurrency(payload[0].value)}</p>
+                                            <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-50 min-w-[200px] animate-in fade-in zoom-in duration-200">
+                                              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[0].payload.color }} />
+                                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{payload[0].name}</p>
+                                              </div>
+                                              <div className="space-y-1">
+                                                <p className="text-lg font-black text-slate-900 leading-none">{formatCurrency(payload[0].value)}</p>
+                                                <p className="text-[10px] font-bold text-indigo-600 bg-indigo-50 inline-block px-1.5 py-0.5 rounded-md">Chiếm {percent}% tổng thể</p>
+                                              </div>
                                             </div>
                                           );
                                         }
@@ -7520,7 +8167,7 @@ export default function App() {
                                     <span className="text-[10px] text-slate-500 font-bold uppercase">Ngân sách</span>
                                   </div>
                                   <div className="flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    <div className="w-3 h-0.5 bg-emerald-500" />
                                     <span className="text-[10px] text-slate-500 font-bold uppercase">Doanh số</span>
                                   </div>
                                   <div className="flex items-center gap-1.5">
@@ -7543,8 +8190,8 @@ export default function App() {
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
                                     <ChartTooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
                                     <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
                                     <Bar dataKey="cost" fill="#f87171" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Line type="monotone" dataKey="revenue" name="Doanh số" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                                   </ComposedChart>
                                 </ResponsiveContainer>
                               </div>
@@ -7950,10 +8597,8 @@ export default function App() {
                                   {(u.role === 'mod' || u.role === 'gdda') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
-                                        <DialogTrigger asChild>
-                                          <Button variant="outline" size="sm" className="h-7 text-[10px] px-2">
-                                            Gán dự án ({u.assignedProjects?.length || 0})
-                                          </Button>
+                                        <DialogTrigger render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
+                                          Gán dự án ({u.assignedProjects?.length || 0})
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-[400px]">
                                           <DialogHeader>
@@ -8036,9 +8681,36 @@ export default function App() {
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
                         <CardTitle className="text-xl font-black text-slate-900">Nhật ký hệ thống</CardTitle>
-                        <CardDescription className="text-slate-500 font-medium font-inter">Theo dõi chi tiết các thay đổi dữ liệu và lịch sử hoạt động</CardDescription>
+                        <CardDescription className="text-slate-500 font-medium font-inter flex items-center gap-2">
+                          Theo dõi chi tiết các thay đổi dữ liệu và lịch sử hoạt động
+                          <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] h-4">Tự động đồng bộ lên Sheets</Badge>
+                        </CardDescription>
                       </div>
                       <div className="flex gap-3">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-10 text-[10px] font-bold text-emerald-700 bg-emerald-50 border-emerald-100 hover:bg-emerald-100 rounded-xl"
+                          onClick={() => handleCreateCheckpoint('Điểm khôi phục thủ công')}
+                          disabled={isBackingUp}
+                        >
+                          <History className="w-3 h-3 mr-1.5" />
+                          Tạo điểm khôi phục
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-10 text-[10px] font-bold text-indigo-700 bg-indigo-50 border-indigo-100 hover:bg-indigo-100 rounded-xl"
+                          onClick={handleSyncAllLogs}
+                          disabled={isSyncingLogs || auditLogs.length === 0}
+                        >
+                          {isSyncingLogs ? (
+                            <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" />
+                          ) : (
+                            <FileSpreadsheet className="w-3 h-3 mr-1.5" />
+                          )}
+                          Đồng bộ toàn bộ Nhật ký
+                        </Button>
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                           <Input 
@@ -8081,6 +8753,7 @@ export default function App() {
                                 log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-700' : 
                                 log.action === 'DELETE' || log.action?.startsWith('DELETE_') ? 'bg-red-100 text-red-700' : 
                                 log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                                log.action === 'SYSTEM_CHECKPOINT' ? 'bg-amber-100 text-amber-700' :
                                 'bg-slate-100 text-slate-700'
                               }`}>
                                 {log.action === 'CREATE' ? 'Thêm mới' : 
@@ -8088,6 +8761,7 @@ export default function App() {
                                  log.action === 'UPDATE' ? 'Cập nhật' : 
                                  log.action === 'DELETE_ALL' ? 'Xóa hết' :
                                  log.action === 'IMPORT_BUDGETS' ? 'Nhập CSV' :
+                                 log.action === 'SYSTEM_CHECKPOINT' ? 'Phiên bản' :
                                  log.action === 'DEEP_SYSTEM_RESTORE' ? 'Khôi phục' : log.action}
                               </Badge>
                             </div>
@@ -8107,8 +8781,22 @@ export default function App() {
                                 <span className="bg-slate-100 px-1.5 py-0.5 rounded">ID: {log.docId}</span>
                               </div>
                               
-                              <div className="p-3 rounded-xl bg-slate-50/50 border border-slate-100/50 text-xs">
-                                <RenderLogData data={log.data} action={log.action} />
+                              <div className="p-3 rounded-xl bg-slate-50/50 border border-slate-100/50 text-xs flex justify-between items-center group/data">
+                                <div className="flex-1">
+                                  <RenderLogData data={log.data} action={log.action} />
+                                </div>
+                                {log.action === 'SYSTEM_CHECKPOINT' && (
+                                  <Button 
+                                    size="sm" 
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black h-7 px-4 rounded-xl ml-4"
+                                    onClick={() => {
+                                      setSelectedCheckpoint(log);
+                                      setIsRestoreCheckpointDialogOpen(true);
+                                    }}
+                                  >
+                                    Khôi phục về đây
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -8190,6 +8878,48 @@ export default function App() {
                   </Card>
                 </TabsContent>
               )}
+
+                {/* Checkpoint Restore Dialog */}
+                <Dialog open={isRestoreCheckpointDialogOpen} onOpenChange={setIsRestoreCheckpointDialogOpen}>
+                  <DialogContent className="sm:max-w-md bg-white border-none shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-indigo-900 text-xl font-black">
+                        <History className="w-6 h-6 text-indigo-600" />
+                        Khôi phục phiên bản?
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-500 font-medium py-2">
+                        Bạn đang chọn khôi phục toàn bộ hệ thống về trạng thái tại thời điểm: 
+                        <span className="block font-bold text-indigo-600 mt-1">
+                          {selectedCheckpoint?.timestamp?.toDate ? safeFormat(selectedCheckpoint.timestamp.toDate(), 'HH:mm:ss dd/MM/yyyy') : '...'}
+                        </span>
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 space-y-2">
+                      <div className="flex items-center gap-2 font-bold mb-1">
+                        <AlertTriangle className="w-4 h-4" /> Lưu ý quan trọng
+                      </div>
+                      <p>Hành động này sẽ cập nhật/ghi đè các bản ghi hiện tại bằng dữ liệu từ bản sao lưu này. Các thay đổi sau thời điểm này sẽ được giữ lại nếu không bị trùng ID.</p>
+                      <p className="font-bold">Quy mô khôi phục dự kiến:</p>
+                      <ul className="list-disc list-inside ml-2">
+                        <li>{selectedCheckpoint?.data?.counts?.projects || 0} Dự án</li>
+                        <li>{selectedCheckpoint?.data?.counts?.budgets || 0} Ngân sách</li>
+                        <li>{selectedCheckpoint?.data?.counts?.costs || 0} Chi phí thực tế</li>
+                      </ul>
+                    </div>
+
+                    <DialogFooter className="gap-3 mt-4">
+                      <Button variant="ghost" onClick={() => setIsRestoreCheckpointDialogOpen(false)} className="rounded-xl font-bold">Hủy bỏ</Button>
+                      <Button 
+                        onClick={() => handleRestoreCheckpoint(selectedCheckpoint)}
+                        disabled={isRestoringData}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl px-6"
+                      >
+                        {isRestoringData ? 'Đang xử lý...' : 'Xác nhận khôi phục'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 {/* Restore Budgets Dialog */}
                 <Dialog open={isRestoreBudgetsDialogOpen} onOpenChange={setIsRestoreBudgetsDialogOpen}>
@@ -8791,47 +9521,47 @@ export default function App() {
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
                           <Dialog open={isBudgetSelectionDialogOpen} onOpenChange={setIsBudgetSelectionDialogOpen}>
-                            <DialogTrigger asChild>
+                            <DialogTrigger render={
                               <Button 
                                 variant="outline" 
                                 className="w-full h-auto py-3 px-4 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 justify-start text-left focus:ring-green-500 rounded-xl transition-all"
-                              >
-                                {selectedBudgetId ? (
-                                  (() => {
-                                    const b = budgets.find(b => b.id === selectedBudgetId);
-                                    return b ? (
-                                      <div className="flex items-center gap-3 w-full">
-                                        <div className="p-2 bg-emerald-100 rounded-lg shrink-0">
-                                          <Wallet className="w-4 h-4 text-emerald-600" />
-                                        </div>
-                                        <div className="flex flex-col min-w-0 flex-1">
-                                          <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
-                                          <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                                            <span className="font-medium">{b.teamName}</span>
-                                            <span className="opacity-30">•</span>
-                                            <span>{b.implementerName}</span>
-                                          </div>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                          <span className="text-xs font-bold text-emerald-600 font-mono italic">
-                                            {b.amount.toLocaleString()} đ
-                                          </span>
+                              />
+                            }>
+                              {selectedBudgetId ? (
+                                (() => {
+                                  const b = budgets.find(b => b.id === selectedBudgetId);
+                                  return b ? (
+                                    <div className="flex items-center gap-3 w-full">
+                                      <div className="p-2 bg-emerald-100 rounded-lg shrink-0">
+                                        <Wallet className="w-4 h-4 text-emerald-600" />
+                                      </div>
+                                      <div className="flex flex-col min-w-0 flex-1" key={b.id}>
+                                        <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
+                                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                          <span className="font-medium">{b.teamName}</span>
+                                          <span className="opacity-30">•</span>
+                                          <span>{b.implementerName}</span>
                                         </div>
                                       </div>
-                                    ) : (
-                                      <div className="flex items-center gap-2 text-slate-400">
-                                        <Search className="w-4 h-4" />
-                                        <span>Chọn khoản ngân sách của bạn...</span>
+                                      <div className="text-right shrink-0">
+                                        <span className="text-xs font-bold text-emerald-600 font-mono italic">
+                                          {b.amount.toLocaleString()} đ
+                                        </span>
                                       </div>
-                                    );
-                                  })()
-                                ) : (
-                                  <div className="flex items-center gap-2 text-slate-400">
-                                    <Search className="w-4 h-4" />
-                                    <span>Chọn khoản ngân sách của bạn...</span>
-                                  </div>
-                                )}
-                              </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-slate-400">
+                                      <Search className="w-4 h-4" />
+                                      <span>Chọn khoản ngân sách của bạn...</span>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <div className="flex items-center gap-2 text-slate-400">
+                                  <Search className="w-4 h-4" />
+                                  <span>Chọn khoản ngân sách của bạn...</span>
+                                </div>
+                              )}
                             </DialogTrigger>
                             <DialogContent className="max-w-[95vw] sm:max-w-[600px] p-0 gap-0 overflow-hidden rounded-2xl shadow-2xl border-none">
                               <DialogHeader className="p-6 pb-0 bg-white">
@@ -10064,31 +10794,114 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={isImportCostsDialogOpen} onOpenChange={setIsImportCostsDialogOpen}>
+      {/* Budget Import Dialog */}
+      <Dialog open={isImportBudgetsDialogOpen} onOpenChange={setIsImportBudgetsDialogOpen}>
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
-            <DialogTitle className="text-blue-600 flex items-center gap-2">
-              <FileUp className="w-5 h-5" /> Nhập dữ liệu chi phí
+            <DialogTitle className="text-indigo-600 flex items-center gap-2 font-black">
+              <FileUp className="w-5 h-5" /> Nhập dữ liệu Ngân sách
             </DialogTitle>
-            <DialogDescription>
-              Tải lên file CSV hoặc nhập link Google Sheet để đồng bộ dữ liệu chi phí.
+            <DialogDescription className="font-medium text-slate-500">
+              Tải lên file Excel/CSV hoặc nhập link Google Sheet để đồng bộ dữ liệu ngân sách.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-50/50 border border-indigo-100">
               <div className="space-y-1">
-                <p className="text-sm font-bold text-slate-700">Tải file mẫu</p>
-                <p className="text-xs text-slate-500">Sử dụng file này để nhập dữ liệu đúng mẫu</p>
+                <p className="text-sm font-bold text-indigo-900">Tải file mẫu</p>
+                <p className="text-xs text-indigo-500 font-medium font-inter">Sử dụng file này để nhập dữ liệu đúng mẫu</p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleDownloadCostTemplate} className="h-9">
+              <Button variant="outline" size="sm" onClick={handleDownloadBudgetTemplate} className="h-9 font-bold text-indigo-700 bg-white border-indigo-200 hover:bg-indigo-50 rounded-xl shadow-sm">
                 <Download className="w-4 h-4 mr-2" /> Tải về
               </Button>
             </div>
             
             <Tabs defaultValue="file" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 h-10 p-1 bg-slate-100 rounded-xl mb-4">
+              <TabsList className="grid w-full grid-cols-2 h-11 p-1 bg-slate-100 rounded-xl mb-4">
+                <TabsTrigger value="file" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm">
+                  <FileText className="w-3.5 h-3.5 mr-2" /> File Excel / CSV
+                </TabsTrigger>
+                <TabsTrigger value="url" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm">
+                  <Link className="w-3.5 h-3.5 mr-2" /> Google Sheet
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="file" className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Chọn file dữ liệu (.xlsx, .csv)</Label>
+                  <div className="relative group">
+                    <Input 
+                      type="file" 
+                      accept=".csv,.xlsx,.xls" 
+                      onChange={handleImportBudgetsCSV} 
+                      disabled={isImportingBudgets}
+                      className="cursor-pointer file:cursor-pointer shadow-sm border-slate-200 h-11 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 rounded-xl"
+                    />
+                    {isImportingBudgets && !isImportingBudgetsUrl && (
+                      <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-md">
+                        <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="url" className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Link Google Sheet công khai</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        placeholder="https://docs.google.com/spreadsheets/d/..." 
+                        value={budgetSheetUrl}
+                        onChange={(e) => setBudgetSheetUrl(e.target.value)}
+                        className="bg-slate-50 border-slate-200 h-11 text-xs rounded-xl"
+                      />
+                      <Button 
+                        onClick={handleImportBudgetsFromUrl} 
+                        disabled={isImportingBudgetsUrl || !budgetSheetUrl}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 h-11 px-6 rounded-xl font-bold"
+                      >
+                        {isImportingBudgetsUrl ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Nhập dữ liệu"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsImportBudgetsDialogOpen(false)} className="rounded-xl text-xs h-9">Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cost Import Dialog */}
+      <Dialog open={isImportCostsDialogOpen} onOpenChange={setIsImportCostsDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2 font-black">
+              <FileUp className="w-5 h-5" /> Nhập dữ liệu chi phí
+            </DialogTitle>
+            <DialogDescription className="font-medium text-slate-500">
+              Tải lên file Excel/CSV hoặc nhập link Google Sheet để đồng bộ dữ liệu chi phí.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-blue-50/50 border border-blue-100">
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-blue-900">Tải file mẫu</p>
+                <p className="text-xs text-blue-500 font-medium font-inter">Sử dụng file này để nhập dữ liệu đúng mẫu</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDownloadCostTemplate} className="h-9 font-bold text-blue-700 bg-white border-blue-200 hover:bg-blue-50 rounded-xl shadow-sm">
+                <Download className="w-4 h-4 mr-2" /> Tải về
+              </Button>
+            </div>
+            
+            <Tabs defaultValue="file" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 h-11 p-1 bg-slate-100 rounded-xl mb-4">
                 <TabsTrigger value="file" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
-                  <FileText className="w-3.5 h-3.5 mr-2" /> File CSV
+                  <FileText className="w-3.5 h-3.5 mr-2" /> File Excel / CSV
                 </TabsTrigger>
                 <TabsTrigger value="url" className="text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
                   <Link className="w-3.5 h-3.5 mr-2" /> Google Sheet
@@ -10097,14 +10910,14 @@ export default function App() {
               
               <TabsContent value="file" className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Chọn file dữ liệu (.csv)</Label>
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Chọn file dữ liệu (.xlsx, .csv)</Label>
                   <div className="relative group">
                     <Input 
                       type="file" 
-                      accept=".csv" 
+                      accept=".csv,.xlsx,.xls" 
                       onChange={handleImportCostsCSV} 
                       disabled={isImportingCosts}
-                      className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      className="cursor-pointer file:cursor-pointer shadow-sm border-slate-200 h-11 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 rounded-xl"
                     />
                     {isImportingCosts && !isImportingCostsUrl && (
                       <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-md">
@@ -10124,14 +10937,14 @@ export default function App() {
                         placeholder="https://docs.google.com/spreadsheets/d/..." 
                         value={costSheetUrl}
                         onChange={(e) => setCostSheetUrl(e.target.value)}
-                        className="bg-slate-50 border-slate-200 h-10 text-xs"
+                        className="bg-slate-50 border-slate-200 h-11 text-xs rounded-xl"
                       />
                       <Button 
                         onClick={handleImportCostsFromUrl} 
                         disabled={isImportingCostsUrl || !costSheetUrl}
-                        className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 h-10"
+                        className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 h-11 px-6 rounded-xl font-bold"
                       >
-                        {isImportingCostsUrl ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Nhập"}
+                        {isImportingCostsUrl ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Nhập dữ liệu"}
                       </Button>
                     </div>
                   </div>
@@ -10150,7 +10963,7 @@ export default function App() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportCostsDialogOpen(false)}>Đóng</Button>
+            <Button variant="ghost" onClick={() => setIsImportCostsDialogOpen(false)} className="rounded-xl text-xs h-9">Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6181,7 +6181,6 @@ export default function App() {
                                         <SelectItem key={p.id} value={p.id}>
                                           <div className="flex flex-col">
                                             <span className="font-medium text-slate-900">{p.name}</span>
-                                            <span className="text-[9px] text-slate-400 font-mono">ID: {p.id}</span>
                                           </div>
                                         </SelectItem>
                                       ))}
@@ -6213,7 +6212,6 @@ export default function App() {
                                         <SelectItem key={t.id} value={t.id}>
                                           <div className="flex flex-col">
                                             <span className="font-medium text-slate-900">{t.name}</span>
-                                            <span className="text-[9px] text-slate-400 font-mono">ID: {t.id}</span>
                                           </div>
                                         </SelectItem>
                                       ))}

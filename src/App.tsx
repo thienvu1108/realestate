@@ -22,7 +22,9 @@ import {
   getDoc,
   updateDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  increment,
+  arrayUnion
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Button } from '@/components/ui/button';
@@ -42,7 +44,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -553,6 +555,22 @@ export default function App() {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [selectedEfficiencyIds, setSelectedEfficiencyIds] = useState<string[]>([]);
+  const [multiBudgetItems, setMultiBudgetItems] = useState<any[]>([]);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
+  const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('1');
+  const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('20');
+  const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
+  const [historyToView, setHistoryToView] = useState<any[]>([]);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [historyTargetName, setHistoryTargetName] = useState('');
+  const [editingCostForm, setEditingCostForm] = useState({
+    fbAds: '',
+    posting: '',
+    zaloAds: '',
+    googleAds: '',
+    otherCost: '',
+    note: ''
+  });
   const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
   const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
   const [adminCostSearch, setAdminCostSearch] = useState('');
@@ -586,6 +604,102 @@ export default function App() {
 
   const [isSyncingLogs, setIsSyncingLogs] = useState(false);
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
+  const [isMergingBudgets, setIsMergingBudgets] = useState(false);
+
+  const handleMergeDuplicateBudgets = async () => {
+    if (!isAdmin && !isMod) return;
+    
+    setIsMergingBudgets(true);
+    const toastId = toast.loading('Đang xử lý gộp ngân sách trùng lặp...');
+    
+    try {
+      const groups: Record<string, any[]> = {};
+      budgets.forEach(b => {
+        const key = `${b.projectId}_${b.teamId}_${b.month}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(b);
+      });
+      
+      let mergedCount = 0;
+      let deletedCount = 0;
+      let costUpdatedCount = 0;
+      
+      for (const key in groups) {
+        const group = groups[key];
+        if (group.length > 1) {
+          // Keep the first one
+          const target = group[0];
+          const others = group.slice(1);
+          
+          const totalAmount = group.reduce((sum, b) => sum + b.amount, 0);
+          
+          // Collect all edit histories
+          let combinedHistory: any[] = [];
+          group.forEach(b => {
+            if (b.editHistory && Array.isArray(b.editHistory)) {
+              combinedHistory = [...combinedHistory, ...b.editHistory];
+            }
+          });
+          
+          // Add a merge entry
+          combinedHistory.push({
+            action: 'MERGE_CLEANUP',
+            editorName: 'SYSTEM',
+            editorEmail: 'system@ais.dev',
+            timestamp: new Date().toISOString(),
+            mergedIds: others.map(o => o.id),
+            previousTotal: target.amount,
+            newTotal: totalAmount
+          });
+          
+          // Sort history by timestamp
+          combinedHistory.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          
+          const batch = writeBatch(db);
+          
+          // Update target
+          batch.update(doc(db, 'budgets', target.id), {
+            amount: totalAmount,
+            editHistory: combinedHistory,
+            updatedAt: serverTimestamp()
+          });
+          
+          // Update costs pointing to others
+          const otherIds = others.map(o => o.id);
+          const costsToUpdate = costs.filter(c => otherIds.includes(c.budgetId));
+          
+          costsToUpdate.forEach(c => {
+            batch.update(doc(db, 'costs', c.id), {
+              budgetId: target.id
+            });
+            costUpdatedCount++;
+          });
+          
+          // Delete others
+          others.forEach(o => {
+            batch.delete(doc(db, 'budgets', o.id));
+            deletedCount++;
+          });
+          
+          await batch.commit();
+          mergedCount++;
+        }
+      }
+      
+      if (mergedCount > 0) {
+        toast.success(`Đã gộp ${mergedCount} nhóm ngân sách. Xóa ${deletedCount} bản trùng. Cập nhật ${costUpdatedCount} chi phí.`, { id: toastId });
+        await logAction('SYSTEM', 'budgets', 'all', { mergedCount, deletedCount, costUpdatedCount });
+      } else {
+        toast.success('Không có ngân sách trùng lặp nào cần gộp.', { id: toastId });
+      }
+    } catch (error) {
+      console.error("Merge error:", error);
+      toast.error('Lỗi khi gộp ngân sách: ' + (error instanceof Error ? error.message : String(error)), { id: toastId });
+    } finally {
+      setIsMergingBudgets(false);
+    }
+  };
+
   const [isDeletingBudgets, setIsDeletingBudgets] = useState(false);
   const [isDeletingCosts, setIsDeletingCosts] = useState(false);
   const [isAddingEfficiency, setIsAddingEfficiency] = useState(false);
@@ -918,6 +1032,16 @@ export default function App() {
       setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
 
+    // Listen to settings
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setSystemSettings(data);
+        if (data.budgetStartDay) setAdminBudgetStartDay(data.budgetStartDay.toString());
+        if (data.budgetEndDay) setAdminBudgetEndDay(data.budgetEndDay.toString());
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings'));
+
     return () => {
       unsubProjects();
       unsubTeams();
@@ -928,6 +1052,7 @@ export default function App() {
       unsubLogs();
       unsubUsers();
       unsubEfficiency();
+      unsubSettings();
     };
   }, [user, userRole, userProfile]);
 
@@ -1165,20 +1290,14 @@ export default function App() {
         rows = XLSX.utils.sheet_to_json(firstSheet);
       }
 
-      if (rows.length === 0) {
-        toast.error("Không tìm thấy dữ liệu trong Google Sheet.");
-        return;
-      }
-
       const batch = writeBatch(db);
       let count = 0;
       let skippedCount = 0;
       const errorDetails: string[] = [];
 
-
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowIndex = i + 2;
+      // Pre-consolidate incoming Google Sheet data
+      const consolidatedDataMap = new Map();
+      for (const row of rows) {
         const normalizedRow: any = {};
         Object.keys(row).forEach(k => {
           const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
@@ -1197,18 +1316,22 @@ export default function App() {
         const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
         const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']);
         const month = normalizeMonth(monthRaw);
-        const implementer = String(getVal(['Người triển khai', 'GDDA', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', 'phụ trách']) || '').trim();
         const amount = parseVal(getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']));
+        const implementer = String(getVal(['Người triển khai', 'GDDA', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', 'phụ trách']) || '').trim();
 
-        if (!pRef || !tRef || !month) {
-          const hasData = Object.values(normalizedRow).some(v => v !== '');
-          if (hasData) {
-            errorDetails.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
-            skippedCount++;
+        if (pRef && tRef && month && amount >= 0) {
+          const key = `${pRef}_${tRef}_${month}`;
+          if (consolidatedDataMap.has(key)) {
+            consolidatedDataMap.get(key).amount += amount;
+          } else {
+            consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer });
           }
-          continue;
         }
+      }
 
+      const consolidatedItems = Array.from(consolidatedDataMap.values()) as any[];
+
+      for (const item of consolidatedItems) {
         const findProject = (ref: string) => {
           const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
@@ -1229,53 +1352,70 @@ export default function App() {
           );
         };
 
-        const project = findProject(pRef);
-        const team = findTeam(tRef);
+        const project = findProject(item.pRef);
+        const team = findTeam(item.tRef);
 
-        if (!project) {
-          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
-          skippedCount++;
-          continue;
-        }
-        if (!team) {
-          errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+        if (!project || !team) {
           skippedCount++;
           continue;
         }
 
         const projectId = project.id;
         const teamId = team.id;
-        const assignedUserEmail = extractEmail(implementer);
+        const assignedUserEmail = extractEmail(item.implementer);
 
-        const existingBudget = budgets.find(b => 
+        const existingBudgetsForMatch = budgets.filter(b => 
           b.projectId === projectId && 
           b.teamId === teamId && 
-          b.month === month
+          b.month === item.month
         );
 
-        if (existingBudget) {
-          batch.update(doc(db, 'budgets', existingBudget.id), {
-            amount,
-            implementerName: implementer || existingBudget.implementerName,
-            assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
-            userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
+        if (existingBudgetsForMatch.length > 0) {
+          const targetBudget = existingBudgetsForMatch[0];
+          const duplicates = existingBudgetsForMatch.slice(1);
+          
+          batch.update(doc(db, 'budgets', targetBudget.id), {
+            amount: item.amount,
+            implementerName: item.implementer || targetBudget.implementerName,
+            assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
+            userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
             updatedAt: serverTimestamp(),
-            updatedBy: user?.uid
+            updatedBy: user?.uid,
+            editHistory: arrayUnion({
+              action: 'URL_IMPORT_UPDATE',
+              editorName: implementerName,
+              timestamp: new Date().toISOString(),
+              newAmount: item.amount,
+              duplicatesFixed: duplicates.length
+            })
           });
+
+          for (const dup of duplicates) {
+            const affectedCosts = costs.filter(c => c.budgetId === dup.id);
+            affectedCosts.forEach(c => {
+              batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
+            });
+            batch.delete(doc(db, 'budgets', dup.id));
+          }
         } else {
           batch.set(doc(collection(db, 'budgets')), {
             projectId,
             projectName: project.name,
             teamId,
             teamName: team.name,
-            implementerName: implementer || 'N/A',
+            implementerName: item.implementer || 'N/A',
             assignedUserEmail: assignedUserEmail,
-            userEmail: assignedUserEmail || user?.email?.toLowerCase(), // Use implementer email if available
-            month,
-            amount,
+            userEmail: assignedUserEmail || user?.email?.toLowerCase(),
+            month: item.month,
+            amount: item.amount,
             createdAt: serverTimestamp(),
             createdBy: user?.uid,
-            // Original registered email is kept in createdByEmail if needed (though not explicit here)
+            editHistory: [{
+              action: 'URL_IMPORT_CREATE',
+              editorName: implementerName,
+              timestamp: new Date().toISOString(),
+              amount: item.amount
+            }]
           });
         }
         count++;
@@ -2950,52 +3090,240 @@ export default function App() {
     return count;
   };
 
+  const isWithinRegistrationWindow = () => {
+    if (isAdmin || isMod || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
+    if (!systemSettings) return true;
+    
+    const now = new Date();
+    const day = now.getDate();
+    const start = systemSettings.budgetStartDay || 1;
+    const end = systemSettings.budgetEndDay || 20;
+
+    return day >= Number(start) && day <= Number(end);
+  };
+
+  const firebaseUserEmail = user?.email?.toLowerCase() || '';
+
   const handleAddBudget = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProjectId || !budgetAmount || !selectedTeamName || !budgetMonth || !implementerName) {
+    if (!selectedProjectId || !budgetAmount || !selectedTeamId || !budgetMonth || !implementerName) {
       toast.error('Vui lòng nhập đầy đủ thông tin');
       return;
     }
-    setIsConfirmBudgetOpen(true);
+
+    if (!isWithinRegistrationWindow()) {
+      toast.error(`Thời gian đăng ký ngân sách đã kết thúc. Vui lòng liên hệ Admin.`);
+      return;
+    }
+
+    const project = projects.find(p => p.id === selectedProjectId);
+    const team = teams.find(t => t.id === selectedTeamId);
+
+    const newItem = {
+      projectId: selectedProjectId,
+      projectName: project?.name || 'N/A',
+      teamId: selectedTeamId,
+      teamName: team?.name || selectedTeamName,
+      implementerName,
+      month: budgetMonth,
+      amount: Number(budgetAmount),
+      tempId: Math.random().toString(36).substr(2, 9)
+    };
+
+    setMultiBudgetItems([...multiBudgetItems, newItem]);
+    setBudgetAmount('');
+    setSelectedProjectId('');
+    toast.success('Đã thêm vào danh sách chờ đăng ký');
+  };
+
+  const removeMultiBudgetItem = (tempId: string) => {
+    setMultiBudgetItems(multiBudgetItems.filter(item => item.tempId !== tempId));
   };
 
   const confirmAddBudget = async () => {
-    const project = projects.find(p => p.id === selectedProjectId);
-    const team = teams.find(t => t.id === selectedTeamId);
+    if (multiBudgetItems.length === 0) return;
+    
     try {
-      const docRef = await addDoc(collection(db, 'budgets'), {
-        projectId: selectedProjectId,
-        projectName: project?.name || 'N/A',
-        teamId: selectedTeamId,
-        teamName: team?.name || selectedTeamName,
-        implementerName: implementerName,
-        month: budgetMonth,
-        amount: Number(budgetAmount),
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid,
-        userEmail: user?.email?.toLowerCase()
-      });
-      await logAction('CREATE', 'budgets', docRef.id, { 
-        projectId: selectedProjectId,
-        projectName: project?.name || 'N/A',
-        teamId: selectedTeamId,
-        teamName: team?.name || selectedTeamName,
-        month: budgetMonth,
-        amount: Number(budgetAmount),
-        implementerName
-      });
-      setBudgetAmount('');
-      // Keep implementerName and selectedTeamId from profile for next entry
-      if (!userProfile?.fullName) setImplementerName('');
-      setSelectedProjectId('');
-      if (!userProfile?.teamId) {
-        setSelectedTeamId('');
-        setSelectedTeamName('');
+      setIsDeletingBudgets(true); 
+
+      // Pre-merge multiBudgetItems to consolidate multiple entries for same project/team/month in current submission
+      const mergedItems = multiBudgetItems.reduce((acc: any[], current) => {
+        const existingIndex = acc.findIndex(item => 
+          item.projectId === current.projectId && 
+          item.teamId === current.teamId && 
+          item.month === current.month
+        );
+        
+        if (existingIndex > -1) {
+          acc[existingIndex].amount += current.amount;
+        } else {
+          acc.push({ ...current });
+        }
+        return acc;
+      }, []);
+
+      for (const item of mergedItems) {
+        // Find ALL existing budgets for same Project, Team, and Month from the main budgets list
+        const existingBudgetsForMatch = budgets.filter(b => 
+          b.projectId === item.projectId && 
+          b.teamId === item.teamId && 
+          b.month === item.month
+        );
+
+        if (existingBudgetsForMatch.length > 0) {
+          // Merge everything into the FIRST one
+          const targetBudget = existingBudgetsForMatch[0];
+          const duplicates = existingBudgetsForMatch.slice(1);
+          
+          const batch = writeBatch(db);
+          
+          let totalToMergeFromDuplicates = 0;
+          const duplicateIdsRemoved: string[] = [];
+
+          // If duplicates existed, prepare them for merge
+          if (duplicates.length > 0) {
+            for (const dup of duplicates) {
+              totalToMergeFromDuplicates += dup.amount;
+              duplicateIdsRemoved.push(dup.id);
+              
+              // Update costs pointing to duplicate to point to target
+              const affectedCosts = costs.filter(c => c.budgetId === dup.id);
+              affectedCosts.forEach(c => {
+                batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
+              });
+              
+              // Delete duplicate
+              batch.delete(doc(db, 'budgets', dup.id));
+            }
+          }
+          
+          // Single update for target with combined amount
+          batch.update(targetRef, {
+            amount: increment(item.amount + totalToMergeFromDuplicates),
+            updatedAt: serverTimestamp(),
+            editHistory: arrayUnion({
+              action: 'MERGE_ADD_CLEANUP',
+              editorName: implementerName,
+              editorEmail: user?.email,
+              timestamp: new Date().toISOString(),
+              addedAmount: item.amount,
+              mergedFromDuplicates: totalToMergeFromDuplicates,
+              prevAmount: targetBudget.amount,
+              duplicatesFixed: duplicateIdsRemoved.length > 0 ? duplicateIdsRemoved : null
+            })
+          });
+
+          await batch.commit();
+          await logAction('UPDATE', 'budgets', targetBudget.id, { 
+            mergedAmount: item.amount,
+            duplicatesRemoved: duplicateIdsRemoved.length 
+          });
+        } else {
+          // Create new
+          const docRef = await addDoc(collection(db, 'budgets'), {
+            projectId: item.projectId,
+            projectName: item.projectName,
+            teamId: item.teamId,
+            teamName: item.teamName,
+            implementerName: item.implementerName,
+            month: item.month,
+            amount: item.amount,
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid,
+            userEmail: user?.email?.toLowerCase(),
+            editHistory: []
+          });
+          await logAction('CREATE', 'budgets', docRef.id, { ...item });
+        }
       }
+
+      setMultiBudgetItems([]);
       setIsConfirmBudgetOpen(false);
-      toast.success('Đã đăng ký ngân sách');
+      toast.success('Đã hoàn tất đăng ký ngân sách');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'budgets');
+    } finally {
+      setIsDeletingBudgets(false);
+    }
+  };
+
+  const handleSaveSystemSettings = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'global'), {
+        budgetStartDay: Number(adminBudgetStartDay),
+        budgetEndDay: Number(adminBudgetEndDay),
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid
+      }, { merge: true });
+      toast.success('Đã lưu cài đặt hệ thống');
+      await logAction('UPDATE', 'settings', 'global', { budgetStartDay: adminBudgetStartDay, budgetEndDay: adminBudgetEndDay });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'settings');
+    }
+  };
+
+  const handleOpenHistory = (target: any, name: string) => {
+    setHistoryToView(target.editHistory || []);
+    setHistoryTargetName(name);
+    setIsHistoryDialogOpen(true);
+  };
+
+  const handleEditBudget = async (budget: any, newAmount: number) => {
+    if (!isWithinRegistrationWindow()) {
+      toast.error('Ngoài thời gian cho phép chỉnh sửa ngân sách.');
+      return;
+    }
+
+    try {
+      const budgetRef = doc(db, 'budgets', budget.id);
+      await updateDoc(budgetRef, {
+        amount: newAmount,
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'EDIT',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          oldAmount: budget.amount,
+          newAmount: newAmount
+        })
+      });
+      toast.success('Đã cập nhật ngân sách');
+      await logAction('UPDATE', 'budgets', budget.id, { oldAmount: budget.amount, newAmount });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'budgets');
+    }
+  };
+
+  const handleEditCost = async (cost: any, newChannels: any, newNote: string) => {
+    // Note: User requirement says can edit actual cost too. 
+    // Usually costs are edits are less restricted by time window unless specified.
+    // For now, I'll allow editing if they created it.
+    
+    const totalAmount = Object.values(newChannels).reduce((acc: number, val: any) => acc + Number(val), 0);
+
+    try {
+      const costRef = doc(db, 'costs', cost.id);
+      await updateDoc(costRef, {
+        amount: totalAmount,
+        channels: newChannels,
+        note: newNote,
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'UPDATE',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: {
+            amount: { old: cost.amount, new: totalAmount },
+            note: { old: cost.note, new: newNote }
+          }
+        })
+      });
+      toast.success('Đã cập nhật chi phí');
+      await logAction('UPDATE', 'costs', cost.id, { oldAmount: cost.amount, newAmount: totalAmount });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'costs');
     }
   };
 
@@ -3084,9 +3412,16 @@ export default function App() {
       toast.error('Vui lòng nhập đầy đủ thông tin');
       return;
     }
+
+    if (!isWithinRegistrationWindow()) {
+      toast.error('Ngoài thời gian cho phép chỉnh sửa ngân sách.');
+      return;
+    }
+
     try {
       const budgetRef = doc(db, 'budgets', editingBudgetId);
-      const updateData = {
+      const originalBudget = budgets.find(b => b.id === editingBudgetId);
+      const updateData: any = {
         amount: Number(editingBudgetAmount),
         month: editingBudgetMonth,
         teamName: editingBudgetTeam,
@@ -3094,7 +3429,20 @@ export default function App() {
         projectName: projectMap[editingBudgetProject] || 'N/A',
         implementerName: editingBudgetImplementer,
         updatedAt: serverTimestamp(),
-        updatedBy: user?.uid
+        updatedBy: user?.uid,
+        editHistory: arrayUnion({
+          action: 'UPDATE',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: {
+            amount: { old: originalBudget?.amount, new: Number(editingBudgetAmount) },
+            month: { old: originalBudget?.month, new: editingBudgetMonth },
+            team: { old: originalBudget?.teamName, new: editingBudgetTeam },
+            project: { old: originalBudget?.projectName, new: projectMap[editingBudgetProject] || 'N/A' },
+            implementer: { old: originalBudget?.implementerName, new: editingBudgetImplementer }
+          }
+        })
       };
       await updateDoc(budgetRef, updateData);
       
@@ -3891,19 +4239,20 @@ export default function App() {
         let errorsCount = 0;
         const errorDetailsList: string[] = [];
 
-        for (let i = 0; i < data.length; i++) {
-          const rawRow = data[i] as any;
-          const rowIndex = i + 2;
-          const row: any = {};
-          Object.keys(rawRow).forEach(k => {
+        // Pre-consolidate the incoming data by projectId_teamId_month
+        const consolidatedDataMap = new Map();
+        for (const row of data) {
+          const processedRow = row as any;
+          const normalizedRow: any = {};
+          Object.keys(processedRow).forEach(k => {
             const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
-            row[cleanKey] = rawRow[k];
+            normalizedRow[cleanKey] = processedRow[k];
           });
 
           const getVal = (possibleKeys: string[]) => {
             for (const pk of possibleKeys) {
               const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
-              if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
+              if (normalizedRow[cleanPK] !== undefined && normalizedRow[cleanPK] !== '') return normalizedRow[cleanPK];
             }
             return undefined;
           };
@@ -3912,20 +4261,27 @@ export default function App() {
           const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'teamid', 'id team', 'mã team']) || '').trim();
           const monthRaw = getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'ky', 'kỳ']);
           const month = normalizeMonth(monthRaw);
-          const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
           const amountRaw = getVal(['Ngân sách', 'Amount', 'ngansach', 'ngân sách', 'ngânsách', 'số tiền']);
           const amountDecimal = String(amountRaw || '0').replace(/[.,]/g, '');
           const amount = Number(amountDecimal);
+          const implementer = String(getVal(['Người phụ trách', 'Giám đốc kinh doanh', 'GDDA', 'Người triển khai', 'Implementer', 'nguoiphutrach', 'giamdockinhdoanh', 'nguoitrienkhai', 'người triển khai', ' GD']) || '').trim();
 
-          if (!pRef || !tRef || !month || amount <= 0) {
-            const hasData = Object.values(row).some(v => v !== '');
-            if (hasData) {
-              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ`);
-              errorsCount++;
+          if (pRef && tRef && month && amount >= 0) {
+            const key = `${pRef}_${tRef}_${month}`;
+            if (consolidatedDataMap.has(key)) {
+              consolidatedDataMap.get(key).amount += amount;
+            } else {
+              consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer, rawRow: processedRow });
             }
-            continue;
+          } else if (Object.values(normalizedRow).some(v => v !== '')) {
+             errorDetailsList.push(`Dòng lỗi: Thiếu thông tin bắt buộc hoặc số tiền không hợp lệ cho "${pRef}"`);
+             errorsCount++;
           }
+        }
 
+        const consolidatedItems = Array.from(consolidatedDataMap.values()) as any[];
+
+        for (const item of consolidatedItems) {
           const findProjectAddress = (ref: string) => {
             const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
             if (!cleanRef) return null;
@@ -3946,40 +4302,65 @@ export default function App() {
             );
           };
 
-          const project = findProjectAddress(pRef);
-          const team = findTeamAddress(tRef);
+          const project = findProjectAddress(item.pRef);
+          const team = findTeamAddress(item.tRef);
 
           if (!project) {
-            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+            errorDetailsList.push(`Không tìm thấy Dự án khớp với "${item.pRef}"`);
             errorsCount++;
             continue;
           }
           if (!team) {
-            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+            errorDetailsList.push(`Không tìm thấy Team khớp với "${item.tRef}"`);
             errorsCount++;
             continue;
           }
 
           const pId = project.id;
           const teamId = team.id;
-          const assignedUserEmail = extractEmail(implementer);
+          const assignedUserEmail = extractEmail(item.implementer);
 
-          const existingBudget = budgets.find(b => 
+          const existingBudgetsForMatch = budgets.filter(b => 
             b.projectId === pId && 
             b.teamId === teamId && 
-            b.month === month
+            b.month === item.month
           );
 
-          if (existingBudget) {
-            const bRef = doc(db, 'budgets', existingBudget.id);
+          if (existingBudgetsForMatch.length > 0) {
+            const targetBudget = existingBudgetsForMatch[0];
+            const duplicates = existingBudgetsForMatch.slice(1);
+            const bRef = doc(db, 'budgets', targetBudget.id);
+            
+            // For import, we typically REPLACE the amount with the one in Excel
+            // but we also need to merge any existing duplicates into this one
+            const totalExistingOtherAmount = duplicates.reduce((sum, b) => sum + b.amount, 0);
+            
             batch.update(bRef, {
-              amount,
-              implementerName: implementer || existingBudget.implementerName,
-              assignedUserEmail: assignedUserEmail || existingBudget.assignedUserEmail || null,
-              userEmail: assignedUserEmail || existingBudget.userEmail || user?.email?.toLowerCase(),
+              amount: item.amount, // Set to Excel amount
+              implementerName: item.implementer || targetBudget.implementerName,
+              assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
+              userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
               updatedAt: serverTimestamp(),
-              updatedBy: user?.uid
+              updatedBy: user?.uid,
+              editHistory: arrayUnion({
+                action: 'IMPORT_UPDATE',
+                editorName: userProfile?.fullName || user?.displayName || 'Admin',
+                editorEmail: user?.email,
+                timestamp: new Date().toISOString(),
+                newAmount: item.amount,
+                previousAmount: targetBudget.amount,
+                duplicatesMerged: duplicates.length
+              })
             });
+
+            // Cleanup duplicates
+            for (const dup of duplicates) {
+              const affectedCosts = costs.filter(c => c.budgetId === dup.id);
+              affectedCosts.forEach(c => {
+                batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
+              });
+              batch.delete(doc(db, 'budgets', dup.id));
+            }
           } else {
             const bRef = doc(collection(db, 'budgets'));
             batch.set(bRef, {
@@ -3987,13 +4368,19 @@ export default function App() {
               projectName: project.name,
               teamId: teamId,
               teamName: team.name,
-              implementerName: implementer || 'N/A',
+              implementerName: item.implementer || 'N/A',
               assignedUserEmail: assignedUserEmail,
               userEmail: assignedUserEmail || user?.email?.toLowerCase(),
-              month,
-              amount,
+              month: item.month,
+              amount: item.amount,
               createdAt: serverTimestamp(),
-              createdBy: user?.uid
+              createdBy: user?.uid,
+              editHistory: [{
+                action: 'IMPORT_CREATE',
+                editorName: 'Admin',
+                timestamp: new Date().toISOString(),
+                amount: item.amount
+              }]
             });
           }
           count++;
@@ -4513,9 +4900,21 @@ export default function App() {
       return;
     }
     try {
+      const existingCost = costs.find(c => c.id === id);
       await updateDoc(doc(db, 'costs', id), {
         amount: Number(editingCostAmount),
-        note: editingCostNote
+        note: editingCostNote,
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'UPDATE',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: {
+            amount: { old: existingCost?.amount, new: Number(editingCostAmount) },
+            note: { old: existingCost?.note, new: editingCostNote }
+          }
+        })
       });
       await logAction('UPDATE', 'costs', id, { amount: editingCostAmount, note: editingCostNote });
       toast.success('Đã cập nhật chi phí');
@@ -5677,14 +6076,24 @@ export default function App() {
                         </>
                       )}
                       {isAdmin && (
-                        <Button 
-                          variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
-                          className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                          onClick={() => setAdminSubTab('users')}
-                        >
-                          <UserCircle className={`mr-3 h-5 w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                          Người dùng
-                        </Button>
+                        <>
+                          <Button 
+                            variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('users')}
+                          >
+                            <UserCircle className={`mr-3 h-5 w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Người dùng
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
+                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'settings' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('settings')}
+                          >
+                            <ShieldCheck className={`mr-3 h-5 w-5 ${adminSubTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            Cài đặt Hệ thống
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -7120,6 +7529,15 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
+                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                            onClick={handleMergeDuplicateBudgets}
+                            disabled={isMergingBudgets}
+                          >
+                            <RefreshCw className={`w-3 h-3 mr-1 ${isMergingBudgets ? 'animate-spin' : ''}`} /> Gộp ngân sách trùng
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
                             className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
                             onClick={handleExportBudgets}
                           >
@@ -7238,6 +7656,15 @@ export default function App() {
                                     <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
                                     <TableCell className="text-right">
                                       <div className="flex justify-end gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                          onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                          title="Lịch sử thay đổi"
+                                        >
+                                          <History className="w-3.5 h-3.5" />
+                                        </Button>
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
@@ -7415,14 +7842,25 @@ export default function App() {
                                     <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
                                     <TableCell className="text-right font-mono font-bold text-blue-600">{c.amount.toLocaleString()} đ</TableCell>
                                     <TableCell className="text-right">
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                        onClick={() => handleDeleteCost(c.id, c.projectName)}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
+                                      <div className="flex justify-end gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                          onClick={() => handleOpenHistory(c, `${c.projectName} - ${c.teamName}`)}
+                                          title="Lịch sử thay đổi"
+                                        >
+                                          <History className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                          onClick={() => handleDeleteCost(c.id, c.projectName)}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -7694,7 +8132,7 @@ export default function App() {
                     </div>
 
                     {/* Summary Cards - Viewable by all but tailored by role */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4 mb-8">
                       {/* 0. Tổng dự án (Admin only) */}
                       {isAdmin && (
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
@@ -7704,8 +8142,8 @@ export default function App() {
                               <Building2 className="w-3 h-3 text-blue-500" />
                             </span>
                           </div>
-                          <p className="text-xl font-black text-slate-900 leading-none">
-                            {projects.length} <span className="text-[10px] font-bold text-slate-400">Dự án</span>
+                          <p className="text-lg font-black text-slate-900 leading-none">
+                            {projects.length} <span className="text-[9px] font-bold text-slate-400">Dự án</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 w-full" />
@@ -7721,8 +8159,8 @@ export default function App() {
                               <Wallet className="w-3 h-3 text-blue-500" />
                             </span>
                           </div>
-                          <p className="text-xl font-black text-slate-900 leading-none">
-                            {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-slate-400">đ</span>
+                          <p className="text-lg font-black text-slate-900 leading-normal">
+                            {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 w-full" />
@@ -7737,8 +8175,8 @@ export default function App() {
                               <Wallet className="w-3 h-3 text-emerald-500" />
                             </span>
                           </div>
-                          <p className="text-xl font-black text-emerald-600 leading-none">
-                            {filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-slate-400">đ</span>
+                          <p className="text-lg font-black text-emerald-600 leading-normal">
+                            {filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-emerald-500 w-3/4 opacity-50" />
@@ -7754,10 +8192,10 @@ export default function App() {
                             </span>
                           </div>
                           <div className="flex items-baseline gap-1">
-                            <p className="text-xl font-black text-slate-900 leading-none">
+                            <p className="text-lg font-black text-slate-900 leading-none">
                               {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)}
                             </p>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Căn</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Căn</span>
                           </div>
                           <p className="text-[8px] font-bold text-slate-400 mt-2 italic">Dữ liệu từ hiệu quả kinh doanh</p>
                         </div>
@@ -7768,8 +8206,8 @@ export default function App() {
                             <p className="text-[10px] text-indigo-100 font-black uppercase tracking-widest">Doanh số (Sales)</p>
                             <TrendingUp className="w-3 h-3 text-indigo-200" />
                           </div>
-                          <p className="text-xl font-black text-white leading-none">
-                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-[10px] font-bold text-indigo-200">đ</span>
+                          <p className="text-lg font-black text-white leading-normal">
+                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-indigo-200">đ</span>
                           </p>
                           <div className="mt-2 text-[9px] font-bold text-indigo-200/80">
                             Hiệu quả doanh thu thực tế
@@ -7790,8 +8228,8 @@ export default function App() {
                                  <BarChart3 className="w-3 h-3 text-amber-500" />
                                </div>
                                <div className="flex items-baseline gap-2">
-                                 <p className="text-xl font-black text-amber-600 leading-none">{romi}x</p>
-                                 <span className="text-[10px] font-bold text-slate-400 border-l pl-2 border-slate-200">{costRatio}%</span>
+                                 <p className="text-lg font-black text-amber-600 leading-none">{romi}x</p>
+                                 <span className="text-[9px] font-bold text-slate-400 border-l pl-2 border-slate-200">{costRatio}%</span>
                                </div>
                                <p className="text-[8px] font-bold text-slate-400 mt-2 uppercase">ROMI | CP/Doanh thu</p>
                              </div>
@@ -7800,32 +8238,33 @@ export default function App() {
 
                         {/* 6. Tỉ lệ Thực chi / Ngân sách */}
                         {(() => {
-                          const budget = filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-                          const cost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-                          const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
-                          const variance = usagePercent - 100;
-                          
-                          return (
-                            <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-purple-200">
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">CP / Ngân sách</p>
-                                <RefreshCw className={`w-3 h-3 ${usagePercent > 100 ? 'text-rose-500' : 'text-purple-500'}`} />
-                              </div>
-                              <div className="flex items-baseline gap-2">
-                                <p className={`text-xl font-black leading-none ${usagePercent > 100 ? 'text-rose-600' : usagePercent > 90 ? 'text-amber-600' : 'text-slate-900'}`}>{usagePercent.toFixed(1)}%</p>
-                                <span className={`text-[8px] font-bold px-1 rounded-sm ${variance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-green-50 text-green-600'}`}>
-                                  {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
-                                </span>
-                              </div>
-                              <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                  style={{ width: `${Math.min(usagePercent, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
+                           const budget = filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           const cost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
+                           const variance = usagePercent - 100;
+                           
+                           return (
+                             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-purple-200">
+                               <div className="flex items-center justify-between mb-1">
+                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">CP / Ngân sách</p>
+                                 <RefreshCw className={`w-3 h-3 ${usagePercent > 100 ? 'text-rose-500' : 'text-purple-500'}`} />
+                               </div>
+                               <div className="flex items-baseline gap-2">
+                                 <p className={`text-lg font-black leading-none ${usagePercent > 100 ? 'text-rose-600' : usagePercent > 90 ? 'text-amber-600' : 'text-slate-900'}`}>{usagePercent.toFixed(1)}%</p>
+                                 <span className={`text-[8px] font-bold px-1 rounded-sm ${variance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-green-50 text-green-600'}`}>
+                                   {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
+                                 </span>
+                               </div>
+                               <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                 <div 
+                                   className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                   style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                                 />
+                               </div>
+                             </div>
+                           );
                         })()}
+
                       </div>
 
                     {/* Chart Section */}
@@ -8030,14 +8469,14 @@ export default function App() {
                           </div>
 
                           {/* Summary KPI Cards */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="p-6 rounded-3xl bg-white border border-slate-100 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
                               <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
                                 <TrendingUp className="w-12 h-12 text-blue-600" />
                               </div>
                               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng căn đã bán</p>
                               <div className="flex items-baseline gap-2">
-                                <p className="text-3xl font-black text-slate-900 leading-none">
+                                <p className="text-2xl font-black text-slate-900 leading-none">
                                   {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)}
                                 </p>
                                 <span className="text-xs font-bold text-slate-400">căn</span>
@@ -8052,7 +8491,7 @@ export default function App() {
                                 <Wallet className="w-12 h-12 text-emerald-600" />
                               </div>
                               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Hiệu quả doanh số</p>
-                              <p className="text-2xl font-black text-emerald-600 leading-none">
+                              <p className="text-xl font-black text-emerald-600 leading-normal break-all">
                                 {formatCurrency(efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0))}
                               </p>
                               <div className="mt-2 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
@@ -8065,7 +8504,7 @@ export default function App() {
                                 <Wallet className="w-12 h-12 text-blue-600" />
                               </div>
                               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách</p>
-                              <p className="text-2xl font-black text-blue-600 leading-none">
+                              <p className="text-xl font-black text-blue-600 leading-normal break-all">
                                 {formatCurrency(efficiencyChartData.reduce((acc, curr) => acc + (curr.budget || 0), 0))}
                               </p>
                               <div className="mt-2 text-[10px] text-blue-500 font-bold">
@@ -8078,7 +8517,7 @@ export default function App() {
                                 <BarChart3 className="w-12 h-12 text-amber-600" />
                               </div>
                               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cost/Sale (TB)</p>
-                              <p className="text-2xl font-black text-amber-600 leading-none">
+                              <p className="text-xl font-black text-amber-600 leading-normal break-all">
                                 {(() => {
                                   const totalSales = efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0);
                                   const totalCost = efficiencyChartData.reduce((acc, curr) => acc + (curr.cost || 0), 0);
@@ -8090,6 +8529,7 @@ export default function App() {
                               </div>
                             </div>
                           </div>
+
 
                           {/* Charts Grid */}
                           <div className="space-y-12">
@@ -8827,57 +9267,182 @@ export default function App() {
               )}
               {isAdmin && (
                 <TabsContent value="backup" className="space-y-6">
-                  <Card className="border-none shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Sao lưu sang Google Sheets</CardTitle>
-                      <CardDescription>Xuất toàn bộ dữ liệu hệ thống sang một tệp Google Spreadsheet mới.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-                        <p className="font-bold mb-1">Lưu ý:</p>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>Bạn cần đăng nhập bằng tài khoản Google có quyền tạo tệp trên Google Drive.</li>
-                          <li>Hệ thống sẽ tạo một tệp Spreadsheet mới với các sheet tương ứng cho từng bảng dữ liệu.</li>
-                          <li>Quá trình này có thể mất vài giây tùy thuộc vào lượng dữ liệu.</li>
-                        </ul>
-                      </div>
-                          <div className="flex flex-wrap gap-3">
-                            <Button 
-                              onClick={syncFullSystem} 
-                              disabled={isBackingUp}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              {isBackingUp ? (
-                                <>
-                                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                                  Đang sao lưu...
-                                </>
-                              ) : (
-                                <>
-                                  <BarChart3 className="w-4 h-4 mr-2" /> Sao lưu dữ liệu (Sync All)
-                                </>
-                              )}
-                            </Button>
-                            <a 
-                              href={GOOGLE_SHEET_URL}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all border border-green-600 text-green-700 hover:bg-green-50 h-10 px-4 py-2"
-                            >
-                              <FileSpreadsheet className="w-4 h-4 mr-2" /> Mở Google Sheet đồng bộ
-                            </a>
-                            <Button 
-                              variant="outline"
-                              onClick={() => setIsRestoreAllDialogOpen(true)}
-                              className="border-indigo-600 text-indigo-700 hover:bg-indigo-50"
-                            >
-                              <History className="w-4 h-4 mr-2" /> Khôi phục toàn bộ (Deep Scan)
-                            </Button>
+                    <Card className="border-none shadow-sm">
+                      <CardHeader>
+                        <CardTitle>Sao lưu sang Google Sheets</CardTitle>
+                        <CardDescription>Xuất toàn bộ dữ liệu hệ thống sang một tệp Google Spreadsheet mới.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+                          <p className="font-bold mb-1">Lưu ý:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li>Bạn cần đăng nhập bằng tài khoản Google có quyền tạo tệp trên Google Drive.</li>
+                            <li>Hệ thống sẽ tạo một tệp Spreadsheet mới với các sheet tương ứng cho từng bảng dữ liệu.</li>
+                            <li>Quá trình này có thể mất vài giây tùy thuộc vào lượng dữ liệu.</li>
+                          </ul>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          <Button 
+                            onClick={syncFullSystem} 
+                            disabled={isBackingUp}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            {isBackingUp ? (
+                              <>
+                                <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                Đang sao lưu...
+                              </>
+                            ) : (
+                              <>
+                                <BarChart3 className="w-4 h-4 mr-2" /> Sao lưu dữ liệu (Sync All)
+                              </>
+                            )}
+                          </Button>
+                          <a 
+                            href={GOOGLE_SHEET_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all border border-green-600 text-green-700 hover:bg-green-50 h-10 px-4 py-2"
+                          >
+                            <FileSpreadsheet className="w-4 h-4 mr-2" /> Mở Google Sheet đồng bộ
+                          </a>
+                          <Button 
+                            variant="outline"
+                            onClick={() => setIsRestoreAllDialogOpen(true)}
+                            className="border-indigo-600 text-indigo-700 hover:bg-indigo-50"
+                          >
+                            <History className="w-4 h-4 mr-2" /> Khôi phục toàn bộ (Deep Scan)
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                )}
+
+                {/* System Settings Tab */}
+                <TabsContent value="settings" className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card className="border-none shadow-sm overflow-hidden">
+                      <div className="h-1.5 bg-gradient-to-r from-amber-400 to-orange-500 w-full" />
+                      <CardHeader>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-amber-50 rounded-lg">
+                            <Clock className="w-5 h-5 text-amber-600" />
                           </div>
-                    </CardContent>
-                  </Card>
+                          <div>
+                            <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Cài đặt Thời gian Đăng ký</CardTitle>
+                            <CardDescription className="text-xs font-medium text-slate-500">Quy định khung thời gian user được phép đăng ký & chỉnh sửa ngân sách hàng tháng</CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3">
+                          <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                          <div className="text-xs text-indigo-700 leading-relaxed font-medium">
+                            <p className="font-bold mb-1 underline">Cơ chế hoạt động:</p>
+                            <ul className="list-disc list-inside space-y-1">
+                              <li>Users chỉ có thể <b>Đăng ký</b> hoặc <b>Chỉnh sửa</b> ngân sách trong khoảng từ ngày <b>Bắt đầu</b> đến ngày <b>Kết thúc</b> của mỗi tháng.</li>
+                              <li>Ngoài khoảng thời gian này, các tính năng thêm/sửa ngân sách sẽ bị khóa.</li>
+                              <li><b>Admin</b> và các tài khoản được chỉ định vẫn có quyền chỉnh sửa bất cứ lúc nào.</li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Ngày Bắt đầu</Label>
+                            <div className="relative">
+                              <Input 
+                                type="number" 
+                                min="1" 
+                                max="31" 
+                                value={adminBudgetStartDay} 
+                                onChange={(e) => setAdminBudgetStartDay(e.target.value)}
+                                className="bg-slate-50 border-slate-200 h-12 text-center text-lg font-black text-indigo-600 focus:ring-amber-500 rounded-xl"
+                              />
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* Thường là ngày 01 đầu tháng</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Ngày Kết thúc</Label>
+                            <div className="relative">
+                              <Input 
+                                type="number" 
+                                min="1" 
+                                max="31" 
+                                value={adminBudgetEndDay} 
+                                onChange={(e) => setAdminBudgetEndDay(e.target.value)}
+                                className="bg-slate-50 border-slate-200 h-12 text-center text-lg font-black text-rose-600 focus:ring-amber-500 rounded-xl"
+                              />
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 10 hàng tháng</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-4">
+                          <Button 
+                            onClick={handleSaveSystemSettings}
+                            className="w-full bg-slate-900 hover:bg-black text-white h-12 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-slate-200 transition-all hover:scale-[1.01]"
+                          >
+                            <Save className="w-4 h-4" /> Lưu cấu hình hệ thống
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-none shadow-sm overflow-hidden bg-slate-50/50">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-indigo-500" />
+                          Trạng thái Hiện tại
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                          <span className="text-sm font-medium text-slate-600">Trạng thái đăng ký:</span>
+                          {isWithinRegistrationWindow() ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                              ĐANG MỞ
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                              <div className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
+                              ĐÃ KHÓA
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Người có quyền ghi đè (Override)</h4>
+                          <div className="space-y-2">
+                            <div className="p-3 bg-white rounded-xl border border-slate-100 flex items-center gap-3">
+                              <UserCircle className="w-8 h-8 text-indigo-400" />
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">Administrator</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Toàn bộ Admin & Super Admin</p>
+                              </div>
+                            </div>
+                            <div className="p-3 bg-white rounded-xl border border-slate-100 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">TV</div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">thienvu1108@gmail.com</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Tài khoản hệ thống (Hardcoded)</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </TabsContent>
-              )}
 
                 {/* Checkpoint Restore Dialog */}
                 <Dialog open={isRestoreCheckpointDialogOpen} onOpenChange={setIsRestoreCheckpointDialogOpen}>
@@ -9186,9 +9751,6 @@ export default function App() {
                                 </SelectItem>
                               ))
                             }
-                            {projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase())).length === 0 && (
-                              <div className="p-4 text-center text-xs text-muted-foreground">Không tìm thấy dự án</div>
-                            )}
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -9224,9 +9786,6 @@ export default function App() {
                                 <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                               ))
                             }
-                            {teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
-                              <div className="p-4 text-center text-xs text-muted-foreground">Không tìm thấy team</div>
-                            )}
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -9282,12 +9841,68 @@ export default function App() {
                     </div>
 
                     <div className="flex items-end">
-                      <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-11 shadow-md shadow-blue-200 transition-all hover:translate-y-[-1px]">
-                        <Plus className="w-4 h-4 mr-2" /> Đăng ký ngân sách
+                      <Button type="submit" variant="outline" className="w-full h-11 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 font-bold transition-all">
+                        <Plus className="w-4 h-4 mr-2" /> Thêm Dự Án Vào Danh Sách
                       </Button>
                     </div>
                   </div>
                 </form>
+
+                {multiBudgetItems.length > 0 && (
+                  <div className="mt-8 space-y-4 pt-8 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                          <Database className="w-5 h-5 text-indigo-500" />
+                          Danh sách dự án chờ đăng ký ({multiBudgetItems.length})
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider italic">Gợi ý: Hệ thống sẽ tự động gộp các dự án trùng Team & Tháng</p>
+                      </div>
+                      <Button 
+                        onClick={() => setIsConfirmBudgetOpen(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-6 px-10 rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-3"
+                      >
+                         Xác Nhận Đăng Ký Tất Cả ({formatCurrency(multiBudgetItems.reduce((acc, curr) => acc + curr.amount, 0))})
+                         <ArrowRight className="w-5 h-5" />
+                      </Button>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-100 overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow>
+                            <TableHead className="text-[10px] font-black uppercase text-slate-400 h-10">Dự án</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-slate-400 h-10">Team</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-slate-400 h-10">Tháng</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase text-slate-400 h-10 text-right">Số tiền</TableHead>
+                            <TableHead className="w-20"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {multiBudgetItems.map((item) => (
+                            <TableRow key={item.tempId} className="hover:bg-slate-50/30 transition-colors">
+                              <TableCell className="font-bold text-slate-900 py-3">{item.projectName}</TableCell>
+                              <TableCell className="text-slate-600 py-3">{item.teamName}</TableCell>
+                              <TableCell className="text-slate-600 font-mono text-xs py-3">{item.month}</TableCell>
+                              <TableCell className="text-right font-black text-indigo-600 py-3">{formatCurrency(item.amount)}</TableCell>
+                              <TableCell className="py-3">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => removeMultiBudgetItem(item.tempId)}
+                                  className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg h-8 w-8"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
               </CardContent>
             </Card>
 
@@ -9458,18 +10073,47 @@ export default function App() {
                               <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{b.userEmail}</span>
                             </div>
                           </TableCell>
-                          {isAdmin && (
-                            <TableCell className="py-4 text-right">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </TableCell>
-                          )}
+                          <TableCell className="py-4 text-right">
+                             <div className="flex justify-end gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                  onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                  title="Lịch sử thay đổi"
+                                >
+                                  <History className="h-3.5 w-3.5" />
+                                </Button>
+                                {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                    onClick={() => {
+                                      setEditingBudgetId(b.id);
+                                      setEditingBudgetProject(b.projectId);
+                                      setEditingBudgetTeam(b.teamId);
+                                      setEditingBudgetAmount(b.amount.toString());
+                                      setEditingBudgetMonth(b.month);
+                                      setEditingBudgetImplementer(b.implementerName);
+                                      setIsEditBudgetDialogOpen(true);
+                                    }}
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                    onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                             </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                       {budgets.length === 0 && (
@@ -9844,7 +10488,7 @@ export default function App() {
                           <TableHead>Thời gian</TableHead>
                           <TableHead className="text-right">Số tiền</TableHead>
                           <TableHead>Ghi chú</TableHead>
-                          {isAdmin && <TableHead className="text-right">Thao tác</TableHead>}
+                          <TableHead className="text-right">Thao tác</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -9896,33 +10540,40 @@ export default function App() {
                                 />
                               ) : (c.note || '-')}
                             </TableCell>
-                            {isAdmin && (
-                              <TableCell className="text-right">
-                                {editingCostId === c.id ? (
-                                  <div className="flex justify-end gap-1">
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateCost(c.id)}>
-                                      <Check className="h-4 w-4" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingCostId(null)}>
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-end gap-1">
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
-                                      setEditingCostId(c.id);
-                                      setEditingCostAmount(c.amount.toString());
-                                      setEditingCostNote(c.note || '');
-                                    }}>
-                                      <Edit2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id, projectMap[c.projectId] || c.projectName)}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </TableCell>
-                            )}
+                            <TableCell className="text-right">
+                              {(isAdmin || c.userEmail === user?.email?.toLowerCase()) && (
+                                <>
+                                  {editingCostId === c.id ? (
+                                    <div className="flex justify-end gap-1">
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateCost(c.id)}>
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingCostId(null)}>
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex justify-end gap-1">
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => handleOpenHistory(c, `${c.projectName} - ${c.teamName}`)} title="Lịch sử thay đổi">
+                                        <History className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                        setEditingCostId(c.id);
+                                        setEditingCostAmount(c.amount.toString());
+                                        setEditingCostNote(c.note || '');
+                                      }}>
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      {isAdmin && (
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id, projectMap[c.projectId] || c.projectName)}>
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                         {costs.length === 0 && (
@@ -11132,6 +11783,65 @@ export default function App() {
               <Download className="w-4 h-4 mr-2" /> Tải file mẫu (.xlsx)
             </Button>
             <Button variant="ghost" onClick={() => setIsImportEfficiencyDialogOpen(false)} className="rounded-xl text-xs h-9">Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-indigo-500" />
+              Lịch sử chỉnh sửa
+            </DialogTitle>
+            <DialogDescription>
+              Chi tiết các thay đổi của: <strong>{historyTargetName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {historyToView && historyToView.length > 0 ? (
+                historyToView.slice().reverse().map((entry, idx) => (
+                  <div key={idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border-indigo-100">
+                        {entry.action === 'UPDATE' ? 'CHỈNH SỬA' : entry.action === 'MERGE_ADD' ? 'GỘP THÊM' : entry.action}
+                      </Badge>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm') : '-'}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-700">{entry.editorName || entry.editorEmail}</p>
+                      {entry.action === 'MERGE_ADD' ? (
+                        <p className="text-[11px] text-slate-600">
+                          Gộp thêm <span className="font-bold text-emerald-600">{entry.addedAmount?.toLocaleString()}đ</span> vào tổng <span className="font-bold">{entry.prevAmount?.toLocaleString()}đ</span>
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {entry.changes && Object.entries(entry.changes).map(([field, delta]: [string, any], cIdx) => (
+                            <p key={cIdx} className="text-[11px] text-slate-600 flex flex-wrap gap-1 items-center">
+                              <span className="font-medium text-slate-400">{field}:</span>
+                              <span className="line-through text-slate-300">{delta.old?.toLocaleString()}</span>
+                              <ArrowRight className="w-2.5 h-2.5 text-slate-300" />
+                              <span className="font-bold text-indigo-600">{delta.new?.toLocaleString()}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-8 text-center text-slate-400 italic text-sm">
+                  Chưa có lịch sử chỉnh sửa cho bản ghi này
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button className="w-full" onClick={() => setIsHistoryDialogOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

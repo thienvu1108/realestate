@@ -32,7 +32,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -468,12 +468,17 @@ export default function App() {
   // Sorting states
   const [projectSort, setProjectSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [teamSort, setTeamSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
+  const [budgetReportSort, setBudgetReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
+  const [costReportSort, setCostReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
+  const [efficiencyTableSort, setEfficiencyTableSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
   const [costAmount, setCostAmount] = useState('');
   const [fbAds, setFbAds] = useState('');
   const [posting, setPosting] = useState('');
   const [zaloAds, setZaloAds] = useState('');
   const [googleAds, setGoogleAds] = useState('');
+  const [visaAmount, setVisaAmount] = useState('');
+  const [digitalAmount, setDigitalAmount] = useState('');
   const [otherCost, setOtherCost] = useState('');
   const [costNote, setCostNote] = useState('');
   const [selectedBudgetId, setSelectedBudgetId] = useState('');
@@ -482,6 +487,7 @@ export default function App() {
   // Edit states for Budget
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [editingBudgetAmount, setEditingBudgetAmount] = useState('');
+  const [editingBudgetVerifiedAmount, setEditingBudgetVerifiedAmount] = useState('');
   const [editingBudgetMonth, setEditingBudgetMonth] = useState(getMarketingMonth(new Date()));
   const [editingBudgetTeam, setEditingBudgetTeam] = useState('');
   const [editingBudgetProject, setEditingBudgetProject] = useState('');
@@ -568,6 +574,8 @@ export default function App() {
     posting: '',
     zaloAds: '',
     googleAds: '',
+    visaAmount: '',
+    digitalAmount: '',
     otherCost: '',
     note: ''
   });
@@ -1117,40 +1125,43 @@ export default function App() {
 
         const batch = writeBatch(db);
         let count = 0;
-        let missingIds = 0;
-        let invalidData = 0;
-        const missingIdDetails: string[] = [];
+        const currentImportErrors: string[] = [];
 
-        for (const row of json) {
-          // Normalize row keys (remove spaces, case insensitive)
+        for (let i = 0; i < json.length; i++) {
+          const row = json[i];
+          const rowNum = i + headerIndex + 2; 
+
+          // Normalize row keys
           const normalizedRow: any = {};
           Object.keys(row).forEach(k => {
-            const cleanKey = k.trim().toLowerCase().replace(/\s+/g, '');
+            const cleanKey = k.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
             normalizedRow[cleanKey] = row[k];
           });
 
           const getVal = (possibleKeys: string[]) => {
             for (const pk of possibleKeys) {
-              const cleanPK = pk.trim().toLowerCase().replace(/\s+/g, '');
-              if (normalizedRow[cleanPK] !== undefined) return normalizedRow[cleanPK];
+              const cleanPK = pk.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
+              if (normalizedRow[cleanPK] !== undefined && normalizedRow[cleanPK] !== '') return normalizedRow[cleanPK];
             }
             return undefined;
           };
 
           const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
-          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'teamid', 'id team', 'mã team']) || '').trim();
           let month = normalizeMonth(getVal(['Tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'tháng', 'kỳ']));
           
           const salesStr = String(getVal(['Căn bán', 'Số căn bán', 'canban', 'socan', 'salescount', 'sales', 'số căn', 'units']) || '0');
           const revenueStr = String(getVal(['Doanh số', 'revenue', 'doanhso', 'thực đạt', 'doanh thu', 'doanhthu']) || '0');
 
-          const sales = parseInt(salesStr.replace(/[^0-9]/g, '')) || 0;
-          const revenue = parseInt(revenueStr.replace(/[^0-9]/g, '')) || 0;
-
           if (!pRef || !tRef || !month) {
-            // Check if row is mostly empty (skip empty rows)
             const hasData = Object.values(normalizedRow).some(v => v !== null && v !== undefined && v !== '');
-            if (hasData) invalidData++;
+            if (hasData) {
+              const missing = [];
+              if (!pRef) missing.push('Dự án');
+              if (!tRef) missing.push('Team');
+              if (!month) missing.push('Tháng');
+              currentImportErrors.push(`Dòng ${rowNum}: Thiếu thông tin bắt buộc (${missing.join(', ')})`);
+            }
             continue;
           }
 
@@ -1158,15 +1169,16 @@ export default function App() {
           const team = teams.find(t => t.id === tRef || t.teamCode === tRef || t.name.toLowerCase() === tRef.toLowerCase());
 
           if (!project) {
-            missingIds++;
-            if (missingIdDetails.length < 3) missingIdDetails.push(`P-Ref: ${pRef}`);
+            currentImportErrors.push(`Dòng ${rowNum}: Không tìm thấy dự án khớp với "${pRef}"`);
             continue;
           }
           if (!team) {
-            missingIds++;
-            if (missingIdDetails.length < 3) missingIdDetails.push(`T-Ref: ${tRef}`);
+            currentImportErrors.push(`Dòng ${rowNum}: Không tìm thấy team khớp với "${tRef}"`);
             continue;
           }
+
+          const sales = parseInt(salesStr.replace(/[^0-9]/g, '')) || 0;
+          const revenue = parseInt(revenueStr.replace(/[^0-9]/g, '')) || 0;
 
           const projectId = project.id;
           const teamId = team.id;
@@ -1210,19 +1222,15 @@ export default function App() {
           toast.success(`Đồng bộ thành công ${count} bản ghi.`);
         }
 
-        if (missingIds > 0) {
-          toast.error(`${missingIds} dòng bị bỏ qua do ID dự án/team không khớp hệ thống. Ví dụ: ${missingIdDetails.join(', ')}`, { duration: 6000 });
-        }
-        
-        if (invalidData > 0) {
-          toast.error(`${invalidData} dòng không hợp lệ (thiếu thông tin bắt buộc).`, { duration: 4000 });
-        }
-
-        if (count === 0 && missingIds === 0 && invalidData === 0) {
+        if (currentImportErrors.length > 0) {
+          setImportErrors(currentImportErrors);
+          setIsImportErrorsDialogOpen(true);
+          toast.error(`Có ${currentImportErrors.length} dòng gặp lỗi khi nhập dữ liệu.`);
+        } else if (count === 0) {
           toast.info("Không tìm thấy dữ liệu mới để đồng bộ.");
         }
 
-        await logAction('IMPORT', 'efficiencyReports', 'bulk', { count, errors: missingIds + invalidData });
+        await logAction('IMPORT', 'efficiencyReports', 'bulk', { count, errors: currentImportErrors.length });
       } catch (error) {
         console.error("Import Error:", error);
         toast.error("Lỗi xử lý file. Vui lòng đảm bảo bạn đang dùng file Excel (.xlsx) hoặc CSV chuẩn và không có bảo mật.");
@@ -1908,7 +1916,23 @@ export default function App() {
       nguoiDung: sanitizeData(allUsers),
       vungKhuVuc: sanitizeData(regions),
       hieuQuaKinhDoanh: sanitizeData(efficiencyReports),
-      nhatKyHeThong: sanitizeData(auditLogs.slice(0, 500)), // Include logs in backup (capped to avoid payload issues)
+      nhatKyHeThong: auditLogs.slice(0, 1000).map(log => {
+        const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date();
+        return {
+          id: log.id,
+          action: log.action,
+          collection: log.collection,
+          docId: log.docId,
+          data: typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data),
+          userEmail: log.userEmail,
+          userId: log.userId,
+          timestamp: ts.toISOString(),
+          // Các trường tiếng việt cho Sheet
+          thoiGian: ts.toLocaleString('vi-VN'),
+          hanhDong: log.action || 'N/A',
+          nguoiChinhSua: log.userEmail || 'Hệ thống'
+        };
+      }),
       systemLog: {
         action: "Full System Backup",
         user: user?.email || "Admin_Mayhomes",
@@ -2023,17 +2047,25 @@ export default function App() {
     if (isSyncingLogs || auditLogs.length === 0) return;
     setIsSyncingLogs(true);
     try {
-      // Logic for automatic sanitization is already in syncFullSystem, we'll replicate simplified version here
       const sanitizeLogs = (logs: any[]) => {
-        return logs.map(log => ({
-          ...log,
-          timestamp: log.timestamp?.toDate ? log.timestamp.toDate().toISOString() : new Date().toISOString(),
-          data: typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data)
-        }));
+        return logs.map(log => {
+          const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date();
+          return {
+            ...log,
+            timestamp: ts.toISOString(),
+            // Thêm các trường tiếng Việt theo yêu cầu user
+            thoiGian: ts.toLocaleString('vi-VN'),
+            hanhDong: log.action || 'N/A',
+            nguoiChinhSua: log.userEmail || 'Hệ thống',
+            collection: log.collection || 'N/A',
+            docId: log.docId || 'N/A',
+            data: typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data)
+          };
+        });
       };
 
       const payload = {
-        nhatKyHanhDong: sanitizeLogs(auditLogs.slice(0, 1000)) // Cap to 1000 latest logs for performance
+        nhatKyHanhDong: sanitizeLogs(auditLogs.slice(0, 2000)) // Tăng giới hạn lên 2000 để bao quát hơn
       };
 
       await fetch(SCRIPT_URL, {
@@ -2043,7 +2075,7 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       
-      toast.success(`Đã đồng bộ ${Math.min(auditLogs.length, 1000)} nhật ký lên Google Sheet.`);
+      toast.success(`Đã đồng bộ ${Math.min(auditLogs.length, 2000)} nhật ký lên Google Sheet.`);
     } catch (error) {
       console.error("Sync All Logs Error:", error);
       toast.error("Lỗi khi đồng bộ toàn bộ nhật ký");
@@ -2054,10 +2086,15 @@ export default function App() {
 
   const syncLogToGoogleSheets = async (logEntry: any) => {
     try {
+      const now = new Date();
       const payload = {
         nhatKyHanhDong: [{
           ...logEntry,
-          timestamp: new Date().toISOString(),
+          timestamp: now.toISOString(),
+          // Các trường tiếng Việt đồng bộ với script Google Sheets
+          thoiGian: now.toLocaleString('vi-VN'),
+          hanhDong: logEntry.action,
+          nguoiChinhSua: logEntry.userEmail || 'Hệ thống',
           data: typeof logEntry.data === 'object' ? JSON.stringify(logEntry.data) : String(logEntry.data)
         }]
       };
@@ -3454,7 +3491,9 @@ export default function App() {
 
   const handleAddCost = async (e: React.FormEvent) => {
     e.preventDefault();
-    const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost);
+    const finalVisa = isAdmin ? Number(visaAmount) : 0;
+    const finalDigital = isAdmin ? Number(digitalAmount) : 0;
+    const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost) + finalVisa + finalDigital;
     if (!actualProjectId || totalAmount <= 0 || !costPeriod || !selectedBudgetId) return;
     const project = projects.find(p => p.id === actualProjectId);
     const budget = budgets.find(b => b.id === selectedBudgetId);
@@ -3485,6 +3524,8 @@ export default function App() {
           posting: Number(posting),
           zaloAds: Number(zaloAds),
           googleAds: Number(googleAds),
+          visaAmount: finalVisa,
+          digitalAmount: finalDigital,
           otherCost: Number(otherCost)
         },
         note: costNote,
@@ -3503,6 +3544,8 @@ export default function App() {
         posting: Number(posting),
         zaloAds: Number(zaloAds),
         googleAds: Number(googleAds),
+        visaAmount: finalVisa,
+        digitalAmount: finalDigital,
         otherCost: Number(otherCost),
         totalAmount,
         note: costNote,
@@ -3512,6 +3555,8 @@ export default function App() {
       setPosting('');
       setZaloAds('');
       setGoogleAds('');
+      setVisaAmount('');
+      setDigitalAmount('');
       setOtherCost('');
       setCostNote('');
       setActualProjectId('');
@@ -3525,6 +3570,7 @@ export default function App() {
   const handleOpenEditBudget = (budget: any) => {
     setEditingBudgetId(budget.id);
     setEditingBudgetAmount(budget.amount.toString());
+    setEditingBudgetVerifiedAmount((budget.verifiedAmount || 0).toString());
     setEditingBudgetMonth(budget.month);
     setEditingBudgetTeam(budget.teamName);
     setEditingBudgetProject(budget.projectId);
@@ -3538,7 +3584,7 @@ export default function App() {
       return;
     }
 
-    if (!isWithinRegistrationWindow()) {
+    if (!isAdmin && !isWithinRegistrationWindow()) {
       toast.error('Ngoài thời gian cho phép chỉnh sửa ngân sách.');
       return;
     }
@@ -3548,6 +3594,7 @@ export default function App() {
       const originalBudget = budgets.find(b => b.id === editingBudgetId);
       const updateData: any = {
         amount: Number(editingBudgetAmount),
+        verifiedAmount: Number(editingBudgetVerifiedAmount),
         month: editingBudgetMonth,
         teamName: editingBudgetTeam,
         projectId: editingBudgetProject,
@@ -3562,6 +3609,7 @@ export default function App() {
           timestamp: new Date().toISOString(),
           changes: {
             amount: { old: originalBudget?.amount, new: Number(editingBudgetAmount) },
+            verifiedAmount: { old: originalBudget?.verifiedAmount || 0, new: Number(editingBudgetVerifiedAmount) },
             month: { old: originalBudget?.month, new: editingBudgetMonth },
             team: { old: originalBudget?.teamName, new: editingBudgetTeam },
             project: { old: originalBudget?.projectName, new: projectMap[editingBudgetProject] || 'N/A' },
@@ -5091,8 +5139,15 @@ export default function App() {
         return { ...b, amount: b.amount / 4 };
       }
       return b;
+    }).sort((a, b) => {
+      const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
+      if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
+      if (budgetReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
+      if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
+      if (budgetReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
+      return 0;
     });
-  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser]);
+  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser, budgetReportSort]);
 
   const filteredCosts = useMemo(() => {
     return costs.filter(c => {
@@ -5124,8 +5179,16 @@ export default function App() {
       const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
       
       return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek && matchUser;
+    }).sort((a, b) => {
+      const factor = costReportSort.direction === 'asc' ? 1 : -1;
+      if (costReportSort.key === 'amount') return (a.amount - b.amount) * factor;
+      if (costReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
+      if (costReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
+      if (costReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
+      if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
+      return 0;
     });
-  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser]);
+  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser, costReportSort]);
 
   const uniqueTeams = useMemo(() => {
     return Array.from(new Set(teams.map(t => t.name)));
@@ -5138,6 +5201,72 @@ export default function App() {
   const uniqueTypes = useMemo(() => {
     return types.map(t => t.name).sort();
   }, [types]);
+
+  const overBudgetProjectIds = useMemo(() => {
+    const currentMonth = getMarketingMonth(new Date());
+    const projectBudgets: {[key: string]: number} = {};
+    const projectCosts: {[key: string]: number} = {};
+    
+    budgets.forEach(b => {
+      if (b.month === currentMonth) {
+        projectBudgets[b.projectId] = (projectBudgets[b.projectId] || 0) + b.amount;
+      }
+    });
+    
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (mMonth === currentMonth) {
+        projectCosts[c.projectId] = (projectCosts[c.projectId] || 0) + c.amount;
+      }
+    });
+
+    const set = new Set<string>();
+    Object.entries(projectBudgets).forEach(([pid, budget]) => {
+      if ((projectCosts[pid] || 0) > budget) {
+        set.add(pid);
+      }
+    });
+    return set;
+  }, [budgets, costs, getMarketingMonth]);
+
+  const channelReportData = useMemo(() => {
+    const keyData: { [key: string]: any } = {};
+    
+    filteredCosts.forEach(c => {
+      const key = `${c.projectId}_${c.teamName}`;
+      if (!keyData[key]) {
+        keyData[key] = {
+          projectId: c.projectId,
+          projectName: c.projectName,
+          teamName: c.teamName,
+          fbAds: 0,
+          googleAds: 0,
+          zaloAds: 0,
+          posting: 0,
+          visaAmount: 0,
+          digitalAmount: 0,
+          otherCost: 0,
+          total: 0
+        };
+      }
+      
+      const p = keyData[key];
+      const ch = c.channels || {};
+      p.fbAds += ch.fbAds || 0;
+      p.googleAds += ch.googleAds || 0;
+      p.zaloAds += ch.zaloAds || 0;
+      p.posting += ch.posting || 0;
+      p.visaAmount += ch.visaAmount || 0;
+      p.digitalAmount += ch.digitalAmount || 0;
+      p.otherCost += ch.otherCost || 0;
+      p.total += c.amount || 0;
+    });
+
+    return Object.values(keyData).sort((a: any, b: any) => {
+       if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
+       return b.total - a.total;
+    });
+  }, [filteredCosts]);
 
   const chartData = useMemo(() => {
     return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
@@ -5325,20 +5454,37 @@ export default function App() {
 
   const salesGeneratingData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
-      if (reportSortBy === 'budget') return b.budget - a.budget;
-      if (reportSortBy === 'actual') return b.cost - a.cost;
-      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      const factor = efficiencyTableSort.direction === 'asc' ? 1 : -1;
+      if (efficiencyTableSort.key === 'revenue') return (a.revenue - b.revenue) * factor;
+      if (efficiencyTableSort.key === 'cost') return (a.cost - b.cost) * factor;
+      if (efficiencyTableSort.key === 'budget') return (a.budget - b.budget) * factor;
+      if (efficiencyTableSort.key === 'name') return (a.name || '').localeCompare(b.name || '') * factor;
+      if (efficiencyTableSort.key === 'sales') return (a.sales - b.sales) * factor;
+      if (efficiencyTableSort.key === 'roi') {
+        const roiA = a.cost > 0 ? a.revenue / a.cost : 0;
+        const roiB = b.cost > 0 ? b.revenue / b.cost : 0;
+        return (roiA - roiB) * factor;
+      }
+      // Default to the global reportSortBy if no table sort or default revenue
+      if (reportSortBy === 'budget') return (b.budget - a.budget) || ((b.revenue - a.revenue) * factor);
+      if (reportSortBy === 'actual') return (b.cost - a.cost) || ((b.revenue - a.revenue) * factor);
+      if (b.revenue !== a.revenue) return (b.revenue - a.revenue);
       return b.cost - a.cost;
     }), 
-    [efficiencyChartData, reportSortBy]
+    [efficiencyChartData, reportSortBy, efficiencyTableSort]
   );
 
   const noSalesData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue === 0).sort((a, b) => {
+      const factor = efficiencyTableSort.direction === 'asc' ? 1 : -1;
+      if (efficiencyTableSort.key === 'cost') return (a.cost - b.cost) * factor;
+      if (efficiencyTableSort.key === 'budget') return (a.budget - b.budget) * factor;
+      if (efficiencyTableSort.key === 'name') return (a.name || '').localeCompare(b.name || '') * factor;
+      
       if (reportSortBy === 'budget') return b.budget - a.budget;
       return b.cost - a.cost;
     }), 
-    [efficiencyChartData, reportSortBy]
+    [efficiencyChartData, reportSortBy, efficiencyTableSort]
   );
 
   const efficiencyPieData = useMemo(() => {
@@ -5738,8 +5884,8 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-30 w-full bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200/50 overflow-hidden group transition-transform hover:scale-105">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200/50 overflow-hidden group transition-transform hover:scale-105 shrink-0">
               <img 
                 src="https://picsum.photos/seed/mayhomes/100/100" 
                 alt="MAYHOMES" 
@@ -5749,25 +5895,23 @@ export default function App() {
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black tracking-tighter leading-none">
+                <h1 className="text-lg sm:text-xl font-black tracking-tighter leading-none">
                   <span className="text-orange-500">MAY</span>
                   <span className="text-indigo-600">HOMES</span>
                 </h1>
               </div>
-              <div className="flex gap-1.5 mt-1.5">
-                {isSuperAdmin && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-purple-200 text-purple-700 bg-purple-50/50">SUPER ADMIN</Badge>}
-                {(userRole === 'admin') && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
-                {isMod && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-slate-200 text-slate-700 bg-slate-50/50">MODERATOR</Badge>}
-                {isGDDA && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-emerald-200 text-emerald-700 bg-emerald-50/50">GDDA</Badge>}
-                {isUser && <Badge variant="outline" className="text-[9px] font-bold py-0 h-4 border-orange-200 text-orange-700 bg-orange-50/50">USER</Badge>}
+              <div className="flex flex-wrap gap-1 mt-1">
+                {isSuperAdmin && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-purple-200 text-purple-700 bg-purple-50/50">SUPER ADMIN</Badge>}
+                {(userRole === 'admin') && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
+                {isMod && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-slate-200 text-slate-700 bg-slate-50/50">MODERATOR</Badge>}
+                {isGDDA && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-emerald-200 text-emerald-700 bg-emerald-50/50">GDDA</Badge>}
+                {isUser && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-orange-200 text-orange-700 bg-orange-50/50">USER</Badge>}
               </div>
             </div>
           </div>
 
-          {/* Removed Duplicated Navigation Menu */}
-          
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex flex-col items-end">
+            <div className="hidden lg:flex flex-col items-end">
               <p className="text-sm font-bold text-slate-900 leading-tight">{user.displayName}</p>
               <p className="text-[11px] font-medium text-slate-500">{user.email}</p>
             </div>
@@ -5778,9 +5922,16 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-10 space-y-10">
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 pt-6 pb-24 lg:py-10 space-y-6 lg:space-y-10">
+        {/* Mobile Welcome */}
+        <div className="lg:hidden mb-2">
+           <h2 className="text-xl font-black text-slate-900">Xin chào, {user.displayName?.split(' ').pop()} 👋</h2>
+           <p className="text-xs text-slate-500 font-medium">{user.email}</p>
+        </div>
+
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
           <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
             <div className="h-1.5 w-full bg-indigo-500" />
             <CardHeader className="pb-4">
@@ -5884,7 +6035,7 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto flex-wrap sm:flex-nowrap lg:flex mb-2">
+          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto flex lg:flex mb-2 hidden lg:flex">
             <TabsTrigger value="home" className="rounded-lg py-2 px-4 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-none font-bold">
               <LayoutDashboard className="w-4 h-4 mr-2" /> Trang chủ
             </TabsTrigger>
@@ -6070,52 +6221,110 @@ export default function App() {
                 <Table>
                   <TableHeader className="bg-slate-50/80">
                     <TableRow className="hover:bg-transparent border-none">
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 h-12">Đối tượng</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Ngân sách</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Thực chi</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center h-12">Căn bán</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12">Doanh số</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-8 h-12">ROI</TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center gap-1">
+                          Đối tượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Thực chi <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'sales', direction: prev.key === 'sales' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Căn bán <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'revenue', direction: prev.key === 'revenue' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Doanh số <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => setEfficiencyTableSort(prev => ({ key: 'roi', direction: prev.key === 'roi' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          ROI <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {efficiencyChartData.slice(0, 10).map((item, idx) => {
-                      const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
-                      const isOverBudget = item.cost > item.budget;
-                      return (
-                        <TableRow key={idx} className="group hover:bg-indigo-50/20 transition-colors border-b-slate-100/50 h-20">
-                          <TableCell className="pl-8">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${item.revenue > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                {idx + 1}
+                    {(() => {
+                      const sortedData = [...efficiencyChartData].sort((a, b) => {
+                        const factor = efficiencyTableSort.direction === 'asc' ? 1 : -1;
+                        if (efficiencyTableSort.key === 'revenue') return (a.revenue - b.revenue) * factor;
+                        if (efficiencyTableSort.key === 'cost') return (a.cost - b.cost) * factor;
+                        if (efficiencyTableSort.key === 'budget') return (a.budget - b.budget) * factor;
+                        if (efficiencyTableSort.key === 'name') return (a.name || '').localeCompare(b.name || '') * factor;
+                        if (efficiencyTableSort.key === 'sales') return (a.sales - b.sales) * factor;
+                        if (efficiencyTableSort.key === 'roi') {
+                          const roiA = a.cost > 0 ? a.revenue / a.cost : 0;
+                          const roiB = b.cost > 0 ? b.revenue / b.cost : 0;
+                          return (roiA - roiB) * factor;
+                        }
+                        return 0;
+                      });
+                      return sortedData.slice(0, 10).map((item, idx) => {
+                        const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
+                        const isOverBudget = item.cost > item.budget;
+                        return (
+                          <TableRow key={idx} className="group hover:bg-indigo-50/20 transition-colors border-b-slate-100/50 h-20">
+                            <TableCell className="pl-8">
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${item.revenue > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                  {idx + 1}
+                                </div>
+                                <div>
+                                  <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{item.name}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium lowercase italic">
+                                    {efficiencyGroupType === 'project' ? `${item.details.length} teams tham gia` : `${item.details.length} dự án triển khai`}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{item.name}</p>
-                                <p className="text-[10px] text-slate-400 font-medium lowercase italic">
-                                  {efficiencyGroupType === 'project' ? `${item.details.length} teams tham gia` : `${item.details.length} dự án triển khai`}
-                                </p>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-slate-400 font-mono text-xs">{formatCurrency(item.budget)}</TableCell>
+                            <TableCell className={`text-right font-black font-mono text-xs ${isOverBudget ? 'text-rose-500' : 'text-slate-700 opacity-70'}`}>
+                              {formatCurrency(item.cost)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-3 h-6 text-[10px] rounded-lg">
+                                {item.sales} căn
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-black text-indigo-600 font-mono text-sm">{formatCurrency(item.revenue)}</TableCell>
+                            <TableCell className="text-right pr-8">
+                              <div className="flex flex-col items-end">
+                                <span className="text-sm font-black text-indigo-700 italic">{roi}x</span>
+                                {parseFloat(roi) >= 5 && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded font-black uppercase">Hiệu quả cao</span>}
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-slate-400 font-mono text-xs">{formatCurrency(item.budget)}</TableCell>
-                          <TableCell className={`text-right font-black font-mono text-xs ${isOverBudget ? 'text-rose-500' : 'text-slate-700 opacity-70'}`}>
-                            {formatCurrency(item.cost)}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-3 h-6 text-[10px] rounded-lg">
-                              {item.sales} căn
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-black text-indigo-600 font-mono text-sm">{formatCurrency(item.revenue)}</TableCell>
-                          <TableCell className="text-right pr-8">
-                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-black text-indigo-700 italic">{roi}x</span>
-                              {parseFloat(roi) >= 5 && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded font-black uppercase">Hiệu quả cao</span>}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
@@ -6134,85 +6343,89 @@ export default function App() {
             <TabsContent value="admin" className="space-y-8">
               <div className="flex flex-col lg:flex-row gap-8">
                 {/* Admin Sidebar-like Navigation */}
-                <aside className="lg:w-64 space-y-2">
-                  <div className="px-3 py-2">
-                    <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Hệ thống</h2>
-                    <div className="space-y-1">
+                <aside className="lg:w-64 space-y-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scroll-hide">
+                  <div className="flex lg:flex-col gap-2 min-w-max lg:min-w-0">
+                    <div className="px-3 py-2 lg:block hidden">
+                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Hệ thống</h2>
+                    </div>
+                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
                       <Button 
                         variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
-                        className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'reports' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                        className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'reports' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                         onClick={() => setAdminSubTab('reports')}
                       >
-                        <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'reports' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                        Báo cáo & Phân tích
+                        <BarChart3 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'reports' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span className="text-xs lg:text-sm">Báo cáo</span>
                       </Button>
                       {(isAdmin || isMod) && (
                         <>
                           <Button 
                             variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'projects' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'projects' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('projects')}
                           >
-                            <Building2 className={`mr-3 h-5 w-5 ${adminSubTab === 'projects' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Quản lý Dự án
+                            <Building2 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'projects' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Dự án</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'regions' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'regions' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('regions')}
                           >
-                            <Map className={`mr-3 h-5 w-5 ${adminSubTab === 'regions' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Quản lý Vùng
+                            <Map className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'regions' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Vùng</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'types' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'types' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('types')}
                           >
-                            <Layers className={`mr-3 h-5 w-5 ${adminSubTab === 'types' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Quản lý Loại hình
+                            <Layers className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'types' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Loại hình</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'teams' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'teams' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('teams')}
                           >
-                            <Users className={`mr-3 h-5 w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Quản lý Team
+                            <Users className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Team</span>
                           </Button>
                         </>
                       )}
                     </div>
                   </div>
 
-                  <div className="px-3 py-2">
-                    <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Dữ liệu</h2>
-                    <div className="space-y-1">
+                  <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
+                    <div className="px-3 py-2 lg:block hidden">
+                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Dữ liệu</h2>
+                    </div>
+                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0">
                       {(isAdmin || isMod) && (
                         <>
                           <Button 
                             variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'budgets' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'budgets' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('budgets')}
                           >
-                            <Wallet className={`mr-3 h-5 w-5 ${adminSubTab === 'budgets' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Ngân sách
+                            <Wallet className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'budgets' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Ngân sách</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'costs' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'costs' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('costs')}
                           >
-                            <TrendingUp className={`mr-3 h-5 w-5 ${adminSubTab === 'costs' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Cập nhật Chi phí
+                            <TrendingUp className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'costs' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Chi phí</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('efficiency')}
                           >
-                            <BarChart3 className={`mr-3 h-5 w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Hiệu quả Kinh doanh
+                            <BarChart3 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Hiệu quả</span>
                           </Button>
                         </>
                       )}
@@ -6220,19 +6433,19 @@ export default function App() {
                         <>
                           <Button 
                             variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('users')}
                           >
-                            <UserCircle className={`mr-3 h-5 w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Người dùng
+                            <UserCircle className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">User</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'settings' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'settings' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('settings')}
                           >
-                            <ShieldCheck className={`mr-3 h-5 w-5 ${adminSubTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Cài đặt Hệ thống
+                            <ShieldCheck className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Cài đặt</span>
                           </Button>
                         </>
                       )}
@@ -6240,25 +6453,27 @@ export default function App() {
                   </div>
 
                   {(isAdmin || isMod) && (
-                    <div className="px-3 py-2">
-                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bảo mật</h2>
-                      <div className="space-y-1">
+                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
+                      <div className="px-3 py-2 lg:block hidden">
+                        <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bảo mật</h2>
+                      </div>
+                      <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0">
                         <Button 
                           variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
-                          className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'audit' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                          className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'audit' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                           onClick={() => setAdminSubTab('audit')}
                         >
-                          <History className={`mr-3 h-5 w-5 ${adminSubTab === 'audit' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                          Nhật ký
+                          <History className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'audit' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <span className="text-xs lg:text-sm">Nhật ký</span>
                         </Button>
                         {isAdmin && (
                           <Button 
                             variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
-                            className={`w-full justify-start rounded-xl px-4 py-2.5 h-auto transition-all ${adminSubTab === 'backup' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'backup' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                             onClick={() => setAdminSubTab('backup')}
                           >
-                            <Database className={`mr-3 h-5 w-5 ${adminSubTab === 'backup' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            Sao lưu
+                            <Database className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'backup' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Sao lưu</span>
                           </Button>
                         )}
                       </div>
@@ -6301,7 +6516,9 @@ export default function App() {
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dự án</Label>
                                 <Select value={newEfficiencyProject} onValueChange={setNewEfficiencyProject}>
                                   <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
-                                    <SelectValue placeholder="Chọn dự án..." />
+                                    <SelectValue placeholder="Chọn dự án...">
+                                      {newEfficiencyProject ? (projectMap[newEfficiencyProject] || newEfficiencyProject) : "Chọn dự án..."}
+                                    </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
                                     <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -6332,7 +6549,9 @@ export default function App() {
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Team</Label>
                                 <Select value={newEfficiencyTeam} onValueChange={setNewEfficiencyTeam}>
                                   <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
-                                    <SelectValue placeholder="Chọn team..." />
+                                    <SelectValue placeholder="Chọn team...">
+                                      {newEfficiencyTeam ? (teamMap[newEfficiencyTeam] || newEfficiencyTeam) : "Chọn team..."}
+                                    </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
                                     <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -6479,11 +6698,12 @@ export default function App() {
                                 </p>
                               )}
                             </div>
-                            <Table>
-                              <TableHeader className="bg-slate-50/50">
-                                <TableRow>
-                                  <TableHead className="w-10 pl-4">
-                                    <input 
+                            <div className="overflow-x-auto scroll-hide -mx-2 px-2">
+                              <Table>
+                                <TableHeader className="bg-slate-50/50">
+                                  <TableRow>
+                                    <TableHead className="w-10 pl-4">
+                                      <input 
                                       type="checkbox" 
                                       className="h-4 w-4 rounded border-slate-300 accent-blue-600"
                                       checked={filteredEfficiencyReports.length > 0 && selectedEfficiencyIds.length === filteredEfficiencyReports.length}
@@ -6574,6 +6794,7 @@ export default function App() {
                                 )}
                               </TableBody>
                             </Table>
+                          </div>
                           </CardContent>
                         </Card>
                       </div>
@@ -6834,7 +7055,7 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -6902,7 +7123,14 @@ export default function App() {
                                           setEditingProjectCode(extractProjectCode(e.target.value));
                                         }
                                       }} className="h-8" />
-                                    ) : p.name}
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        {p.name}
+                                        {overBudgetProjectIds.has(p.id) && (
+                                          <Badge variant="destructive" className="h-4 px-1 text-[8px] animate-pulse">Vượt ngân sách</Badge>
+                                        )}
+                                      </div>
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     {editingProjectId === p.id ? (
@@ -7077,7 +7305,7 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -7312,7 +7540,7 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -7553,7 +7781,7 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -7770,7 +7998,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -7793,6 +8021,7 @@ export default function App() {
                                 <TableHead>Người triển khai</TableHead>
                                 <TableHead>Kỳ</TableHead>
                                 <TableHead className="text-right">Ngân sách</TableHead>
+                                <TableHead className="text-right">Chi phí NT</TableHead>
                                 <TableHead className="text-right">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -7800,8 +8029,8 @@ export default function App() {
                               {budgets
                                 .filter(b => {
                                   const matchesSearch = 
-                                    (b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    (b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+                                    (teamMap[b.teamId] || b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
                                     (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
                                   const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
                                   return matchesSearch && matchesMonth;
@@ -7827,11 +8056,12 @@ export default function App() {
                                         }}
                                       />
                                     </TableCell>
-                                    <TableCell className="font-medium">{b.projectName}</TableCell>
-                                    <TableCell>{b.teamName}</TableCell>
+                                    <TableCell className="font-medium">{projectMap[b.projectId] || b.projectName}</TableCell>
+                                    <TableCell>{teamMap[b.teamId] || b.teamName}</TableCell>
                                     <TableCell>{b.implementerName}</TableCell>
                                     <TableCell className="text-xs">{b.month}</TableCell>
                                     <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
+                                    <TableCell className="text-right font-mono font-bold text-blue-600">{((b.verifiedAmount || 0)).toLocaleString()} đ</TableCell>
                                     <TableCell className="text-right">
                                       <div className="flex justify-end gap-1">
                                         <Button 
@@ -7954,7 +8184,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
@@ -7984,8 +8214,8 @@ export default function App() {
                               {costs
                                 .filter(c => {
                                   const matchesSearch = 
-                                    (c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    (c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (projectMap[c.projectId] || c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
+                                    (teamMap[c.teamId] || c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
                                     (c.implementerName || '').toLowerCase().includes(adminCostSearch.toLowerCase());
                                   
                                   const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
@@ -8014,8 +8244,8 @@ export default function App() {
                                         }}
                                       />
                                     </TableCell>
-                                    <TableCell className="font-medium">{c.projectName}</TableCell>
-                                    <TableCell>{c.teamName}</TableCell>
+                                    <TableCell className="font-medium">{projectMap[c.projectId] || c.projectName}</TableCell>
+                                    <TableCell>{teamMap[c.teamId] || c.teamName}</TableCell>
                                     <TableCell>{c.implementerName}</TableCell>
                                     <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
                                     <TableCell className="text-right font-mono font-bold text-blue-600">{c.amount.toLocaleString()} đ</TableCell>
@@ -8100,7 +8330,9 @@ export default function App() {
                         </Label>
                         <Select value={reportProject} onValueChange={setReportProject}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả dự án" />
+                            <SelectValue placeholder="Tất cả dự án">
+                              {reportProject === 'all' ? "Tất cả dự án" : (projectMap[reportProject] || reportProject)}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -8136,7 +8368,9 @@ export default function App() {
                           </Label>
                           <Select value={reportTeam} onValueChange={setReportTeam}>
                             <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                              <SelectValue placeholder="Tất cả đội" />
+                              <SelectValue placeholder="Tất cả đội">
+                                {reportTeam === 'all' ? "Tất cả đội" : reportTeam}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -8172,7 +8406,9 @@ export default function App() {
                         </Label>
                         <Select value={reportRegion} onValueChange={setReportRegion}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả miền" />
+                            <SelectValue placeholder="Tất cả miền">
+                              {reportRegion === 'all' ? "Tất cả miền" : reportRegion}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Tất cả miền</SelectItem>
@@ -8189,7 +8425,9 @@ export default function App() {
                         </Label>
                         <Select value={reportType} onValueChange={setReportType}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả loại hình" />
+                            <SelectValue placeholder="Tất cả loại hình">
+                               {reportType === 'all' ? "Tất cả loại hình" : reportType}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Tất cả loại hình</SelectItem>
@@ -8474,6 +8712,7 @@ export default function App() {
                               <TabsTrigger value="team" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Team</TabsTrigger>
                               <TabsTrigger value="project" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Dự án</TabsTrigger>
                               <TabsTrigger value="region" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Khu vực</TabsTrigger>
+                              <TabsTrigger value="channels" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Chi tiết Kênh</TabsTrigger>
                               <TabsTrigger value="efficiency" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Hiệu quả</TabsTrigger>
                             </TabsList>
                           </div>
@@ -8615,6 +8854,74 @@ export default function App() {
                               </ComposedChart>
                             </ResponsiveContainer>
                           </div>
+                        </TabsContent>
+
+                        <TabsContent value="channels" className="mt-0 space-y-6">
+                          <Card className="border-none shadow-sm overflow-hidden">
+                            <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50">
+                              <div>
+                                <CardTitle className="text-lg font-bold">Báo cáo chi tiết theo Kênh</CardTitle>
+                                <CardDescription>Chi tiết chi phí từng kênh cho mỗi dự án và đội triển khai</CardDescription>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                              <div className="overflow-x-auto scroll-hide">
+                                <Table>
+                                  <TableHeader className="bg-slate-100/80">
+                                    <TableRow>
+                                      <TableHead className="w-[50px] text-center font-bold text-slate-700">STT</TableHead>
+                                      <TableHead className="font-bold text-slate-700 whitespace-nowrap">Team</TableHead>
+                                      <TableHead className="font-bold text-slate-700 whitespace-nowrap">Dự án</TableHead>
+                                      <TableHead className="text-right font-bold text-indigo-600 whitespace-nowrap">Facebook Ads</TableHead>
+                                      <TableHead className="text-right font-bold text-blue-600 whitespace-nowrap">Google Ads</TableHead>
+                                      <TableHead className="text-right font-bold text-emerald-600 whitespace-nowrap">Zalo Ads</TableHead>
+                                      <TableHead className="text-right font-bold text-amber-600 whitespace-nowrap">Đăng tin</TableHead>
+                                      <TableHead className="text-right font-bold text-blue-700 whitespace-nowrap">Visa Công ty</TableHead>
+                                      <TableHead className="text-right font-bold text-purple-700 whitespace-nowrap">Digital Agency</TableHead>
+                                      <TableHead className="text-right font-bold text-slate-700 whitespace-nowrap">Tổng cộng</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {channelReportData.map((row, idx) => (
+                                      <TableRow key={`${row.projectId}-${row.teamName}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                                        <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
+                                        <TableCell className="font-medium text-slate-600 whitespace-nowrap text-xs">{teamMap[row.teamId] || row.teamName}</TableCell>
+                                        <TableCell className="font-medium text-slate-900 whitespace-nowrap uppercase tracking-tight text-xs">{row.projectName}</TableCell>
+                                        <TableCell className="text-right font-mono text-xs">{row.fbAds.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs">{row.googleAds.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs">{row.zaloAds.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs">{row.posting.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">{row.visaAmount.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs font-bold text-purple-600 bg-purple-50/20">{row.digitalAmount.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono font-bold text-slate-900 text-xs">{row.total.toLocaleString()} đ</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    {channelReportData.length === 0 && (
+                                      <TableRow>
+                                        <TableCell colSpan={10} className="h-32 text-center text-slate-400 italic">
+                                          Không có dữ liệu chi phí cho kỳ này
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </TableBody>
+                                  {channelReportData.length > 0 && (
+                                    <TableFooter className="bg-slate-50 font-bold">
+                                      <TableRow>
+                                        <TableCell colSpan={3} className="uppercase text-[10px] text-slate-600 pl-8">Tổng cộng các kênh:</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.fbAds, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.googleAds, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.zaloAds, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.posting, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px] text-blue-700">{channelReportData.reduce((acc, curr) => acc + curr.visaAmount, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px] text-purple-700">{channelReportData.reduce((acc, curr) => acc + curr.digitalAmount, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-md text-slate-900 font-black">{channelReportData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString()} đ</TableCell>
+                                      </TableRow>
+                                    </TableFooter>
+                                  )}
+                                </Table>
+                              </div>
+                            </CardContent>
+                          </Card>
                         </TabsContent>
 
                         <TabsContent value="efficiency" className="mt-0 space-y-8">
@@ -8877,12 +9184,54 @@ export default function App() {
                                   <Table>
                                     <TableHeader className="bg-slate-50/50">
                                       <TableRow className="hover:bg-transparent">
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12">Đối tượng</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Ngân sách</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Chi phí thực</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center h-12">Sản lượng</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Doanh số</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12">Chỉ số ROI</TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            Đối tượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Chi phí thực <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'sales', direction: prev.key === 'sales' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-center gap-1">
+                                            Sản lượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'revenue', direction: prev.key === 'revenue' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Doanh số <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'roi', direction: prev.key === 'roi' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Chỉ số ROI <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -8936,6 +9285,27 @@ export default function App() {
                                         );
                                       })}
                                     </TableBody>
+                                    {salesGeneratingData.length > 0 && (
+                                      <TableFooter className="bg-slate-50/80 font-black border-t-2 border-slate-100">
+                                        <TableRow>
+                                          <TableCell className="pl-8 py-4 uppercase text-[10px] text-slate-500">TỔNG CỘNG ĐƠN VỊ CÓ DOANH SỐ:</TableCell>
+                                          <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
+                                          <TableCell className="text-right py-4 font-black font-mono text-[11px] text-slate-900">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
+                                          <TableCell className="text-center py-4">
+                                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-2 h-5 text-[9px]">{salesGeneratingData.reduce((acc, curr) => acc + curr.sales, 0)} căn</Badge>
+                                          </TableCell>
+                                          <TableCell className="text-right py-4 font-black text-emerald-600 font-mono text-[11px]">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0))}</TableCell>
+                                          <TableCell className="text-right pr-8 py-4">
+                                            <div className="text-xs font-black font-mono text-emerald-600">
+                                              {(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0) > 0 
+                                                ? (salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0) / salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0)) 
+                                                : 0).toFixed(2)}x
+                                            </div>
+                                            <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">ROI Trung bình</div>
+                                          </TableCell>
+                                        </TableRow>
+                                      </TableFooter>
+                                    )}
                                   </Table>
                                 </div>
                               </CardContent>
@@ -8959,9 +9329,30 @@ export default function App() {
                                   <Table>
                                     <TableHeader className="bg-slate-50/50">
                                       <TableRow className="hover:bg-transparent">
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12">Đối tượng</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Ngân sách</TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12">Chi phí thực</TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            Đối tượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
+                                        <TableHead 
+                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                        >
+                                          <div className="flex items-center justify-end gap-1">
+                                            Chi phí thực <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                          </div>
+                                        </TableHead>
                                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12">Số dự án/team liên quan</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -9013,6 +9404,20 @@ export default function App() {
                                         </TableRow>
                                       )}
                                     </TableBody>
+                                    {noSalesData.length > 0 && (
+                                      <TableFooter className="bg-red-50/30 font-black border-t border-red-100">
+                                        <TableRow>
+                                          <TableCell className="pl-8 py-4 uppercase text-[10px] text-red-700">TỔNG CỘNG ĐƠN VỊ CHƯA DOANH SỐ:</TableCell>
+                                          <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
+                                          <TableCell className="text-right py-4 font-black font-mono text-[11px] text-red-600">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
+                                          <TableCell colSpan={1} className="pr-8 text-right">
+                                             <Badge variant="outline" className="text-[9px] font-bold text-slate-500">
+                                              {noSalesData.length} Đơn vị
+                                            </Badge>
+                                          </TableCell>
+                                        </TableRow>
+                                      </TableFooter>
+                                    )}
                                   </Table>
                                 </div>
                               </CardContent>
@@ -9067,6 +9472,7 @@ export default function App() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-[50px] text-center">STT</TableHead>
                             {isAdmin && (
                               <TableHead className="w-[40px]">
                                 <input 
@@ -9083,17 +9489,46 @@ export default function App() {
                                 />
                               </TableHead>
                             )}
-                            <TableHead>Đội</TableHead>
-                            <TableHead>Người triển khai</TableHead>
-                            <TableHead>Dự án</TableHead>
-                            <TableHead className="text-right">Ngân sách</TableHead>
+                            <TableHead 
+                              className="cursor-pointer hover:bg-slate-50 transition-colors"
+                              onClick={() => setBudgetReportSort(prev => ({ key: 'team', direction: prev.key === 'team' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            >
+                              <div className="flex items-center gap-1">
+                                Đội <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </TableHead>
+                            <TableHead 
+                              className="cursor-pointer hover:bg-slate-50 transition-colors"
+                              onClick={() => setBudgetReportSort(prev => ({ key: 'implementer', direction: prev.key === 'implementer' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            >
+                              <div className="flex items-center gap-1">
+                                Người triển khai <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </TableHead>
+                            <TableHead 
+                              className="cursor-pointer hover:bg-slate-50 transition-colors"
+                              onClick={() => setBudgetReportSort(prev => ({ key: 'project', direction: prev.key === 'project' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            >
+                              <div className="flex items-center gap-1">
+                                Dự án <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </TableHead>
+                            <TableHead 
+                              className="text-right cursor-pointer hover:bg-slate-50 transition-colors"
+                              onClick={() => setBudgetReportSort(prev => ({ key: 'amount', direction: prev.key === 'amount' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              </div>
+                            </TableHead>
                             <TableHead>Người đăng ký</TableHead>
                             {isAdmin && <TableHead className="text-right">Thao tác</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredBudgets.map(b => (
+                          {filteredBudgets.map((b, idx) => (
                             <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
+                              <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
                               {isAdmin && (
                                 <TableCell>
                                   <input 
@@ -9110,31 +9545,31 @@ export default function App() {
                                   />
                                 </TableCell>
                               )}
-                               <TableCell className="font-medium">{b.teamName}</TableCell>
-                              <TableCell>{b.implementerName}</TableCell>
-                              <TableCell>{projectMap[b.projectId] || b.projectName || 'N/A'}</TableCell>
-                              <TableCell className="text-right font-mono">{b.amount.toLocaleString()} đ</TableCell>
-                              <TableCell className="text-xs text-slate-500">{b.userEmail}</TableCell>
+                               <TableCell className="font-medium text-xs">{teamMap[b.teamId] || b.teamName}</TableCell>
+                              <TableCell className="text-xs">{b.implementerName}</TableCell>
+                              <TableCell className="text-xs">{projectMap[b.projectId] || b.projectName || 'N/A'}</TableCell>
+                              <TableCell className="text-right font-mono text-xs font-bold">{b.amount.toLocaleString()} đ</TableCell>
+                              <TableCell className="text-[10px] text-slate-500">{b.userEmail}</TableCell>
                               {isAdmin && (
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-1">
                                     <Button 
                                       size="icon" 
                                       variant="ghost" 
-                                      className="h-8 w-8 text-slate-400 hover:text-blue-600" 
+                                      className="h-7 w-7 text-slate-400 hover:text-blue-600" 
                                       onClick={() => handleOpenEditBudget(b)}
                                       title="Sửa ngân sách"
                                     >
-                                      <Edit2 className="h-3.5 w-3.5" />
+                                      <Edit2 className="h-3 w-3" />
                                     </Button>
                                     <Button 
                                       size="icon" 
                                       variant="ghost" 
-                                      className="h-8 w-8 text-slate-400 hover:text-red-600" 
+                                      className="h-7 w-7 text-slate-400 hover:text-red-600" 
                                       onClick={() => handleDeleteBudget(b.id, b.projectName)}
                                       title="Xóa ngân sách"
                                     >
-                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <Trash2 className="h-3 w-3" />
                                     </Button>
                                   </div>
                                 </TableCell>
@@ -9143,10 +9578,21 @@ export default function App() {
                           ))}
                           {filteredBudgets.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center py-8 text-slate-400">Không tìm thấy dữ liệu phù hợp</TableCell>
+                              <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-slate-400">Không tìm thấy dữ liệu phù hợp</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
+                        {filteredBudgets.length > 0 && (
+                          <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
+                            <TableRow>
+                              <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng ngân sách:</TableCell>
+                              <TableCell className="text-right font-mono text-indigo-600 font-black">
+                                {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
+                              </TableCell>
+                              <TableCell colSpan={isAdmin ? 2 : 1}></TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        )}
                       </Table>
                     </div>
                   </div>
@@ -10061,7 +10507,7 @@ export default function App() {
                           {multiBudgetItems.map((item) => (
                             <TableRow key={item.tempId} className="hover:bg-slate-50/30 transition-colors">
                               <TableCell className="font-bold text-slate-900 py-3">{item.projectName}</TableCell>
-                              <TableCell className="text-slate-600 py-3">{item.teamName}</TableCell>
+                              <TableCell className="text-slate-600 py-3">{teamMap[item.teamId] || item.teamName}</TableCell>
                               <TableCell className="text-slate-600 font-mono text-xs py-3">{item.month}</TableCell>
                               <TableCell className="text-right font-black text-indigo-600 py-3">{formatCurrency(item.amount)}</TableCell>
                               <TableCell className="py-3">
@@ -10361,7 +10807,7 @@ export default function App() {
                                       <div className="flex flex-col min-w-0 flex-1" key={b.id}>
                                         <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
                                         <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                                          <span className="font-medium">{b.teamName}</span>
+                                          <span className="font-medium">{teamMap[b.teamId] || b.teamName}</span>
                                           <span className="opacity-30">•</span>
                                           <span>{b.implementerName}</span>
                                         </div>
@@ -10439,7 +10885,7 @@ export default function App() {
                                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                           <Users className="w-3 h-3 opacity-60" />
-                                          <span className="font-medium">{b.teamName}</span>
+                                          <span className="font-medium">{teamMap[b.teamId] || b.teamName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                           <UserCircle className="w-3 h-3 opacity-60" />
@@ -10579,6 +11025,14 @@ export default function App() {
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Đăng tin</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(posting)} onChange={handleNumberInputChange(setPosting)} />
                           </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Visa Công ty</Label>
+                            <Input type="text" className="h-9 text-xs font-mono border-blue-100 bg-blue-50/20" placeholder="0" value={formatNumberWithCommas(visaAmount)} onChange={handleNumberInputChange(setVisaAmount)} disabled={!isAdmin} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Digital Agency</Label>
+                            <Input type="text" className="h-9 text-xs font-mono border-purple-100 bg-purple-50/20" placeholder="0" value={formatNumberWithCommas(digitalAmount)} onChange={handleNumberInputChange(setDigitalAmount)} disabled={!isAdmin} />
+                          </div>
                           <div className="space-y-1.5 col-span-2">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Khác</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(otherCost)} onChange={handleNumberInputChange(setOtherCost)} />
@@ -10586,7 +11040,7 @@ export default function App() {
                           <div className="col-span-2 pt-3 border-t border-slate-200 flex justify-between items-center">
                             <span className="text-xs font-bold text-slate-600">Tổng cộng:</span>
                             <span className="text-base font-bold text-blue-600 font-mono">
-                              {(Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost)).toLocaleString()} đ
+                              {(Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost) + Number(visaAmount) + Number(digitalAmount)).toLocaleString()} đ
                             </span>
                           </div>
                         </div>
@@ -10646,6 +11100,7 @@ export default function App() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[50px] text-center">STT</TableHead>
                           {isAdmin && (
                             <TableHead className="w-[40px]">
                               <input 
@@ -10662,10 +11117,38 @@ export default function App() {
                               />
                             </TableHead>
                           )}
-                          <TableHead>Dự án / Team</TableHead>
-                          <TableHead>Người triển khai</TableHead>
-                          <TableHead>Thời gian</TableHead>
-                          <TableHead className="text-right">Số tiền</TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                            onClick={() => setCostReportSort(prev => ({ key: 'project', direction: prev.key === 'project' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                          >
+                            <div className="flex items-center gap-1">
+                              Dự án / Team <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                            onClick={() => setCostReportSort(prev => ({ key: 'implementer', direction: prev.key === 'implementer' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                          >
+                            <div className="flex items-center gap-1">
+                              Người triển khai <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                            onClick={() => setCostReportSort(prev => ({ key: 'week', direction: prev.key === 'week' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                          >
+                            <div className="flex items-center gap-1">
+                              Thời gian <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                            </div>
+                          </TableHead>
+                          <TableHead 
+                            className="text-right cursor-pointer hover:bg-slate-50 transition-colors"
+                            onClick={() => setCostReportSort(prev => ({ key: 'amount', direction: prev.key === 'amount' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                          >
+                            <div className="flex items-center justify-end gap-1">
+                              Số tiền <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                            </div>
+                          </TableHead>
                           <TableHead>Ghi chú</TableHead>
                           <TableHead className="text-right">Thao tác</TableHead>
                         </TableRow>
@@ -10673,9 +11156,10 @@ export default function App() {
                       <TableBody>
                         {costs
                           .filter(c => isAdmin || isMod || c.userEmail === user.email)
-                          .slice(0, 15)
-                          .map(c => (
+                          .slice(0, 50)
+                          .map((c, idx) => (
                           <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
+                            <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
                             {isAdmin && (
                               <TableCell>
                                 <input 
@@ -10694,13 +11178,13 @@ export default function App() {
                             )}
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium text-sm">{projectMap[c.projectId] || c.projectName}</span>
-                                <span className="text-[10px] text-slate-500">{c.teamName}</span>
+                                <span className="font-medium text-xs">{projectMap[c.projectId] || c.projectName}</span>
+                                <span className="text-[10px] text-slate-500">{teamMap[c.teamId] || c.teamName}</span>
                               </div>
                             </TableCell>
                             <TableCell className="text-xs">{c.implementerName}</TableCell>
                             <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
-                            <TableCell className="text-right font-mono font-medium">
+                            <TableCell className="text-right font-mono font-medium text-xs">
                               {editingCostId === c.id ? (
                                 <Input 
                                   type="text" 
@@ -10757,10 +11241,21 @@ export default function App() {
                         ))}
                         {costs.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
+                            <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
+                      {costs.length > 0 && (
+                        <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
+                          <TableRow>
+                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng chi phí kỳ này:</TableCell>
+                            <TableCell className="text-right font-mono text-emerald-600 font-black">
+                              {costs.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
+                            </TableCell>
+                            <TableCell colSpan={2}></TableCell>
+                          </TableRow>
+                        </TableFooter>
+                      )}
                     </Table>
                   </CardContent>
                 </Card>
@@ -11506,7 +12001,9 @@ export default function App() {
               <Label className="text-xs font-bold text-slate-500 uppercase">Dự án</Label>
               <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
                 <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Chọn dự án" />
+                  <SelectValue placeholder="Chọn dự án">
+                    {editingBudgetProject ? (projectMap[editingBudgetProject] || editingBudgetProject) : "Chọn dự án"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="w-[400px] md:w-[550px]">
                   <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -11544,7 +12041,9 @@ export default function App() {
               <Label className="text-xs font-bold text-slate-500 uppercase">Team</Label>
               <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
                 <SelectTrigger className="bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Chọn team" />
+                  <SelectValue placeholder="Chọn team">
+                    {editingBudgetTeam ? (teamMap[editingBudgetTeam] || editingBudgetTeam) : "Chọn team"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -11584,15 +12083,28 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-500 uppercase">Số tiền (VNĐ)</Label>
+              <Label className="text-xs font-bold text-slate-500 uppercase">Ngân sách đăng ký (VNĐ)</Label>
               <div className="relative">
                 <Input 
                   type="text" 
                   value={formatNumberWithCommas(editingBudgetAmount)} 
                   onChange={handleNumberInputChange(setEditingBudgetAmount)} 
-                  className="bg-slate-50 border-slate-200 pr-8 font-mono font-bold text-blue-600"
+                  className="bg-slate-50 border-slate-200 pr-8 font-mono font-bold"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">đ</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase text-blue-600">Chi phí nghiệm thu (Admin)</Label>
+              <div className="relative">
+                <Input 
+                  type="text" 
+                  value={formatNumberWithCommas(editingBudgetVerifiedAmount)} 
+                  onChange={handleNumberInputChange(setEditingBudgetVerifiedAmount)} 
+                  className="bg-blue-50 border-blue-200 pr-8 font-mono font-bold text-blue-700"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-400">đ</span>
               </div>
             </div>
           </div>
@@ -12024,6 +12536,53 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Bottom Navigation for Mobile */}
+      <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
+        <div className="bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl shadow-indigo-100/50 rounded-[28px] p-2 flex items-center justify-between">
+          <button 
+            onClick={() => setActiveTab('home')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'home' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <LayoutDashboard className={`w-5 h-5 ${activeTab === 'home' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Trang chủ</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('register')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'register' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Wallet className={`w-5 h-5 ${activeTab === 'register' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Budget</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('actual')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'actual' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <TrendingUp className={`w-5 h-5 ${activeTab === 'actual' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Chi phí</span>
+          </button>
+
+          {(isAdmin || isMod || isGDDA) && (
+            <button 
+              onClick={() => setActiveTab('admin')}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'admin' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <ShieldCheck className={`w-5 h-5 ${activeTab === 'admin' ? 'animate-in zoom-in duration-300' : ''}`} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">Quản trị</span>
+            </button>
+          )}
+
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <History className={`w-5 h-5 ${activeTab === 'history' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Nhật ký</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

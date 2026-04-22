@@ -13,26 +13,30 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function hasUserData() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function isSuperAdmin() {
       return isAuthenticated() &&
-        (getUserData().role == 'super_admin' ||
-          (request.auth.token.email == "thienvu1108@gmail.com" && request.auth.token.email_verified == true));
+        ((request.auth.token.email == "thienvu1108@gmail.com") ||
+         (hasUserData() && getUserData().role == 'super_admin'));
     }
 
     function isAdmin() {
-      return isAuthenticated() && (isSuperAdmin() || getUserData().role == 'admin');
+      return isAuthenticated() && (isSuperAdmin() || (hasUserData() && getUserData().role == 'admin'));
     }
 
     function isMod() {
-      return isAuthenticated() && getUserData().role == 'mod';
+      return isAuthenticated() && hasUserData() && getUserData().role == 'mod';
     }
 
     function isGDDA() {
-      return isAuthenticated() && getUserData().role == 'gdda';
+      return isAuthenticated() && hasUserData() && getUserData().role == 'gdda';
     }
 
     function isUser() {
-      return isAuthenticated() && getUserData().role == 'user';
+      return isAuthenticated() && (!hasUserData() || getUserData().role == 'user');
     }
 
     function canViewProject(projectId) {
@@ -149,6 +153,23 @@ service cloud.firestore {
       allow create: if isAdmin() || isMod();
       allow update: if isAdmin() || isMod();
       allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Settings
+    // ===============================================================
+    match /settings/{settingId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    match /settings {
+      allow read: if request.auth != null;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

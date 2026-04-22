@@ -59,6 +59,7 @@
         "teamName": { "type": "string" },
         "month": { "type": "string", "description": "YYYY-MM" },
         "amount": { "type": "number" },
+        "verifiedAmount": { "type": "number", "description": "Admin verified actual cost after inspection" },
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" },
@@ -77,7 +78,9 @@
         "weekNumber": { "type": "number" },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
-        "amount": { "type": "number" },
+        "amount": { "type": "number", "description": "Total actual cost for the week" },
+        "visaAmount": { "type": "number", "description": "Cost run via company visa card" },
+        "digitalAmount": { "type": "number", "description": "Cost run via digital agency" },
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" },
@@ -140,6 +143,17 @@
         "createdByEmail": { "type": "string" }
       },
       "required": ["projectId", "teamId", "month"]
+    },
+    "Setting": {
+      "title": "System Settings",
+      "description": "Global configuration settings",
+      "type": "object",
+      "properties": {
+        "budgetStartDay": { "type": "number" },
+        "budgetEndDay": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -178,6 +192,10 @@
     "/types/{typeId}": {
       "schema": "Type",
       "description": "Project types"
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Global system settings"
     }
   }
 }

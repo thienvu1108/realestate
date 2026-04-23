@@ -44,7 +44,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -110,6 +110,7 @@ export default function App() {
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
+  const [acceptances, setAcceptances] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('home');
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -566,6 +567,12 @@ export default function App() {
   const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('1');
   const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('20');
   const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
+  
+  const formatCurrencyInput = (value: string) => {
+    const number = value.replace(/\D/g, '');
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
   const [historyToView, setHistoryToView] = useState<any[]>([]);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [historyTargetName, setHistoryTargetName] = useState('');
@@ -1039,10 +1046,22 @@ export default function App() {
     }
 
     // Listen to efficiency reports
-    const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
-    const unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
-      setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
+    let unsubEfficiency = () => {};
+    if (isAdmin || isMod) {
+      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
+      unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
+        setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
+    }
+
+    // Listen to acceptances
+    let unsubAcceptances = () => {};
+    if (isAdmin || isMod) {
+      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
+      unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
+        setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
+    }
 
     // Listen to settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
@@ -1064,6 +1083,7 @@ export default function App() {
       unsubLogs();
       unsubUsers();
       unsubEfficiency();
+      unsubAcceptances();
       unsubSettings();
     };
   }, [user, userRole, userProfile]);
@@ -1916,6 +1936,7 @@ export default function App() {
       nguoiDung: sanitizeData(allUsers),
       vungKhuVuc: sanitizeData(regions),
       hieuQuaKinhDoanh: sanitizeData(efficiencyReports),
+      nghiemThu: sanitizeData(acceptances),
       nhatKyHeThong: auditLogs.slice(0, 1000).map(log => {
         const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date();
         return {
@@ -3878,45 +3899,55 @@ export default function App() {
     // Specical cases for bulk actions
     if (action === 'DELETE_ALL' || action === 'DELETE_BULK') {
       return (
-        <div className="flex items-center gap-2 text-red-600 font-bold">
-          <Trash2 className="w-3 h-3" /> 
+        <div className="flex items-center gap-2 text-danger font-bold">
+          <Trash2 className="w-4 h-4" /> 
           Đã xóa {data.count || data.snapshot?.length || 'tất cả'} bản ghi
           {data.snapshot && <span className="text-[10px] bg-red-50 px-2 py-0.5 rounded-full">(Có snapshot khôi phục)</span>}
         </div>
       );
     }
 
-    if (action === 'IMPORT_BUDGETS' || action === 'IMPORT_COSTS') {
+    if (action === 'IMPORT_BUDGETS' || action === 'IMPORT_COSTS' || action === 'IMPORT_UNIFIED_URL') {
       return (
-        <div className="flex items-center gap-2 text-emerald-600 font-bold">
-          <FileUp className="w-3 h-3" /> 
-          Đã nhập {data.count || data.items?.length || data.snapshot?.length || 'nhiều'} bản ghi từ {data.source || 'tệp CSV'}
-        </div>
-      );
-    }
-
-    if (action === 'FULL_SYSTEM_BACKUP') {
-      return (
-        <div className="flex items-center gap-2 text-indigo-600 font-bold">
-          <Database className="w-3 h-3" /> 
-          Bản sao lưu hệ thống toàn diện
+        <div className="flex items-center gap-2 text-success font-bold">
+          <FileUp className="w-4 h-4" /> 
+          {action === 'IMPORT_UNIFIED_URL' ? (
+            <span>Nhập từ URL: {data.costCount} chi phí, {data.efficiencyCount} hiệu quả</span>
+          ) : (
+            <span>Đã nhập {data.count || data.items?.length || data.snapshot?.length || 'nhiều'} bản ghi</span>
+          )}
         </div>
       );
     }
 
     // Standard recursive renderer for small objects
     const renderObject = (obj: any, depth = 0) => {
-      if (depth > 2) return <span className="text-slate-400">...</span>;
-      if (typeof obj !== 'object' || obj === null) return <span>{String(obj)}</span>;
+      if (depth > 2) return <span className="text-muted-foreground italic">...</span>;
+      if (typeof obj !== 'object' || obj === null) return <span className="font-medium text-foreground">{String(obj)}</span>;
       
       return (
-        <div className="pl-2 space-y-0.5 border-l border-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 pl-3 border-l-2 border-indigo-100 my-1">
           {Object.entries(obj).map(([key, val]) => {
-            if (key === 'snapshot' || key === 'payload' || key === 'items') return null; // Too big
+            if (['snapshot', 'payload', 'items', 'counts'].includes(key)) return null; 
+            
+            // Highlight changes if old/new exist
+            if (key === 'oldAmount' || key === 'newAmount' || key === 'amount' || key === 'oldName' || key === 'newName') {
+               const isOld = key.startsWith('old');
+               const isNew = key.startsWith('new');
+               return (
+                 <div key={key} className="flex items-center gap-2 text-xs">
+                   <span className="font-bold text-slate-400 capitalize">{key.replace('Amount', ' (VNĐ)')}:</span>
+                   <span className={`${isOld ? 'text-slate-400 line-through' : isNew ? 'text-emerald-600 font-black' : 'text-slate-900 font-bold'}`}>
+                     {typeof val === 'number' ? formatCurrency(val) : String(val)}
+                   </span>
+                 </div>
+               );
+            }
+
             return (
-              <div key={key} className="flex flex-wrap gap-x-2">
-                <span className="font-bold text-slate-500">{key}:</span>
-                <span className="text-slate-900">
+              <div key={key} className="flex items-center gap-2 text-xs overflow-hidden">
+                <span className="font-bold text-slate-500 min-w-[80px] shrink-0">{key}:</span>
+                <span className="text-slate-900 truncate">
                   {typeof val === 'object' ? renderObject(val, depth + 1) : String(val)}
                 </span>
               </div>
@@ -3926,7 +3957,7 @@ export default function App() {
       );
     };
 
-    return <div className="mt-1">{renderObject(data)}</div>;
+    return <div className="w-full">{renderObject(data)}</div>;
   };
 
   const handleCreateCheckpoint = async (customNote: string = '') => {
@@ -6427,6 +6458,14 @@ export default function App() {
                             <BarChart3 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
                             <span className="text-xs lg:text-sm">Hiệu quả</span>
                           </Button>
+                          <Button 
+                            variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
+                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'acceptance' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            onClick={() => setAdminSubTab('acceptance')}
+                          >
+                            <Check className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'acceptance' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                            <span className="text-xs lg:text-sm">Nghiệm thu</span>
+                          </Button>
                         </>
                       )}
                       {isAdmin && (
@@ -6517,7 +6556,7 @@ export default function App() {
                                 <Select value={newEfficiencyProject} onValueChange={setNewEfficiencyProject}>
                                   <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
                                     <SelectValue placeholder="Chọn dự án...">
-                                      {newEfficiencyProject ? (projectMap[newEfficiencyProject] || newEfficiencyProject) : "Chọn dự án..."}
+                                      {newEfficiencyProject ? `${projectMap[newEfficiencyProject] || newEfficiencyProject} (${projects.find(p => p.id === newEfficiencyProject)?.projectCode || ''})` : "Chọn dự án..."}
                                     </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
@@ -6550,7 +6589,7 @@ export default function App() {
                                 <Select value={newEfficiencyTeam} onValueChange={setNewEfficiencyTeam}>
                                   <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
                                     <SelectValue placeholder="Chọn team...">
-                                      {newEfficiencyTeam ? (teamMap[newEfficiencyTeam] || newEfficiencyTeam) : "Chọn team..."}
+                                      {newEfficiencyTeam ? `${teamMap[newEfficiencyTeam] || newEfficiencyTeam} (${teams.find(t => t.id === newEfficiencyTeam)?.teamCode || ''})` : "Chọn team..."}
                                     </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
@@ -8056,8 +8095,18 @@ export default function App() {
                                         }}
                                       />
                                     </TableCell>
-                                    <TableCell className="font-medium">{projectMap[b.projectId] || b.projectName}</TableCell>
-                                    <TableCell>{teamMap[b.teamId] || b.teamName}</TableCell>
+                                    <TableCell className="font-medium">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span>{projectMap[b.projectId] || b.projectName}</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-col gap-0.5">
+                                        <span>{teamMap[b.teamId] || b.teamName}</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">({teams.find(t => t.id === b.teamId)?.teamCode || ''})</span>
+                                      </div>
+                                    </TableCell>
                                     <TableCell>{b.implementerName}</TableCell>
                                     <TableCell className="text-xs">{b.month}</TableCell>
                                     <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
@@ -8174,14 +8223,45 @@ export default function App() {
                               onChange={e => setAdminCostSearch(e.target.value)}
                             />
                           </div>
-                          <div className="w-[200px]">
-                            <Input 
-                              type="month" 
-                              className="bg-white border-none shadow-sm h-10"
-                              value={adminCostMonthFilter}
-                              onChange={e => setAdminCostMonthFilter(e.target.value)}
-                            />
-                          </div>
+                  <div className="space-y-4">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ báo cáo</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                       <Select 
+                        value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[0] : ''} 
+                        onValueChange={(val) => {
+                          const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
+                          const [, m] = current.split('-');
+                          setAdminCostMonthFilter(`${val}-${m}`);
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-none shadow-sm h-10 w-[90px]">
+                          <SelectValue placeholder="Năm" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[2024, 2025, 2026, 2027, 2028].map(y => (
+                            <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select 
+                        value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[1] : ''} 
+                        onValueChange={(val) => {
+                          const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
+                          const [y] = current.split('-');
+                          setAdminCostMonthFilter(`${y}-${val}`);
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-none shadow-sm h-10 w-[110px]">
+                          <SelectValue placeholder="Tháng" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                            <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                         </div>
 
                         <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
@@ -8331,7 +8411,7 @@ export default function App() {
                         <Select value={reportProject} onValueChange={setReportProject}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                             <SelectValue placeholder="Tất cả dự án">
-                              {reportProject === 'all' ? "Tất cả dự án" : (projectMap[reportProject] || reportProject)}
+                              {reportProject === 'all' ? "Tất cả dự án" : `${projectMap[reportProject] || reportProject} (${projects.find(p => p.id === reportProject)?.projectCode || ''})`}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -8351,7 +8431,7 @@ export default function App() {
                             {projects
                               .filter(p => p.name.toLowerCase().includes(reportProjectSearch.toLowerCase()))
                               .map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
                               ))
                             }
                             {projects.filter(p => p.name.toLowerCase().includes(reportProjectSearch.toLowerCase())).length === 0 && (
@@ -8369,7 +8449,7 @@ export default function App() {
                           <Select value={reportTeam} onValueChange={setReportTeam}>
                             <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
                               <SelectValue placeholder="Tất cả đội">
-                                {reportTeam === 'all' ? "Tất cả đội" : reportTeam}
+                                {reportTeam === 'all' ? "Tất cả đội" : `${reportTeam} (${teams.find(t => t.name === reportTeam)?.teamCode || ''})`}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
@@ -8389,7 +8469,7 @@ export default function App() {
                               {uniqueTeams
                                 .filter(t => t.toLowerCase().includes(reportTeamSearch.toLowerCase()))
                                 .map(t => (
-                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                  <SelectItem key={t} value={t}>{t} ({teams.find(team => team.name === t)?.teamCode || ''})</SelectItem>
                                 ))
                               }
                               {uniqueTeams.filter(t => t.toLowerCase().includes(reportTeamSearch.toLowerCase())).length === 0 && (
@@ -8458,21 +8538,41 @@ export default function App() {
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tất cả các tháng'}
                         </Label>
-                        <div className="relative">
-                          <Input 
-                            type="month" 
-                            className="bg-white border-slate-200 shadow-sm h-10 cursor-pointer transition-all hover:border-blue-300 pr-10" 
-                            value={reportMonth} 
-                            onChange={e => setReportMonth(e.target.value)} 
-                          />
-                          {reportMonth && (
-                            <button 
-                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full transition-colors"
-                              onClick={() => setReportMonth('')}
-                            >
-                              <X className="w-3 h-3 text-slate-400" />
-                            </button>
-                          )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <Select 
+                            value={reportMonth ? reportMonth.split('-')[0] : ''} 
+                            onValueChange={(val) => {
+                              const current = reportMonth || format(new Date(), 'yyyy-MM');
+                              const [currentY, m] = current.split('-');
+                              setReportMonth(`${val}-${m}`);
+                            }}
+                          >
+                            <SelectTrigger className="bg-white border-slate-200 shadow-sm h-10 w-[90px]">
+                              <SelectValue placeholder="Năm" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select 
+                            value={reportMonth ? reportMonth.split('-')[1] : ''} 
+                            onValueChange={(val) => {
+                              const current = reportMonth || format(new Date(), 'yyyy-MM');
+                              const [y, currentM] = current.split('-');
+                              setReportMonth(`${y}-${val}`);
+                            }}
+                          >
+                            <SelectTrigger className="bg-white border-slate-200 shadow-sm h-10 w-[110px]">
+                              <SelectValue placeholder="Tháng" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
 
@@ -9741,6 +9841,25 @@ export default function App() {
               )}
 
               {(isAdmin || isMod) && (
+                <>
+                  {/* Tab Nghiệm thu */}
+                  <TabsContent value="acceptance" className="space-y-6">
+                    <AcceptanceManager 
+                      isAdmin={isAdmin}
+                      isMod={isMod}
+                      user={user}
+                      teams={teams}
+                      projects={projects}
+                      acceptances={acceptances}
+                      teamMap={teamMap}
+                      projectMap={projectMap}
+                      formatCurrency={formatCurrency}
+                      getMarketingMonth={getMarketingMonth}
+                      handleFirestoreError={handleFirestoreError}
+                      formatCurrencyInput={formatCurrencyInput}
+                    />
+                  </TabsContent>
+
                 <TabsContent value="audit" className="space-y-6">
                   <Card className="border-none shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -9812,48 +9931,65 @@ export default function App() {
                     <CardContent className="p-0">
                       <div className="max-h-[700px] overflow-y-auto px-6 py-4 space-y-3 custom-scrollbar">
                         {filteredLogs.slice(0, logLimit).map(log => (
-                          <div key={log.id} className="group relative flex items-start gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all">
+                          <div key={log.id} className="group relative flex items-start gap-4 p-5 rounded-2xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
                             <div className="mt-1 shrink-0">
-                              <Badge className={`text-[10px] font-black border-none uppercase h-5 px-2 ${
-                                log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-700' : 
-                                log.action === 'DELETE' || log.action?.startsWith('DELETE_') ? 'bg-red-100 text-red-700' : 
-                                log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
-                                log.action === 'SYSTEM_CHECKPOINT' ? 'bg-amber-100 text-amber-700' :
-                                'bg-slate-100 text-slate-700'
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                log.action === 'CREATE' ? 'bg-emerald-50 text-emerald-600' : 
+                                log.action === 'DELETE' || log.action?.startsWith('DELETE_') ? 'bg-red-50 text-red-600' : 
+                                log.action === 'UPDATE' ? 'bg-blue-50 text-blue-600' :
+                                log.action === 'SYSTEM_CHECKPOINT' ? 'bg-amber-50 text-amber-600' :
+                                'bg-slate-50 text-slate-600'
                               }`}>
-                                {log.action === 'CREATE' ? 'Thêm mới' : 
-                                 log.action === 'DELETE' ? 'Xóa' : 
-                                 log.action === 'UPDATE' ? 'Cập nhật' : 
-                                 log.action === 'DELETE_ALL' ? 'Xóa hết' :
-                                 log.action === 'IMPORT_BUDGETS' ? 'Nhập CSV' :
-                                 log.action === 'SYSTEM_CHECKPOINT' ? 'Phiên bản' :
-                                 log.action === 'DEEP_SYSTEM_RESTORE' ? 'Khôi phục' : log.action}
-                              </Badge>
+                                {log.action === 'CREATE' ? <Plus className="w-5 h-5" /> : 
+                                 log.action === 'DELETE' ? <Trash2 className="w-5 h-5" /> : 
+                                 log.action === 'UPDATE' ? <Edit2 className="w-5 h-5" /> : 
+                                 log.action === 'DELETE_ALL' ? <AlertTriangle className="w-5 h-5" /> :
+                                 log.action === 'IMPORT_BUDGETS' ? <FileUp className="w-5 h-5" /> :
+                                 log.action === 'SYSTEM_CHECKPOINT' ? <History className="w-5 h-5" /> :
+                                 log.action === 'DEEP_SYSTEM_RESTORE' ? <RefreshCw className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                              </div>
                             </div>
-                            <div className="flex-1 space-y-2 min-w-0">
+                            <div className="flex-1 space-y-3 min-w-0">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-bold text-slate-900 truncate">
-                                  <span className="text-indigo-600">{log.userEmail}</span> 
-                                  <span className="mx-1 text-slate-400 font-medium">→</span>
-                                  <span className="text-slate-700">{log.collection}</span>
-                                </p>
-                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
+                                <div className="space-y-0.5">
+                                  <Badge className={`text-[9px] font-black border-none uppercase h-4 px-1.5 mb-1 ${
+                                    log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-700' : 
+                                    log.action === 'DELETE' || log.action?.startsWith('DELETE_') ? 'bg-red-100 text-red-700' : 
+                                    log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                                    log.action === 'SYSTEM_CHECKPOINT' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {log.action === 'CREATE' ? 'Thêm mới' : 
+                                     log.action === 'DELETE' ? 'XÓA' : 
+                                     log.action === 'UPDATE' ? 'Cập nhật' : 
+                                     log.action === 'DELETE_ALL' ? 'XÓA TOÀN BỘ' :
+                                     log.action === 'IMPORT_BUDGETS' ? 'NHẬP EXCEL' :
+                                     log.action === 'SYSTEM_CHECKPOINT' ? 'PHIÊN BẢN' :
+                                     log.action === 'DEEP_SYSTEM_RESTORE' ? 'KHÔI PHỤC' : log.action}
+                                  </Badge>
+                                  <p className="text-sm font-bold text-slate-900 truncate flex items-center gap-2">
+                                    <span className="text-indigo-600 font-black">{log.userEmail || 'Hệ thống'}</span> 
+                                    <span className="text-slate-400 font-medium">đã {
+                                      log.action === 'CREATE' ? 'tạo mới' : 
+                                      log.action === 'DELETE' ? 'xóa' : 
+                                      log.action === 'UPDATE' ? 'chỉnh sửa' : 'thực hiện'
+                                    } trong</span>
+                                    <span className="text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg text-xs">{log.collection}</span>
+                                  </p>
+                                </div>
+                                <span className="text-[11px] font-black text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100 italic">
                                   {log.timestamp?.toDate ? safeFormat(log.timestamp.toDate(), 'HH:mm:ss dd/MM/yyyy') : '...'}
                                 </span>
                               </div>
                               
-                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded">ID: {log.docId}</span>
-                              </div>
-                              
-                              <div className="p-3 rounded-xl bg-slate-50/50 border border-slate-100/50 text-xs flex justify-between items-center group/data">
-                                <div className="flex-1">
+                              <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100/50 text-xs flex justify-between items-start group/data shadow-inner">
+                                <div className="flex-1 overflow-hidden">
                                   <RenderLogData data={log.data} action={log.action} />
                                 </div>
                                 {log.action === 'SYSTEM_CHECKPOINT' && (
                                   <Button 
                                     size="sm" 
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black h-7 px-4 rounded-xl ml-4"
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black h-8 px-4 rounded-xl ml-4 shadow-lg shadow-indigo-200"
                                     onClick={() => {
                                       setSelectedCheckpoint(log);
                                       setIsRestoreCheckpointDialogOpen(true);
@@ -9889,8 +10025,9 @@ export default function App() {
                     </CardContent>
                   </Card>
                 </TabsContent>
-              )}
-              {isAdmin && (
+              </>
+            )}
+            {isAdmin && (
                 <TabsContent value="backup" className="space-y-6">
                     <Card className="border-none shadow-sm">
                       <CardHeader>
@@ -10344,7 +10481,7 @@ export default function App() {
                             {selectedProjectId ? (
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{projectMap[selectedProjectId]}</span>
-                                <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === selectedProjectId)?.region})</span>
+                                <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === selectedProjectId)?.projectCode || projects.find(p => p.id === selectedProjectId)?.region})</span>
                               </div>
                             ) : "Chọn dự án"}
                           </SelectValue>
@@ -10368,7 +10505,7 @@ export default function App() {
                               .map(p => (
                                 <SelectItem key={p.id} value={p.id}>
                                   <div className="flex items-center justify-between w-full gap-4">
-                                    <span className="font-medium">{p.name}</span>
+                                    <span className="font-medium">{p.name} ({p.projectCode})</span>
                                     <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100 shrink-0">
                                       {p.region}
                                     </Badge>
@@ -10389,7 +10526,9 @@ export default function App() {
                         if (team) setSelectedTeamName(team.name);
                       }}>
                         <SelectTrigger className="bg-slate-50 border-slate-200 focus:ring-blue-500 h-11">
-                          <SelectValue placeholder="Vui lòng chọn team" />
+                          <SelectValue placeholder="Vui lòng chọn team">
+                            {selectedTeamId ? `${teamMap[selectedTeamId] || selectedTeamId} (${teams.find(t => t.id === selectedTeamId)?.teamCode || ''})` : "Vui lòng chọn team"}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <div className="p-2 sticky top-0 bg-popover z-10 border-b">
@@ -10408,7 +10547,7 @@ export default function App() {
                             {teams
                               .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
                               .map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                <SelectItem key={t.id} value={t.id}>{t.name} ({t.teamCode})</SelectItem>
                               ))
                             }
                           </SelectGroup>
@@ -10543,11 +10682,15 @@ export default function App() {
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right font-bold">Dự án:</Label>
-                    <div className="col-span-3">{projectMap[selectedProjectId]}</div>
+                    <div className="col-span-3">
+                      {projectMap[selectedProjectId]} ({projects.find(p => p.id === selectedProjectId)?.projectCode || ''})
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right font-bold">Team:</Label>
-                    <div className="col-span-3">{selectedTeamName}</div>
+                    <div className="col-span-3">
+                      {selectedTeamName} ({teams.find(t => t.id === selectedTeamId)?.teamCode || ''})
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right font-bold">Người triển khai:</Label>
@@ -10672,11 +10815,14 @@ export default function App() {
                             </TableCell>
                           )}
                           <TableCell className="py-4">
-                            <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
+                              <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                            </div>
                           </TableCell>
                           <TableCell className="py-4">
                             <Badge variant="outline" className="font-normal border-slate-200 text-slate-600 bg-white">
-                              {b.teamName}
+                              {b.teamName} ({teams.find(t => t.id === b.teamId)?.teamCode || ''})
                             </Badge>
                           </TableCell>
                           <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
@@ -10780,12 +10926,42 @@ export default function App() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ ngân sách</Label>
-                          <Input 
-                            type="month" 
-                            className="bg-slate-50 border-slate-200 h-11" 
-                            value={costBudgetMonth} 
-                            onChange={e => setCostBudgetMonth(e.target.value)} 
-                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <Select 
+                              value={costBudgetMonth ? costBudgetMonth.split('-')[0] : ''} 
+                              onValueChange={(val) => {
+                                const current = costBudgetMonth || format(new Date(), 'yyyy-MM');
+                                const [, m] = current.split('-');
+                                setCostBudgetMonth(`${val}-${m}`);
+                              }}
+                            >
+                              <SelectTrigger className="bg-slate-50 border-slate-200 h-11">
+                                <SelectValue placeholder="Năm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select 
+                              value={costBudgetMonth ? costBudgetMonth.split('-')[1] : ''} 
+                              onValueChange={(val) => {
+                                const current = costBudgetMonth || format(new Date(), 'yyyy-MM');
+                                const [y] = current.split('-');
+                                setCostBudgetMonth(`${y}-${val}`);
+                              }}
+                            >
+                              <SelectTrigger className="bg-slate-50 border-slate-200 h-11">
+                                <SelectValue placeholder="Tháng" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                  <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
@@ -10805,7 +10981,10 @@ export default function App() {
                                         <Wallet className="w-4 h-4 text-emerald-600" />
                                       </div>
                                       <div className="flex flex-col min-w-0 flex-1" key={b.id}>
-                                        <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
+                                          <span className="text-[10px] text-slate-400 font-normal shrink-0">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                                        </div>
                                         <div className="flex items-center gap-2 text-[10px] text-slate-500">
                                           <span className="font-medium">{teamMap[b.teamId] || b.teamName}</span>
                                           <span className="opacity-30">•</span>
@@ -10875,9 +11054,12 @@ export default function App() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex justify-between items-start gap-2 mb-1">
-                                        <h4 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
-                                          {projectMap[b.projectId]}
-                                        </h4>
+                                        <div className="flex items-center gap-2 truncate">
+                                          <h4 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
+                                            {projectMap[b.projectId]}
+                                          </h4>
+                                          <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                                        </div>
                                         <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                                           {b.type}
                                         </span>
@@ -12002,7 +12184,7 @@ export default function App() {
               <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
                 <SelectTrigger className="bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Chọn dự án">
-                    {editingBudgetProject ? (projectMap[editingBudgetProject] || editingBudgetProject) : "Chọn dự án"}
+                    {editingBudgetProject ? `${projectMap[editingBudgetProject] || editingBudgetProject} (${projects.find(p => p.id === editingBudgetProject)?.projectCode || ''})` : "Chọn dự án"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="w-[400px] md:w-[550px]">
@@ -12024,7 +12206,7 @@ export default function App() {
                       .map(p => (
                         <SelectItem key={p.id} value={p.id}>
                           <div className="flex items-center justify-between w-full gap-4">
-                            <span className="font-medium">{p.name}</span>
+                            <span className="font-medium">{p.name} ({p.projectCode})</span>
                             <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100 shrink-0">
                               {p.region}
                             </Badge>
@@ -12042,13 +12224,13 @@ export default function App() {
               <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
                 <SelectTrigger className="bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Chọn team">
-                    {editingBudgetTeam ? (teamMap[editingBudgetTeam] || editingBudgetTeam) : "Chọn team"}
+                    {editingBudgetTeam ? `${teamMap[editingBudgetTeam] || editingBudgetTeam} (${teams.find(t => (t.id === editingBudgetTeam || t.name === editingBudgetTeam))?.teamCode || ''})` : "Chọn team"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {teams.map(t => (
-                      <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                      <SelectItem key={t.id} value={t.id}>{t.name} ({t.teamCode})</SelectItem>
                     ))}
                   </SelectGroup>
                 </SelectContent>
@@ -12586,3 +12768,627 @@ export default function App() {
     </div>
   );
 }
+
+/**
+ * AcceptanceManager Component
+ * Encapsulates the Acceptance tab logic and UI to improve performance and reduce input lag.
+ */
+const AcceptanceManager = React.memo(({ 
+  isAdmin, isMod, user, teams, projects, acceptances, teamMap, projectMap, 
+  formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput 
+}: any) => {
+  const [acceptanceSearch, setAcceptanceSearch] = useState('');
+  const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
+  const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
+  const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
+
+  // Form states (Local to this component to avoid App-wide lag)
+  const [acceptanceMonth, setAcceptanceMonth] = useState('');
+  const [acceptanceTeam, setAcceptanceTeam] = useState('');
+  const [acceptanceProject, setAcceptanceProject] = useState('');
+  const [formTeamSearch, setFormTeamSearch] = useState('');
+  const [formProjectSearch, setFormProjectSearch] = useState('');
+  
+  // Dynamic channel costs
+  const initialBreakdown = {
+    facebook: [{ account: '', amount: '' }],
+    zalo: [{ account: '', amount: '' }],
+    google: [{ account: '', amount: '' }],
+    posting: [{ account: '', amount: '' }],
+    other: [{ account: '', amount: '' }],
+    visa: [{ account: '', amount: '' }],
+    digital: [{ account: '', amount: '' }],
+  };
+  const [breakdown, setBreakdown] = useState<Record<string, { account: string; amount: string }[]>>(initialBreakdown);
+
+  const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
+  const [acceptanceType, setAcceptanceType] = useState('Chi phí không đổi');
+  const [acceptanceRealCost, setAcceptanceRealCost] = useState('');
+
+  const addAccountRow = (channel: string) => {
+    setBreakdown(prev => ({
+      ...prev,
+      [channel]: [...prev[channel], { account: '', amount: '' }]
+    }));
+  };
+
+  const removeAccountRow = (channel: string, index: number) => {
+    setBreakdown(prev => {
+      if (prev[channel].length <= 1) {
+        return {
+          ...prev,
+          [channel]: [{ account: '', amount: '' }]
+        };
+      }
+      const newList = [...prev[channel]];
+      newList.splice(index, 1);
+      return {
+        ...prev,
+        [channel]: newList
+      };
+    });
+  };
+
+  const updateAccountRow = (channel: string, index: number, field: 'account' | 'amount', value: string) => {
+    setBreakdown(prev => {
+      const newList = [...prev[channel]];
+      newList[index] = { ...newList[index], [field]: value };
+      return {
+        ...prev,
+        [channel]: newList
+      };
+    });
+  };
+
+  const calculateChannelTotal = (channel: string) => {
+    return breakdown[channel].reduce((sum, item) => {
+      const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
+      return sum + val;
+    }, 0);
+  };
+
+  const filteredAcceptances = useMemo(() => {
+    return acceptances.filter((a: any) => {
+      const matchesSearch = 
+        (a.projectName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
+        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
+        (a.teamCode || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
+      const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
+      return matchesSearch && matchesMonth;
+    });
+  }, [acceptances, acceptanceSearch, acceptanceMonthFilter]);
+
+  const handleAddAcceptance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!acceptanceMonth || !acceptanceTeam || !acceptanceProject) {
+      toast.error('Vui lòng chọn đầy đủ Tháng, Đội và Dự án');
+      return;
+    }
+
+    setIsAddingAcceptance(true);
+    try {
+      const fb = calculateChannelTotal('facebook');
+      const zalo = calculateChannelTotal('zalo');
+      const google = calculateChannelTotal('google');
+      const posting = calculateChannelTotal('posting');
+      const other = calculateChannelTotal('other');
+      const visa = calculateChannelTotal('visa');
+      const digital = calculateChannelTotal('digital');
+      const realCost = parseFloat(acceptanceRealCost.replace(/\./g, '')) || 0;
+      
+      const beforeAcceptanceTotal = fb + zalo + google + posting + other + visa + digital;
+      const afterTotal = (acceptanceStatus === 'Đã nghiệm thu' && acceptanceType === 'Chi phí thay đổi') ? realCost : beforeAcceptanceTotal;
+
+      const team = teams.find((t: any) => t.id === acceptanceTeam);
+      const project = projects.find((p: any) => p.id === acceptanceProject);
+
+      // Process breakdown for storage (convert strings to numbers)
+      const processedBreakdown: any = {};
+      Object.keys(breakdown).forEach(key => {
+        processedBreakdown[key] = breakdown[key]
+          .filter(item => item.account.trim() !== '' || item.amount.trim() !== '')
+          .map(item => ({
+            account: item.account,
+            amount: parseFloat(item.amount.replace(/\./g, '')) || 0
+          }));
+      });
+
+      const payload = {
+        month: acceptanceMonth,
+        teamId: acceptanceTeam,
+        teamName: team?.name || '',
+        teamCode: team?.teamCode || '',
+        projectId: acceptanceProject,
+        projectName: project?.name || '',
+        projectCode: project?.projectCode || '',
+        facebookCost: fb,
+        zaloCost: zalo,
+        googleCost: google,
+        postingCost: posting,
+        otherCost: other,
+        visaCost: visa,
+        digitalCost: digital,
+        totalCost: beforeAcceptanceTotal,
+        beforeAcceptanceCost: beforeAcceptanceTotal,
+        afterAcceptanceCost: afterTotal,
+        status: acceptanceStatus,
+        acceptanceType: acceptanceStatus === 'Đã nghiệm thu' ? acceptanceType : null,
+        breakdown: processedBreakdown,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || '',
+        updatedByUid: user?.uid || ''
+      };
+
+      if (editingAcceptance) {
+        await updateDoc(doc(db, 'acceptances', editingAcceptance.id), payload);
+        toast.success('Cập nhật nghiệm thu thành công');
+        setEditingAcceptance(null);
+      } else {
+        await addDoc(collection(db, 'acceptances'), {
+          ...payload,
+          createdAt: serverTimestamp(),
+          createdBy: user?.email || '',
+          createdByUid: user?.uid || ''
+        });
+        toast.success('Thêm bản ghi nghiệm thu thành công');
+      }
+
+      // Reset form
+      setAcceptanceTeam('');
+      setAcceptanceProject('');
+      setBreakdown(initialBreakdown);
+      setAcceptanceRealCost('');
+      setAcceptanceStatus('Trước nghiệm thu');
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.WRITE, 'acceptances');
+    } finally {
+      setIsAddingAcceptance(false);
+    }
+  };
+
+  const handleDeleteAcceptance = async (id: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bản ghi này?')) return;
+    try {
+      await deleteDoc(doc(db, 'acceptances', id));
+      toast.success('Xóa bản ghi thành công');
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.DELETE, 'acceptances');
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+      <div className="lg:col-span-2">
+        <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden sticky top-8">
+          <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 w-full" />
+          <CardHeader className="pb-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <CheckSquare className="w-5 h-5 text-indigo-600" />
+              </div>
+              <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Nghiệm Thu</CardTitle>
+            </div>
+            <CardDescription className="text-slate-500 font-medium font-inter">Nhập chi tiết nghiệm thu marketing hàng tháng</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleAddAcceptance} className="space-y-6">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kỳ báo cáo tháng</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select 
+                      value={acceptanceMonth ? acceptanceMonth.split('-')[0] : ''} 
+                      onValueChange={(val) => {
+                        const current = acceptanceMonth || format(new Date(), 'yyyy-MM');
+                        const [, m] = current.split('-');
+                        setAcceptanceMonth(`${val}-${m}`);
+                      }}
+                    >
+                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                        <SelectValue placeholder="Năm" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[2024, 2025, 2026, 2027, 2028].map(y => (
+                          <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select 
+                      value={acceptanceMonth ? acceptanceMonth.split('-')[1] : ''} 
+                      onValueChange={(val) => {
+                        const current = acceptanceMonth || format(new Date(), 'yyyy-MM');
+                        const [y] = current.split('-');
+                        setAcceptanceMonth(`${y}-${val}`);
+                      }}
+                    >
+                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                        <SelectValue placeholder="Tháng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                          <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Đội (Team)</Label>
+                    <Select value={acceptanceTeam} onValueChange={setAcceptanceTeam}>
+                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                        <SelectValue placeholder="Chọn đội...">
+                          {acceptanceTeam ? `${teamMap[acceptanceTeam] || acceptanceTeam} (${teams.find((t: any) => t.id === acceptanceTeam)?.teamCode || ''})` : "Chọn đội..."}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                          <Input 
+                            placeholder="Tìm đội..." 
+                            className="h-8 text-xs font-bold bg-slate-50 border-none"
+                            value={formTeamSearch}
+                            onChange={e => setFormTeamSearch(e.target.value)}
+                            onKeyDown={e => e.stopPropagation()}
+                          />
+                        </div>
+                        {teams
+                          .filter((t: any) => (t.name || '').toLowerCase().includes(formTeamSearch.toLowerCase()) || (t.teamCode || '').toLowerCase().includes(formTeamSearch.toLowerCase()))
+                          .map((team: any) => (
+                            <SelectItem key={team.id} value={team.id}>{team.name} ({team.teamCode})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dự án (Project)</Label>
+                    <Select value={acceptanceProject} onValueChange={setAcceptanceProject}>
+                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                        <SelectValue placeholder="Chọn dự án...">
+                          {acceptanceProject ? `${projectMap[acceptanceProject] || acceptanceProject} (${projects.find((p: any) => p.id === acceptanceProject)?.projectCode || ''})` : "Chọn dự án..."}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
+                          <Input 
+                            placeholder="Tìm dự án..." 
+                            className="h-8 text-xs font-bold bg-slate-50 border-none"
+                            value={formProjectSearch}
+                            onChange={e => setFormProjectSearch(e.target.value)}
+                            onKeyDown={e => e.stopPropagation()}
+                          />
+                        </div>
+                        {projects
+                          .filter((p: any) => (p.name || '').toLowerCase().includes(formProjectSearch.toLowerCase()) || (p.projectCode || '').toLowerCase().includes(formProjectSearch.toLowerCase()))
+                          .map((p: any) => (
+                            <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {[
+                    { key: 'facebook', label: 'Facebook', color: 'indigo' },
+                    { key: 'zalo', label: 'Zalo', color: 'blue' },
+                    { key: 'google', label: 'Google', color: 'red' },
+                    { key: 'posting', label: 'Đăng tin', color: 'emerald' },
+                    { key: 'visa', label: 'Visa', color: 'orange' },
+                    { key: 'digital', label: 'Digital', color: 'violet' },
+                    { key: 'other', label: 'Khác', color: 'slate' },
+                  ].map((ch) => (
+                    <div key={ch.key} className="space-y-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-indigo-100 group">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-6 rounded-full bg-${ch.color}-500`} />
+                          <Label className={`text-xs font-black text-${ch.color}-600 uppercase tracking-widest`}>{ch.label}</Label>
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className={`h-7 w-7 rounded-full text-${ch.color}-600 hover:bg-${ch.color}-50 bg-white shadow-sm border border-slate-200/50`}
+                          onClick={() => addAccountRow(ch.key)}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="space-y-2.5">
+                        {breakdown[ch.key].map((item, idx) => (
+                          <div key={idx} className="flex gap-3 items-center animate-in fade-in slide-in-from-left-2 duration-300">
+                            <div className="relative flex-1">
+                              <Input 
+                                placeholder="Tên tài khoản / Account..." 
+                                className="h-10 bg-white border-slate-200 rounded-xl text-xs font-bold pl-3 focus:border-indigo-300"
+                                value={item.account}
+                                onChange={e => updateAccountRow(ch.key, idx, 'account', e.target.value)}
+                              />
+                            </div>
+                            <div className="relative w-[150px]">
+                              <Input 
+                                placeholder="Số tiền..." 
+                                className={`h-10 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-black text-${ch.color}-700 focus:border-${ch.color}-300`}
+                                value={item.amount}
+                                onChange={e => updateAccountRow(ch.key, idx, 'amount', formatCurrencyInput(e.target.value))}
+                              />
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">đ</span>
+                            </div>
+                            {breakdown[ch.key].length > 1 && (
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 rounded-full text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                                onClick={() => removeAccountRow(ch.key, idx)}
+                              >
+                                <MinusCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-end pt-2 border-t border-slate-100 group-hover:border-indigo-50">
+                        <span className={`text-[10px] font-black text-${ch.color}-500 uppercase tracking-tighter`}>
+                          Tổng {ch.label}: <span className={`text-sm text-${ch.color}-700 ml-1 font-mono tracking-tight`}>{formatCurrency(calculateChannelTotal(ch.key))}</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Trạng thái</Label>
+                    <Select value={acceptanceStatus} onValueChange={setAcceptanceStatus}>
+                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                        <SelectValue placeholder="Chọn trạng thái" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Trước nghiệm thu">Trước nghiệm thu</SelectItem>
+                        <SelectItem value="Đã nghiệm thu">Đã nghiệm thu</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {acceptanceStatus === 'Đã nghiệm thu' && (
+                    <div className="animate-in slide-in-from-top-2 duration-300 space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Loại nghiệm thu</Label>
+                        <Select value={acceptanceType} onValueChange={setAcceptanceType}>
+                          <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl font-bold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Chi phí không đổi">Chi phí không đổi</SelectItem>
+                            <SelectItem value="Chi phí thay đổi">Chi phí thay đổi</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {acceptanceType === 'Chi phí thay đổi' && (
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chi phí thực tế sau NT</Label>
+                          <Input 
+                            className="h-11 bg-indigo-50 border-indigo-200 rounded-xl font-black text-indigo-700 text-lg" 
+                            placeholder="Nhập chi phí thực tế..." 
+                            value={acceptanceRealCost}
+                            onChange={e => setAcceptanceRealCost(formatCurrencyInput(e.target.value))}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button 
+                  type="submit" 
+                  className={`w-full h-11 rounded-xl font-black text-sm transition-all shadow-lg ${
+                    editingAcceptance ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+                  }`}
+                  disabled={isAddingAcceptance}
+                >
+                  {isAddingAcceptance ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : editingAcceptance ? (
+                    'Cập nhật Nghiệm thu'
+                  ) : (
+                    'Lưu Nghiệm thu'
+                  )}
+                </Button>
+                {editingAcceptance && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    className="w-full mt-2 text-slate-400 font-bold"
+                    onClick={() => {
+                      setEditingAcceptance(null);
+                      setAcceptanceMonth('');
+                      setAcceptanceTeam('');
+                      setAcceptanceProject('');
+                      setBreakdown(initialBreakdown);
+                      setAcceptanceRealCost('');
+                      setAcceptanceStatus('Trước nghiệm thu');
+                      setAcceptanceType('Chi phí không đổi');
+                    }}
+                  >
+                    Hủy chỉnh sửa
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="lg:col-span-3">
+        <Card className="border-none shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-6">
+            <div>
+              <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Chi tiết Nghiệm thu</CardTitle>
+              <CardDescription className="text-slate-500 font-medium">Lịch sử nghiệm thu chi tiết hàng tháng</CardDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input 
+                  placeholder="Tìm Team, Dự án..." 
+                  className="h-10 pl-10 w-[200px] border-none bg-slate-100 rounded-xl text-xs font-bold"
+                  value={acceptanceSearch}
+                  onChange={e => setAcceptanceSearch(e.target.value)}
+                />
+              </div>
+              <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
+                <SelectTrigger className="h-10 w-[150px] border-none bg-slate-100 rounded-xl text-xs font-bold">
+                  <SelectValue placeholder="Chọn tháng..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả tháng</SelectItem>
+                  {Array.from(new Set(acceptances.map((a: any) => a.month))).sort().reverse().map((m: any) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 overflow-hidden">
+            <div className="overflow-x-auto custom-scrollbar">
+              <Table>
+                <TableHeader className="bg-slate-50/80">
+                  <TableRow>
+                     <TableHead className="text-center w-[50px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
+                     <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
+                     <TableHead className="text-right font-black text-[10px] bg-amber-50/50 text-amber-600 uppercase">Trước NT</TableHead>
+                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Sau NT</TableHead>
+                     <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase w-[100px]">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAcceptances.map((a: any, index: number) => (
+                    <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamCode}</Badge>
+                            <span className="text-[9px] text-slate-400 font-medium">{a.month}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-[10px] text-indigo-600 font-bold">{formatCurrency(a.facebookCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] text-blue-600 font-bold">{formatCurrency(a.zaloCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] text-red-600 font-bold">{formatCurrency(a.googleCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] text-emerald-600 font-bold">{formatCurrency(a.postingCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] text-slate-600 font-bold">{formatCurrency(a.otherCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] bg-amber-50/30 text-amber-700 font-black">{formatCurrency(a.beforeAcceptanceCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] bg-emerald-50/30 text-emerald-700 font-black">{formatCurrency(a.afterAcceptanceCost)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={`text-[9px] h-5 font-black border-none whitespace-nowrap ${
+                          a.status === 'Đã nghiệm thu' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {a.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                            onClick={() => {
+                              setEditingAcceptance(a);
+                              setAcceptanceMonth(a.month);
+                              setAcceptanceTeam(a.teamId);
+                              setAcceptanceProject(a.projectId);
+                              
+                              if (a.breakdown) {
+                                const newBreakdown: any = {};
+                                Object.keys(initialBreakdown).forEach(key => {
+                                  if (a.breakdown[key] && Array.isArray(a.breakdown[key])) {
+                                    newBreakdown[key] = a.breakdown[key].map((item: any) => ({
+                                      account: item.account || '',
+                                      amount: formatCurrencyInput(String(item.amount || 0))
+                                    }));
+                                  } else {
+                                    newBreakdown[key] = [{ account: '', amount: '' }];
+                                  }
+                                });
+
+                                // Ensure legacy fields are added if they exist but breakdown for that channel is empty
+                                const legacyMap: any = {
+                                  facebook: a.facebookCost,
+                                  zalo: a.zaloCost,
+                                  google: a.googleCost,
+                                  posting: a.postingCost,
+                                  other: a.otherCost,
+                                  visa: a.visaCost,
+                                  digital: a.digitalCost
+                                };
+                                Object.keys(legacyMap).forEach(key => {
+                                  if ((!newBreakdown[key] || newBreakdown[key].length === 0 || (newBreakdown[key].length === 1 && newBreakdown[key][0].amount === '0')) && legacyMap[key] > 0) {
+                                    newBreakdown[key] = [{ account: 'Legacy', amount: formatCurrencyInput(String(legacyMap[key])) }];
+                                  }
+                                });
+
+                                setBreakdown(newBreakdown);
+                              } else {
+                                // Complete legacy fallback
+                                setBreakdown({
+                                  facebook: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.facebookCost || 0)) }],
+                                  zalo: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.zaloCost || 0)) }],
+                                  google: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.googleCost || 0)) }],
+                                  posting: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.postingCost || 0)) }],
+                                  other: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.otherCost || 0)) }],
+                                  visa: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.visaCost || 0)) }],
+                                  digital: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.digitalCost || 0)) }],
+                                });
+                              }
+
+                              setAcceptanceStatus(a.status);
+                              setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
+                              setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                            onClick={() => handleDeleteAcceptance(a.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredAcceptances.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={11} className="h-40 text-center text-slate-400 italic">
+                        Không tìm thấy dữ liệu nghiệm thu
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+});
+
+// Final wrapper to handle naming/export if needed, but here we just use it in App
+const AcceptanceManagerDefinition = AcceptanceManager;

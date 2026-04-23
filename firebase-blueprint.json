@@ -154,6 +154,42 @@
         "updatedAt": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string" }
       }
+    },
+    "Acceptance": {
+      "title": "Acceptance",
+      "description": "Monthly marketing cost acceptance/finalization",
+      "type": "object",
+      "properties": {
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "teamId": { "type": "string" },
+        "teamCode": { "type": "string" },
+        "teamName": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectCode": { "type": "string" },
+        "projectName": { "type": "string" },
+        "facebookCost": { "type": "number" },
+        "zaloCost": { "type": "number" },
+        "googleCost": { "type": "number" },
+        "postingCost": { "type": "number" },
+        "otherCost": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "beforeAcceptanceCost": { "type": "number" },
+        "afterAcceptanceCost": { "type": "number" },
+        "visaCost": { "type": "number" },
+        "digitalCost": { "type": "number" },
+        "status": { 
+          "type": "string", 
+          "enum": ["Trước nghiệm thu", "Đã nghiệm thu"] 
+        },
+        "acceptanceType": {
+          "type": "string",
+          "enum": ["Chi phí không đổi", "Chi phí thay đổi"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["month", "teamId", "projectId"]
     }
   },
   "firestore": {
@@ -180,6 +216,10 @@
     "/costs/{costId}": {
       "schema": "WeeklyCost",
       "description": "Weekly actual costs"
+    },
+    "/acceptances/{acceptanceId}": {
+      "schema": "Acceptance",
+      "description": "Monthly cost acceptance records"
     },
     "/auditLogs/{logId}": {
       "schema": "AuditLog",

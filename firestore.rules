@@ -19,20 +19,28 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() &&
-        ((request.auth.token.email == "thienvu1108@gmail.com") ||
-         (hasUserData() && getUserData().role == 'super_admin'));
+        (request.auth.token.email == "thienvu1108@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'));
     }
 
     function isAdmin() {
-      return isAuthenticated() && (isSuperAdmin() || (hasUserData() && getUserData().role == 'admin'));
+      return isAuthenticated() && (
+        request.auth.token.email == "thienvu1108@gmail.com" || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'))
+      );
     }
 
     function isMod() {
-      return isAuthenticated() && hasUserData() && getUserData().role == 'mod';
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'mod';
     }
 
     function isGDDA() {
-      return isAuthenticated() && hasUserData() && getUserData().role == 'gdda';
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'gdda';
     }
 
     function isUser() {
@@ -51,6 +59,14 @@ service cloud.firestore {
     
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     // ===============================================================
@@ -152,6 +168,31 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAdmin() || isMod();
       allow update: if isAdmin() || isMod();
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Acceptances
+    // ===============================================================
+    function isValidAcceptance(data) {
+      return data.month is string && data.month.size() == 7 &&
+             data.teamId is string && data.teamId.size() <= 128 &&
+             data.projectId is string && data.projectId.size() <= 128 &&
+             data.projectName is string && data.projectName.size() <= 200 &&
+             data.totalCost is number && (data.totalCost >= 0) &&
+             data.status in ['Trước nghiệm thu', 'Đã nghiệm thu'];
+    }
+
+    match /acceptances/{acceptanceId} {
+      allow read: if isAdmin() || isMod();
+      allow create: if (isAdmin() || isMod()) && 
+                    isValidAcceptance(incoming()) &&
+                    incoming().createdByUid == request.auth.uid;
+      allow update: if (isAdmin() || isMod()) && 
+                    isValidAcceptance(incoming()) && (
+                      // Action: Update status or costs
+                      incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
+                    );
       allow delete: if isAdmin();
     }
 

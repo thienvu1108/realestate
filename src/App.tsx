@@ -44,7 +44,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -111,6 +111,7 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
   const [acceptances, setAcceptances] = useState<any[]>([]);
+  const [finalAcceptances, setFinalAcceptances] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('home');
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -175,12 +176,12 @@ export default function App() {
 
   const formatNumberWithCommas = (value: string | number) => {
     if (value === undefined || value === null || value === '') return '';
-    const stringValue = value.toString().replace(/,/g, '');
-    return stringValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const stringValue = value.toString().replace(/\./g, '');
+    return stringValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
   const handleNumberInputChange = (setter: (val: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/,/g, '');
+    const rawValue = e.target.value.replace(/\./g, '');
     if (rawValue === '' || /^\d+$/.test(rawValue)) {
       setter(rawValue);
     }
@@ -570,7 +571,7 @@ export default function App() {
   
   const formatCurrencyInput = (value: string) => {
     const number = value.replace(/\D/g, '');
-    return number.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
   const [historyToView, setHistoryToView] = useState<any[]>([]);
@@ -899,6 +900,11 @@ export default function App() {
             }
           }
           
+          // Force super_admin role for specific email
+          if (firebaseUser.email === 'thienvu1108@gmail.com') {
+            role = 'super_admin';
+          }
+          
           setUserRole(role);
           setUser(firebaseUser);
           if (role === 'super_admin' || role === 'admin') {
@@ -1063,6 +1069,15 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     }
 
+    // Listen to final acceptances
+    let unsubFinalAcceptances = () => {};
+    if (isAdmin || isMod) {
+      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('acceptedAt', 'desc'));
+      unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
+        setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
+    }
+
     // Listen to settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
       if (doc.exists()) {
@@ -1084,6 +1099,7 @@ export default function App() {
       unsubUsers();
       unsubEfficiency();
       unsubAcceptances();
+      unsubFinalAcceptances();
       unsubSettings();
     };
   }, [user, userRole, userProfile]);
@@ -6544,12 +6560,42 @@ export default function App() {
                             <form onSubmit={handleAddEfficiency} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                               <div className="lg:col-span-2 space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Kỳ báo cáo</Label>
-                                <Input 
-                                  type="month" 
-                                  className="bg-slate-50 border-none h-11 rounded-xl" 
-                                  value={newEfficiencyMonth}
-                                  onChange={e => setNewEfficiencyMonth(e.target.value)}
-                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Select 
+                                    value={newEfficiencyMonth ? newEfficiencyMonth.split('-')[0] : ''} 
+                                    onValueChange={(val) => {
+                                      const current = newEfficiencyMonth || format(new Date(), 'yyyy-MM');
+                                      const [, m] = current.split('-');
+                                      setNewEfficiencyMonth(`${val}-${m}`);
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                                      <SelectValue placeholder="Năm" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Select 
+                                    value={newEfficiencyMonth ? newEfficiencyMonth.split('-')[1] : ''} 
+                                    onValueChange={(val) => {
+                                      const current = newEfficiencyMonth || format(new Date(), 'yyyy-MM');
+                                      const [y] = current.split('-');
+                                      setNewEfficiencyMonth(`${y}-${val}`);
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                                      <SelectValue placeholder="Tháng" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                        <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                               <div className="lg:col-span-2 space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dự án</Label>
@@ -6634,7 +6680,7 @@ export default function App() {
                                   placeholder="VD: 15,000,000,000"
                                   className="bg-slate-50 border-none h-11 rounded-xl" 
                                   value={formatNumberWithCommas(newEfficiencyRevenue)}
-                                  onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/,/g, ''))}
+                                  onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/\./g, ''))}
                                 />
                               </div>
                               <div className="lg:col-span-2">
@@ -6698,16 +6744,45 @@ export default function App() {
                                     onChange={e => setAdminEfficiencySearch(e.target.value)}
                                   />
                                 </div>
-                                <div className="relative">
-                                  <Input 
-                                    type="month" 
-                                    className="w-40 bg-slate-50 border-none h-10 text-xs rounded-xl pr-10"
-                                    value={adminEfficiencyMonthFilter}
-                                    onChange={e => setAdminEfficiencyMonthFilter(e.target.value)}
-                                  />
+                                <div className="flex gap-1">
+                                  <Select 
+                                    value={adminEfficiencyMonthFilter ? adminEfficiencyMonthFilter.split('-')[0] : ''} 
+                                    onValueChange={(val) => {
+                                      const current = adminEfficiencyMonthFilter || format(new Date(), 'yyyy-MM');
+                                      const [y, m] = current.split('-');
+                                      setAdminEfficiencyMonthFilter(`${val}-${m}`);
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[80px] bg-slate-50 border-none h-10 text-[10px] font-bold rounded-xl">
+                                      <SelectValue placeholder="Năm" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Select 
+                                    value={adminEfficiencyMonthFilter ? adminEfficiencyMonthFilter.split('-')[1] : ''} 
+                                    onValueChange={(val) => {
+                                      const current = adminEfficiencyMonthFilter || format(new Date(), 'yyyy-MM');
+                                      const [y, m] = current.split('-');
+                                      setAdminEfficiencyMonthFilter(`${y}-${val}`);
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[100px] bg-slate-50 border-none h-10 text-[10px] font-bold rounded-xl">
+                                      <SelectValue placeholder="Tháng" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">Tất cả</SelectItem>
+                                      {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                        <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                   {adminEfficiencyMonthFilter && (
                                     <button 
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-full transition-colors"
+                                      className="p-1 hover:bg-slate-200 rounded-full transition-colors self-center"
                                       onClick={() => setAdminEfficiencyMonthFilter('')}
                                     >
                                       <X className="w-3 h-3 text-slate-400" />
@@ -8027,13 +8102,41 @@ export default function App() {
                               onChange={e => setAdminBudgetSearch(e.target.value)}
                             />
                           </div>
-                          <div className="w-[200px]">
-                            <Input 
-                              type="month" 
-                              className="bg-white border-none shadow-sm h-10"
-                              value={adminBudgetMonthFilter}
-                              onChange={e => setAdminBudgetMonthFilter(e.target.value)}
-                            />
+                          <div className="flex gap-1">
+                            <Select 
+                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[0] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [y, m] = current.split('-');
+                                setAdminBudgetMonthFilter(`${val}-${m}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[80px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Năm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select 
+                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[1] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [y, m] = current.split('-');
+                                setAdminBudgetMonthFilter(`${y}-${val}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[100px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Tháng" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                  <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
 
@@ -9846,11 +9949,13 @@ export default function App() {
                   <TabsContent value="acceptance" className="space-y-6">
                     <AcceptanceManager 
                       isAdmin={isAdmin}
+                      isSuperAdmin={isSuperAdmin}
                       isMod={isMod}
                       user={user}
                       teams={teams}
                       projects={projects}
                       acceptances={acceptances}
+                      finalAcceptances={finalAcceptances}
                       teamMap={teamMap}
                       projectMap={projectMap}
                       formatCurrency={formatCurrency}
@@ -12515,7 +12620,7 @@ export default function App() {
               <Input 
                 type="text"
                 value={formatNumberWithCommas(newEfficiencyRevenue)}
-                onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/,/g, ''))}
+                onChange={e => setNewEfficiencyRevenue(e.target.value.replace(/\./g, ''))}
               />
             </div>
           </div>
@@ -12774,11 +12879,12 @@ export default function App() {
  * Encapsulates the Acceptance tab logic and UI to improve performance and reduce input lag.
  */
 const AcceptanceManager = React.memo(({ 
-  isAdmin, isMod, user, teams, projects, acceptances, teamMap, projectMap, 
+  isAdmin, isSuperAdmin, isMod, user, teams, projects, acceptances, finalAcceptances, teamMap, projectMap, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput 
 }: any) => {
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
+  const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
   const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
 
@@ -12789,62 +12895,126 @@ const AcceptanceManager = React.memo(({
   const [formTeamSearch, setFormTeamSearch] = useState('');
   const [formProjectSearch, setFormProjectSearch] = useState('');
   
-  // Dynamic channel costs
-  const initialBreakdown = {
-    facebook: [{ account: '', amount: '' }],
-    zalo: [{ account: '', amount: '' }],
-    google: [{ account: '', amount: '' }],
-    posting: [{ account: '', amount: '' }],
-    other: [{ account: '', amount: '' }],
-    visa: [{ account: '', amount: '' }],
-    digital: [{ account: '', amount: '' }],
-  };
-  const [breakdown, setBreakdown] = useState<Record<string, { account: string; amount: string }[]>>(initialBreakdown);
+  // Dynamic line items (flat list)
+  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
+    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }
+  ]);
 
   const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
   const [acceptanceType, setAcceptanceType] = useState('Chi phí không đổi');
   const [acceptanceRealCost, setAcceptanceRealCost] = useState('');
+  const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [acceptanceToDelete, setAcceptanceToDelete] = useState<string | null>(null);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isDeleteFinalDialogOpen, setIsDeleteFinalDialogOpen] = useState(false);
+  const [finalAcceptanceToDelete, setFinalAcceptanceToDelete] = useState<string | null>(null);
+  const [isDeletingAcceptance, setIsDeletingAcceptance] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
+  const [editingBreakdownValues, setEditingBreakdownValues] = useState<Record<string, string>>({});
 
-  const addAccountRow = (channel: string) => {
-    setBreakdown(prev => ({
-      ...prev,
-      [channel]: [...prev[channel], { account: '', amount: '' }]
-    }));
+  const addEntry = () => {
+    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
   };
 
-  const removeAccountRow = (channel: string, index: number) => {
-    setBreakdown(prev => {
-      if (prev[channel].length <= 1) {
-        return {
-          ...prev,
-          [channel]: [{ account: '', amount: '' }]
-        };
+  const removeEntry = (id: string) => {
+    setEntries(prev => {
+      if (prev.length <= 1) {
+        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }];
       }
-      const newList = [...prev[channel]];
-      newList.splice(index, 1);
-      return {
-        ...prev,
-        [channel]: newList
-      };
+      return prev.filter(e => e.id !== id);
     });
   };
 
-  const updateAccountRow = (channel: string, index: number, field: 'account' | 'amount', value: string) => {
-    setBreakdown(prev => {
-      const newList = [...prev[channel]];
-      newList[index] = { ...newList[index], [field]: value };
-      return {
-        ...prev,
-        [channel]: newList
-      };
-    });
+  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount', value: string) => {
+    setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
   };
 
-  const calculateChannelTotal = (channel: string) => {
-    return breakdown[channel].reduce((sum, item) => {
-      const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
-      return sum + val;
-    }, 0);
+  const calculateChannelTotal = (channelKey: string) => {
+    return entries
+      .filter(e => e.channel === channelKey)
+      .reduce((sum, item) => {
+        const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
+        return sum + val;
+      }, 0);
+  };
+
+  const [expandingAcceptance, setExpandingAcceptance] = useState<string | null>(null);
+
+  const handleToggleEntryConfirmation = async (acceptanceId: string, channel: string, itemIdx: number) => {
+    const acc = acceptances.find((a: any) => a.id === acceptanceId);
+    if (!acc) return;
+
+    const newBreakdown = { ...acc.breakdown };
+    if (!newBreakdown[channel]) return;
+    
+    const items = [...newBreakdown[channel]];
+    if (!items[itemIdx]) return;
+    
+    const isCurrentlyConfirmed = items[itemIdx].isConfirmed || false;
+    
+    items[itemIdx] = {
+      ...items[itemIdx],
+      isConfirmed: !isCurrentlyConfirmed,
+      finalAmount: !isCurrentlyConfirmed ? items[itemIdx].amount : null
+    };
+    newBreakdown[channel] = items;
+
+    try {
+      await updateDoc(doc(db, 'acceptances', acceptanceId), {
+        breakdown: newBreakdown,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('Cập nhật trạng thái mục chi');
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.UPDATE, 'acceptances');
+    }
+  };
+
+  const handleUpdateEntryAmount = async (acceptanceId: string, channel: string, itemIdx: number, newAmount: number) => {
+    const acc = acceptances.find((a: any) => a.id === acceptanceId);
+    if (!acc) return;
+
+    const newBreakdown = { ...acc.breakdown };
+    if (!newBreakdown[channel]) return;
+    
+    const items = [...newBreakdown[channel]];
+    if (!items[itemIdx]) return;
+    
+    items[itemIdx] = {
+      ...items[itemIdx],
+      finalAmount: newAmount,
+      isConfirmed: true
+    };
+    newBreakdown[channel] = items;
+
+    // Recalculate total after acceptance
+    let newAfterAcceptanceTotal = 0;
+    Object.keys(newBreakdown).forEach(ch => {
+      newBreakdown[ch].forEach((it: any) => {
+        newAfterAcceptanceTotal += (it.finalAmount !== undefined && it.finalAmount !== null) ? it.finalAmount : it.amount;
+      });
+    });
+
+    try {
+      await updateDoc(doc(db, 'acceptances', acceptanceId), {
+        breakdown: newBreakdown,
+        afterAcceptanceCost: newAfterAcceptanceTotal,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('Cập nhật chi phí thực tế thành công');
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.UPDATE, 'acceptances');
+    }
+  };
+
+  const toggleEntryConfirmation = (acceptanceId: string, channel: string, itemIdx: number) => {
+    handleToggleEntryConfirmation(acceptanceId, channel, itemIdx);
+  };
+
+  const updateBreakdownAmount = (acceptanceId: string, channel: string, itemIdx: number, newAmount: string) => {
+    const numericVal = parseFloat(newAmount.replace(/\./g, '')) || 0;
+    handleUpdateEntryAmount(acceptanceId, channel, itemIdx, numericVal);
   };
 
   const filteredAcceptances = useMemo(() => {
@@ -12857,6 +13027,16 @@ const AcceptanceManager = React.memo(({
       return matchesSearch && matchesMonth;
     });
   }, [acceptances, acceptanceSearch, acceptanceMonthFilter]);
+
+  const filteredFinalAcceptances = useMemo(() => {
+    return (finalAcceptances || []).filter((a: any) => {
+      const matchesSearch = 
+        (a.projectName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
+        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
+      const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
+      return matchesSearch && matchesMonth;
+    });
+  }, [finalAcceptances, acceptanceSearch, acceptanceMonthFilter]);
 
   const handleAddAcceptance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -12884,12 +13064,16 @@ const AcceptanceManager = React.memo(({
 
       // Process breakdown for storage (convert strings to numbers)
       const processedBreakdown: any = {};
-      Object.keys(breakdown).forEach(key => {
-        processedBreakdown[key] = breakdown[key]
-          .filter(item => item.account.trim() !== '' || item.amount.trim() !== '')
-          .map(item => ({
-            account: item.account,
-            amount: parseFloat(item.amount.replace(/\./g, '')) || 0
+      const channelKeys = ['facebook', 'zalo', 'google', 'posting', 'visa', 'digital', 'other'];
+      
+      channelKeys.forEach(key => {
+        processedBreakdown[key] = entries
+          .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== ''))
+          .map(e => ({
+            account: e.account,
+            amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
+            isConfirmed: e.isConfirmed || false,
+            finalAmount: e.finalAmount !== undefined ? e.finalAmount : null
           }));
       });
 
@@ -12936,7 +13120,7 @@ const AcceptanceManager = React.memo(({
       // Reset form
       setAcceptanceTeam('');
       setAcceptanceProject('');
-      setBreakdown(initialBreakdown);
+      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
       setAcceptanceRealCost('');
       setAcceptanceStatus('Trước nghiệm thu');
     } catch (error: any) {
@@ -12947,19 +13131,108 @@ const AcceptanceManager = React.memo(({
   };
 
   const handleDeleteAcceptance = async (id: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bản ghi này?')) return;
+    if (!id) return;
+    setIsDeletingAcceptance(true);
+    const toastId = toast.loading('Đang xóa bản ghi...');
     try {
       await deleteDoc(doc(db, 'acceptances', id));
-      toast.success('Xóa bản ghi thành công');
+      toast.success('Xóa bản ghi thành công', { id: toastId });
+      setIsDeleteDialogOpen(false);
+      setAcceptanceToDelete(null);
     } catch (error: any) {
+      console.error("Delete error:", error);
       handleFirestoreError(error, OperationType.DELETE, 'acceptances');
+      toast.error('Không thể xóa. Vui lòng kiểm tra quyền hạn của Admin.', { id: toastId });
+    } finally {
+      setIsDeletingAcceptance(false);
+    }
+  };
+
+  const handleBulkDeleteAcceptances = async () => {
+    if (selectedAcceptanceIds.length === 0) return;
+    setIsDeletingAcceptance(true);
+    const toastId = toast.loading(`Đang xóa ${selectedAcceptanceIds.length} bản ghi...`);
+    try {
+      const batch = writeBatch(db);
+      selectedAcceptanceIds.forEach(id => {
+        batch.delete(doc(db, 'acceptances', id));
+      });
+      await batch.commit();
+      const count = selectedAcceptanceIds.length;
+      setSelectedAcceptanceIds([]);
+      toast.success(`Đã xóa thành công ${count} bản ghi`, { id: toastId });
+      setIsBulkDeleteDialogOpen(false);
+    } catch (error: any) {
+      console.error("Bulk delete error:", error);
+      handleFirestoreError(error, OperationType.DELETE, 'acceptances');
+      toast.error('Không thể xóa hàng loạt. Vui lòng kiểm tra quyền hạn.', { id: toastId });
+    } finally {
+      setIsDeletingAcceptance(false);
+    }
+  };
+
+  const handleDeleteFinalAcceptance = async (id: string) => {
+    if (!id) return;
+    setIsDeletingAcceptance(true);
+    const toastId = toast.loading('Đang xóa bản ghi thực tế...');
+    try {
+      await deleteDoc(doc(db, 'finalAcceptances', id));
+      toast.success('Đã xóa bản ghi thực tế', { id: toastId });
+      setIsDeleteFinalDialogOpen(false);
+      setFinalAcceptanceToDelete(null);
+    } catch (error: any) {
+      console.error("Final delete error:", error);
+      handleFirestoreError(error, OperationType.DELETE, 'finalAcceptances');
+      toast.error('Lỗi khi xóa bản ghi thực tế.', { id: toastId });
+    } finally {
+      setIsDeletingAcceptance(false);
+    }
+  };
+
+  const handleCompleteAcceptance = async (acc: any) => {
+    if (!window.confirm('Xác nhận hoàn thành nghiệm thu bản ghi này và lưu kết quả thực tế?')) return;
+    
+    const toastId = toast.loading('Đang xử lý hoàn thành nghiệm thu...');
+    try {
+      // Ensure we have a breakdown object
+      const breakdown = acc.breakdown || {};
+      
+      const finalPayload = {
+        originalAcceptanceId: acc.id,
+        month: acc.month || '',
+        teamId: acc.teamId || '',
+        teamName: acc.teamName || '',
+        projectId: acc.projectId || '',
+        projectName: acc.projectName || '',
+        breakdown: breakdown,
+        totalActualCost: acc.afterAcceptanceCost || 0,
+        acceptedAt: serverTimestamp(),
+        acceptedBy: user?.email || '',
+        acceptedByUid: user?.uid || ''
+      };
+      
+      await addDoc(collection(db, 'finalAcceptances'), finalPayload);
+      
+      await updateDoc(doc(db, 'acceptances', acc.id), {
+        status: 'Đã nghiệm thu',
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || '',
+        updatedByUid: user?.uid || ''
+      });
+      
+      toast.success('Đã hoàn thành nghiệm thu thành công!', { id: toastId });
+      setExpandingAcceptance(null);
+    } catch (error: any) {
+      console.error("Complete acceptance error:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'finalAcceptances');
+      toast.error('Lỗi khi hoàn thành nghiệm thu. Vui lòng thử lại.', { id: toastId });
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-      <div className="lg:col-span-2">
-        <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden sticky top-8">
+    <div className="space-y-8">
+      <div>
+        <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 w-full" />
           <CardHeader className="pb-6">
             <div className="flex items-center gap-3 mb-1">
@@ -13068,327 +13341,620 @@ const AcceptanceManager = React.memo(({
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  {[
-                    { key: 'facebook', label: 'Facebook', color: 'indigo' },
-                    { key: 'zalo', label: 'Zalo', color: 'blue' },
-                    { key: 'google', label: 'Google', color: 'red' },
-                    { key: 'posting', label: 'Đăng tin', color: 'emerald' },
-                    { key: 'visa', label: 'Visa', color: 'orange' },
-                    { key: 'digital', label: 'Digital', color: 'violet' },
-                    { key: 'other', label: 'Khác', color: 'slate' },
-                  ].map((ch) => (
-                    <div key={ch.key} className="space-y-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-indigo-100 group">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-6 rounded-full bg-${ch.color}-500`} />
-                          <Label className={`text-xs font-black text-${ch.color}-600 uppercase tracking-widest`}>{ch.label}</Label>
-                        </div>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className={`h-7 w-7 rounded-full text-${ch.color}-600 hover:bg-${ch.color}-50 bg-white shadow-sm border border-slate-200/50`}
-                          onClick={() => addAccountRow(ch.key)}
-                        >
-                          <PlusCircle className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="space-y-2.5">
-                        {breakdown[ch.key].map((item, idx) => (
-                          <div key={idx} className="flex gap-3 items-center animate-in fade-in slide-in-from-left-2 duration-300">
-                            <div className="relative flex-1">
-                              <Input 
-                                placeholder="Tên tài khoản / Account..." 
-                                className="h-10 bg-white border-slate-200 rounded-xl text-xs font-bold pl-3 focus:border-indigo-300"
-                                value={item.account}
-                                onChange={e => updateAccountRow(ch.key, idx, 'account', e.target.value)}
-                              />
-                            </div>
-                            <div className="relative w-[150px]">
-                              <Input 
-                                placeholder="Số tiền..." 
-                                className={`h-10 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-black text-${ch.color}-700 focus:border-${ch.color}-300`}
-                                value={item.amount}
-                                onChange={e => updateAccountRow(ch.key, idx, 'amount', formatCurrencyInput(e.target.value))}
-                              />
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">đ</span>
-                            </div>
-                            {breakdown[ch.key].length > 1 && (
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 rounded-full text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
-                                onClick={() => removeAccountRow(ch.key, idx)}
-                              >
-                                <MinusCircle className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex justify-end pt-2 border-t border-slate-100 group-hover:border-indigo-50">
-                        <span className={`text-[10px] font-black text-${ch.color}-500 uppercase tracking-tighter`}>
-                          Tổng {ch.label}: <span className={`text-sm text-${ch.color}-700 ml-1 font-mono tracking-tight`}>{formatCurrency(calculateChannelTotal(ch.key))}</span>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Trạng thái</Label>
-                    <Select value={acceptanceStatus} onValueChange={setAcceptanceStatus}>
-                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
-                        <SelectValue placeholder="Chọn trạng thái" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Trước nghiệm thu">Trước nghiệm thu</SelectItem>
-                        <SelectItem value="Đã nghiệm thu">Đã nghiệm thu</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center justify-between px-1">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chi tiết khoản chi</Label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={addEntry}
+                      className="h-8 rounded-xl border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-black text-[10px] uppercase gap-1.5"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" /> Thêm khoản chi
+                    </Button>
                   </div>
 
-                  {acceptanceStatus === 'Đã nghiệm thu' && (
-                    <div className="animate-in slide-in-from-top-2 duration-300 space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Loại nghiệm thu</Label>
-                        <Select value={acceptanceType} onValueChange={setAcceptanceType}>
-                          <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl font-bold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Chi phí không đổi">Chi phí không đổi</SelectItem>
-                            <SelectItem value="Chi phí thay đổi">Chi phí thay đổi</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {acceptanceType === 'Chi phí thay đổi' && (
-                        <div className="space-y-2">
-                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chi phí thực tế sau NT</Label>
-                          <Input 
-                            className="h-11 bg-indigo-50 border-indigo-200 rounded-xl font-black text-indigo-700 text-lg" 
-                            placeholder="Nhập chi phí thực tế..." 
-                            value={acceptanceRealCost}
-                            onChange={e => setAcceptanceRealCost(formatCurrencyInput(e.target.value))}
-                          />
+                  <div className="space-y-3">
+                    {entries.map((entry, idx) => (
+                      <div key={entry.id} className="flex flex-col gap-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3">
+                          <div className="w-[140px]">
+                            <Select 
+                              value={entry.channel} 
+                              onValueChange={(val) => updateEntry(entry.id, 'channel', val)}
+                            >
+                              <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
+                                <SelectValue placeholder="Kênh..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="facebook">Facebook</SelectItem>
+                                <SelectItem value="zalo">Zalo</SelectItem>
+                                <SelectItem value="google">Google</SelectItem>
+                                <SelectItem value="posting">Đăng tin</SelectItem>
+                                <SelectItem value="visa">Visa</SelectItem>
+                                <SelectItem value="digital">Digital</SelectItem>
+                                <SelectItem value="other">Khác</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex-1">
+                            <Input 
+                              placeholder="Tên tài khoản / Ghi chú..." 
+                              className="h-9 bg-white border-slate-200 rounded-xl text-xs font-bold focus:border-indigo-300"
+                              value={entry.account}
+                              onChange={e => updateEntry(entry.id, 'account', e.target.value)}
+                            />
+                          </div>
+                          <div className="w-[140px] relative">
+                            <Input 
+                              placeholder="Số tiền..." 
+                              className="h-9 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-black text-indigo-700"
+                              value={entry.amount}
+                              onChange={e => updateEntry(entry.id, 'amount', formatCurrencyInput(e.target.value))}
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">đ</span>
+                          </div>
+                          {entries.length > 1 && (
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+                              onClick={() => removeEntry(entry.id)}
+                            >
+                              <MinusCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    ))}
+                  </div>
+
+                    <div className="p-4 bg-indigo-50 rounded-2xl flex items-center justify-between border border-indigo-100 shadow-sm">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Tổng chi tạm tính</span>
+                      <span className="text-lg font-black text-indigo-700 font-mono italic">
+                        {formatCurrency(entries.reduce((sum, e) => sum + (parseFloat(e.amount.replace(/\./g, '')) || 0), 0))}
+                      </span>
                     </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Trạng thái</Label>
+                      <Select value={acceptanceStatus} onValueChange={setAcceptanceStatus}>
+                        <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
+                          <SelectValue placeholder="Chọn trạng thái" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Trước nghiệm thu">Trước nghiệm thu</SelectItem>
+                          <SelectItem value="Đã nghiệm thu">Đã nghiệm thu</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {acceptanceStatus === 'Đã nghiệm thu' && (
+                      <div className="animate-in slide-in-from-top-2 duration-300 space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Loại nghiệm thu</Label>
+                          <Select value={acceptanceType} onValueChange={setAcceptanceType}>
+                            <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl font-bold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Chi phí không đổi">Chi phí không đổi</SelectItem>
+                              <SelectItem value="Chi phí thay đổi">Chi phí thay đổi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {acceptanceType === 'Chi phí thay đổi' && (
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chi phí thực tế sau NT</Label>
+                            <Input 
+                              className="h-11 bg-indigo-50 border-indigo-200 rounded-xl font-black text-indigo-700 text-lg" 
+                              placeholder="Nhập chi phí thực tế..." 
+                              value={acceptanceRealCost}
+                              onChange={e => setAcceptanceRealCost(formatCurrencyInput(e.target.value))}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button 
+                    type="submit" 
+                    className={`w-full h-11 rounded-xl font-black text-sm transition-all shadow-lg ${
+                      editingAcceptance ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+                    }`}
+                    disabled={isAddingAcceptance}
+                  >
+                    {isAddingAcceptance ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : editingAcceptance ? (
+                      'Cập nhật Nghiệm thu'
+                    ) : (
+                      'Lưu Nghiệm thu'
+                    )}
+                  </Button>
+                  {editingAcceptance && (
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      className="w-full mt-2 text-slate-400 font-bold"
+                      onClick={() => {
+                        setEditingAcceptance(null);
+                        setAcceptanceMonth('');
+                        setAcceptanceTeam('');
+                        setAcceptanceProject('');
+                        setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                        setAcceptanceRealCost('');
+                        setAcceptanceStatus('Trước nghiệm thu');
+                        setAcceptanceType('Chi phí không đổi');
+                      }}
+                    >
+                      Hủy chỉnh sửa
+                    </Button>
                   )}
                 </div>
-              </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
-              <div className="pt-4">
-                <Button 
-                  type="submit" 
-                  className={`w-full h-11 rounded-xl font-black text-sm transition-all shadow-lg ${
-                    editingAcceptance ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
-                  }`}
-                  disabled={isAddingAcceptance}
-                >
-                  {isAddingAcceptance ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                  ) : editingAcceptance ? (
-                    'Cập nhật Nghiệm thu'
-                  ) : (
-                    'Lưu Nghiệm thu'
+        <div>
+          <Card className="border-none shadow-sm">
+            <CardHeader className="flex flex-col space-y-4 pb-6">
+              <div className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Quản lý Nghiệm thu</CardTitle>
+                  <CardDescription className="text-slate-500 font-medium tracking-tight">Chi tiết báo cáo và quyết toán chi phí hàng tháng</CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  {selectedAcceptanceIds.length > 0 && (isAdmin || isSuperAdmin) && (
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="h-10 px-4 rounded-xl font-black text-[10px] uppercase gap-2 shadow-lg shadow-red-100 animate-in zoom-in duration-300"
+                      onClick={() => setIsBulkDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="w-4 h-4" /> Xóa {selectedAcceptanceIds.length} bản ghi
+                    </Button>
                   )}
-                </Button>
-                {editingAcceptance && (
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    className="w-full mt-2 text-slate-400 font-bold"
-                    onClick={() => {
-                      setEditingAcceptance(null);
-                      setAcceptanceMonth('');
-                      setAcceptanceTeam('');
-                      setAcceptanceProject('');
-                      setBreakdown(initialBreakdown);
-                      setAcceptanceRealCost('');
-                      setAcceptanceStatus('Trước nghiệm thu');
-                      setAcceptanceType('Chi phí không đổi');
-                    }}
-                  >
-                    Hủy chỉnh sửa
-                  </Button>
-                )}
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <Button 
+                      variant={acceptanceListView === 'pending' ? "white" : "ghost"} 
+                      size="sm"
+                      className={`text-[10px] font-black uppercase h-8 rounded-lg px-4 ${acceptanceListView === 'pending' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+                      onClick={() => setAcceptanceListView('pending')}
+                    >
+                      Đang duyệt
+                    </Button>
+                    <Button 
+                      variant={acceptanceListView === 'finalized' ? "white" : "ghost"} 
+                      size="sm"
+                      className={`text-[10px] font-black uppercase h-8 rounded-lg px-4 ${acceptanceListView === 'finalized' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'}`}
+                      onClick={() => setAcceptanceListView('finalized')}
+                    >
+                      Đã quyết toán
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="lg:col-span-3">
-        <Card className="border-none shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-6">
-            <div>
-              <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Chi tiết Nghiệm thu</CardTitle>
-              <CardDescription className="text-slate-500 font-medium">Lịch sử nghiệm thu chi tiết hàng tháng</CardDescription>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input 
-                  placeholder="Tìm Team, Dự án..." 
-                  className="h-10 pl-10 w-[200px] border-none bg-slate-100 rounded-xl text-xs font-bold"
-                  value={acceptanceSearch}
-                  onChange={e => setAcceptanceSearch(e.target.value)}
-                />
+              
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input 
+                    placeholder="Tìm dự án, đội ngũ..." 
+                    className="pl-10 h-10 bg-slate-50 border-none rounded-xl text-xs font-bold"
+                    value={acceptanceSearch}
+                    onChange={(e) => setAcceptanceSearch(e.target.value)}
+                  />
+                </div>
+                <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
+                  <SelectTrigger className="h-10 w-[160px] bg-slate-50 border-none rounded-xl text-xs font-bold">
+                    <SelectValue placeholder="Lọc theo tháng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả tháng</SelectItem>
+                    {Array.from(new Set(acceptances.map((a: any) => a.month))).sort().reverse().map((m: any) => (
+                      <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
-                <SelectTrigger className="h-10 w-[150px] border-none bg-slate-100 rounded-xl text-xs font-bold">
-                  <SelectValue placeholder="Chọn tháng..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả tháng</SelectItem>
-                  {Array.from(new Set(acceptances.map((a: any) => a.month))).sort().reverse().map((m: any) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <Table>
-                <TableHeader className="bg-slate-50/80">
+            </CardHeader>
+            <CardContent className="p-0">
+              {acceptanceListView === 'pending' ? (
+                <Table>
+                  <TableHeader className="bg-slate-50/80">
                   <TableRow>
-                     <TableHead className="text-center w-[50px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
+                     {(isAdmin || isSuperAdmin) && (
+                       <TableHead className="w-[40px] px-4">
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 h-4 w-4"
+                            checked={filteredAcceptances.length > 0 && selectedAcceptanceIds.length === filteredAcceptances.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAcceptanceIds(filteredAcceptances.map((a: any) => a.id));
+                              } else {
+                                setSelectedAcceptanceIds([]);
+                              }
+                            }}
+                          />
+                       </TableHead>
+                     )}
+                     <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
                      <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
-                     <TableHead className="text-right font-black text-[10px] bg-amber-50/50 text-amber-600 uppercase">Trước NT</TableHead>
-                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Sau NT</TableHead>
+                     <TableHead className="text-right font-black text-[10px] bg-amber-50/50 text-amber-600 uppercase">Tạm tính</TableHead>
+                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Thực thu</TableHead>
                      <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase w-[100px]">Thao tác</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase pr-4">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAcceptances.map((a: any, index: number) => (
-                    <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors group">
-                      <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamCode}</Badge>
-                            <span className="text-[9px] text-slate-400 font-medium">{a.month}</span>
+                    <React.Fragment key={a.id}>
+                      <TableRow className={`hover:bg-slate-50/50 transition-colors group ${expandingAcceptance === a.id ? 'bg-indigo-50/30' : ''}`}>
+                        {(isAdmin || isSuperAdmin) && (
+                          <TableCell className="px-4">
+                            <input 
+                              type="checkbox" 
+                              className="rounded border-slate-300 h-4 w-4"
+                              checked={selectedAcceptanceIds.includes(a.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedAcceptanceIds(prev => [...prev, a.id]);
+                                } else {
+                                  setSelectedAcceptanceIds(prev => prev.filter(id => id !== a.id));
+                                }
+                              }}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamName}</Badge>
+                              <span className="text-[9px] font-bold text-slate-400">{a.month}</span>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-[10px] text-indigo-600 font-bold">{formatCurrency(a.facebookCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] text-blue-600 font-bold">{formatCurrency(a.zaloCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] text-red-600 font-bold">{formatCurrency(a.googleCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] text-emerald-600 font-bold">{formatCurrency(a.postingCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] text-slate-600 font-bold">{formatCurrency(a.otherCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] bg-amber-50/30 text-amber-700 font-black">{formatCurrency(a.beforeAcceptanceCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] bg-emerald-50/30 text-emerald-700 font-black">{formatCurrency(a.afterAcceptanceCost)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge className={`text-[9px] h-5 font-black border-none whitespace-nowrap ${
-                          a.status === 'Đã nghiệm thu' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {a.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                            onClick={() => {
-                              setEditingAcceptance(a);
-                              setAcceptanceMonth(a.month);
-                              setAcceptanceTeam(a.teamId);
-                              setAcceptanceProject(a.projectId);
-                              
-                              if (a.breakdown) {
-                                const newBreakdown: any = {};
-                                Object.keys(initialBreakdown).forEach(key => {
-                                  if (a.breakdown[key] && Array.isArray(a.breakdown[key])) {
-                                    newBreakdown[key] = a.breakdown[key].map((item: any) => ({
-                                      account: item.account || '',
-                                      amount: formatCurrencyInput(String(item.amount || 0))
-                                    }));
-                                  } else {
-                                    newBreakdown[key] = [{ account: '', amount: '' }];
-                                  }
-                                });
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost + a.visaCost + a.digitalCost)}</TableCell>
+                        <TableCell className="text-right bg-amber-50/30">
+                          <p className="font-mono text-xs font-black text-amber-700">{formatCurrency(a.totalCost)}</p>
+                        </TableCell>
+                        <TableCell className="text-right bg-emerald-50/30">
+                          <p className="font-mono text-xs font-black text-emerald-700">
+                             {a.status === 'Đã nghiệm thu' ? formatCurrency(a.afterAcceptanceCost) : '-'}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none ${
+                            a.status === 'Đã nghiệm thu' 
+                              ? 'bg-emerald-100 text-emerald-700' 
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {a.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button 
+                              variant={a.status !== 'Đã nghiệm thu' ? "default" : "ghost"}
+                              size="sm"
+                              className={`h-8 px-2 text-[10px] font-black uppercase rounded-lg transition-all ${
+                                a.status !== 'Đã nghiệm thu' 
+                                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100' 
+                                  : 'text-slate-400 hover:text-indigo-600'
+                              } ${expandingAcceptance === a.id ? 'ring-2 ring-indigo-200 ring-offset-1' : ''}`}
+                              onClick={() => setExpandingAcceptance(expandingAcceptance === a.id ? null : a.id)}
+                            >
+                              {a.status !== 'Đã nghiệm thu' ? 'Nghiệm thu' : 'Chi tiết'}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                              onClick={() => {
+                                setEditingAcceptance(a);
+                                setAcceptanceMonth(a.month);
+                                setAcceptanceTeam(a.teamId);
+                                setAcceptanceProject(a.projectId);
+                                
+                                const flatEntries: any[] = [];
+                                if (a.breakdown) {
+                                  Object.keys(a.breakdown).forEach(channel => {
+                                    if (Array.isArray(a.breakdown[channel])) {
+                                      a.breakdown[channel].forEach((item: any) => {
+                                        flatEntries.push({
+                                          id: Math.random().toString(36).substring(7),
+                                          channel,
+                                          account: item.account || '',
+                                          amount: formatCurrencyInput(String(item.amount || 0)),
+                                          isConfirmed: item.isConfirmed || false,
+                                          finalAmount: item.finalAmount
+                                        });
+                                      });
+                                    }
+                                  });
+                                }
+                                
+                                if (flatEntries.length === 0) {
+                                  const legacyFields = [
+                                    { key: 'facebook', val: a.facebookCost },
+                                    { key: 'zalo', val: a.zaloCost },
+                                    { key: 'google', val: a.googleCost },
+                                    { key: 'posting', val: a.postingCost },
+                                    { key: 'visa', val: a.visaCost },
+                                    { key: 'digital', val: a.digitalCost },
+                                    { key: 'other', val: a.otherCost },
+                                  ];
+                                  legacyFields.forEach(f => {
+                                    if (f.val > 0) {
+                                      flatEntries.push({
+                                        id: Math.random().toString(36).substring(7),
+                                        channel: f.key,
+                                        account: 'Hệ thống',
+                                        amount: formatCurrencyInput(String(f.val))
+                                      });
+                                    }
+                                  });
+                                }
+                                setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                                setAcceptanceStatus(a.status);
+                                setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
+                                setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            {(isAdmin || isSuperAdmin) && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-slate-400 hover:text-red-600 transition-colors"
+                                onClick={() => {
+                                  setAcceptanceToDelete(a.id);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {expandingAcceptance === a.id && (
+                        <TableRow className="bg-indigo-50/20 border-t-0 animate-in slide-in-from-top-1 duration-300">
+                          <TableCell colSpan={(isAdmin || isSuperAdmin) ? 12 : 11} className="p-0">
+                            <div className="p-6 border-x-2 border-indigo-200/50 m-2 bg-white rounded-2xl shadow-xl shadow-indigo-100/50">
+                               <div className="grid grid-cols-2 gap-8">
+                                 <div className="space-y-4">
+                                   <div className="flex items-center gap-2 mb-2">
+                                     <div className="w-1.5 h-4 bg-indigo-500 rounded-full" />
+                                     <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest px-1">Chi tiết phân bổ chi phí</h4>
+                                   </div>
+                                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                      {Object.keys(a.breakdown || {}).map(channel => (
+                                        <div key={channel} className="space-y-1">
+                                          {(a.breakdown[channel] || []).map((item: any, i: number) => (
+                                            <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${item.isConfirmed ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'} hover:border-indigo-200 transition-colors`}>
+                                              <div className="flex items-center gap-3">
+                                                <Badge variant="outline" className="text-[9px] font-black uppercase bg-white">{channel}</Badge>
+                                                <span className="text-xs font-bold text-slate-700">{item.account}</span>
+                                              </div>
+                                              <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                  <p className="text-[10px] font-black text-slate-400 line-through opacity-50">{formatCurrency(item.amount)}</p>
+                                                  <p className="text-xs font-black text-indigo-600">{formatCurrency(item.finalAmount || item.amount)}</p>
+                                                </div>
+                                                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100">
+                                                  <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className={`h-6 w-10 text-[9px] font-black ${item.isConfirmed ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 hover:text-indigo-600'}`}
+                                                    onClick={() => toggleEntryConfirmation(a.id, channel, i)}
+                                                  >
+                                                    {item.isConfirmed ? 'OK' : 'Xác nhận'}
+                                                  </Button>
+                                                  <Input 
+                                                    className="w-24 h-6 text-right text-[10px] font-black font-mono border-none bg-slate-50 rounded"
+                                                    value={editingBreakdownValues[`${a.id}-${channel}-${i}`] || formatCurrencyInput(String(item.finalAmount || item.amount))}
+                                                    onChange={e => {
+                                                      const val = formatCurrencyInput(e.target.value);
+                                                      setEditingBreakdownValues(prev => ({...prev, [`${a.id}-${channel}-${i}`]: val}));
+                                                      updateBreakdownAmount(a.id, channel, i, val);
+                                                    }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ))}
+                                   </div>
+                                 </div>
 
-                                // Ensure legacy fields are added if they exist but breakdown for that channel is empty
-                                const legacyMap: any = {
-                                  facebook: a.facebookCost,
-                                  zalo: a.zaloCost,
-                                  google: a.googleCost,
-                                  posting: a.postingCost,
-                                  other: a.otherCost,
-                                  visa: a.visaCost,
-                                  digital: a.digitalCost
-                                };
-                                Object.keys(legacyMap).forEach(key => {
-                                  if ((!newBreakdown[key] || newBreakdown[key].length === 0 || (newBreakdown[key].length === 1 && newBreakdown[key][0].amount === '0')) && legacyMap[key] > 0) {
-                                    newBreakdown[key] = [{ account: 'Legacy', amount: formatCurrencyInput(String(legacyMap[key])) }];
-                                  }
-                                });
+                                 <div className="space-y-6">
+                                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loại NT</span>
+                                        <Select 
+                                          value={a.acceptanceType || 'Chi phí không đổi'} 
+                                          onValueChange={(val) => {
+                                            updateDoc(doc(db, 'acceptances', a.id), { 
+                                              acceptanceType: val,
+                                              afterAcceptanceCost: val === 'Chi phí không đổi' ? a.totalCost : a.afterAcceptanceCost
+                                            });
+                                          }}
+                                        >
+                                          <SelectTrigger className="w-[160px] h-8 bg-white border-slate-200 rounded-lg text-[10px] font-black uppercase">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Chi phí không đổi">Chi phí không đổi</SelectItem>
+                                            <SelectItem value="Chi phí thay đổi">Chi phí thay đổi</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tiền thực NT</span>
+                                        <div className="w-[160px] relative">
+                                          <Input 
+                                            className="h-8 text-right font-black font-mono text-indigo-700 bg-white border-slate-200 rounded-lg pr-4"
+                                            value={formatCurrency(a.afterAcceptanceCost)}
+                                            readOnly 
+                                          />
+                                        </div>
+                                      </div>
 
-                                setBreakdown(newBreakdown);
-                              } else {
-                                // Complete legacy fallback
-                                setBreakdown({
-                                  facebook: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.facebookCost || 0)) }],
-                                  zalo: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.zaloCost || 0)) }],
-                                  google: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.googleCost || 0)) }],
-                                  posting: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.postingCost || 0)) }],
-                                  other: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.otherCost || 0)) }],
-                                  visa: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.visaCost || 0)) }],
-                                  digital: [{ account: 'Hệ thống', amount: formatCurrencyInput(String(a.digitalCost || 0)) }],
-                                });
-                              }
+                                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">Lệch quyết toán</span>
+                                        <span className={`text-xs font-black font-mono ${(a.afterAcceptanceCost - a.totalCost) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                          {(a.afterAcceptanceCost - a.totalCost) > 0 ? '+' : ''}{formatCurrency(a.afterAcceptanceCost - a.totalCost)}
+                                        </span>
+                                      </div>
+                                   </div>
 
-                              setAcceptanceStatus(a.status);
-                              setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
-                              setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-red-600"
-                            onClick={() => handleDeleteAcceptance(a.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                                   <Button 
+                                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 transition-all gap-2"
+                                      disabled={isFinalizing === a.id}
+                                      onClick={() => handleFinalizeAcceptance(a)}
+                                   >
+                                      {isFinalizing === a.id ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                                      CHỐT SỐ LIỆU & QUYẾT TOÁN
+                                   </Button>
+                                   <p className="text-[9px] text-center text-slate-400 font-bold px-4 italic leading-relaxed uppercase tracking-tighter">
+                                     Hành động này sẽ đóng bảng nghiệm thu tháng này và chuyển dữ liệu sang báo cáo thực tế chính thức
+                                   </p>
+                                 </div>
+                               </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                   {filteredAcceptances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={11} className="h-40 text-center text-slate-400 italic">
-                        Không tìm thấy dữ liệu nghiệm thu
+                      <TableCell colSpan={(isAdmin || isSuperAdmin) ? 12 : 11} className="h-40 text-center text-slate-300 italic">
+                        Không tìm thấy dữ liệu nghiệm thu phù hợp
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </div>
+            ) : (              <Table>
+                <TableHeader className="bg-slate-50/80">
+                  <TableRow>
+                     <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
+                     <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
+                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Quyết toán</TableHead>
+                     <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase pr-4">Ngày chốt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAcceptances.map((a: any, index: number) => (
+                    <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                      <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamName}</Badge>
+                            <span className="text-[9px] font-bold text-slate-400">{a.month}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost + a.visaCost + a.digitalCost)}</TableCell>
+                      <TableCell className="text-right bg-emerald-50/30">
+                        <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(a.afterAcceptanceCost)}</p>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none bg-emerald-100 text-emerald-700">
+                          {a.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <span className="text-[10px] font-bold text-slate-500">
+                          {a.finalizedAt ? format(new Date(a.finalizedAt), 'dd/MM/yyyy HH:mm') : '-'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredAcceptances.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="h-40 text-center text-slate-300 italic">
+                        Chưa có dữ liệu đã quyết toán
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+              <AlertTriangle className="w-8 h-8 text-rose-500" />
+            </div>
+            <div className="space-y-2 text-center">
+              <h3 className="text-xl font-black text-slate-900 leading-none">Xác nhận xóa?</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
+                Hành động này không thể hoàn tác. Dữ liệu nghiệm thu sẽ bị xóa vĩnh viễn khỏi hệ thống.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
+                onClick={() => setIsDeleteDialogOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
+                onClick={handleDeleteAcceptance}
+              >
+                Xác nhận xóa
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
-
-// Final wrapper to handle naming/export if needed, but here we just use it in App
-const AcceptanceManagerDefinition = AcceptanceManager;

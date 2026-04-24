@@ -193,7 +193,17 @@ service cloud.firestore {
                       // Action: Update status or costs
                       incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
                     );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isMod() || isSuperAdmin();
+    }
+
+    // ===============================================================
+    // Final Acceptances (Actual Costs)
+    // ===============================================================
+    match /finalAcceptances/{finalId} {
+      allow read: if isAdmin() || isMod();
+      allow create: if isAdmin() || isMod();
+      allow update: if isAdmin() || isMod();
+      allow delete: if isAdmin() || isSuperAdmin();
     }
 
     // ===============================================================

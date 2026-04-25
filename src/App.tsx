@@ -1,4 +1,204 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
+
+// Optimized searchable components for reports to prevent whole-app re-renders on every keystroke
+const SearchableSelectGeneric = memo(({ 
+  value, 
+  onValueChange, 
+  items, 
+  placeholder, 
+  searchPlaceholder = "Tìm kiếm...",
+  noResultsText = "Không tìm thấy kết quả",
+  triggerClassName,
+  triggerDisplay,
+  selectContentClassName,
+  renderItem
+}: any) => {
+  const [search, setSearch] = useState('');
+  const filteredItems = useMemo(() => {
+    return items.filter((item: any) => 
+      item.searchString.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [items, search]);
+
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={triggerClassName}>
+        <SelectValue placeholder={placeholder}>
+          {triggerDisplay || placeholder}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className={selectContentClassName}>
+        <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={searchPlaceholder}
+              className="pl-8 h-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+        {filteredItems.map((item: any) => renderItem ? renderItem(item) : (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+        {filteredItems.length === 0 && (
+          <div className="p-4 text-center text-xs text-muted-foreground">{noResultsText}</div>
+        )}
+      </SelectContent>
+    </Select>
+  );
+});
+
+const SearchableProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+  const items = useMemo(() => {
+    const list = projects.map((p: any) => ({
+      value: p.id,
+      label: `${p.name} (${p.projectCode})`,
+      searchString: `${p.name} ${p.projectCode || ''}`
+    }));
+    return list;
+  }, [projects]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Tất cả dự án"
+      searchPlaceholder="Tìm dự án..."
+      triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
+      triggerDisplay={value === 'all' ? "Tất cả dự án" : `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})`}
+    />
+  );
+});
+
+const SearchableTeamSelect = memo(({ value, onValueChange, teams, uniqueTeams }: any) => {
+  const items = useMemo(() => {
+    return uniqueTeams.map((t: string) => ({
+      value: t,
+      label: `${t} (${teams.find((team: any) => team.name === t)?.teamCode || ''})`,
+      searchString: t
+    }));
+  }, [uniqueTeams, teams]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Tất cả đội"
+      searchPlaceholder="Tìm team..."
+      triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
+      triggerDisplay={value === 'all' ? "Tất cả đội" : `${value} (${teams.find((t: any) => t.name === value)?.teamCode || ''})`}
+    />
+  );
+});
+
+const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+  const items = useMemo(() => {
+    return projects.map((p: any) => ({
+      value: p.id,
+      label: p.name,
+      searchString: `${p.name} ${p.projectCode || ''}`
+    }));
+  }, [projects]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Chọn dự án..."
+      searchPlaceholder="Tìm dự án..."
+      triggerClassName="bg-slate-50 border-none h-11 rounded-xl"
+      triggerDisplay={value ? `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+      renderItem={(item: any) => (
+        <SelectItem key={item.value} value={item.value}>
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900">{item.label}</span>
+          </div>
+        </SelectItem>
+      )}
+    />
+  );
+});
+
+const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams, teamMap }: any) => {
+  const items = useMemo(() => {
+    return teams.map((t: any) => ({
+      value: t.id,
+      label: t.name,
+      searchString: `${t.name} ${t.teamCode || ''}`
+    }));
+  }, [teams]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Chọn team..."
+      searchPlaceholder="Tìm team..."
+      triggerClassName="bg-slate-50 border-none h-11 rounded-xl"
+      triggerDisplay={value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn team..."}
+      renderItem={(item: any) => (
+        <SelectItem key={item.value} value={item.value}>
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900">{item.label}</span>
+          </div>
+        </SelectItem>
+      )}
+    />
+  );
+});
+
+const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams, teamMap }: any) => {
+  const items = useMemo(() => {
+    return teams.map((t: any) => ({
+      value: t.id,
+      label: t.name,
+      searchString: `${t.name} ${t.teamCode || ''}`
+    }));
+  }, [teams]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Chọn đội..."
+      searchPlaceholder="Tìm đội..."
+      triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
+      triggerDisplay={value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn đội..."}
+    />
+  );
+});
+
+const SearchableAcceptanceProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+  const items = useMemo(() => {
+    return projects.map((p: any) => ({
+      value: p.id,
+      label: p.name,
+      searchString: `${p.name} ${p.projectCode || ''}`
+    }));
+  }, [projects]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Chọn dự án..."
+      searchPlaceholder="Tìm dự án..."
+      triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
+      triggerDisplay={value ? `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+    />
+  );
+});
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
@@ -44,7 +244,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -544,8 +744,6 @@ export default function App() {
   const [reportTeam, setReportTeam] = useState('all');
   const [reportRegion, setReportRegion] = useState('all');
   const [reportType, setReportType] = useState('all');
-  const [reportUser, setReportUser] = useState('all');
-  const [reportUserSearch, setReportUserSearch] = useState('');
   const [reportMonth, setReportMonth] = useState(getMarketingMonth(new Date()));
   const [reportWeek, setReportWeek] = useState('all');
   const [costPeriod, setCostPeriod] = useState('1');
@@ -554,8 +752,6 @@ export default function App() {
   const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual' | 'revenue'>('budget');
   const [activeReportTab, setActiveReportTab] = useState('team');
   const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project'>('team');
-  const [reportProjectSearch, setReportProjectSearch] = useState('');
-  const [reportTeamSearch, setReportTeamSearch] = useState('');
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
   const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -729,8 +925,6 @@ export default function App() {
   const [newEfficiencyMonth, setNewEfficiencyMonth] = useState(getMarketingMonth(new Date()));
   const [newEfficiencySales, setNewEfficiencySales] = useState('');
   const [newEfficiencyRevenue, setNewEfficiencyRevenue] = useState('');
-  const [newEfficiencyProjectSearch, setNewEfficiencyProjectSearch] = useState('');
-  const [newEfficiencyTeamSearch, setNewEfficiencyTeamSearch] = useState('');
   const [adminEfficiencySearch, setAdminEfficiencySearch] = useState('');
   const [adminEfficiencyMonthFilter, setAdminEfficiencyMonthFilter] = useState(getMarketingMonth(new Date()));
   const [isImportingEfficiencyUrl, setIsImportingEfficiencyUrl] = useState(false);
@@ -1053,7 +1247,7 @@ export default function App() {
 
     // Listen to efficiency reports
     let unsubEfficiency = () => {};
-    if (isAdmin || isMod) {
+    if (isAdmin || isMod || isGDDA) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -1062,7 +1256,7 @@ export default function App() {
 
     // Listen to acceptances
     let unsubAcceptances = () => {};
-    if (isAdmin || isMod) {
+    if (isAdmin || isMod || isGDDA) {
       const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -1071,8 +1265,8 @@ export default function App() {
 
     // Listen to final acceptances
     let unsubFinalAcceptances = () => {};
-    if (isAdmin || isMod) {
-      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('acceptedAt', 'desc'));
+    if (isAdmin || isMod || isGDDA) {
+      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -5153,39 +5347,26 @@ export default function App() {
   const filteredBudgets = useMemo(() => {
     return budgets.filter(b => {
       const project = projects.find(p => p.id === b.projectId);
-      
-      // Role-based project access
-      const hasProjectAccess = (isAdmin || isMod) || 
-                               (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) ||
-                               (isUser); // Users can see all projects for registration but maybe we should restrict here too?
-                                         // User request says "GDDA : Có quyền xem thông tin báo cáo , thông tin ngân sách đăng ký theo dự án được chỉ định"
-                                         // "User : Người dùng có quyền đăng ký ngân sách , cập nhập chi phí thực tế theo ngân sách đăng ký ."
-                                         // So Users can see projects they are registering for.
-      
-      if (!hasProjectAccess) return false;
-
-      const matchProject = reportProject === 'all' || b.projectId === reportProject;
       const userEmail = user?.email?.toLowerCase();
       const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
       const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-
-      const matchUser = reportUser === 'all' || budgetEmail === reportUser.toLowerCase();
-      const matchTeam = (isAdmin || isMod || isGDDA)
-        ? (reportTeam === 'all' || b.teamName === reportTeam)
-        : (isOwner || isAssigned);
       
+      // Role-based access control
+      const hasAccess = isAdmin || isMod || 
+                         (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) ||
+                         (isOwner || isAssigned);
+      
+      if (!hasAccess) return false;
+
+      const matchProject = reportProject === 'all' || b.projectId === reportProject;
+      const bTeamName = teamMap[b.teamId] || b.teamName;
+      const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
       const matchMonth = b.month === reportMonth;
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
       
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchUser;
-    }).map(b => {
-      // If a specific week is selected, return 1/4 of the budget as an estimate
-      if (reportWeek !== 'all') {
-        return { ...b, amount: b.amount / 4 };
-      }
-      return b;
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType;
     }).sort((a, b) => {
       const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
       if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
@@ -5194,30 +5375,27 @@ export default function App() {
       if (budgetReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
       return 0;
     });
-  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser, budgetReportSort]);
+  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, budgetReportSort]);
 
   const filteredCosts = useMemo(() => {
     return costs.filter(c => {
       const project = projects.find(p => p.id === c.projectId);
-      
-      // Role-based project access
-      const hasProjectAccess = (isAdmin || isMod) || 
-                               (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) ||
-                               (isUser);
-      
-      if (!hasProjectAccess) return false;
-
-      const matchProject = reportProject === 'all' || c.projectId === reportProject;
       const userEmail = user?.email?.toLowerCase();
       const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
       const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
       const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
-      const isOwnerOrAssigned = isOwner || isAssigned;
+      
+      // Role-based access control
+      const hasAccess = isAdmin || isMod || 
+                         (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) ||
+                         (isOwner || isAssigned);
+      
+      if (!hasAccess) return false;
 
-      const matchUser = reportUser === 'all' || costEmail === reportUser.toLowerCase();
-      const matchTeam = (isAdmin || isMod || isGDDA)
-        ? (reportTeam === 'all' || c.teamName === reportTeam)
-        : isOwnerOrAssigned;
+      const matchProject = reportProject === 'all' || c.projectId === reportProject;
+      const cTeamName = teamMap[c.teamId] || c.teamName;
+      const matchTeam = reportTeam === 'all' || cTeamName === reportTeam;
+      
       // Map cost date to marketing month
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       const matchMonth = mMonth === reportMonth;
@@ -5225,7 +5403,7 @@ export default function App() {
       const matchType = reportType === 'all' || (project?.type === reportType);
       const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
       
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek && matchUser;
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek;
     }).sort((a, b) => {
       const factor = costReportSort.direction === 'asc' ? 1 : -1;
       if (costReportSort.key === 'amount') return (a.amount - b.amount) * factor;
@@ -5235,7 +5413,22 @@ export default function App() {
       if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
       return 0;
     });
-  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, reportUser, costReportSort]);
+  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, costReportSort]);
+
+  const adminFilteredBudgets = useMemo(() => {
+    return budgets.filter(b => {
+      const matchesSearch = 
+        (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+        (teamMap[b.teamId] || b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
+        (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
+      const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
+      return matchesSearch && matchesMonth;
+    }).sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [budgets, adminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap]);
 
   const uniqueTeams = useMemo(() => {
     return Array.from(new Set(teams.map(t => t.name)));
@@ -5323,11 +5516,12 @@ export default function App() {
         const matchMonth = b.month === reportMonth;
         const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
         const matchType = reportType === 'all' || (project?.type === reportType);
-        return matchProject && b.teamName === team && matchMonth && matchRegion && matchType;
+        const bTeamName = teamMap[b.teamId] || b.teamName;
+        return matchProject && bTeamName === team && matchMonth && matchRegion && matchType;
       });
       
-      let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-      if (chartTimeType === 'week') teamTotalBudget = teamTotalBudget / 4;
+      let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      if (chartTimeType === 'week' && reportWeek !== 'all') teamTotalBudget = teamTotalBudget / 4;
 
       let teamTotalCost = costs.filter(c => {
         const project = projects.find(p => p.id === c.projectId);
@@ -5337,13 +5531,10 @@ export default function App() {
         const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
         const matchType = reportType === 'all' || (project?.type === reportType);
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+        const cTeamName = teamMap[c.teamId] || c.teamName;
         
-        return matchProject && c.teamName === team && matchMonth && matchRegion && matchType && matchWeek;
-      }).reduce((acc, curr) => acc + curr.amount, 0);
-
-      if (chartTimeType === 'week' && reportWeek === 'all') {
-        teamTotalCost = teamTotalCost / 4;
-      }
+        return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
+      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
       // Project breakdown for team
       const teamProjectDetails = projects.map(p => {
@@ -5356,21 +5547,25 @@ export default function App() {
           const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
           const matchType = reportType === 'all' || (project?.type === reportType);
           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+          const cTeamName = teamMap[c.teamId] || c.teamName;
           
-          return matchProject && c.teamName === team && matchMonth && matchRegion && matchType && matchWeek;
+          return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
         });
 
-        let pTotalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-        let pTotalCost = pCosts.reduce((acc, curr) => acc + curr.amount, 0);
+        let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-        if (chartTimeType === 'week') {
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
           pTotalBudget = pTotalBudget / 4;
-          if (reportWeek === 'all') pTotalCost = pTotalCost / 4;
         }
 
-        const pRevenue = efficiencyReports
+        let pRevenue = efficiencyReports
           .filter(r => r.projectId === p.id && (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth))
           .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          pRevenue = pRevenue / 4;
+        }
 
         return {
           name: p.name,
@@ -5379,11 +5574,15 @@ export default function App() {
           revenue: pRevenue
         };
       }).filter(d => d.budget > 0 || d.actual > 0)
-        .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+        .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
-      const teamRevenue = efficiencyReports
+      let teamRevenue = efficiencyReports
         .filter(r => (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth) && (reportProject === 'all' || r.projectId === reportProject))
         .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        teamRevenue = teamRevenue / 4;
+      }
       
       return {
         name: team,
@@ -5408,28 +5607,45 @@ export default function App() {
       return rawData[mainKey][detailKey];
     };
 
-    // Budgets
+    // Budgets - Normalize by period
     budgets.forEach(b => {
       if (reportMonth && reportMonth !== 'all' && b.month !== reportMonth) return;
       if (reportProject !== 'all' && b.projectId !== reportProject) return;
-      if (reportTeam !== 'all' && b.teamName !== reportTeam) return;
+      const bTeamName = teamMap[b.teamId] || b.teamName;
+      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
 
-      const tId = teams.find(t => t.name === b.teamName)?.id || b.teamName;
+      const tId = b.teamId || b.teamName;
       const mainKey = efficiencyGroupType === 'project' ? b.projectId : tId;
       const detailKey = efficiencyGroupType === 'project' ? tId : b.projectId;
       
       const target = getTarget(mainKey, detailKey);
-      if (target) target.budget += b.amount || 0;
+      if (target) {
+        let amount = b.amount || 0;
+        if (chartTimeType === 'week') {
+          // If a specific week is selected, show 1/4 of budget. 
+          // If "All" weeks, we keep it as month total for the overview.
+          if (reportWeek !== 'all') {
+            amount = amount / 4;
+          }
+        }
+        target.budget += amount;
+      }
     });
 
-    // Costs
+    // Costs - Filter by week if needed
     costs.forEach(c => {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       if (reportMonth && reportMonth !== 'all' && mMonth !== reportMonth) return;
       if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      if (reportTeam !== 'all' && c.teamName !== reportTeam) return;
+      const cTeamName = teamMap[c.teamId] || c.teamName;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
 
-      const tId = teams.find(t => t.name === c.teamName)?.id || c.teamName;
+      // Week filter
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        if (c.weekNumber?.toString() !== reportWeek) return;
+      }
+
+      const tId = c.teamId || c.teamName;
       const mainKey = efficiencyGroupType === 'project' ? c.projectId : tId;
       const detailKey = efficiencyGroupType === 'project' ? tId : c.projectId;
 
@@ -5437,21 +5653,27 @@ export default function App() {
       if (target) target.cost += c.amount || 0;
     });
 
-    // Efficiency Reports
+    // Efficiency Reports - Note: Revenue is monthly in this app's current schema
     efficiencyReports.forEach(r => {
       if (reportMonth && reportMonth !== 'all' && r.month !== reportMonth) return;
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
       const currentTeamName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
-      if (reportUser !== 'all' && r.createdByEmail?.toLowerCase() !== reportUser.toLowerCase()) return;
 
       const mainKey = efficiencyGroupType === 'project' ? r.projectId : r.teamId;
       const detailKey = efficiencyGroupType === 'project' ? r.teamId : r.projectId;
 
       const target = getTarget(mainKey, detailKey);
       if (target) {
-        target.sales += r.salesCount || 0;
-        target.revenue += r.revenue || 0;
+        // If we are looking at a single week, prorate revenue/sales
+        let rev = r.revenue || 0;
+        let sales = r.salesCount || 0;
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          rev = rev / 4;
+          sales = sales / 4;
+        }
+        target.sales += sales;
+        target.revenue += rev;
       }
     });
 
@@ -5478,6 +5700,7 @@ export default function App() {
       }), { sales: 0, revenue: 0, cost: 0, budget: 0 });
 
       return {
+        id: mainKey,
         name,
         ...totals,
         details
@@ -5488,7 +5711,7 @@ export default function App() {
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     });
-  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, reportUser, efficiencyGroupType, projectMap, teamMap, teams, getMarketingMonth, reportSortBy]);
+  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const overBudgetStats = useMemo(() => {
     const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
@@ -5570,64 +5793,19 @@ export default function App() {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       if (!mMonth || !mMonth.startsWith(year)) return;
       if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      if (reportTeam !== 'all' && c.teamName !== reportTeam) return;
+      const currentTeamName = teamMap[c.teamId] || c.teamName;
+      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
 
       if (monthlyMap[mMonth]) {
         monthlyMap[mMonth].cost += c.amount || 0;
       }
     });
 
-    return Object.values(monthlyMap).map(d => ({
-      ...d,
-      roi: d.cost > 0 ? Number((d.revenue / d.cost).toFixed(2)) : 0
+    return Object.values(monthlyMap).map(m => ({
+      ...m,
+      roi: m.cost > 0 ? (m.revenue / m.cost) : 0
     }));
   }, [efficiencyReports, costs, reportYear, reportProject, reportTeam, teamMap, getMarketingMonth]);
-
-  const regionChartData = useMemo(() => {
-    return uniqueRegions.map(region => {
-      const regionBudgets = budgets.filter(b => {
-        const project = projects.find(p => p.id === b.projectId);
-        const matchProject = reportProject === 'all' || b.projectId === reportProject;
-        const matchTeam = reportTeam === 'all' || b.teamName === reportTeam;
-        const matchMonth = b.month === reportMonth;
-        return matchProject && matchTeam && project?.region === region && matchMonth;
-      });
-      
-      let totalBudget = regionBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-      if (chartTimeType === 'week') totalBudget = totalBudget / 4;
-
-      let totalCost = costs.filter(c => {
-        const project = projects.find(p => p.id === c.projectId);
-        const matchProject = reportProject === 'all' || c.projectId === reportProject;
-        const matchTeam = reportTeam === 'all' || c.teamName === reportTeam;
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth === reportMonth;
-        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-        
-        return matchProject && matchTeam && project?.region === region && matchMonth && matchWeek;
-      }).reduce((acc, curr) => acc + curr.amount, 0);
-
-      if (chartTimeType === 'week' && reportWeek === 'all') {
-        totalCost = totalCost / 4;
-      }
-
-      const regionRevenue = efficiencyReports.filter(r => {
-        const project = projects.find(p => p.id === r.projectId);
-        const matchProject = reportProject === 'all' || r.projectId === reportProject;
-        const matchTeam = reportTeam === 'all' || (teamMap[r.teamId] === reportTeam || r.teamName === reportTeam);
-        const matchMonth = reportMonth === 'all' || r.month === reportMonth;
-        return matchProject && matchTeam && project?.region === region && matchMonth;
-      }).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-      return {
-        name: region,
-        budget: totalBudget,
-        actual: totalCost,
-        revenue: regionRevenue
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
-  }, [uniqueRegions, budgets, costs, projects, reportProject, reportTeam, reportMonth, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const projectChartData = useMemo(() => {
     const projectIds = Array.from(new Set([
@@ -5642,41 +5820,41 @@ export default function App() {
       const projectName = projectMap[id] || 'N/A';
       const projectBudgets = budgets.filter(b => b.projectId === id && b.month === reportMonth);
       
-      let totalBudget = projectBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-      if (chartTimeType === 'week') totalBudget = totalBudget / 4;
+      let totalBudget = projectBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      if (chartTimeType === 'week' && reportWeek !== 'all') totalBudget = totalBudget / 4;
 
       let totalCost = costs.filter(c => {
         const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
         const matchMonth = mMonth === reportMonth;
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
         return c.projectId === id && matchMonth && matchWeek;
-      }).reduce((acc, curr) => acc + curr.amount, 0);
-
-      if (chartTimeType === 'week' && reportWeek === 'all') {
-        totalCost = totalCost / 4;
-      }
+      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
       // Team breakdown for project
       const projectTeamDetails = uniqueTeams.map(teamName => {
-        const tBudgets = projectBudgets.filter(b => b.teamName === teamName);
+        const tBudgets = projectBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === teamName);
         const tCosts = costs.filter(c => {
           const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
           const matchMonth = mMonth === reportMonth;
           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-          return c.projectId === id && c.teamName === teamName && matchMonth && matchWeek;
+          const cTeamName = teamMap[c.teamId] || c.teamName;
+          return c.projectId === id && cTeamName === teamName && matchMonth && matchWeek;
         });
 
-        let tTotalBudget = tBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-        let tTotalCost = tCosts.reduce((acc, curr) => acc + curr.amount, 0);
+        let tTotalBudget = tBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        let tTotalCost = tCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-        if (chartTimeType === 'week') {
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
           tTotalBudget = tTotalBudget / 4;
-          if (reportWeek === 'all') tTotalCost = tTotalCost / 4;
         }
 
-        const tRevenue = efficiencyReports
-          .filter(r => r.projectId === id && (teamMap[r.teamId] === teamName || r.teamName === teamName) && (reportMonth === 'all' || r.month === reportMonth))
+        let tRevenue = efficiencyReports
+          .filter(r => r.projectId === id && (teamMap[r.teamId] || r.teamName) === teamName && (reportMonth === 'all' || r.month === reportMonth))
           .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+        
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          tRevenue = tRevenue / 4;
+        }
 
         return {
           name: teamName,
@@ -5685,13 +5863,18 @@ export default function App() {
           revenue: tRevenue
         };
       }).filter(d => d.budget > 0 || d.actual > 0)
-        .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+        .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
-      const projectRevenue = efficiencyReports
-        .filter(r => r.projectId === id && (reportMonth === 'all' || r.month === reportMonth) && (reportTeam === 'all' || (teamMap[r.teamId] === reportTeam || r.teamName === reportTeam)))
+      let projectRevenue = efficiencyReports
+        .filter(r => r.projectId === id && (reportMonth === 'all' || r.month === reportMonth) && (reportTeam === 'all' || (teamMap[r.teamId] || r.teamName) === reportTeam))
         .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        projectRevenue = projectRevenue / 4;
+      }
+
       return {
+        id: id,
         name: projectName,
         budget: totalBudget,
         actual: totalCost,
@@ -5700,34 +5883,129 @@ export default function App() {
         isProjectReport: true
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
-  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
+      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
+  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, uniqueTeams, teamMap, efficiencyReports]);
+
+  const regionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    regions.forEach(r => {
+      map[r.id] = r.name;
+    });
+    return map;
+  }, [regions]);
+
+  const regionChartData = useMemo(() => {
+    const rawData: Record<string, { budget: number, actual: number, revenue: number }> = {};
+    
+    uniqueRegions.forEach(regionName => {
+      rawData[regionName] = { budget: 0, actual: 0, revenue: 0 };
+    });
+
+    budgets.forEach(b => {
+      const project = projects.find(p => p.id === b.projectId);
+      const rName = project?.region || 'Chưa xác định';
+      
+      const userEmail = user?.email?.toLowerCase();
+      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+      const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+      const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
+      const hasAccess = isAdmin || isMod || (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) || (isOwner || isAssigned);
+      if (!hasAccess) return;
+
+      if (reportMonth && reportMonth !== 'all' && b.month !== reportMonth) return;
+      if (reportProject !== 'all' && b.projectId !== reportProject) return;
+      const bTeamName = teamMap[b.teamId] || b.teamName;
+      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
+
+      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
+      
+      let amount = b.amount || 0;
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        amount = amount / 4;
+      }
+      rawData[rName].budget += amount;
+    });
+
+    costs.forEach(c => {
+      const project = projects.find(p => p.id === c.projectId);
+      const rName = project?.region || 'Chưa xác định';
+
+      const userEmail = user?.email?.toLowerCase();
+      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
+      const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
+      const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
+      const hasAccess = isAdmin || isMod || (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) || (isOwner || isAssigned);
+      if (!hasAccess) return;
+
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (reportMonth && reportMonth !== 'all' && mMonth !== reportMonth) return;
+      if (reportProject !== 'all' && c.projectId !== reportProject) return;
+      const cTeamName = teamMap[c.teamId] || c.teamName;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        if (c.weekNumber?.toString() !== reportWeek) return;
+      }
+
+      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
+      rawData[rName].actual += c.amount || 0;
+    });
+
+    efficiencyReports.forEach(r => {
+      const project = projects.find(p => p.id === r.projectId);
+      const rName = project?.region || 'Chưa xác định';
+
+      if (reportMonth && reportMonth !== 'all' && r.month !== reportMonth) return;
+      if (reportProject !== 'all' && r.projectId !== reportProject) return;
+      const tName = teamMap[r.teamId] || r.teamName;
+      if (reportTeam !== 'all' && tName !== reportTeam) return;
+
+      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
+      
+      let rev = r.revenue || 0;
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        rev = rev / 4;
+      }
+      rawData[rName].revenue += rev;
+    });
+
+    return Object.keys(rawData).map(name => ({
+      name,
+      ...rawData[name]
+    })).filter(d => reportRegion === 'all' || d.name === reportRegion)
+      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
+  }, [regions, uniqueRegions, budgets, costs, efficiencyReports, projects, reportMonth, reportProject, reportTeam, reportRegion, teamMap, chartTimeType, reportWeek, isAdmin, isMod, isGDDA, user, userProfile, reportSortBy, getMarketingMonth]);
 
   const reportTableData = useMemo(() => {
+    // 1. Process Teams group
     const teams = uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
-       const teamBudgets = filteredBudgets.filter(b => b.teamName === team);
-       let totalBudget = teamBudgets.reduce((acc, curr) => acc + curr.amount, 0);
+       const teamBudgets = filteredBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === team);
        
-       let totalCost = filteredCosts.filter(c => {
+       const teamCosts = filteredCosts.filter(c => {
          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-         return c.teamName === team && matchWeek;
-       }).reduce((acc, curr) => acc + curr.amount, 0);
+         const cTeamName = teamMap[c.teamId] || c.teamName;
+         return cTeamName === team && matchWeek;
+       });
 
-       if (chartTimeType === 'week') {
+       let totalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+       let totalCost = teamCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+       if (chartTimeType === 'week' && reportWeek !== 'all') {
          totalBudget = totalBudget / 4;
-         if (reportWeek === 'all') totalCost = totalCost / 4;
        }
 
-       const projectsInTeam = Array.from(new Set(teamBudgets.map(b => projectMap[b.projectId])));
+       // Use project IDs to avoid name collision and ensure correct filtering
+       const projectsInTeamIds = Array.from(new Set([
+         ...teamBudgets.map(b => b.projectId),
+         ...teamCosts.map(c => c.projectId)
+       ]));
 
-       const aggregatedProjects = projectsInTeam.map(projectId => {
+       const aggregatedProjects = projectsInTeamIds.map(projectId => {
          const pBudgets = teamBudgets.filter(b => b.projectId === projectId);
-         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-         
-         let pTotalCost = filteredCosts.filter(c => {
-           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-           return c.teamName === team && c.projectId === projectId && matchWeek;
-         }).reduce((acc, curr) => acc + curr.amount, 0);
+         const pCosts = teamCosts.filter(c => c.projectId === projectId);
+
+         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+         let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
          if (chartTimeType === 'week') {
            pTotalBudget = pTotalBudget / 4;
@@ -5755,7 +6033,7 @@ export default function App() {
          name: team,
          budget: totalBudget,
          actual: totalCost,
-         projects: projectsInTeam,
+         projects: projectsInTeamIds.map(id => projectMap[id]),
          items: aggregatedProjects
        };
     }).filter(d => d.budget > 0 || d.actual > 0)
@@ -5766,34 +6044,34 @@ export default function App() {
       ...filteredCosts.map(c => c.projectId)
     ]));
 
-    const projectsData = projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
+    const projects = projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
        const pBudgets = filteredBudgets.filter(b => b.projectId === id);
-       let totalBudget = pBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-       
-       let totalCost = filteredCosts.filter(c => {
+       const pCosts = filteredCosts.filter(c => {
          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
          return c.projectId === id && matchWeek;
-       }).reduce((acc, curr) => acc + curr.amount, 0);
+       });
 
-       if (chartTimeType === 'week') {
+       let totalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+       let totalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+       if (chartTimeType === 'week' && reportWeek !== 'all') {
          totalBudget = totalBudget / 4;
-         if (reportWeek === 'all') totalCost = totalCost / 4;
        }
 
-       const teamsInProject = Array.from(new Set(pBudgets.map(b => b.teamName)));
+       const teamsInProjectNames = Array.from(new Set([
+         ...pBudgets.map(b => teamMap[b.teamId] || b.teamName),
+         ...pCosts.map(c => teamMap[c.teamId] || c.teamName)
+       ]));
 
-       const aggregatedTeams = uniqueTeams.map(teamName => {
-         const tBudgets = pBudgets.filter(b => b.teamName === teamName);
-         let tTotalBudget = tBudgets.reduce((acc, curr) => acc + curr.amount, 0);
-         
-         let tTotalCost = filteredCosts.filter(c => {
-           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-           return c.projectId === id && c.teamName === teamName && matchWeek;
-         }).reduce((acc, curr) => acc + curr.amount, 0);
+       const aggregatedTeams = teamsInProjectNames.map(teamName => {
+         const tBudgets = pBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === teamName);
+         const tCosts = pCosts.filter(c => (teamMap[c.teamId] || c.teamName) === teamName);
 
-         if (chartTimeType === 'week') {
+         let tTotalBudget = tBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+         let tTotalCost = tCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+         if (chartTimeType === 'week' && reportWeek !== 'all') {
            tTotalBudget = tTotalBudget / 4;
-           if (reportWeek === 'all') tTotalCost = tTotalCost / 4;
          }
 
          return {
@@ -5815,14 +6093,16 @@ export default function App() {
          name: projectMap[id] || 'N/A',
          budget: totalBudget,
          actual: totalCost,
-         teams: teamsInProject,
+         teams: teamsInProjectNames,
          items: aggregatedTeams
        };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
-    return { teams, projects: projectsData };
-  }, [uniqueTeams, reportTeam, reportProject, filteredBudgets, filteredCosts, chartTimeType, reportWeek, reportSortBy, projectMap]);
+    return { teams, projects };
+  }, [uniqueTeams, reportTeam, reportProject, filteredBudgets, filteredCosts, chartTimeType, reportWeek, reportSortBy, projectMap, teamMap]);
+
+
 
   const getCurrentPeriod = () => {
     const now = new Date();
@@ -5881,6 +6161,31 @@ export default function App() {
     }
   };
 
+  // Thêm component footer thông tin phát triển
+  const DeveloperFooter = ({ className = "", isHeader = false }: { className?: string, isHeader?: boolean }) => (
+    <div className={`flex flex-col items-center justify-center gap-3 text-slate-400 ${className}`}>
+      <div className={`flex items-center gap-2 font-black uppercase tracking-[0.2em] ${isHeader ? 'text-[12px]' : 'text-[9px]'}`}>
+        <span className="opacity-60">Phát triển bởi</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+        <span className={isHeader ? 'text-slate-800' : 'text-slate-600'}>Thiên Vũ - Digital Marketing Mayhomes</span>
+      </div>
+      <a 
+        href="https://zalo.me/0854642555" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className={`flex items-center gap-3 border transition-all duration-300 group ${isHeader ? 'px-6 py-2.5 bg-white border-blue-200 rounded-2xl shadow-lg shadow-blue-100/50 hover:shadow-xl hover:border-blue-400 hover:translate-y-[-2px]' : 'px-3 py-1 bg-slate-50 border-slate-100 rounded-full hover:bg-white hover:shadow-sm'}`}
+      >
+        <div className={`bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200 group-hover:rotate-[10deg] transition-all ${isHeader ? 'w-8 h-8' : 'w-5 h-5'}`}>
+          <MessageCircle className={`${isHeader ? 'w-5 h-5' : 'w-3 h-3'} fill-current`} />
+        </div>
+        <div className="flex flex-col items-start leading-none">
+          <span className={`font-black uppercase tracking-tight ${isHeader ? 'text-sm text-blue-700' : 'text-[10px] text-slate-600'}`}>Liên hệ hỗ trợ Zalo</span>
+          {isHeader && <span className="text-[11px] font-bold text-blue-500/70 mt-0.5">0854.642.555</span>}
+        </div>
+      </a>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
@@ -5911,9 +6216,12 @@ export default function App() {
                 <p className="text-[10px] font-bold text-blue-800 tracking-[0.2em] uppercase">Khơi nguồn cuộc sống tinh hoa</p>
               </div>
             </div>
-            <div className="pt-4 space-y-2">
+            <div className="pt-4 space-y-3">
               <CardTitle className="text-xl font-bold tracking-tight text-slate-800">Marketing Cost Control</CardTitle>
-              <CardDescription className="text-slate-500">Hệ thống quản lý chi phí marketing chuyên nghiệp</CardDescription>
+              <div className="space-y-4">
+                <CardDescription className="text-slate-500">Hệ thống quản lý chi phí marketing chuyên nghiệp</CardDescription>
+                <DeveloperFooter className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100" />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-4">
@@ -5971,6 +6279,11 @@ export default function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 pt-6 pb-24 lg:py-10 space-y-6 lg:space-y-10">
+        {/* Top Developer Support Info */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-[2rem] border border-blue-100/50 shadow-inner">
+          <DeveloperFooter isHeader={true} />
+        </div>
+
         {/* Mobile Welcome */}
         <div className="lg:hidden mb-2">
            <h2 className="text-xl font-black text-slate-900">Xin chào, {user.displayName?.split(' ').pop()} 👋</h2>
@@ -6599,69 +6912,21 @@ export default function App() {
                               </div>
                               <div className="lg:col-span-2 space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dự án</Label>
-                                <Select value={newEfficiencyProject} onValueChange={setNewEfficiencyProject}>
-                                  <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
-                                    <SelectValue placeholder="Chọn dự án...">
-                                      {newEfficiencyProject ? `${projectMap[newEfficiencyProject] || newEfficiencyProject} (${projects.find(p => p.id === newEfficiencyProject)?.projectCode || ''})` : "Chọn dự án..."}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                                      <div className="relative">
-                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                          placeholder="Tìm dự án..."
-                                          className="pl-8 h-9 border-none bg-slate-50"
-                                          value={newEfficiencyProjectSearch}
-                                          onChange={(e) => setNewEfficiencyProjectSearch(e.target.value)}
-                                          onKeyDown={(e) => e.stopPropagation()}
-                                        />
-                                      </div>
-                                    </div>
-                                    {projects
-                                      .filter(p => p.name.toLowerCase().includes(newEfficiencyProjectSearch.toLowerCase()) || p.id.toLowerCase().includes(newEfficiencyProjectSearch.toLowerCase()))
-                                      .map(p => (
-                                        <SelectItem key={p.id} value={p.id}>
-                                          <div className="flex flex-col">
-                                            <span className="font-medium text-slate-900">{p.name}</span>
-                                          </div>
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <SearchableEfficiencyProjectSelect 
+                                  value={newEfficiencyProject} 
+                                  onValueChange={setNewEfficiencyProject} 
+                                  projects={projects} 
+                                  projectMap={projectMap} 
+                                />
                               </div>
                               <div className="lg:col-span-2 space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Team</Label>
-                                <Select value={newEfficiencyTeam} onValueChange={setNewEfficiencyTeam}>
-                                  <SelectTrigger className="bg-slate-50 border-none h-11 rounded-xl">
-                                    <SelectValue placeholder="Chọn team...">
-                                      {newEfficiencyTeam ? `${teamMap[newEfficiencyTeam] || newEfficiencyTeam} (${teams.find(t => t.id === newEfficiencyTeam)?.teamCode || ''})` : "Chọn team..."}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                                      <div className="relative">
-                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                          placeholder="Tìm team..."
-                                          className="pl-8 h-9 border-none bg-slate-50"
-                                          value={newEfficiencyTeamSearch}
-                                          onChange={(e) => setNewEfficiencyTeamSearch(e.target.value)}
-                                          onKeyDown={(e) => e.stopPropagation()}
-                                        />
-                                      </div>
-                                    </div>
-                                    {teams
-                                      .filter(t => t.name.toLowerCase().includes(newEfficiencyTeamSearch.toLowerCase()) || t.id.toLowerCase().includes(newEfficiencyTeamSearch.toLowerCase()))
-                                      .map(t => (
-                                        <SelectItem key={t.id} value={t.id}>
-                                          <div className="flex flex-col">
-                                            <span className="font-medium text-slate-900">{t.name}</span>
-                                          </div>
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <SearchableEfficiencyTeamSelect 
+                                  value={newEfficiencyTeam} 
+                                  onValueChange={setNewEfficiencyTeam} 
+                                  teams={teams} 
+                                  teamMap={teamMap} 
+                                />
                               </div>
                               <div className="lg:col-span-2 space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Số căn bán</Label>
@@ -6974,25 +7239,26 @@ export default function App() {
                                 variant="outline" 
                                 className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 relative"
                                 disabled={isImportingProjects}
-                                asChild
+                                nativeButton={false}
+                                render={
+                                  <label className="cursor-pointer flex items-center h-10 px-4" />
+                                }
                               >
-                                <label className="cursor-pointer flex items-center h-10 px-4">
-                                  {isImportingProjects ? (
-                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <FileUp className="w-4 h-4 mr-2" />
-                                  )}
-                                  Nhập Excel
-                                  <input 
-                                    type="file" 
-                                    className="hidden" 
-                                    accept=".xlsx,.xls,.csv" 
-                                    onChange={handleImportProjectsCSV}
-                                  />
-                                </label>
+                                {isImportingProjects ? (
+                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <FileUp className="w-4 h-4 mr-2" />
+                                )}
+                                Nhập Excel
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept=".xlsx,.xls,.csv" 
+                                  onChange={handleImportProjectsCSV}
+                                />
                               </Button>
                               <Dialog>
-                                <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
+                                <DialogTrigger nativeButton={false} render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
                                   <Plus className="w-4 h-4 mr-2" /> Thêm dự án
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[500px]">
@@ -7063,7 +7329,7 @@ export default function App() {
                           {isAdmin && (
                             <div className="flex gap-2 mr-4">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
-                                <DialogTrigger render={
+                                <DialogTrigger nativeButton={false} render={
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -7100,7 +7366,7 @@ export default function App() {
                               </Dialog>
 
                               <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
-                                <DialogTrigger render={
+                                <DialogTrigger nativeButton={false} render={
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -7352,7 +7618,7 @@ export default function App() {
                           </div>
                           {isAdmin && (
                             <Dialog>
-                              <DialogTrigger render={
+                              <DialogTrigger nativeButton={false} render={
                                 <Button className="bg-blue-600 hover:bg-blue-700">
                                   <Plus className="w-4 h-4 mr-2" /> Thêm Vùng / Khu vực
                                 </Button>
@@ -7559,7 +7825,7 @@ export default function App() {
                           </div>
                           {isAdmin && (
                             <Dialog>
-                              <DialogTrigger render={
+                              <DialogTrigger nativeButton={false} render={
                                 <Button className="bg-blue-600 hover:bg-blue-700">
                                   <Plus className="w-4 h-4 mr-2" /> Thêm Loại hình
                                 </Button>
@@ -7818,7 +8084,7 @@ export default function App() {
                                 <Download className="w-4 h-4 mr-2" /> Xuất Excel
                               </Button>
                               <Dialog>
-                                <DialogTrigger render={
+                                <DialogTrigger nativeButton={false} render={
                                   <Button className="bg-blue-600 hover:bg-blue-700">
                                     <Plus className="w-4 h-4 mr-2" /> Thêm Team
                                   </Button>
@@ -8168,100 +8434,95 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {budgets
-                                .filter(b => {
-                                  const matchesSearch = 
-                                    (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    (teamMap[b.teamId] || b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
-                                  const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
-                                  return matchesSearch && matchesMonth;
-                                })
-                                .sort((a, b) => {
-                                  const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-                                  const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-                                  return dateB - dateA;
-                                })
-                                .map(b => (
-                                  <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
-                                    <TableCell>
-                                      <input 
-                                        type="checkbox" 
-                                        className="rounded border-slate-300"
-                                        checked={selectedBudgetIds.includes(b.id)}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            setSelectedBudgetIds(prev => [...prev, b.id]);
-                                          } else {
-                                            setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
-                                          }
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                      <div className="flex flex-col gap-0.5">
-                                        <span>{projectMap[b.projectId] || b.projectName}</span>
-                                        <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex flex-col gap-0.5">
-                                        <span>{teamMap[b.teamId] || b.teamName}</span>
-                                        <span className="text-[10px] text-slate-400 font-normal">({teams.find(t => t.id === b.teamId)?.teamCode || ''})</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>{b.implementerName}</TableCell>
-                                    <TableCell className="text-xs">{b.month}</TableCell>
-                                    <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
-                                    <TableCell className="text-right font-mono font-bold text-blue-600">{((b.verifiedAmount || 0)).toLocaleString()} đ</TableCell>
-                                    <TableCell className="text-right">
-                                      <div className="flex justify-end gap-1">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                                          onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
-                                          title="Lịch sử thay đổi"
-                                        >
-                                          <History className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-blue-600"
-                                          onClick={() => handleOpenEditBudget(b)}
-                                          title="Sửa ngân sách"
-                                        >
-                                          <Edit2 className="w-4 h-4" />
-                                        </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                          onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                          title="Xóa ngân sách"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              {budgets.filter(b => {
-                                  const matchesSearch = 
-                                    (b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    (b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-                                    (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
-                                  const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
-                                  return matchesSearch && matchesMonth;
-                                }).length === 0 && (
-                                  <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
-                                      Không tìm thấy ngân sách nào phù hợp
-                                    </TableCell>
-                                  </TableRow>
-                                )}
+                              {adminFilteredBudgets.map(b => (
+                                <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
+                                  <TableCell>
+                                    <input 
+                                      type="checkbox" 
+                                      className="rounded border-slate-300"
+                                      checked={selectedBudgetIds.includes(b.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedBudgetIds(prev => [...prev, b.id]);
+                                        } else {
+                                          setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                        }
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span>{projectMap[b.projectId] || b.projectName}</span>
+                                      <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span>{teamMap[b.teamId] || b.teamName}</span>
+                                      <span className="text-[10px] text-slate-400 font-normal">({teams.find(t => t.id === b.teamId)?.teamCode || ''})</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{b.implementerName}</TableCell>
+                                  <TableCell className="text-xs">{b.month}</TableCell>
+                                  <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
+                                  <TableCell className="text-right font-mono font-bold text-blue-600">{((b.verifiedAmount || 0)).toLocaleString()} đ</TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-1">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                        onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                        title="Lịch sử thay đổi"
+                                      >
+                                        <History className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                        onClick={() => handleOpenEditBudget(b)}
+                                        title="Sửa ngân sách"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                        onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                        title="Xóa ngân sách"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {adminFilteredBudgets.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={8} className="h-24 text-center text-slate-500">
+                                    Không tìm thấy ngân sách nào phù hợp
+                                  </TableCell>
+                                </TableRow>
+                              )}
                             </TableBody>
+                            {adminFilteredBudgets.length > 0 && (
+                              <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
+                                <TableRow>
+                                  <TableCell></TableCell>
+                                  <TableCell colSpan={4} className="text-slate-900 uppercase text-[10px] tracking-wider">Tổng cộng</TableCell>
+                                  <TableCell className="text-right font-mono text-blue-700">
+                                    {adminFilteredBudgets.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} đ
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-indigo-700">
+                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.verifiedAmount || 0), 0).toLocaleString()} đ
+                                  </TableCell>
+                                  <TableCell></TableCell>
+                                </TableRow>
+                              </TableFooter>
+                            )}
+
                           </Table>
                         </div>
                       </CardContent>
@@ -8511,37 +8772,12 @@ export default function App() {
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <Building2 className="w-3 h-3" /> Dự án
                         </Label>
-                        <Select value={reportProject} onValueChange={setReportProject}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả dự án">
-                              {reportProject === 'all' ? "Tất cả dự án" : `${projectMap[reportProject] || reportProject} (${projects.find(p => p.id === reportProject)?.projectCode || ''})`}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                              <div className="relative">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  placeholder="Tìm dự án..."
-                                  className="pl-8 h-9"
-                                  value={reportProjectSearch}
-                                  onChange={(e) => setReportProjectSearch(e.target.value)}
-                                  onKeyDown={(e) => e.stopPropagation()}
-                                />
-                              </div>
-                            </div>
-                            <SelectItem value="all">Tất cả dự án</SelectItem>
-                            {projects
-                              .filter(p => p.name.toLowerCase().includes(reportProjectSearch.toLowerCase()))
-                              .map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
-                              ))
-                            }
-                            {projects.filter(p => p.name.toLowerCase().includes(reportProjectSearch.toLowerCase())).length === 0 && (
-                              <div className="p-4 text-center text-xs text-muted-foreground">Không tìm thấy dự án</div>
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <SearchableProjectSelect 
+                          value={reportProject} 
+                          onValueChange={setReportProject} 
+                          projects={projects} 
+                          projectMap={projectMap} 
+                        />
                       </div>
 
                       {isAdmin && (
@@ -8549,37 +8785,12 @@ export default function App() {
                           <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                             <Users className="w-3 h-3" /> Đội (Team)
                           </Label>
-                          <Select value={reportTeam} onValueChange={setReportTeam}>
-                            <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                              <SelectValue placeholder="Tất cả đội">
-                                {reportTeam === 'all' ? "Tất cả đội" : `${reportTeam} (${teams.find(t => t.name === reportTeam)?.teamCode || ''})`}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                                <div className="relative">
-                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                  <Input
-                                    placeholder="Tìm team..."
-                                    className="pl-8 h-9"
-                                    value={reportTeamSearch}
-                                    onChange={(e) => setReportTeamSearch(e.target.value)}
-                                    onKeyDown={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </div>
-                              <SelectItem value="all">Tất cả đội</SelectItem>
-                              {uniqueTeams
-                                .filter(t => t.toLowerCase().includes(reportTeamSearch.toLowerCase()))
-                                .map(t => (
-                                  <SelectItem key={t} value={t}>{t} ({teams.find(team => team.name === t)?.teamCode || ''})</SelectItem>
-                                ))
-                              }
-                              {uniqueTeams.filter(t => t.toLowerCase().includes(reportTeamSearch.toLowerCase())).length === 0 && (
-                                <div className="p-4 text-center text-xs text-muted-foreground">Không tìm thấy team</div>
-                              )}
-                            </SelectContent>
-                          </Select>
+                          <SearchableTeamSelect 
+                            value={reportTeam} 
+                            onValueChange={setReportTeam} 
+                            teams={teams} 
+                            uniqueTeams={uniqueTeams} 
+                          />
                         </div>
                       )}
 
@@ -8621,62 +8832,29 @@ export default function App() {
                         </Select>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <TrendingUp className="w-3 h-3" /> Năm báo cáo
-                        </Label>
-                        <Select value={reportYear} onValueChange={setReportYear}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Chọn năm" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[2024, 2025, 2026, 2027, 2028].map(y => (
-                              <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+
 
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tất cả các tháng'}
                         </Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Select 
-                            value={reportMonth ? reportMonth.split('-')[0] : ''} 
-                            onValueChange={(val) => {
-                              const current = reportMonth || format(new Date(), 'yyyy-MM');
-                              const [currentY, m] = current.split('-');
-                              setReportMonth(`${val}-${m}`);
-                            }}
-                          >
-                            <SelectTrigger className="bg-white border-slate-200 shadow-sm h-10 w-[90px]">
-                              <SelectValue placeholder="Năm" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {[2024, 2025, 2026, 2027, 2028].map(y => (
-                                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Select 
-                            value={reportMonth ? reportMonth.split('-')[1] : ''} 
-                            onValueChange={(val) => {
-                              const current = reportMonth || format(new Date(), 'yyyy-MM');
-                              const [y, currentM] = current.split('-');
-                              setReportMonth(`${y}-${val}`);
-                            }}
-                          >
-                            <SelectTrigger className="bg-white border-slate-200 shadow-sm h-10 w-[110px]">
-                              <SelectValue placeholder="Tháng" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
-                                <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <Select 
+                          value={reportMonth ? reportMonth.split('-')[1] : ''} 
+                          onValueChange={(val) => {
+                            const current = reportMonth || format(new Date(), 'yyyy-MM');
+                            const [y] = current.split('-');
+                            setReportMonth(`${y}-${val}`);
+                          }}
+                        >
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10 w-full">
+                            <SelectValue placeholder="Chọn Tháng" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                              <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="space-y-2">
@@ -8713,39 +8891,7 @@ export default function App() {
                         </Select>
                       </div>
 
-                      {isAdmin && (
-                        <div className="space-y-2">
-                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                            <UserCircle className="w-3 h-3" /> Nhân viên
-                          </Label>
-                          <Select value={reportUser} onValueChange={setReportUser}>
-                            <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                              <SelectValue placeholder="Tất cả nhân viên" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="p-2 sticky top-0 bg-popover z-10 border-b">
-                                <div className="relative">
-                                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                  <Input
-                                    placeholder="Tìm nhân viên..."
-                                    className="pl-8 h-9"
-                                    value={reportUserSearch}
-                                    onChange={(e) => setReportUserSearch(e.target.value)}
-                                    onKeyDown={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </div>
-                              <SelectItem value="all">Tất cả nhân viên</SelectItem>
-                              {allUsers
-                                .filter(u => u.email.toLowerCase().includes(reportUserSearch.toLowerCase()) || (u.displayName || '').toLowerCase().includes(reportUserSearch.toLowerCase()))
-                                .map(u => (
-                                  <SelectItem key={u.id} value={u.email}>{u.fullName || u.email}</SelectItem>
-                                ))
-                              }
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
+
                     </div>
 
                     {/* Summary Cards - Viewable by all but tailored by role */}
@@ -8771,13 +8917,13 @@ export default function App() {
                       {/* 1. Tổng ngân sách */}
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách {chartTimeType === 'week' ? 'kỳ này (Ước tính)' : ''}</p>
                             <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
                               <Wallet className="w-3 h-3 text-blue-500" />
                             </span>
                           </div>
                           <p className="text-lg font-black text-slate-900 leading-normal">
-                            {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
+                            {(filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1)).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 w-full" />
@@ -8963,9 +9109,46 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
-                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                <Line 
+                                  yAxisId="left" 
+                                  type="monotone" 
+                                  dataKey="budget" 
+                                  name="Ngân sách" 
+                                  stroke="#0ea5e9" 
+                                  strokeWidth={2} 
+                                  strokeDasharray="5 5" 
+                                  dot={{ r: 3, fill: '#0ea5e9' }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportTeam(data.name);
+                                  }}
+                                />
+                                <Bar 
+                                  yAxisId="left" 
+                                  dataKey="actual" 
+                                  name="Chi phí" 
+                                  fill="#10b981" 
+                                  radius={[6, 6, 0, 0]} 
+                                  barSize={32} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportTeam(data.name);
+                                  }}
+                                />
+                                <Line 
+                                  yAxisId="right" 
+                                  type="monotone" 
+                                  dataKey="revenue" 
+                                  name="Doanh số" 
+                                  stroke="#8b5cf6" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2 }} 
+                                  activeDot={{ r: 6 }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportTeam(data.name);
+                                  }}
+                                />
                               </ComposedChart>
                             </ResponsiveContainer>
                           </div>
@@ -9009,9 +9192,46 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
-                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={24} />
-                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                <Line 
+                                  yAxisId="left" 
+                                  type="monotone" 
+                                  dataKey="budget" 
+                                  name="Ngân sách" 
+                                  stroke="#0ea5e9" 
+                                  strokeWidth={2} 
+                                  strokeDasharray="5 5" 
+                                  dot={{ r: 3, fill: '#0ea5e9' }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) setReportProject(data.id);
+                                  }}
+                                />
+                                <Bar 
+                                  yAxisId="left" 
+                                  dataKey="actual" 
+                                  name="Chi phí" 
+                                  fill="#8b5cf6" 
+                                  radius={[6, 6, 0, 0]} 
+                                  barSize={24} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) setReportProject(data.id);
+                                  }}
+                                />
+                                <Line 
+                                  yAxisId="right" 
+                                  type="monotone" 
+                                  dataKey="revenue" 
+                                  name="Doanh số" 
+                                  stroke="#f59e0b" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2 }} 
+                                  activeDot={{ r: 6 }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) setReportProject(data.id);
+                                  }}
+                                />
                               </ComposedChart>
                             </ResponsiveContainer>
                           </div>
@@ -9051,9 +9271,46 @@ export default function App() {
                                   iconType="circle" 
                                   wrapperStyle={{ paddingBottom: '30px', fontSize: '12px', fontWeight: 500 }} 
                                 />
-                                <Line yAxisId="left" type="monotone" dataKey="budget" name="Ngân sách" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: '#0ea5e9' }} />
-                                <Bar yAxisId="left" dataKey="actual" name="Chi phí" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={32} />
-                                <Line yAxisId="right" type="monotone" dataKey="revenue" name="Doanh số" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                <Line 
+                                  yAxisId="left" 
+                                  type="monotone" 
+                                  dataKey="budget" 
+                                  name="Ngân sách" 
+                                  stroke="#0ea5e9" 
+                                  strokeWidth={2} 
+                                  strokeDasharray="5 5" 
+                                  dot={{ r: 3, fill: '#0ea5e9' }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportRegion(data.name);
+                                  }}
+                                />
+                                <Bar 
+                                  yAxisId="left" 
+                                  dataKey="actual" 
+                                  name="Chi phí" 
+                                  fill="#ec4899" 
+                                  radius={[6, 6, 0, 0]} 
+                                  barSize={32} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportRegion(data.name);
+                                  }}
+                                />
+                                <Line 
+                                  yAxisId="right" 
+                                  type="monotone" 
+                                  dataKey="revenue" 
+                                  name="Doanh số" 
+                                  stroke="#3b82f6" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2 }} 
+                                  activeDot={{ r: 6 }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.name) setReportRegion(data.name);
+                                  }}
+                                />
                               </ComposedChart>
                             </ResponsiveContainer>
                           </div>
@@ -9192,7 +9449,7 @@ export default function App() {
                               <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
                                 <Wallet className="w-12 h-12 text-blue-600" />
                               </div>
-                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách</p>
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách {chartTimeType === 'week' ? 'kỳ này (Ước tính)' : ''}</p>
                               <p className="text-xl font-black text-blue-600 leading-normal break-all">
                                 {formatCurrency(efficiencyChartData.reduce((acc, curr) => acc + (curr.budget || 0), 0))}
                               </p>
@@ -9318,9 +9575,48 @@ export default function App() {
                                     />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
                                     <ChartTooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
-                                    <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Bar dataKey="cost" fill="#f87171" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Line type="monotone" dataKey="revenue" name="Doanh số" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                <Bar 
+                                  dataKey="budget" 
+                                  fill="#e2e8f0" 
+                                  radius={[4, 4, 0, 0]} 
+                                  barSize={20} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) {
+                                      if (efficiencyGroupType === 'project') setReportProject(data.id);
+                                      else setReportTeam(data.id);
+                                    }
+                                  }}
+                                />
+                                <Bar 
+                                  dataKey="cost" 
+                                  fill="#f87171" 
+                                  radius={[4, 4, 0, 0]} 
+                                  barSize={20} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) {
+                                      if (efficiencyGroupType === 'project') setReportProject(data.id);
+                                      else setReportTeam(data.id);
+                                    }
+                                  }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="revenue" 
+                                  name="Doanh số" 
+                                  stroke="#10b981" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#10b981', strokeWidth: 2 }} 
+                                  activeDot={{ r: 6 }} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) {
+                                      if (efficiencyGroupType === 'project') setReportProject(data.id);
+                                      else setReportTeam(data.id);
+                                    }
+                                  }}
+                                />
                                   </ComposedChart>
                                 </ResponsiveContainer>
                               </div>
@@ -9359,8 +9655,32 @@ export default function App() {
                                     />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
                                     <Tooltip cursor={{ fill: '#f8fafc' }} content={<EfficiencyDetailedTooltip />} />
-                                    <Bar dataKey="budget" fill="#e2e8f0" radius={[4, 4, 0, 0]} barSize={24} />
-                                    <Bar dataKey="cost" fill="#f87171" radius={[4, 4, 0, 0]} barSize={24} />
+                                <Bar 
+                                  dataKey="budget" 
+                                  fill="#e2e8f0" 
+                                  radius={[4, 4, 0, 0]} 
+                                  barSize={24} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) {
+                                      if (efficiencyGroupType === 'project') setReportProject(data.id);
+                                      else setReportTeam(data.id);
+                                    }
+                                  }}
+                                />
+                                <Bar 
+                                  dataKey="cost" 
+                                  fill="#f87171" 
+                                  radius={[4, 4, 0, 0]} 
+                                  barSize={24} 
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={(data) => {
+                                    if (data && data.id) {
+                                      if (efficiencyGroupType === 'project') setReportProject(data.id);
+                                      else setReportTeam(data.id);
+                                    }
+                                  }}
+                                />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -9442,7 +9762,14 @@ export default function App() {
                                         const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
                                         const isOverBudget = item.cost > item.budget;
                                         return (
-                                          <TableRow key={idx} className={`group transition-colors border-b-slate-50 ${isOverBudget ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-emerald-50/30'}`}>
+                                          <TableRow 
+                                            key={idx} 
+                                            className={`group transition-colors border-b-slate-50 cursor-pointer ${isOverBudget ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-emerald-50/30'}`}
+                                            onClick={() => {
+                                              if (efficiencyGroupType === 'project') setReportProject(item.id);
+                                              else setReportTeam(item.id);
+                                            }}
+                                          >
                                             <TableCell className="pl-8 py-4">
                                               <div className="flex items-center gap-3">
                                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
@@ -9454,7 +9781,7 @@ export default function App() {
                                                     {isOverBudget && (
                                                       <TooltipProvider>
                                                         <UITooltip>
-                                                          <TooltipTrigger>
+                                                          <TooltipTrigger nativeButton={false}>
                                                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
                                                           </TooltipTrigger>
                                                           <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
@@ -9563,7 +9890,14 @@ export default function App() {
                                       {noSalesData.map((item, idx) => {
                                         const isOverBudget = item.cost > item.budget;
                                         return (
-                                          <TableRow key={idx} className={`group transition-colors border-b-slate-50 ${isOverBudget ? 'bg-red-50/50 hover:bg-red-100/40' : 'hover:bg-red-50/30'}`}>
+                                          <TableRow 
+                                            key={idx} 
+                                            className={`group transition-colors border-b-slate-50 cursor-pointer ${isOverBudget ? 'bg-red-50/50 hover:bg-red-100/40' : 'hover:bg-red-50/30'}`}
+                                            onClick={() => {
+                                              if (efficiencyGroupType === 'project') setReportProject(item.id);
+                                              else setReportTeam(item.id);
+                                            }}
+                                          >
                                             <TableCell className="pl-8 py-4">
                                               <div className="flex items-center gap-3">
                                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-200 text-red-700' : 'bg-red-100 text-red-600'}`}>
@@ -9575,7 +9909,7 @@ export default function App() {
                                                     {isOverBudget && (
                                                       <TooltipProvider>
                                                         <UITooltip>
-                                                          <TooltipTrigger>
+                                                          <TooltipTrigger nativeButton={false}>
                                                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
                                                           </TooltipTrigger>
                                                           <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
@@ -9786,11 +10120,13 @@ export default function App() {
                           )}
                         </TableBody>
                         {filteredBudgets.length > 0 && (
-                          <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
+                          <TableFooter className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                             <TableRow>
-                              <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng ngân sách:</TableCell>
-                              <TableCell className="text-right font-mono text-indigo-600 font-black">
-                                {filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
+                              <TableCell colSpan={isAdmin ? 5 : 4} className="text-right py-4 text-slate-500 uppercase text-[10px] tracking-widest font-black">
+                                TỔNG CỘNG NGÂN SÁCH ĐĂNG KÝ {chartTimeType === 'week' ? '(ƯỚC TÍNH THEO KỲ)' : '(THÁNG)'}:
+                              </TableCell>
+                              <TableCell className="text-right py-4 font-black font-mono text-[13px] text-indigo-700">
+                                {formatCurrency(filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1))}
                               </TableCell>
                               <TableCell colSpan={isAdmin ? 2 : 1}></TableCell>
                             </TableRow>
@@ -9865,7 +10201,7 @@ export default function App() {
                                   {(u.role === 'mod' || u.role === 'gdda') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
-                                        <DialogTrigger render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
+                                        <DialogTrigger nativeButton={false} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
                                           Gán dự án ({u.assignedProjects?.length || 0})
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-[400px]">
@@ -11071,7 +11407,7 @@ export default function App() {
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
                           <Dialog open={isBudgetSelectionDialogOpen} onOpenChange={setIsBudgetSelectionDialogOpen}>
-                            <DialogTrigger render={
+                            <DialogTrigger nativeButton={false} render={
                               <Button 
                                 variant="outline" 
                                 className="w-full h-auto py-3 px-4 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 justify-start text-left focus:ring-green-500 rounded-xl transition-all"
@@ -12887,13 +13223,13 @@ const AcceptanceManager = React.memo(({
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
   const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [acceptanceToFinalize, setAcceptanceToFinalize] = useState<any>(null);
 
   // Form states (Local to this component to avoid App-wide lag)
   const [acceptanceMonth, setAcceptanceMonth] = useState('');
   const [acceptanceTeam, setAcceptanceTeam] = useState('');
   const [acceptanceProject, setAcceptanceProject] = useState('');
-  const [formTeamSearch, setFormTeamSearch] = useState('');
-  const [formProjectSearch, setFormProjectSearch] = useState('');
   
   // Dynamic line items (flat list)
   const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
@@ -13024,7 +13360,8 @@ const AcceptanceManager = React.memo(({
         (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
-      return matchesSearch && matchesMonth;
+      const isPending = a.status !== 'Đã nghiệm thu';
+      return matchesSearch && matchesMonth && isPending;
     });
   }, [acceptances, acceptanceSearch, acceptanceMonthFilter]);
 
@@ -13032,11 +13369,36 @@ const AcceptanceManager = React.memo(({
     return (finalAcceptances || []).filter((a: any) => {
       const matchesSearch = 
         (a.projectName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
-        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
+        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
+        (a.teamCode || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       return matchesSearch && matchesMonth;
     });
   }, [finalAcceptances, acceptanceSearch, acceptanceMonthFilter]);
+
+  const pendingTotals = useMemo(() => {
+    return filteredAcceptances.reduce((acc, a) => ({
+      total: acc.total + (a.totalCost || 0),
+      after: acc.after + (a.afterAcceptanceCost || 0),
+      fb: acc.fb + (a.facebookCost || 0),
+      zalo: acc.zalo + (a.zaloCost || 0),
+      google: acc.google + (a.googleCost || 0),
+      posting: acc.posting + (a.postingCost || 0),
+      other: acc.other + (a.otherCost + a.visaCost + a.digitalCost || 0)
+    }), { total: 0, after: 0, fb: 0, zalo: 0, google: 0, posting: 0, other: 0 });
+  }, [filteredAcceptances]);
+
+  const finalizedTotals = useMemo(() => {
+    return filteredFinalAcceptances.reduce((acc, a) => ({
+      total: acc.total + (a.beforeAcceptanceCost || 0),
+      after: acc.after + (a.totalActualCost || 0),
+      fb: acc.fb + (a.facebookCost || 0),
+      zalo: acc.zalo + (a.zaloCost || 0),
+      google: acc.google + (a.googleCost || 0),
+      posting: acc.posting + (a.postingCost || 0),
+      other: acc.other + (a.otherCost + a.visaCost + a.digitalCost || 0)
+    }), { total: 0, after: 0, fb: 0, zalo: 0, google: 0, posting: 0, other: 0 });
+  }, [filteredFinalAcceptances]);
 
   const handleAddAcceptance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -13189,12 +13551,12 @@ const AcceptanceManager = React.memo(({
     }
   };
 
-  const handleCompleteAcceptance = async (acc: any) => {
-    if (!window.confirm('Xác nhận hoàn thành nghiệm thu bản ghi này và lưu kết quả thực tế?')) return;
+  const handleFinalizeAcceptance = async (acc: any) => {
+    if (!acc) return;
     
-    const toastId = toast.loading('Đang xử lý hoàn thành nghiệm thu...');
+    setIsFinalizing(acc.id);
+    const toastId = toast.loading('Đàng xử lý chốt số liệu quyết toán...');
     try {
-      // Ensure we have a breakdown object
       const breakdown = acc.breakdown || {};
       
       const finalPayload = {
@@ -13202,30 +13564,47 @@ const AcceptanceManager = React.memo(({
         month: acc.month || '',
         teamId: acc.teamId || '',
         teamName: acc.teamName || '',
+        teamCode: acc.teamCode || '',
         projectId: acc.projectId || '',
         projectName: acc.projectName || '',
+        projectCode: acc.projectCode || '',
+        facebookCost: acc.facebookCost || 0,
+        zaloCost: acc.zaloCost || 0,
+        googleCost: acc.googleCost || 0,
+        postingCost: acc.postingCost || 0,
+        otherCost: acc.otherCost || 0,
+        visaCost: acc.visaCost || 0,
+        digitalCost: acc.digitalCost || 0,
         breakdown: breakdown,
         totalActualCost: acc.afterAcceptanceCost || 0,
-        acceptedAt: serverTimestamp(),
-        acceptedBy: user?.email || '',
-        acceptedByUid: user?.uid || ''
+        beforeAcceptanceCost: acc.beforeAcceptanceCost || 0,
+        finalizedAt: serverTimestamp(),
+        finalizedBy: user?.email || '',
+        finalizedByUid: user?.uid || '',
+        status: 'Đã nghiệm thu'
       };
       
+      // 1. Add to finalAcceptances
       await addDoc(collection(db, 'finalAcceptances'), finalPayload);
       
+      // 2. Mark original as finalized
       await updateDoc(doc(db, 'acceptances', acc.id), {
         status: 'Đã nghiệm thu',
+        finalizedAt: serverTimestamp(),
+        finalizedBy: user?.email || '',
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
         updatedByUid: user?.uid || ''
       });
       
-      toast.success('Đã hoàn thành nghiệm thu thành công!', { id: toastId });
+      toast.success('Đã chốt số liệu và quyết toán thành công!', { id: toastId });
       setExpandingAcceptance(null);
     } catch (error: any) {
-      console.error("Complete acceptance error:", error);
+      console.error("Finalize error:", error);
       handleFirestoreError(error, OperationType.WRITE, 'finalAcceptances');
-      toast.error('Lỗi khi hoàn thành nghiệm thu. Vui lòng thử lại.', { id: toastId });
+      toast.error('Lỗi khi chốt số liệu. Vui lòng thử lại.', { id: toastId });
+    } finally {
+      setIsFinalizing(null);
     }
   };
 
@@ -13289,55 +13668,21 @@ const AcceptanceManager = React.memo(({
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Đội (Team)</Label>
-                    <Select value={acceptanceTeam} onValueChange={setAcceptanceTeam}>
-                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
-                        <SelectValue placeholder="Chọn đội...">
-                          {acceptanceTeam ? `${teamMap[acceptanceTeam] || acceptanceTeam} (${teams.find((t: any) => t.id === acceptanceTeam)?.teamCode || ''})` : "Chọn đội..."}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
-                          <Input 
-                            placeholder="Tìm đội..." 
-                            className="h-8 text-xs font-bold bg-slate-50 border-none"
-                            value={formTeamSearch}
-                            onChange={e => setFormTeamSearch(e.target.value)}
-                            onKeyDown={e => e.stopPropagation()}
-                          />
-                        </div>
-                        {teams
-                          .filter((t: any) => (t.name || '').toLowerCase().includes(formTeamSearch.toLowerCase()) || (t.teamCode || '').toLowerCase().includes(formTeamSearch.toLowerCase()))
-                          .map((team: any) => (
-                            <SelectItem key={team.id} value={team.id}>{team.name} ({team.teamCode})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableAcceptanceTeamSelect 
+                      value={acceptanceTeam} 
+                      onValueChange={setAcceptanceTeam} 
+                      teams={teams} 
+                      teamMap={teamMap} 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dự án (Project)</Label>
-                    <Select value={acceptanceProject} onValueChange={setAcceptanceProject}>
-                      <SelectTrigger className="h-11 bg-slate-50 border-none rounded-xl font-bold">
-                        <SelectValue placeholder="Chọn dự án...">
-                          {acceptanceProject ? `${projectMap[acceptanceProject] || acceptanceProject} (${projects.find((p: any) => p.id === acceptanceProject)?.projectCode || ''})` : "Chọn dự án..."}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2 sticky top-0 bg-white z-10 border-b">
-                          <Input 
-                            placeholder="Tìm dự án..." 
-                            className="h-8 text-xs font-bold bg-slate-50 border-none"
-                            value={formProjectSearch}
-                            onChange={e => setFormProjectSearch(e.target.value)}
-                            onKeyDown={e => e.stopPropagation()}
-                          />
-                        </div>
-                        {projects
-                          .filter((p: any) => (p.name || '').toLowerCase().includes(formProjectSearch.toLowerCase()) || (p.projectCode || '').toLowerCase().includes(formProjectSearch.toLowerCase()))
-                          .map((p: any) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableAcceptanceProjectSelect 
+                      value={acceptanceProject} 
+                      onValueChange={setAcceptanceProject} 
+                      projects={projects} 
+                      projectMap={projectMap} 
+                    />
                   </div>
                 </div>
 
@@ -13526,20 +13871,20 @@ const AcceptanceManager = React.memo(({
                   )}
                   <div className="flex bg-slate-100 p-1 rounded-xl">
                     <Button 
-                      variant={acceptanceListView === 'pending' ? "white" : "ghost"} 
+                      variant="ghost" 
                       size="sm"
                       className={`text-[10px] font-black uppercase h-8 rounded-lg px-4 ${acceptanceListView === 'pending' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
                       onClick={() => setAcceptanceListView('pending')}
                     >
-                      Đang duyệt
+                      Chưa nghiệm thu
                     </Button>
                     <Button 
-                      variant={acceptanceListView === 'finalized' ? "white" : "ghost"} 
+                      variant="ghost" 
                       size="sm"
                       className={`text-[10px] font-black uppercase h-8 rounded-lg px-4 ${acceptanceListView === 'finalized' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'}`}
                       onClick={() => setAcceptanceListView('finalized')}
                     >
-                      Đã quyết toán
+                      Đã nghiệm thu
                     </Button>
                   </div>
                 </div>
@@ -13838,10 +14183,13 @@ const AcceptanceManager = React.memo(({
                                    <Button 
                                       className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 transition-all gap-2"
                                       disabled={isFinalizing === a.id}
-                                      onClick={() => handleFinalizeAcceptance(a)}
+                                      onClick={() => {
+                                        setAcceptanceToFinalize(a);
+                                        setIsFinalizeDialogOpen(true);
+                                      }}
                                    >
                                       {isFinalizing === a.id ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                                      CHỐT SỐ LIỆU & QUYẾT TOÁN
+                                      Chốt số liệu
                                    </Button>
                                    <p className="text-[9px] text-center text-slate-400 font-bold px-4 italic leading-relaxed uppercase tracking-tighter">
                                      Hành động này sẽ đóng bảng nghiệm thu tháng này và chuyển dữ liệu sang báo cáo thực tế chính thức
@@ -13854,6 +14202,21 @@ const AcceptanceManager = React.memo(({
                       )}
                     </React.Fragment>
                   ))}
+                  {filteredAcceptances.length > 0 && (
+                    <TableRow className="bg-slate-50/50 border-t-2 border-slate-100">
+                      <TableCell colSpan={(isAdmin || isSuperAdmin) ? 3 : 2} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.fb)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.zalo)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.google)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.posting)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.other)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-slate-400">{formatCurrency(pendingTotals.total)}</TableCell>
+                      <TableCell className="text-right bg-emerald-50/30">
+                        <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(pendingTotals.after)}</p>
+                      </TableCell>
+                      <TableCell colSpan={2}></TableCell>
+                    </TableRow>
+                  )}
                   {filteredAcceptances.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={(isAdmin || isSuperAdmin) ? 12 : 11} className="h-40 text-center text-slate-300 italic">
@@ -13879,7 +14242,7 @@ const AcceptanceManager = React.memo(({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAcceptances.map((a: any, index: number) => (
+                  {filteredFinalAcceptances.map((a: any, index: number) => (
                     <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
                       <TableCell>
@@ -13891,27 +14254,63 @@ const AcceptanceManager = React.memo(({
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost + a.visaCost + a.digitalCost)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency((a.otherCost || 0) + (a.visaCost || 0) + (a.digitalCost || 0))}</TableCell>
                       <TableCell className="text-right bg-emerald-50/30">
-                        <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(a.afterAcceptanceCost)}</p>
+                        <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(a.totalActualCost)}</p>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none bg-emerald-100 text-emerald-700">
                           {a.status}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {a.finalizedAt ? format(a.finalizedAt.toDate ? a.finalizedAt.toDate() : new Date(a.finalizedAt), 'dd/MM/yyyy HH:mm') : '-'}
+                          </span>
+                          {a.finalizedBy && (
+                            <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[100px]">
+                              {a.finalizedBy.split('@')[0]}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right pr-4">
-                        <span className="text-[10px] font-bold text-slate-500">
-                          {a.finalizedAt ? format(new Date(a.finalizedAt), 'dd/MM/yyyy HH:mm') : '-'}
-                        </span>
+                        {(isAdmin || isSuperAdmin) && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors rounded-full"
+                            onClick={() => {
+                              setFinalAcceptanceToDelete(a.id);
+                              setIsDeleteFinalDialogOpen(true);
+                             }}
+                           >
+                             <Trash2 className="h-3.5 w-3.5" />
+                           </Button>
+                         )}
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredAcceptances.length === 0 && (
+                  {filteredFinalAcceptances.length > 0 && (
+                    <TableRow className="bg-emerald-50/20 border-t-2 border-emerald-100">
+                      <TableCell colSpan={2} className="text-right font-black text-[10px] text-emerald-600 uppercase tracking-wider">TỔNG CỘNG</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.fb)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.zalo)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.google)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.posting)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.other)}</TableCell>
+                      <TableCell className="text-right bg-emerald-100/30">
+                        <p className="font-mono text-xs font-black text-emerald-800">{formatCurrency(finalizedTotals.after)}</p>
+                      </TableCell>
+                      <TableCell colSpan={3}></TableCell>
+                    </TableRow>
+                  )}
+                  {filteredFinalAcceptances.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={10} className="h-40 text-center text-slate-300 italic">
                         Chưa có dữ liệu đã quyết toán
@@ -13947,9 +14346,106 @@ const AcceptanceManager = React.memo(({
               </Button>
               <Button 
                 className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
-                onClick={handleDeleteAcceptance}
+                onClick={() => acceptanceToDelete && handleDeleteAcceptance(acceptanceToDelete)}
               >
                 Xác nhận xóa
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+              <AlertTriangle className="w-8 h-8 text-rose-500" />
+            </div>
+            <div className="space-y-2 text-center">
+              <h3 className="text-xl font-black text-slate-900 leading-none">Xóa hàng loạt?</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
+                Bạn đang chuẩn bị xóa <span className="text-rose-600 font-black">{selectedAcceptanceIds.length}</span> bản ghi đã chọn. Hành động này không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
+                onClick={() => setIsBulkDeleteDialogOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
+                onClick={handleBulkDeleteAcceptances}
+              >
+                Xác nhận xóa
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isDeleteFinalDialogOpen} onOpenChange={setIsDeleteFinalDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+              <AlertTriangle className="w-8 h-8 text-rose-500" />
+            </div>
+            <div className="space-y-2 text-center">
+              <h3 className="text-xl font-black text-slate-900 leading-none">Xóa bản ghi đã chốt?</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
+                Bản ghi này đã được quyết toán. Việc xóa sẽ làm mất dấu vết lịch sử tài chính. Bạn có chắc chắn?
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
+                onClick={() => setIsDeleteFinalDialogOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
+                onClick={() => finalAcceptanceToDelete && handleDeleteFinalAcceptance(finalAcceptanceToDelete)}
+              >
+                Xác nhận xóa
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-emerald-50/30">
+              <ShieldCheck className="w-8 h-8 text-emerald-500" />
+            </div>
+            <div className="space-y-2 text-center">
+              <h3 className="text-xl font-black text-slate-900 leading-none">Chốt số liệu?</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
+                Hành động này sẽ <span className="text-emerald-600 font-black uppercase">CHỐT</span> số liệu quyết toán và không thể thay đổi sau đó. Bản ghi sẽ được chuyển sang báo cáo thực tế chính thức.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
+                onClick={() => setIsFinalizeDialogOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black tracking-wide shadow-lg shadow-emerald-200"
+                onClick={() => {
+                  if (acceptanceToFinalize) {
+                    handleFinalizeAcceptance(acceptanceToFinalize);
+                    setIsFinalizeDialogOpen(false);
+                    setAcceptanceToFinalize(null);
+                  }
+                }}
+              >
+                Xác nhận chốt
               </Button>
             </div>
           </div>

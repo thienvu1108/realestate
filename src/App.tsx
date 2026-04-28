@@ -1,4 +1,49 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+
+// Component Input có debounce để tránh re-render toàn bộ app khi gõ phím
+const DebouncedInput = memo(({ 
+  value: initialValue, 
+  onChange, 
+  debounce = 300, 
+  ...props 
+}: { 
+  value: string; 
+  onChange: (value: string) => void; 
+  debounce?: number; 
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'>) => {
+  const [value, setValue] = useState(initialValue);
+
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      onChange(value);
+    }, debounce);
+
+    return () => clearTimeout(timeout);
+  }, [value, debounce, onChange]);
+
+  return (
+    <Input 
+      {...props} 
+      value={value} 
+      onChange={e => setValue(e.target.value)} 
+    />
+  );
+});
 
 // Optimized searchable components for reports to prevent whole-app re-renders on every keystroke
 const SearchableSelectGeneric = memo(({ 
@@ -22,27 +67,27 @@ const SearchableSelectGeneric = memo(({
 
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className={triggerClassName}>
+      <SelectTrigger className={`w-full overflow-hidden flex items-center justify-between ${triggerClassName}`}>
         <SelectValue placeholder={placeholder}>
-          {triggerDisplay || placeholder}
+          <span className="truncate block text-left flex-1">{triggerDisplay || placeholder}</span>
         </SelectValue>
       </SelectTrigger>
       <SelectContent className={selectContentClassName}>
         <div className="p-2 sticky top-0 bg-popover z-10 border-b">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
+            <DebouncedInput
               placeholder={searchPlaceholder}
               className="pl-8 h-9"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
               onKeyDown={(e) => e.stopPropagation()}
             />
           </div>
         </div>
         {filteredItems.map((item: any) => renderItem ? renderItem(item) : (
           <SelectItem key={item.value} value={item.value}>
-            {item.label}
+            <span className="truncate">{item.label}</span>
           </SelectItem>
         ))}
         {filteredItems.length === 0 && (
@@ -50,6 +95,50 @@ const SearchableSelectGeneric = memo(({
         )}
       </SelectContent>
     </Select>
+  );
+});
+
+const SearchableRegionSelect = memo(({ value, onValueChange, regions }: any) => {
+  const items = useMemo(() => {
+    const list = [{ value: 'all', label: 'Tất cả miền', searchString: 'tất cả miền all' }];
+    regions.forEach((r: string) => {
+      list.push({ value: r, label: r, searchString: r.toLowerCase() });
+    });
+    return list;
+  }, [regions]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Tất cả miền"
+      searchPlaceholder="Tìm miền..."
+      triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
+      triggerDisplay={value === 'all' ? "Tất cả miền" : value}
+    />
+  );
+});
+
+const SearchableTypeSelect = memo(({ value, onValueChange, types }: any) => {
+  const items = useMemo(() => {
+    const list = [{ value: 'all', label: 'Tất cả loại hình', searchString: 'tất cả loại hình all' }];
+    types.forEach((t: string) => {
+      list.push({ value: t, label: t, searchString: t.toLowerCase() });
+    });
+    return list;
+  }, [types]);
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Tất cả loại hình"
+      searchPlaceholder="Tìm loại hình..."
+      triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
+      triggerDisplay={value === 'all' ? "Tất cả loại hình" : value}
+    />
   );
 });
 
@@ -227,7 +316,7 @@ import {
   arrayUnion
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -244,13 +333,14 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { format, getWeek } from 'date-fns';
 import { 
   BarChart, 
+  LineChart,
   Bar, 
   Line,
   ComposedChart,
@@ -364,6 +454,11 @@ export default function App() {
       });
     }
     return options;
+  };
+
+  const getChartColor = (index: number) => {
+    const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+    return colors[index % colors.length];
   };
 
   const formatCurrency = (value: number) => {
@@ -744,7 +839,7 @@ export default function App() {
   const [reportTeam, setReportTeam] = useState('all');
   const [reportRegion, setReportRegion] = useState('all');
   const [reportType, setReportType] = useState('all');
-  const [reportMonth, setReportMonth] = useState(getMarketingMonth(new Date()));
+  const [reportMonths, setReportMonths] = useState<string[]>([getMarketingMonth(new Date())]);
   const [reportWeek, setReportWeek] = useState('all');
   const [costPeriod, setCostPeriod] = useState('1');
   const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
@@ -5362,7 +5457,7 @@ export default function App() {
       const matchProject = reportProject === 'all' || b.projectId === reportProject;
       const bTeamName = teamMap[b.teamId] || b.teamName;
       const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
-      const matchMonth = b.month === reportMonth;
+      const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
       
@@ -5375,7 +5470,7 @@ export default function App() {
       if (budgetReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
       return 0;
     });
-  }, [budgets, reportProject, reportTeam, reportMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, budgetReportSort]);
+  }, [budgets, reportProject, reportTeam, reportMonths, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, budgetReportSort]);
 
   const filteredCosts = useMemo(() => {
     return costs.filter(c => {
@@ -5398,7 +5493,7 @@ export default function App() {
       
       // Map cost date to marketing month
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      const matchMonth = mMonth === reportMonth;
+      const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
       const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
       const matchType = reportType === 'all' || (project?.type === reportType);
       const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
@@ -5413,7 +5508,7 @@ export default function App() {
       if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
       return 0;
     });
-  }, [costs, reportProject, reportTeam, reportMonth, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, costReportSort]);
+  }, [costs, reportProject, reportTeam, reportMonths, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, costReportSort]);
 
   const adminFilteredBudgets = useMemo(() => {
     return budgets.filter(b => {
@@ -5513,7 +5608,7 @@ export default function App() {
       const teamBudgets = budgets.filter(b => {
         const project = projects.find(p => p.id === b.projectId);
         const matchProject = reportProject === 'all' || b.projectId === reportProject;
-        const matchMonth = b.month === reportMonth;
+        const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
         const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
         const matchType = reportType === 'all' || (project?.type === reportType);
         const bTeamName = teamMap[b.teamId] || b.teamName;
@@ -5527,7 +5622,7 @@ export default function App() {
         const project = projects.find(p => p.id === c.projectId);
         const matchProject = reportProject === 'all' || c.projectId === reportProject;
         const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth === reportMonth;
+        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
         const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
         const matchType = reportType === 'all' || (project?.type === reportType);
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
@@ -5543,7 +5638,7 @@ export default function App() {
           const project = projects.find(proj => proj.id === c.projectId);
           const matchProject = c.projectId === p.id;
           const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-          const matchMonth = mMonth === reportMonth;
+          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
           const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
           const matchType = reportType === 'all' || (project?.type === reportType);
           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
@@ -5560,7 +5655,7 @@ export default function App() {
         }
 
         let pRevenue = efficiencyReports
-          .filter(r => r.projectId === p.id && (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth))
+          .filter(r => r.projectId === p.id && (teamMap[r.teamId] === team || r.teamName === team) && (reportMonths.length === 0 || reportMonths.includes(r.month)))
           .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
         if (chartTimeType === 'week' && reportWeek !== 'all') {
@@ -5577,7 +5672,7 @@ export default function App() {
         .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
       let teamRevenue = efficiencyReports
-        .filter(r => (teamMap[r.teamId] === team || r.teamName === team) && (reportMonth === 'all' || r.month === reportMonth) && (reportProject === 'all' || r.projectId === reportProject))
+        .filter(r => (teamMap[r.teamId] === team || r.teamName === team) && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportProject === 'all' || r.projectId === reportProject))
         .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
       if (chartTimeType === 'week' && reportWeek !== 'all') {
@@ -5594,7 +5689,7 @@ export default function App() {
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
-  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonth, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
+  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonths, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const efficiencyChartData = useMemo(() => {
     // rawData structure: rawData[mainKey][detailKey] = { budget, cost, revenue, sales }
@@ -5609,7 +5704,7 @@ export default function App() {
 
     // Budgets - Normalize by period
     budgets.forEach(b => {
-      if (reportMonth && reportMonth !== 'all' && b.month !== reportMonth) return;
+      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
       if (reportProject !== 'all' && b.projectId !== reportProject) return;
       const bTeamName = teamMap[b.teamId] || b.teamName;
       if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
@@ -5635,7 +5730,7 @@ export default function App() {
     // Costs - Filter by week if needed
     costs.forEach(c => {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (reportMonth && reportMonth !== 'all' && mMonth !== reportMonth) return;
+      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
       if (reportProject !== 'all' && c.projectId !== reportProject) return;
       const cTeamName = teamMap[c.teamId] || c.teamName;
       if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
@@ -5655,7 +5750,7 @@ export default function App() {
 
     // Efficiency Reports - Note: Revenue is monthly in this app's current schema
     efficiencyReports.forEach(r => {
-      if (reportMonth && reportMonth !== 'all' && r.month !== reportMonth) return;
+      if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
       const currentTeamName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
@@ -5711,7 +5806,7 @@ export default function App() {
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     });
-  }, [efficiencyReports, costs, budgets, reportMonth, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
+  }, [efficiencyReports, costs, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
   const overBudgetStats = useMemo(() => {
     const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
@@ -5809,23 +5904,23 @@ export default function App() {
 
   const projectChartData = useMemo(() => {
     const projectIds = Array.from(new Set([
-      ...budgets.filter(b => b.month === reportMonth).map(b => b.projectId),
+      ...budgets.filter(b => reportMonths.length === 0 || reportMonths.includes(b.month)).map(b => b.projectId),
       ...costs.filter(c => {
         const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        return mMonth === reportMonth;
+        return mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
       }).map(c => c.projectId)
     ]));
 
     return projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
       const projectName = projectMap[id] || 'N/A';
-      const projectBudgets = budgets.filter(b => b.projectId === id && b.month === reportMonth);
+      const projectBudgets = budgets.filter(b => b.projectId === id && (reportMonths.length === 0 || reportMonths.includes(b.month)));
       
       let totalBudget = projectBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
       if (chartTimeType === 'week' && reportWeek !== 'all') totalBudget = totalBudget / 4;
 
       let totalCost = costs.filter(c => {
         const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth === reportMonth;
+        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
         return c.projectId === id && matchMonth && matchWeek;
       }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
@@ -5835,7 +5930,7 @@ export default function App() {
         const tBudgets = projectBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === teamName);
         const tCosts = costs.filter(c => {
           const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-          const matchMonth = mMonth === reportMonth;
+          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
           const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
           const cTeamName = teamMap[c.teamId] || c.teamName;
           return c.projectId === id && cTeamName === teamName && matchMonth && matchWeek;
@@ -5849,7 +5944,7 @@ export default function App() {
         }
 
         let tRevenue = efficiencyReports
-          .filter(r => r.projectId === id && (teamMap[r.teamId] || r.teamName) === teamName && (reportMonth === 'all' || r.month === reportMonth))
+          .filter(r => r.projectId === id && (teamMap[r.teamId] || r.teamName) === teamName && (reportMonths.length === 0 || reportMonths.includes(r.month)))
           .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
         
         if (chartTimeType === 'week' && reportWeek !== 'all') {
@@ -5866,7 +5961,7 @@ export default function App() {
         .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
       let projectRevenue = efficiencyReports
-        .filter(r => r.projectId === id && (reportMonth === 'all' || r.month === reportMonth) && (reportTeam === 'all' || (teamMap[r.teamId] || r.teamName) === reportTeam))
+        .filter(r => r.projectId === id && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportTeam === 'all' || (teamMap[r.teamId] || r.teamName) === reportTeam))
         .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
       if (chartTimeType === 'week' && reportWeek !== 'all') {
@@ -5884,7 +5979,7 @@ export default function App() {
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-  }, [budgets, costs, projectMap, reportMonth, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, uniqueTeams, teamMap, efficiencyReports]);
+  }, [budgets, costs, projectMap, reportMonths, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, uniqueTeams, teamMap, efficiencyReports]);
 
   const regionMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -5912,7 +6007,7 @@ export default function App() {
       const hasAccess = isAdmin || isMod || (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) || (isOwner || isAssigned);
       if (!hasAccess) return;
 
-      if (reportMonth && reportMonth !== 'all' && b.month !== reportMonth) return;
+      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
       if (reportProject !== 'all' && b.projectId !== reportProject) return;
       const bTeamName = teamMap[b.teamId] || b.teamName;
       if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
@@ -5938,7 +6033,7 @@ export default function App() {
       if (!hasAccess) return;
 
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (reportMonth && reportMonth !== 'all' && mMonth !== reportMonth) return;
+      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
       if (reportProject !== 'all' && c.projectId !== reportProject) return;
       const cTeamName = teamMap[c.teamId] || c.teamName;
       if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
@@ -5955,7 +6050,7 @@ export default function App() {
       const project = projects.find(p => p.id === r.projectId);
       const rName = project?.region || 'Chưa xác định';
 
-      if (reportMonth && reportMonth !== 'all' && r.month !== reportMonth) return;
+      if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
       const tName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && tName !== reportTeam) return;
@@ -5974,7 +6069,52 @@ export default function App() {
       ...rawData[name]
     })).filter(d => reportRegion === 'all' || d.name === reportRegion)
       .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-  }, [regions, uniqueRegions, budgets, costs, efficiencyReports, projects, reportMonth, reportProject, reportTeam, reportRegion, teamMap, chartTimeType, reportWeek, isAdmin, isMod, isGDDA, user, userProfile, reportSortBy, getMarketingMonth]);
+  }, [regions, uniqueRegions, budgets, costs, efficiencyReports, projects, reportMonths, reportProject, reportTeam, reportRegion, teamMap, chartTimeType, reportWeek, isAdmin, isMod, isGDDA, user, userProfile, reportSortBy, getMarketingMonth]);
+
+  const comparisonChartData = useMemo(() => {
+    if (reportMonths.length === 0) return [];
+
+    const categories = efficiencyGroupType === 'team' ? uniqueTeams : Array.from(new Set(projects.map(p => p.id)));
+    
+    return categories.map(catId => {
+      const name = efficiencyGroupType === 'team' ? catId : projectMap[catId] || 'N/A';
+      const row: any = { name };
+
+      reportMonths.forEach(month => {
+        let value = 0;
+        if (reportSortBy === 'budget') {
+          const mBudgets = budgets.filter(b => {
+            const matchCat = efficiencyGroupType === 'team' ? (teamMap[b.teamId] || b.teamName) === catId : b.projectId === catId;
+            return b.month === month && matchCat;
+          });
+          value = mBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        } else if (reportSortBy === 'actual') {
+          const mCosts = costs.filter(c => {
+             const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+             const matchCat = efficiencyGroupType === 'team' ? (teamMap[c.teamId] || c.teamName) === catId : c.projectId === catId;
+             return mMonth === month && matchCat;
+          });
+          value = mCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        } else if (reportSortBy === 'revenue') {
+          const mRevs = efficiencyReports.filter(r => {
+             const matchCat = efficiencyGroupType === 'team' ? (teamMap[r.teamId] || r.teamName) === catId : r.projectId === catId;
+             return r.month === month && matchCat;
+          });
+          value = mRevs.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+        }
+        row[month] = value;
+      });
+
+      return row;
+    }).filter(row => {
+      // Only show rows that have at least one value > 0 across selected months
+      return reportMonths.some(m => row[m] > 0);
+    }).sort((a, b) => {
+      // Sort by the first selected month's value
+      const primaryMonth = reportMonths[0];
+      return (b[primaryMonth] || 0) - (a[primaryMonth] || 0);
+    });
+  }, [reportMonths, efficiencyGroupType, uniqueTeams, projects, budgets, costs, efficiencyReports, projectMap, teamMap, reportSortBy, getMarketingMonth]);
 
   const reportTableData = useMemo(() => {
     // 1. Process Teams group
@@ -6703,150 +6843,201 @@ export default function App() {
             <TabsContent value="admin" className="space-y-8">
               <div className="flex flex-col lg:flex-row gap-8">
                 {/* Admin Sidebar-like Navigation */}
-                <aside className="lg:w-64 space-y-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scroll-hide">
-                  <div className="flex lg:flex-col gap-2 min-w-max lg:min-w-0">
-                    <div className="px-3 py-2 lg:block hidden">
-                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Hệ thống</h2>
-                    </div>
-                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
+                <aside className="lg:w-72 space-y-6 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scroll-hide scrollbar-hide">
+                  <div className="flex lg:flex-col gap-6 min-w-max lg:min-w-0">
+                    
+                    {/* Category: Phân tích & Báo cáo */}
+                    <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
+                      <div className="px-4 py-2 lg:block hidden">
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Phân tích & Thống kê</h2>
+                      </div>
                       <Button 
                         variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
-                        className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'reports' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                        className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                          adminSubTab === 'reports' 
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                            : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                        }`}
                         onClick={() => setAdminSubTab('reports')}
                       >
-                        <BarChart3 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'reports' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                        <span className="text-xs lg:text-sm">Báo cáo</span>
+                        <BarChart3 className={`mr-3 h-4 w-4 ${adminSubTab === 'reports' ? 'text-white' : 'text-blue-500'}`} />
+                        <span className="text-sm">Báo cáo chuyên sâu</span>
                       </Button>
-                      {(isAdmin || isMod) && (
-                        <>
-                          <Button 
-                            variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'projects' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('projects')}
-                          >
-                            <Building2 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'projects' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Dự án</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'regions' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('regions')}
-                          >
-                            <Map className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'regions' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Vùng</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'types' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('types')}
-                          >
-                            <Layers className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'types' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Loại hình</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'teams' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('teams')}
-                          >
-                            <Users className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'teams' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Team</span>
-                          </Button>
-                        </>
-                      )}
                     </div>
-                  </div>
 
-                  <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
-                    <div className="px-3 py-2 lg:block hidden">
-                      <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Dữ liệu</h2>
-                    </div>
-                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0">
+                    {/* Category: Quản lý Dữ liệu gốc */}
+                    {(isAdmin || isMod) && (
+                      <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
+                        <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
+                          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Dữ liệu nền tảng</h2>
+                        </div>
+                        <Button 
+                          variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'projects' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('projects')}
+                        >
+                          <Building2 className={`mr-3 h-4 w-4 ${adminSubTab === 'projects' ? 'text-white' : 'text-indigo-500'}`} />
+                          <span className="text-sm">Danh mục Dự án</span>
+                        </Button>
+                        <Button 
+                          variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'regions' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('regions')}
+                        >
+                          <Map className={`mr-3 h-4 w-4 ${adminSubTab === 'regions' ? 'text-white' : 'text-emerald-500'}`} />
+                          <span className="text-sm">Vùng miền</span>
+                        </Button>
+                        <Button 
+                          variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'types' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('types')}
+                        >
+                          <Layers className={`mr-3 h-4 w-4 ${adminSubTab === 'types' ? 'text-white' : 'text-amber-500'}`} />
+                          <span className="text-sm">Loại hình</span>
+                        </Button>
+                        <Button 
+                          variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'teams' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('teams')}
+                        >
+                          <Users className={`mr-3 h-4 w-4 ${adminSubTab === 'teams' ? 'text-white' : 'text-purple-500'}`} />
+                          <span className="text-sm">Đội nhóm (Teams)</span>
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Category: Vận hành & Chi phí */}
+                    <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
+                      <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Vận hành & Tài chính</h2>
+                      </div>
                       {(isAdmin || isMod) && (
                         <>
                           <Button 
                             variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'budgets' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                              adminSubTab === 'budgets' 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                            }`}
                             onClick={() => setAdminSubTab('budgets')}
                           >
-                            <Wallet className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'budgets' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Ngân sách</span>
+                            <Wallet className={`mr-3 h-4 w-4 ${adminSubTab === 'budgets' ? 'text-white' : 'text-cyan-500'}`} />
+                            <span className="text-sm">Quản lý Ngân sách</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'costs' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                              adminSubTab === 'costs' 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                            }`}
                             onClick={() => setAdminSubTab('costs')}
                           >
-                            <TrendingUp className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'costs' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Chi phí</span>
+                            <TrendingUp className={`mr-3 h-4 w-4 ${adminSubTab === 'costs' ? 'text-white' : 'text-rose-500'}`} />
+                            <span className="text-sm">Thực chi Marketing</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'efficiency' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                              adminSubTab === 'efficiency' 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                            }`}
                             onClick={() => setAdminSubTab('efficiency')}
                           >
-                            <BarChart3 className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'efficiency' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Hiệu quả</span>
+                            <Target className={`mr-3 h-4 w-4 ${adminSubTab === 'efficiency' ? 'text-white' : 'text-orange-500'}`} />
+                            <span className="text-sm">Hiệu quả Kinh doanh</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'acceptance' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                              adminSubTab === 'acceptance' 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                            }`}
                             onClick={() => setAdminSubTab('acceptance')}
                           >
-                            <Check className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'acceptance' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Nghiệm thu</span>
-                          </Button>
-                        </>
-                      )}
-                      {isAdmin && (
-                        <>
-                          <Button 
-                            variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'users' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('users')}
-                          >
-                            <UserCircle className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'users' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">User</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'settings' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('settings')}
-                          >
-                            <ShieldCheck className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Cài đặt</span>
+                            <ShieldCheck className={`mr-3 h-4 w-4 ${adminSubTab === 'acceptance' ? 'text-white' : 'text-teal-500'}`} />
+                            <span className="text-sm">Nghiệm thu hồ sơ</span>
                           </Button>
                         </>
                       )}
                     </div>
-                  </div>
 
-                  {(isAdmin || isMod) && (
-                    <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0 px-2 lg:px-0">
-                      <div className="px-3 py-2 lg:block hidden">
-                        <h2 className="mb-4 px-4 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bảo mật</h2>
-                      </div>
-                      <div className="flex lg:flex-col gap-1 min-w-max lg:min-w-0">
+                    {/* Category: Hệ thống & Bảo mật */}
+                    {isAdmin && (
+                      <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
+                        <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
+                          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Hệ thống & Bảo mật</h2>
+                        </div>
+                        <Button 
+                          variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'users' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('users')}
+                        >
+                          <UserCircle className={`mr-3 h-4 w-4 ${adminSubTab === 'users' ? 'text-white' : 'text-slate-500'}`} />
+                          <span className="text-sm">Người dùng & Quyền</span>
+                        </Button>
                         <Button 
                           variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'audit' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'audit' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
                           onClick={() => setAdminSubTab('audit')}
                         >
-                          <History className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'audit' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                          <span className="text-xs lg:text-sm">Nhật ký</span>
+                          <History className={`mr-3 h-4 w-4 ${adminSubTab === 'audit' ? 'text-white' : 'text-slate-500'}`} />
+                          <span className="text-sm">Nhật ký hoạt động</span>
                         </Button>
-                        {isAdmin && (
-                          <Button 
-                            variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-xl px-4 py-2.5 h-10 lg:h-auto transition-all ${adminSubTab === 'backup' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            onClick={() => setAdminSubTab('backup')}
-                          >
-                            <Database className={`mr-2 lg:mr-3 h-4 lg:h-5 w-4 lg:w-5 ${adminSubTab === 'backup' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                            <span className="text-xs lg:text-sm">Sao lưu</span>
-                          </Button>
-                        )}
+                        <Button 
+                          variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'backup' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('backup')}
+                        >
+                          <Database className={`mr-3 h-4 w-4 ${adminSubTab === 'backup' ? 'text-white' : 'text-slate-500'}`} />
+                          <span className="text-sm">Sao lưu & Sheets</span>
+                        </Button>
+                        <Button 
+                          variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
+                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                            adminSubTab === 'settings' 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                          onClick={() => setAdminSubTab('settings')}
+                        >
+                          <Settings className={`mr-3 h-4 w-4 ${adminSubTab === 'settings' ? 'text-white' : 'text-slate-500'}`} />
+                          <span className="text-sm">Cài đặt hệ thống</span>
+                        </Button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </aside>
 
                 {/* Admin Content Area */}
@@ -7002,11 +7193,11 @@ export default function App() {
                                 )}
                                 <div className="relative w-64">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                  <Input 
+                                  <DebouncedInput 
                                     placeholder="Tìm dự án, team..." 
                                     className="pl-10 bg-slate-50 border-none h-10 text-xs rounded-xl"
                                     value={adminEfficiencySearch}
-                                    onChange={e => setAdminEfficiencySearch(e.target.value)}
+                                    onChange={setAdminEfficiencySearch}
                                   />
                                 </div>
                                 <div className="flex gap-1">
@@ -7181,175 +7372,182 @@ export default function App() {
 
                     {/* Project Management Tab */}
                     <TabsContent value="projects" className="space-y-6">
-                  <div className="grid grid-cols-1 gap-6">
-                    {/* Project Controls */}
-                    <Card className="border-none shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="flex flex-wrap items-end gap-4">
-                          <div className="flex-1 min-w-[250px] space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tìm kiếm dự án</Label>
-                            <div className="relative">
-                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input 
-                                placeholder="Nhập tên dự án..." 
-                                className="pl-10 bg-slate-50 border-none shadow-none"
-                                value={projectSearch}
-                                onChange={e => setProjectSearch(e.target.value)}
-                              />
+                      <div className="space-y-6">
+                        {/* Project Controls Card */}
+                        <Card className="border-none shadow-sm overflow-hidden bg-white">
+                          <div className="h-1 bg-blue-600 w-full" />
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <CardTitle className="text-xl font-black text-slate-900">Danh mục Dự án</CardTitle>
+                                <CardDescription className="text-xs font-medium text-slate-500">Quản lý toàn bộ danh sách dự án bất động sản trên hệ thống</CardDescription>
+                              </div>
+                              {isAdmin && (
+                                <div className="flex gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="h-9 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 transition-all font-bold"
+                                    onClick={handleExportProjects}
+                                  >
+                                    <Download className="w-4 h-4 mr-2 text-indigo-500" /> Xuất Excel
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="h-9 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 transition-all font-bold relative"
+                                    disabled={isImportingProjects}
+                                    nativeButton={false}
+                                    render={<label className="cursor-pointer flex items-center px-4" />}
+                                  >
+                                    {isImportingProjects ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <FileUp className="w-4 h-4 mr-2 text-emerald-500" />}
+                                    Nhập Excel
+                                    <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleImportProjectsCSV} />
+                                  </Button>
+                                  <Dialog>
+                                    <DialogTrigger nativeButton={false} render={<Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-100 font-bold px-4" />}>
+                                      <Plus className="w-4 h-4 mr-2" /> Thêm dự án
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl">
+                                      <DialogHeader>
+                                        <DialogTitle className="text-xl font-black text-slate-900">Thêm dự án mới</DialogTitle>
+                                        <DialogDescription className="font-medium text-slate-500">Nhập thông tin dự án bất động sản. Bạn có thể nhập nhiều dự án cùng lúc (mỗi dòng một tên).</DialogDescription>
+                                      </DialogHeader>
+                                      <form onSubmit={handleAddProject} className="space-y-6 py-4">
+                                        <div className="space-y-2">
+                                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Tên dự án</Label>
+                                          <textarea 
+                                            className="flex min-h-[140px] w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm transition-all focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none"
+                                            placeholder="VD: Vinhomes Grand Park&#10;Vinhomes Central Park" 
+                                            value={newProjectName} 
+                                            onChange={e => setNewProjectName(e.target.value)} 
+                                          />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                          <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Vùng / Khu vực</Label>
+                                            <Select value={newProjectRegion} onValueChange={setNewProjectRegion}>
+                                              <SelectTrigger className="rounded-xl border-slate-100 bg-slate-50 h-11">
+                                                <SelectValue placeholder="Chọn vùng..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="rounded-xl border-none shadow-xl">
+                                                {regions.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Loại hình</Label>
+                                            <Select value={newProjectType} onValueChange={setNewProjectType}>
+                                              <SelectTrigger className="rounded-xl border-slate-100 bg-slate-50 h-11">
+                                                <SelectValue placeholder="Chọn loại..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="rounded-xl border-none shadow-xl">
+                                                {types.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        </div>
+                                        <DialogFooter>
+                                          <Button type="submit" className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
+                                            Xác nhận thêm dự án
+                                          </Button>
+                                        </DialogFooter>
+                                      </form>
+                                    </DialogContent>
+                                  </Dialog>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          <div className="w-[180px] space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Khu vực</Label>
-                            <Select value={adminProjectRegionFilter} onValueChange={setAdminProjectRegionFilter}>
-                              <SelectTrigger className="bg-slate-50 border-none shadow-none">
-                                <SelectValue placeholder="Tất cả khu vực" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">Tất cả khu vực</SelectItem>
-                                {uniqueRegions.map(r => (
-                                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="w-[180px] space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Loại hình</Label>
-                            <Select value={adminProjectTypeFilter} onValueChange={setAdminProjectTypeFilter}>
-                              <SelectTrigger className="bg-slate-50 border-none shadow-none">
-                                <SelectValue placeholder="Tất cả loại hình" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">Tất cả loại hình</SelectItem>
-                                {types.map(t => (
-                                  <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {isAdmin && (
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="outline" 
-                                className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                                onClick={handleExportProjects}
-                              >
-                                <Download className="w-4 h-4 mr-2" /> Xuất Excel
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 relative"
-                                disabled={isImportingProjects}
-                                nativeButton={false}
-                                render={
-                                  <label className="cursor-pointer flex items-center h-10 px-4" />
-                                }
-                              >
-                                {isImportingProjects ? (
-                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <FileUp className="w-4 h-4 mr-2" />
-                                )}
-                                Nhập Excel
-                                <input 
-                                  type="file" 
-                                  className="hidden" 
-                                  accept=".xlsx,.xls,.csv" 
-                                  onChange={handleImportProjectsCSV}
-                                />
-                              </Button>
-                              <Dialog>
-                                <DialogTrigger nativeButton={false} render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
-                                  <Plus className="w-4 h-4 mr-2" /> Thêm dự án
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-[500px]">
-                              <DialogHeader>
-                                <DialogTitle>Thêm dự án mới</DialogTitle>
-                                <DialogDescription>Nhập thông tin dự án bất động sản. Bạn có thể nhập nhiều dự án cùng lúc bằng cách xuống dòng.</DialogDescription>
-                              </DialogHeader>
-                              <form onSubmit={handleAddProject} className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label>Tên dự án (Mỗi dòng 1 dự án)</Label>
-                                  <textarea 
-                                    className="flex min-h-[120px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    placeholder="VD: Vinhomes Grand Park&#10;Vinhomes Central Park" 
-                                    value={newProjectName} 
-                                    onChange={e => setNewProjectName(e.target.value)} 
+                          </CardHeader>
+                          <CardContent className="px-6 pb-6 pt-2">
+                            <div className="flex flex-wrap items-center gap-4 p-4 rounded-2xl bg-slate-50/80 border border-slate-100 shadow-inner">
+                              <div className="flex-1 min-w-[280px]">
+                                <div className="relative group">
+                                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-colors group-focus-within:text-blue-500" />
+                                  <DebouncedInput 
+                                    placeholder="Tìm theo tên dự án hoặc mã..." 
+                                    className="pl-11 h-11 bg-white border-none shadow-sm rounded-xl text-sm transition-all focus:ring-2 focus:ring-blue-100"
+                                    value={projectSearch}
+                                    onChange={setProjectSearch}
                                   />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>Vùng / Khu vực</Label>
-                                    <Select value={newProjectRegion} onValueChange={setNewProjectRegion}>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Chọn vùng..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {regions.map(r => (
-                                          <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Loại hình</Label>
-                                    <Select value={newProjectType} onValueChange={setNewProjectType}>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Chọn loại hình..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {types.map(t => (
-                                          <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
-                                <DialogFooter>
-                                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-                                    Xác nhận thêm dự án
-                                  </Button>
-                                </DialogFooter>
-                              </form>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      )}
-                    </div>
-                    </CardContent>
-                    </Card>
-
+                              </div>
+                              <div className="w-[200px]">
+                                <Select value={adminProjectRegionFilter} onValueChange={setAdminProjectRegionFilter}>
+                                  <SelectTrigger className="h-11 bg-white border-none shadow-sm rounded-xl text-[13px] font-medium text-slate-600">
+                                    <div className="flex items-center gap-2">
+                                      <Map className="w-3.5 h-3.5 text-emerald-500" />
+                                      <SelectValue placeholder="Tất cả khu vực" />
+                                    </div>
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl border-none shadow-xl">
+                                    <SelectItem value="all">Tất cả khu vực</SelectItem>
+                                    {uniqueRegions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="w-[200px]">
+                                <Select value={adminProjectTypeFilter} onValueChange={setAdminProjectTypeFilter}>
+                                  <SelectTrigger className="h-11 bg-white border-none shadow-sm rounded-xl text-[13px] font-medium text-slate-600">
+                                    <div className="flex items-center gap-2">
+                                      <Layers className="w-3.5 h-3.5 text-amber-500" />
+                                      <SelectValue placeholder="Tất cả loại hình" />
+                                    </div>
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl border-none shadow-xl">
+                                    <SelectItem value="all">Tất cả loại hình</SelectItem>
+                                    {types.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      {/* Project Table Card will be here, inside the same div/TabsContent */}
+                      
                     {/* Project Table */}
-                    <Card className="border-none shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                          <CardTitle>Danh sách dự án</CardTitle>
-                          <CardDescription>Quản lý và phân loại dự án ({sortedProjects.length} kết quả)</CardDescription>
+                    <Card className="border-none shadow-sm bg-white overflow-hidden">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-blue-600 p-2 rounded-xl">
+                            <Building2 className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-lg font-bold text-slate-900">Danh sách dự án</CardTitle>
+                              <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none font-bold">
+                                {projects.length}
+                              </Badge>
+                            </div>
+                            <CardDescription className="text-[11px] font-medium text-slate-400">Quản lý và phân loại dự án bất động sản</CardDescription>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {isAdmin && (
-                            <div className="flex gap-2 mr-4">
+
+                        {isAdmin && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
                                 <DialogTrigger nativeButton={false} render={
                                   <Button 
-                                    variant="outline" 
+                                    variant="ghost" 
                                     size="sm" 
-                                    className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
+                                    className="h-8 text-[11px] font-bold text-slate-600 hover:text-blue-600 rounded-lg transition-all"
                                     disabled={selectedProjectIds.length === 0}
                                   />
                                 }>
-                                  <Building2 className="w-3 h-3 mr-1" /> Sửa Vùng ({selectedProjectIds.length})
+                                  <Map className="w-3.5 h-3.5 mr-1.5" /> Vùng ({selectedProjectIds.length})
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[400px]">
+                                <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
                                   <DialogHeader>
-                                    <DialogTitle>Cập nhật Vùng / Khu vực</DialogTitle>
-                                    <DialogDescription>Chọn vùng / khu vực mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
+                                    <DialogTitle className="text-xl font-black text-slate-900">Cập nhật Vùng</DialogTitle>
+                                    <DialogDescription className="font-medium text-slate-500">Chọn vùng / khu vực mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
                                   </DialogHeader>
-                                  <div className="py-4 space-y-4">
+                                  <div className="py-6 space-y-4">
                                     <div className="space-y-2">
-                                      <Label>Vùng / Khu vực</Label>
+                                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Vùng / Khu vực mới</Label>
                                       <Select value={selectedRegionForBulk} onValueChange={setSelectedRegionForBulk}>
-                                        <SelectTrigger><SelectValue placeholder="Chọn vùng..." /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100"><SelectValue placeholder="Chọn vùng..." /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
                                           {regions.map(r => (
                                             <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
                                           ))}
@@ -7358,35 +7556,37 @@ export default function App() {
                                     </div>
                                   </div>
                                   <DialogFooter>
-                                    <Button onClick={handleBulkUpdateProjectRegion} className="w-full bg-blue-600 hover:bg-blue-700">
+                                    <Button onClick={handleBulkUpdateProjectRegion} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
                                       Cập nhật cho {selectedProjectIds.length} dự án
                                     </Button>
                                   </DialogFooter>
                                 </DialogContent>
                               </Dialog>
 
+                              <div className="w-px h-4 bg-slate-200 mx-1" />
+
                               <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
                                 <DialogTrigger nativeButton={false} render={
                                   <Button 
-                                    variant="outline" 
+                                    variant="ghost" 
                                     size="sm" 
-                                    className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                    className="h-8 text-[11px] font-bold text-slate-600 hover:text-indigo-600 rounded-lg transition-all"
                                     disabled={selectedProjectIds.length === 0}
                                   />
                                 }>
-                                  <Layers className="w-3 h-3 mr-1" /> Sửa Loại hình ({selectedProjectIds.length})
+                                  <Layers className="w-3.5 h-3.5 mr-1.5" /> Loại hình ({selectedProjectIds.length})
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[400px]">
+                                <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
                                   <DialogHeader>
-                                    <DialogTitle>Cập nhật Loại hình</DialogTitle>
-                                    <DialogDescription>Chọn loại hình mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
+                                    <DialogTitle className="text-xl font-black text-slate-900">Cập nhật Loại hình</DialogTitle>
+                                    <DialogDescription className="font-medium text-slate-500">Chọn loại hình mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
                                   </DialogHeader>
-                                  <div className="py-4 space-y-4">
+                                  <div className="py-6 space-y-4">
                                     <div className="space-y-2">
-                                      <Label>Loại hình</Label>
+                                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Loại hình mới</Label>
                                       <Select value={selectedTypeForBulk} onValueChange={setSelectedTypeForBulk}>
-                                        <SelectTrigger><SelectValue placeholder="Chọn loại hình..." /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100"><SelectValue placeholder="Chọn loại hình..." /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
                                           {types.map(t => (
                                             <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
                                           ))}
@@ -7395,55 +7595,69 @@ export default function App() {
                                     </div>
                                   </div>
                                   <DialogFooter>
-                                    <Button onClick={handleBulkUpdateProjectType} className="w-full bg-blue-600 hover:bg-blue-700">
+                                    <Button onClick={handleBulkUpdateProjectType} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
                                       Cập nhật cho {selectedProjectIds.length} dự án
                                     </Button>
                                   </DialogFooter>
                                 </DialogContent>
                               </Dialog>
-
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
-                                onClick={handleSyncProjectCodes}
-                                disabled={isSyncingProjects}
-                              >
-                                <RefreshCw className={`w-3 h-3 mr-1 ${isSyncingProjects ? 'animate-spin' : ''}`} /> Đồng bộ Mã Dự án
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                                onClick={handleBulkDeleteProjects}
-                                disabled={selectedProjectIds.length === 0}
-                              >
-                                <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedProjectIds.length})
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm" 
-                                className="h-8 text-[10px]"
-                                onClick={handleDeleteAllProjects}
-                                disabled={projects.length === 0}
-                              >
-                                <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                              </Button>
                             </div>
-                          )}
-                          <Badge variant="secondary">{projects.length} tổng số</Badge>
-                        </div>
+
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[11px] font-bold text-blue-600 border-blue-100 hover:bg-blue-50 transition-all px-4"
+                              onClick={handleSyncProjectCodes}
+                              disabled={isSyncingProjects}
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isSyncingProjects ? 'animate-spin' : ''}`} /> Đồng bộ Mã
+                            </Button>
+
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[11px] font-bold text-red-600 border-red-100 hover:bg-red-50 transition-all px-4"
+                              onClick={handleBulkDeleteProjects}
+                              disabled={selectedProjectIds.length === 0}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa ({selectedProjectIds.length})
+                            </Button>
+
+                            <Dialog>
+                              <DialogTrigger nativeButton={false} render={
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  className="h-9 rounded-xl text-[11px] font-bold px-4"
+                                  disabled={projects.length === 0}
+                                />
+                              }>
+                                <AlertTriangle className="w-3.5 h-3.5 mr-2" /> Xóa tất cả
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                <DialogHeader>
+                                  <DialogTitle className="text-xl font-black text-slate-900">Xác nhận xóa tất cả?</DialogTitle>
+                                  <DialogDescription className="font-medium text-slate-500">Hành động này sẽ xóa toàn bộ danh sách dự án. Dữ liệu không thể khôi phục.</DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="mt-4">
+                                  <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                  <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={handleDeleteAllProjects}>Xác nhận Xóa hết</Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        )}
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
-                            <TableHeader className="bg-slate-50">
-                              <TableRow>
+                            <TableHeader className="bg-slate-50/50">
+                              <TableRow className="hover:bg-transparent border-b border-slate-100">
                                 {isAdmin && (
-                                  <TableHead className="w-[40px]">
+                                  <TableHead className="w-[50px] pl-6 py-4">
                                     <input 
                                       type="checkbox" 
-                                      className="rounded border-slate-300"
+                                      className="h-4 w-4 rounded border-slate-300 accent-blue-600"
                                       checked={selectedProjectIds.length === sortedProjects.length && sortedProjects.length > 0}
                                       onChange={(e) => {
                                         if (e.target.checked) {
@@ -7455,30 +7669,38 @@ export default function App() {
                                     />
                                   </TableHead>
                                 )}
-                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'projectCode', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
-                                  <div className="flex items-center gap-2">Mã Dự án <ArrowUpDown className="w-3 h-3" /></div>
+                                <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'projectCode', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                    Mã Dự án <ArrowUpDown className="w-3 h-3" />
+                                  </div>
                                 </TableHead>
-                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'name', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
-                                  <div className="flex items-center gap-2">Tên dự án <ArrowUpDown className="w-3 h-3" /></div>
+                                <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'name', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                    Tên dự án <ArrowUpDown className="w-3 h-3" />
+                                  </div>
                                 </TableHead>
-                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'region', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
-                                  <div className="flex items-center gap-2">Vùng / Khu vực <ArrowUpDown className="w-3 h-3" /></div>
+                                <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'region', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                    Khu vực <ArrowUpDown className="w-3 h-3" />
+                                  </div>
                                 </TableHead>
-                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setProjectSort({ key: 'type', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
-                                  <div className="flex items-center gap-2">Loại hình <ArrowUpDown className="w-3 h-3" /></div>
+                                <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'type', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                    Loại hình <ArrowUpDown className="w-3 h-3" />
+                                  </div>
                                 </TableHead>
-                                <TableHead>Ngày tạo</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400 py-4">Ngày tạo</TableHead>
+                                <TableHead className="text-right pr-6 py-4 text-[10px] uppercase font-black tracking-widest text-slate-400">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {sortedProjects.map(p => (
-                                <TableRow key={p.id} className={selectedProjectIds.includes(p.id) ? "bg-blue-50/30" : ""}>
+                                <TableRow key={p.id} className={`group transition-colors border-b border-slate-50 ${selectedProjectIds.includes(p.id) ? "bg-blue-50/20" : "hover:bg-slate-50/30"}`}>
                                   {isAdmin && (
-                                    <TableCell>
+                                    <TableCell className="pl-6 py-4">
                                       <input 
                                         type="checkbox" 
-                                        className="rounded border-slate-300"
+                                        className="h-4 w-4 rounded border-slate-300 accent-blue-600"
                                         checked={selectedProjectIds.includes(p.id)}
                                         onChange={(e) => {
                                           if (e.target.checked) {
@@ -7490,91 +7712,115 @@ export default function App() {
                                       />
                                     </TableCell>
                                   )}
-                                  <TableCell className="font-mono text-xs font-bold text-blue-600">
+                                  <TableCell className="py-4">
                                     {editingProjectId === p.id ? (
-                                      <Input value={editingProjectCode} onChange={e => setEditingProjectCode(e.target.value)} className="h-8 font-mono" />
-                                    ) : (p.projectCode || '-')}
+                                      <Input value={editingProjectCode} onChange={e => setEditingProjectCode(e.target.value)} className="h-9 font-mono text-xs rounded-lg border-blue-100 bg-blue-50/30" />
+                                    ) : (
+                                      <Badge variant="outline" className="font-mono text-[10px] font-black text-blue-600 border-blue-100 bg-blue-50 shadow-none px-2 rounded-lg">
+                                        {p.projectCode || '-'}
+                                      </Badge>
+                                    )}
                                   </TableCell>
-                                  <TableCell className="font-medium">
+                                  <TableCell className="py-4">
                                     {editingProjectId === p.id ? (
                                       <Input value={editingProjectName} onChange={e => {
                                         setEditingProjectName(e.target.value);
                                         if (!editingProjectCode) {
                                           setEditingProjectCode(extractProjectCode(e.target.value));
                                         }
-                                      }} className="h-8" />
+                                      }} className="h-9 text-sm rounded-lg border-blue-100 bg-blue-50/30" />
                                     ) : (
-                                      <div className="flex items-center gap-2">
-                                        {p.name}
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{p.name}</span>
                                         {overBudgetProjectIds.has(p.id) && (
-                                          <Badge variant="destructive" className="h-4 px-1 text-[8px] animate-pulse">Vượt ngân sách</Badge>
+                                          <div className="flex items-center gap-1 mt-0.5">
+                                            <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                            <span className="text-[9px] font-black uppercase text-red-500 tracking-tighter">Vượt ngân sách</span>
+                                          </div>
                                         )}
                                       </div>
                                     )}
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-4">
                                     {editingProjectId === p.id ? (
                                       <Select value={editingProjectRegion} onValueChange={setEditingProjectRegion}>
-                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectTrigger className="h-9 text-xs rounded-lg border-blue-100 bg-blue-50/30"><SelectValue /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
                                           {regions.map(r => (
                                             <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
                                           ))}
                                         </SelectContent>
                                       </Select>
                                     ) : (
-                                      <Badge variant="outline" className="font-normal border-slate-200">{p.region || 'Chưa xác định'}</Badge>
+                                      <div className="flex items-center gap-1.5 font-medium text-slate-600 text-sm">
+                                        <Map className="w-3 h-3 text-emerald-500" />
+                                        {p.region || 'Chưa xác định'}
+                                      </div>
                                     )}
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-4">
                                     {editingProjectId === p.id ? (
                                       <Select value={editingProjectType} onValueChange={setEditingProjectType}>
-                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectTrigger className="h-9 text-xs rounded-lg border-blue-100 bg-blue-50/30"><SelectValue /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
                                           {types.map(t => (
                                             <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
                                           ))}
                                         </SelectContent>
                                       </Select>
                                     ) : (
-                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                        (p.type || '').trim() === 'Cao tầng' ? 'bg-indigo-50 text-indigo-600' : 
-                                        (p.type || '').trim() === 'Thấp tầng' ? 'bg-amber-50 text-amber-600' : 
-                                        p.type ? 'bg-slate-50 text-slate-600' : 'bg-red-50 text-red-600'
+                                      <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${
+                                        (p.type || '').trim() === 'Cao tầng' ? 'bg-indigo-50 text-indigo-700' : 
+                                        (p.type || '').trim() === 'Thấp tầng' ? 'bg-amber-50 text-amber-700' : 
+                                        p.type ? 'bg-slate-50 text-slate-600' : 'bg-red-50 text-red-700'
                                       }`}>
                                         {p.type || 'Chưa phân loại'}
                                       </span>
                                     )}
                                   </TableCell>
-                                  <TableCell className="text-xs text-slate-500">
+                                  <TableCell className="py-4 text-xs font-medium text-slate-400">
                                     {safeFormat(p.createdAt?.toDate ? p.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                   </TableCell>
-                                  <TableCell className="text-right">
+                                  <TableCell className="py-4 pr-6 text-right">
                                     {isAdmin && (
                                       <div className="flex justify-end gap-1">
                                         {editingProjectId === p.id ? (
                                           <>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateProject(p.id, editingProjectName, editingProjectCode, editingProjectRegion, editingProjectType)}>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-lg shadow-sm" onClick={() => handleUpdateProject(p.id, editingProjectName, editingProjectCode, editingProjectRegion, editingProjectType)}>
                                               <Check className="h-4 w-4" />
                                             </Button>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingProjectId(null)}>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-lg" onClick={() => setEditingProjectId(null)}>
                                               <X className="h-4 w-4" />
                                             </Button>
                                           </>
                                         ) : (
                                           <>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" onClick={() => {
                                               setEditingProjectId(p.id);
                                               setEditingProjectName(p.name);
-                                               setEditingProjectCode(p.projectCode || extractProjectCode(p.name));
+                                              setEditingProjectCode(p.projectCode || extractProjectCode(p.name));
                                               setEditingProjectRegion(p.region || '');
                                               setEditingProjectType(p.type || '');
                                             }}>
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteProject(p.id, p.name)}>
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <Dialog>
+                                              <DialogTrigger nativeButton={false} render={
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
+                                              }>
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </DialogTrigger>
+                                              <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                                <DialogHeader>
+                                                  <DialogTitle className="text-xl font-black text-slate-900">Xóa dự án?</DialogTitle>
+                                                  <DialogDescription className="font-medium text-slate-500">Bạn có chắc chắn muốn xóa dự án <span className="text-red-600 font-bold">{p.name}</span>? Thao tác này không thể hoàn tác.</DialogDescription>
+                                                </DialogHeader>
+                                                <DialogFooter className="mt-4">
+                                                  <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                                  <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={() => handleDeleteProject(p.id, p.name)}>Xác nhận Xóa</Button>
+                                                </DialogFooter>
+                                              </DialogContent>
+                                            </Dialog>
                                           </>
                                         )}
                                       </div>
@@ -7584,8 +7830,16 @@ export default function App() {
                               ))}
                               {sortedProjects.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={5} className="h-24 text-center text-slate-500">
-                                    Không tìm thấy dự án nào phù hợp
+                                  <TableCell colSpan={isAdmin ? 7 : 6} className="h-64 text-center">
+                                    <div className="flex flex-col items-center justify-center space-y-4">
+                                      <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
+                                        <Search className="h-8 w-8 text-slate-300" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="font-bold text-slate-900">Không tìm thấy dự án nào</p>
+                                        <p className="text-xs text-slate-500">Hãy thử thay đổi từ khóa hoặc bộ lọc</p>
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               )}
@@ -7601,46 +7855,51 @@ export default function App() {
                 <TabsContent value="regions" className="space-y-6">
                   <div className="grid grid-cols-1 gap-6">
                     {/* Region Controls */}
-                    <Card className="border-none shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="flex flex-wrap items-end gap-4">
-                          <div className="flex-1 min-w-[250px] space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tìm kiếm Vùng / Khu vực</Label>
-                            <div className="relative">
-                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input 
-                                placeholder="Nhập tên vùng..." 
-                                className="pl-10 bg-slate-50 border-none shadow-none"
+                    <Card className="border-none shadow-sm bg-white overflow-hidden">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                          <div className="flex-1 max-w-md space-y-2">
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Tìm kiếm Vùng / Khu vực</Label>
+                            <div className="relative group">
+                              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                              <DebouncedInput 
+                                placeholder="Nhập tên vùng (VD: Quận 1, Quận 2...)" 
+                                className="h-11 pl-11 bg-slate-50 border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 transition-all text-sm font-medium"
                                 value={regionSearch}
-                                onChange={e => setRegionSearch(e.target.value)}
+                                onChange={setRegionSearch}
                               />
                             </div>
                           </div>
+                          
                           {isAdmin && (
                             <Dialog>
                               <DialogTrigger nativeButton={false} render={
-                                <Button className="bg-blue-600 hover:bg-blue-700">
-                                  <Plus className="w-4 h-4 mr-2" /> Thêm Vùng / Khu vực
+                                <Button className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100 px-6 transition-all transform active:scale-95 flex items-center gap-2">
+                                  <Plus className="w-5 h-5" /> Thêm Vùng / Khu vực
                                 </Button>
                               } />
-                              <DialogContent className="sm:max-w-[500px]">
+                              <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl">
                                 <DialogHeader>
-                                  <DialogTitle>Thêm Vùng / Khu vực mới</DialogTitle>
-                                  <DialogDescription>Nhập danh sách các vùng hoặc khu vực. Mỗi dòng tương ứng 1 vùng.</DialogDescription>
+                                  <DialogTitle className="text-2xl font-black text-slate-900">Thêm Vùng mới</DialogTitle>
+                                  <DialogDescription className="font-medium text-slate-500">Nhập danh sách các vùng hoặc khu vực. Mỗi dòng tương ứng 1 vùng.</DialogDescription>
                                 </DialogHeader>
-                                <form onSubmit={handleAddRegion} className="space-y-4 py-4">
+                                <form onSubmit={handleAddRegion} className="space-y-6 pt-4">
                                   <div className="space-y-2">
-                                    <Label>Tên Vùng / Khu vực (Mỗi dòng 1 vùng)</Label>
+                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Tên Vùng / Khu vực (Mỗi dòng 1 vùng)</Label>
                                     <textarea 
-                                      className="flex min-h-[120px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                      placeholder="VD: Quận 9&#10;Thủ Đức" 
+                                      className="flex min-h-[160px] w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 transition-all"
+                                      placeholder="VD: Quận 9&#10;Thủ Đức&#10;Quận 2" 
                                       value={newRegionName} 
                                       onChange={e => setNewRegionName(e.target.value)} 
                                     />
                                   </div>
                                   <DialogFooter>
-                                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isAddingRegion}>
-                                      {isAddingRegion ? 'Đang xử lý...' : 'Xác nhận thêm Vùng / Khu vực'}
+                                    <Button type="submit" className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100" disabled={isAddingRegion}>
+                                      {isAddingRegion ? (
+                                        <div className="flex items-center gap-2">
+                                          <RefreshCw className="w-4 h-4 animate-spin" /> Đang xử lý...
+                                        </div>
+                                      ) : 'Xác nhận lưu danh sách'}
                                     </Button>
                                   </DialogFooter>
                                 </form>
@@ -7652,48 +7911,70 @@ export default function App() {
                     </Card>
 
                     {/* Region Table */}
-                    <Card className="border-none shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                          <CardTitle>Danh sách Vùng / Khu vực</CardTitle>
-                          <CardDescription>Quản lý các vùng và khu vực ({regions.length} kết quả)</CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isAdmin && (
-                            <div className="flex gap-2 mr-4">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                                onClick={handleBulkDeleteRegions}
-                                disabled={selectedRegionIds.length === 0 || isDeletingRegions}
-                              >
-                                <Trash2 className="w-3 h-3 mr-1" /> {isDeletingRegions ? 'Đang xóa...' : `Xóa đã chọn (${selectedRegionIds.length})`}
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm" 
-                                className="h-8 text-[10px]"
-                                onClick={handleDeleteAllRegions}
-                                disabled={regions.length === 0}
-                              >
-                                <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                              </Button>
+                    <Card className="border-none shadow-sm bg-white overflow-hidden">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-emerald-600 p-2 rounded-xl">
+                            <Map className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-lg font-bold text-slate-900">Danh sách Vùng</CardTitle>
+                              <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none font-bold">
+                                {regions.length}
+                              </Badge>
                             </div>
-                          )}
-                          <Badge variant="secondary">{regions.length} tổng số</Badge>
+                            <CardDescription className="text-[11px] font-medium text-slate-400">Định nghĩa các khu vực hoạt động</CardDescription>
+                          </div>
                         </div>
+
+                        {isAdmin && (
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[11px] font-bold text-red-600 border-red-100 hover:bg-red-50 transition-all px-4"
+                              onClick={handleBulkDeleteRegions}
+                              disabled={selectedRegionIds.length === 0 || isDeletingRegions}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-2" /> {isDeletingRegions ? 'Đang xóa...' : `Xóa (${selectedRegionIds.length})`}
+                            </Button>
+
+                            <Dialog>
+                              <DialogTrigger nativeButton={false} render={
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  className="h-9 rounded-xl text-[11px] font-bold px-4"
+                                  disabled={regions.length === 0}
+                                />
+                              }>
+                                <AlertTriangle className="w-3.5 h-3.5 mr-2" /> Xóa tất cả
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                <DialogHeader>
+                                  <DialogTitle className="text-xl font-black text-slate-900">Xác nhận xóa tất cả?</DialogTitle>
+                                  <DialogDescription className="font-medium text-slate-500">Toàn bộ danh sách vùng / khu vực sẽ bị xóa vĩnh viễn.</DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="mt-4">
+                                  <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                  <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={handleDeleteAllRegions}>Xác nhận Xóa</Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        )}
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
-                            <TableHeader className="bg-slate-50">
-                              <TableRow>
+                            <TableHeader className="bg-slate-50/50">
+                              <TableRow className="hover:bg-transparent border-b border-slate-100">
                                 {isAdmin && (
-                                  <TableHead className="w-[40px]">
+                                  <TableHead className="w-[50px] pl-6 py-4">
                                     <input 
                                       type="checkbox" 
-                                      className="rounded border-slate-300"
+                                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
                                       checked={selectedRegionIds.length === regions.length && regions.length > 0}
                                       onChange={(e) => {
                                         if (e.target.checked) {
@@ -7705,12 +7986,14 @@ export default function App() {
                                     />
                                   </TableHead>
                                 )}
-                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setRegionSort({ key: 'name', direction: regionSort.direction === 'asc' ? 'desc' : 'asc' })}>
-                                  <div className="flex items-center gap-2">Tên Vùng / Khu vực <ArrowUpDown className="w-3 h-3" /></div>
+                                <TableHead className="cursor-pointer py-4 pl-4 group" onClick={() => setRegionSort({ key: 'name', direction: regionSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-emerald-600 transition-colors">
+                                    Tên Vùng / Khu vực <ArrowUpDown className="w-3 h-3" />
+                                  </div>
                                 </TableHead>
-                                <TableHead>Số lượng dự án</TableHead>
-                                <TableHead>Ngày tạo</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase font-black tracking-widest text-slate-400">Số lượng dự án</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase font-black tracking-widest text-slate-400">Ngày tạo</TableHead>
+                                <TableHead className="text-right pr-6 py-4 text-[10px] uppercase font-black tracking-widest text-slate-400">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -7723,12 +8006,12 @@ export default function App() {
                                 .map(r => {
                                   const regionProjects = projects.filter(p => p.region === r.name);
                                   return (
-                                    <TableRow key={r.id} className={selectedRegionIds.includes(r.id) ? "bg-blue-50/30" : ""}>
+                                    <TableRow key={r.id} className={`group transition-all border-b border-slate-50 ${selectedRegionIds.includes(r.id) ? "bg-emerald-50/20" : "hover:bg-slate-50/30"}`}>
                                       {isAdmin && (
-                                        <TableCell>
+                                        <TableCell className="pl-6 py-4">
                                           <input 
                                             type="checkbox" 
-                                            className="rounded border-slate-300"
+                                            className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
                                             checked={selectedRegionIds.includes(r.id)}
                                             onChange={(e) => {
                                               if (e.target.checked) {
@@ -7740,47 +8023,65 @@ export default function App() {
                                           />
                                         </TableCell>
                                       )}
-                                      <TableCell className="font-medium">
+                                      <TableCell className="py-4 pl-4">
                                         {editingRegionId === r.id ? (
-                                          <Input value={editingRegionName} onChange={e => setEditingRegionName(e.target.value)} className="h-8" />
-                                        ) : r.name}
+                                          <Input value={editingRegionName} onChange={e => setEditingRegionName(e.target.value)} className="h-9 px-3 rounded-lg border-emerald-100 bg-emerald-50/30 text-sm font-bold" />
+                                        ) : (
+                                          <span className="font-bold text-slate-900 group-hover:text-emerald-600 transition-colors uppercase italic">{r.name}</span>
+                                        )}
                                       </TableCell>
-                                      <TableCell>
-                                        <Badge variant="secondary" className="font-normal">{regionProjects.length} dự án</Badge>
+                                      <TableCell className="py-4">
+                                        <Badge variant="secondary" className="bg-slate-50 text-slate-600 border-slate-100 font-bold px-3 py-1 rounded-lg">
+                                          {regionProjects.length} dự án
+                                        </Badge>
                                       </TableCell>
-                                      <TableCell className="text-xs text-slate-500">
+                                      <TableCell className="py-4 text-xs font-medium text-slate-400">
                                         {safeFormat(r.createdAt?.toDate ? r.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                       </TableCell>
-                                      <TableCell className="text-right">
+                                      <TableCell className="py-4 pr-6 text-right">
                                         {isAdmin && (
                                           <div className="flex justify-end gap-1">
                                             {editingRegionId === r.id ? (
                                               <>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateRegion(r.id, editingRegionName)}>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-lg shadow-sm" onClick={() => handleUpdateRegion(r.id, editingRegionName)}>
                                                   <Check className="h-4 w-4" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingRegionId(null)}>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-lg" onClick={() => setEditingRegionId(null)}>
                                                   <X className="h-4 w-4" />
                                                 </Button>
                                               </>
                                             ) : (
                                               <>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" onClick={() => {
                                                   setRegionForProjects(r);
                                                   setSelectedProjectIdsForRegion(regionProjects.map(p => p.id));
                                                   setIsSetProjectsDialogOpen(true);
                                                 }} title="Gán dự án">
                                                   <Plus className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg" onClick={() => {
                                                   setEditingRegionId(r.id);
                                                   setEditingRegionName(r.name);
                                                 }}>
                                                   <Edit2 className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteRegion(r.id, r.name)}>
-                                                  <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
+                                                <Dialog>
+                                                  <DialogTrigger nativeButton={false} render={
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
+                                                  }>
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </DialogTrigger>
+                                                  <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                                    <DialogHeader>
+                                                      <DialogTitle className="text-xl font-black text-slate-900">Xóa vùng này?</DialogTitle>
+                                                      <DialogDescription className="font-medium text-slate-500">Dự án thuộc vùng này sẽ về trạng thái 'Chưa xác định'.</DialogDescription>
+                                                    </DialogHeader>
+                                                    <DialogFooter className="mt-4">
+                                                      <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                                      <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={() => handleDeleteRegion(r.id, r.name)}>Xác nhận Xóa</Button>
+                                                    </DialogFooter>
+                                                  </DialogContent>
+                                                </Dialog>
                                               </>
                                             )}
                                           </div>
@@ -7791,8 +8092,16 @@ export default function App() {
                                 })}
                               {regions.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={5} className="h-24 text-center text-slate-500">
-                                    Chưa có vùng / khu vực nào
+                                  <TableCell colSpan={isAdmin ? 5 : 4} className="h-64 text-center">
+                                    <div className="flex flex-col items-center justify-center space-y-4">
+                                      <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
+                                        <Map className="h-8 w-8 text-slate-300" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="font-bold text-slate-900">Chưa có vùng nào</p>
+                                        <p className="text-xs text-slate-500">Hãy thêm vùng mới để quản lý dự án</p>
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               )}
@@ -7815,11 +8124,11 @@ export default function App() {
                             <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tìm kiếm Loại hình</Label>
                             <div className="relative">
                               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input 
+                              <DebouncedInput 
                                 placeholder="Nhập tên loại hình..." 
                                 className="pl-10 bg-slate-50 border-none shadow-none"
                                 value={typeSearch}
-                                onChange={e => setTypeSearch(e.target.value)}
+                                onChange={setTypeSearch}
                               />
                             </div>
                           </div>
@@ -7859,67 +8168,89 @@ export default function App() {
                     </Card>
 
                     {/* Type Table */}
-                    <Card className="border-none shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                          <CardTitle>Danh sách Loại hình</CardTitle>
-                          <CardDescription>Quản lý các loại hình dự án ({types.length} kết quả)</CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isAdmin && (
-                            <div className="flex gap-2 mr-4">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                                onClick={handleSyncTypes}
-                                disabled={isSyncingTypes}
-                                title="Chuẩn hóa dữ liệu & Tự động thêm loại hình còn thiếu từ danh sách dự án"
-                              >
-                                {isSyncingTypes ? (
-                                  <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                                ) : (
-                                  <RefreshCw className="w-3 h-3 mr-1" />
-                                )}
-                                Đồng bộ Dữ liệu
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-blue-600 border-blue-200 hover:bg-blue-50"
-                                onClick={() => {
-                                  setSelectedGlobalProjectIds(selectedProjectIds);
-                                  setTargetGlobalType('');
-                                  setIsGlobalProjectAssignDialogOpen(true);
-                                }}
-                                title="Chọn nhiều dự án và gán 1 loại hình duy nhất"
-                              >
-                                <Plus className="w-3 h-3 mr-1" /> Gán Loại hình cho Dự án
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                                onClick={handleBulkDeleteTypes}
-                                disabled={selectedTypeIds.length === 0}
-                              >
-                                <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedTypeIds.length})
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm" 
-                                className="h-8 text-[10px]"
-                                onClick={handleDeleteAllTypes}
-                                disabled={types.length === 0}
-                              >
-                                <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                              </Button>
+                    <Card className="border-none shadow-sm bg-white overflow-hidden">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-indigo-600 p-2 rounded-xl">
+                            <Layers className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-lg font-bold text-slate-900">Danh sách Loại hình</CardTitle>
+                              <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none font-bold">
+                                {types.length}
+                              </Badge>
                             </div>
-                          )}
-                          <Badge variant="secondary">{types.length} tổng số</Badge>
+                            <CardDescription className="text-[11px] font-medium text-slate-400">Phân loại các hình thức bất động sản</CardDescription>
+                          </div>
                         </div>
+
+                        {isAdmin && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[10px] font-bold text-indigo-600 border-indigo-100 hover:bg-indigo-50 transition-all px-3"
+                              onClick={handleSyncTypes}
+                              disabled={isSyncingTypes}
+                            >
+                              {isSyncingTypes ? (
+                                <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                              )}
+                              Đồng bộ
+                            </Button>
+
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[10px] font-bold text-blue-600 border-blue-100 hover:bg-blue-50 transition-all px-3"
+                              onClick={() => {
+                                setSelectedGlobalProjectIds(selectedProjectIds);
+                                setTargetGlobalType('');
+                                setIsGlobalProjectAssignDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="w-3.5 h-3.5 mr-2" /> Gán nhanh
+                            </Button>
+
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-9 rounded-xl text-[11px] font-bold text-red-600 border-red-100 hover:bg-red-50 transition-all px-4"
+                              onClick={handleBulkDeleteTypes}
+                              disabled={selectedTypeIds.length === 0}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-2" /> {`Xóa (${selectedTypeIds.length})`}
+                            </Button>
+
+                            <Dialog>
+                              <DialogTrigger nativeButton={false} render={
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  className="h-9 rounded-xl text-[11px] font-bold px-4"
+                                  disabled={types.length === 0}
+                                />
+                              }>
+                                <AlertTriangle className="w-3.5 h-3.5 mr-2" /> Xóa tất cả
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                <DialogHeader>
+                                  <DialogTitle className="text-xl font-black text-slate-900">Xác nhận xóa tất cả?</DialogTitle>
+                                  <DialogDescription className="font-medium text-slate-500">Toàn bộ danh sách loại hình sẽ bị xóa vĩnh viễn.</DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="mt-4">
+                                  <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                  <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={handleDeleteAllTypes}>Xác nhận Xóa</Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        )}
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
                           <Table>
                             <TableHeader className="bg-slate-50">
@@ -7958,12 +8289,12 @@ export default function App() {
                                 .map(t => {
                                   const typeProjects = projects.filter(p => (p.type || '').trim() === (t.name || '').trim());
                                   return (
-                                    <TableRow key={t.id} className={selectedTypeIds.includes(t.id) ? "bg-blue-50/30" : ""}>
+                                    <TableRow key={t.id} className={`group transition-all border-b border-slate-50 ${selectedTypeIds.includes(t.id) ? "bg-indigo-50/20" : "hover:bg-slate-50/30"}`}>
                                       {isAdmin && (
-                                        <TableCell>
+                                        <TableCell className="pl-6 py-4">
                                           <input 
                                             type="checkbox" 
-                                            className="rounded border-slate-300"
+                                            className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
                                             checked={selectedTypeIds.includes(t.id)}
                                             onChange={(e) => {
                                               if (e.target.checked) {
@@ -7975,50 +8306,68 @@ export default function App() {
                                           />
                                         </TableCell>
                                       )}
-                                      <TableCell className="font-medium">
+                                      <TableCell className="py-4 pl-4">
                                         {editingTypeId === t.id ? (
-                                          <Input value={editingTypeName} onChange={e => setEditingTypeName(e.target.value)} className="h-8" />
-                                        ) : t.name}
+                                          <Input value={editingTypeName} onChange={e => setEditingTypeName(e.target.value)} className="h-9 px-3 rounded-lg border-indigo-100 bg-indigo-50/30 text-sm font-bold" />
+                                        ) : (
+                                          <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors uppercase italic">{t.name}</span>
+                                        )}
                                       </TableCell>
-                                      <TableCell>
-                                        <Badge variant="secondary" className="font-normal">{typeProjects.length} dự án</Badge>
+                                      <TableCell className="py-4">
+                                        <Badge variant="secondary" className="bg-slate-50 text-slate-600 border-slate-100 font-bold px-3 py-1 rounded-lg">
+                                          {typeProjects.length} dự án
+                                        </Badge>
                                       </TableCell>
-                                      <TableCell className="text-xs text-slate-500">
+                                      <TableCell className="py-4 text-xs font-medium text-slate-400">
                                         {safeFormat(t.createdAt?.toDate ? t.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                       </TableCell>
-                                      <TableCell className="text-right">
+                                      <TableCell className="py-4 pr-6 text-right">
                                         {isAdmin && (
-                                          <div className="flex justify-end gap-1">
+                                          <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                             {editingTypeId === t.id ? (
                                               <>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateType(t.id, editingTypeName)}>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-lg shadow-sm" onClick={() => handleUpdateType(t.id, editingTypeName)}>
                                                   <Check className="h-4 w-4" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingTypeId(null)}>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-lg" onClick={() => setEditingTypeId(null)}>
                                                   <X className="h-4 w-4" />
                                                 </Button>
                                               </>
                                             ) : (
                                               <>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" onClick={() => {
                                                   setTypeForProjects(t);
                                                   setSelectedProjectIdsForType(typeProjects.map(p => p.id));
                                                   setIsSetProjectsForTypeDialogOpen(true);
                                                 }} title="Gán dự án">
                                                   <Plus className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => handleMigrateType(t)} title="Chuyển toàn bộ dự án">
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" onClick={() => handleMigrateType(t)} title="Chuyển toàn bộ dự án">
                                                   <RefreshCw className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => {
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" onClick={() => {
                                                   setEditingTypeId(t.id);
                                                   setEditingTypeName(t.name);
                                                 }}>
                                                   <Edit2 className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteType(t.id, t.name)}>
-                                                  <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
+                                                <Dialog>
+                                                  <DialogTrigger nativeButton={false} render={
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
+                                                  }>
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </DialogTrigger>
+                                                  <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                                    <DialogHeader>
+                                                      <DialogTitle className="text-xl font-black text-slate-900">Xóa loại hình này?</DialogTitle>
+                                                      <DialogDescription className="font-medium text-slate-500">Dự án thuộc loại hình này sẽ về trạng thái 'Chưa xác định'.</DialogDescription>
+                                                    </DialogHeader>
+                                                    <DialogFooter className="mt-4">
+                                                      <Button variant="outline" className="rounded-xl h-12 font-bold" onClick={() => {}}>Hủy</Button>
+                                                      <Button variant="destructive" className="rounded-xl h-12 font-black shadow-lg shadow-red-100" onClick={() => handleDeleteType(t.id, t.name)}>Xác nhận Xóa</Button>
+                                                    </DialogFooter>
+                                                  </DialogContent>
+                                                </Dialog>
                                               </>
                                             )}
                                           </div>
@@ -8029,23 +8378,31 @@ export default function App() {
                                 })}
                               {types.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={5} className="h-24 text-center text-slate-500">
-                                    Chưa có loại hình nào
+                                  <TableCell colSpan={isAdmin ? 5 : 4} className="h-48 text-center bg-slate-50/50">
+                                    <div className="flex flex-col items-center justify-center space-y-4">
+                                      <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
+                                        <Layers className="h-8 w-8 text-slate-300" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="font-bold text-slate-900">Chưa có loại hình nào</p>
+                                        <p className="text-xs text-slate-500">Hãy thêm loại hình mới để quản lý dự án</p>
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               )}
-                              <TableRow className="bg-slate-50/50">
-                                {isAdmin && <TableCell />}
-                                <TableCell className="font-medium italic text-slate-500">
+                              <TableRow className="bg-slate-50/30 hover:bg-slate-50/50 transition-colors">
+                                {isAdmin && <TableCell className="pl-6" />}
+                                <TableCell className="py-4 pl-4 font-bold text-slate-500 italic">
                                   Chưa phân loại
                                 </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="font-normal border-red-100 bg-red-50 text-red-600">
+                                <TableCell className="py-4">
+                                  <Badge variant="outline" className="font-bold border-red-100 bg-red-50 text-red-600 px-3 py-1 rounded-lg">
                                     {projects.filter(p => !p.type || !(p.type || '').trim()).length} dự án
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="text-xs text-slate-300">-</TableCell>
-                                <TableCell className="text-right italic text-xs text-slate-400">Tự động</TableCell>
+                                <TableCell className="py-4 text-xs font-medium text-slate-300">-</TableCell>
+                                <TableCell className="py-4 pr-6 text-right italic text-[10px] font-bold text-slate-400">Hệ thống</TableCell>
                               </TableRow>
                             </TableBody>
                           </Table>
@@ -8066,11 +8423,11 @@ export default function App() {
                             <Label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tìm kiếm Team</Label>
                             <div className="relative">
                               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input 
+                              <DebouncedInput 
                                 placeholder="Nhập tên team..." 
                                 className="pl-10 bg-slate-50 border-none shadow-none"
                                 value={teamSearch}
-                                onChange={e => setTeamSearch(e.target.value)}
+                                onChange={setTeamSearch}
                               />
                             </div>
                           </div>
@@ -8361,11 +8718,11 @@ export default function App() {
                         <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
                           <div className="flex-1 min-w-[200px] relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input 
+                            <DebouncedInput 
                               placeholder="Tìm theo dự án, team, người triển khai..." 
                               className="pl-10 bg-white border-none shadow-sm h-10"
                               value={adminBudgetSearch}
-                              onChange={e => setAdminBudgetSearch(e.target.value)}
+                              onChange={setAdminBudgetSearch}
                             />
                           </div>
                           <div className="flex gap-1">
@@ -8580,11 +8937,11 @@ export default function App() {
                         <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
                           <div className="flex-1 min-w-[200px] relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input 
+                            <DebouncedInput 
                               placeholder="Tìm theo dự án, team, người triển khai..." 
                               className="pl-10 bg-white border-none shadow-sm h-10"
                               value={adminCostSearch}
-                              onChange={e => setAdminCostSearch(e.target.value)}
+                              onChange={setAdminCostSearch}
                             />
                           </div>
                   <div className="space-y-4">
@@ -8767,8 +9124,8 @@ export default function App() {
                     )}
 
                     {/* Filters Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8">
-                      <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8 overflow-hidden">
+                      <div className="space-y-2 min-w-0">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <Building2 className="w-3 h-3" /> Dự án
                         </Label>
@@ -8781,7 +9138,7 @@ export default function App() {
                       </div>
 
                       {isAdmin && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0">
                           <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                             <Users className="w-3 h-3" /> Đội (Team)
                           </Label>
@@ -8794,67 +9151,92 @@ export default function App() {
                         </div>
                       )}
 
-                      <div className="space-y-2">
+                      <div className="space-y-2 min-w-0">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <Map className="w-3 h-3" /> Miền / Vùng
                         </Label>
-                        <Select value={reportRegion} onValueChange={setReportRegion}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả miền">
-                              {reportRegion === 'all' ? "Tất cả miền" : reportRegion}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Tất cả miền</SelectItem>
-                            {uniqueRegions.map(r => (
-                              <SelectItem key={r} value={r}>{r}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableRegionSelect
+                          value={reportRegion}
+                          onValueChange={setReportRegion}
+                          regions={uniqueRegions}
+                        />
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-2 min-w-0">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <Layers className="w-3 h-3" /> Loại hình
                         </Label>
-                        <Select value={reportType} onValueChange={setReportType}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả loại hình">
-                               {reportType === 'all' ? "Tất cả loại hình" : reportType}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Tất cả loại hình</SelectItem>
-                            {uniqueTypes.map(t => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableTypeSelect
+                          value={reportType}
+                          onValueChange={setReportType}
+                          types={uniqueTypes}
+                        />
                       </div>
 
 
 
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <History className="w-3 h-3" /> {reportMonth ? getMarketingMonthDisplayRange(reportMonth) : 'Tất cả các tháng'}
+                          <History className="w-3 h-3" /> Năm
                         </Label>
-                        <Select 
-                          value={reportMonth ? reportMonth.split('-')[1] : ''} 
-                          onValueChange={(val) => {
-                            const current = reportMonth || format(new Date(), 'yyyy-MM');
-                            const [y] = current.split('-');
-                            setReportMonth(`${y}-${val}`);
-                          }}
-                        >
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10 w-full">
-                            <SelectValue placeholder="Chọn Tháng" />
+                        <Select value={reportYear} onValueChange={setReportYear}>
+                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
+                            <SelectValue placeholder="Chọn năm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
-                              <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                            {Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - 2 + i).toString()).map(y => (
+                              <SelectItem key={y} value={y}>Năm {y}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Calendar className="w-3 h-3" /> {reportMonths.length > 1 ? `Đang chọn ${reportMonths.length} tháng` : reportMonths.length === 1 ? getMarketingMonthDisplayRange(reportMonths[0]) : 'Chọn tháng'}
+                        </Label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "w-full bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10 justify-between font-medium")}>
+                            <span className="truncate">
+                              {reportMonths.length === 0 ? "Chọn Tháng" : 
+                               reportMonths.length === 1 ? `Tháng ${reportMonths[0].split('-')[1]}` :
+                               `Đã chọn ${reportMonths.length} tháng`}
+                            </span>
+                            <Plus className="w-4 h-4 ml-2 opacity-50" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-56 bg-white rounded-2xl shadow-2xl border-slate-100 p-2 overflow-y-auto max-h-[300px]">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5">Chọn nhiều tháng để so sánh</DropdownMenuLabel>
+                              <DropdownMenuSeparator className="bg-slate-50" />
+                              {Array.from({ length: 12 }, (_, i) => {
+                                const m = (i + 1).toString().padStart(2, '0');
+                                const year = reportYear || new Date().getFullYear().toString();
+                                const monthValue = `${year}-${m}`;
+                                const isChecked = reportMonths.includes(monthValue);
+                                
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={m}
+                                    checked={isChecked}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setReportMonths([...reportMonths, monthValue]);
+                                      } else {
+                                        setReportMonths(reportMonths.filter(v => v !== monthValue));
+                                      }
+                                    }}
+                                    className="rounded-xl focus:bg-blue-50 focus:text-blue-600 transition-colors cursor-pointer py-2 px-3"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm">Tháng {m}</span>
+                                      <span className="text-[9px] text-slate-400 uppercase font-black">{getMarketingMonthDisplayRange(monthValue)}</span>
+                                    </div>
+                                  </DropdownMenuCheckboxItem>
+                                );
+                              })}
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
 
                       <div className="space-y-2">
@@ -8867,10 +9249,10 @@ export default function App() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Tất cả kỳ</SelectItem>
-                            <SelectItem value="1">Kỳ 1 ({getPeriodRange(reportMonth, '1')})</SelectItem>
-                            <SelectItem value="2">Kỳ 2 ({getPeriodRange(reportMonth, '2')})</SelectItem>
-                            <SelectItem value="3">Kỳ 3 ({getPeriodRange(reportMonth, '3')})</SelectItem>
-                            <SelectItem value="4">Kỳ 4 ({getPeriodRange(reportMonth, '4')})</SelectItem>
+                            <SelectItem value="1">Kỳ 1 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '1')})</SelectItem>
+                            <SelectItem value="2">Kỳ 2 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '2')})</SelectItem>
+                            <SelectItem value="3">Kỳ 3 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '3')})</SelectItem>
+                            <SelectItem value="4">Kỳ 4 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '4')})</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -9063,9 +9445,164 @@ export default function App() {
                               <TabsTrigger value="region" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Khu vực</TabsTrigger>
                               <TabsTrigger value="channels" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Chi tiết Kênh</TabsTrigger>
                               <TabsTrigger value="efficiency" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Hiệu quả</TabsTrigger>
+                              <TabsTrigger value="comparison" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-bold border border-indigo-100">So sánh tháng</TabsTrigger>
                             </TabsList>
                           </div>
                         </div>
+
+                        <TabsContent value="comparison" className="mt-0 space-y-6">
+                           <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6">
+                              {reportMonths.length === 0 ? (
+                                <div className="h-[400px] flex flex-col items-center justify-center text-center space-y-4">
+                                  <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center border border-slate-100">
+                                    <History className="w-10 h-10 text-slate-300" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <h3 className="font-black text-slate-900 uppercase tracking-tighter">Chưa chọn tháng so sánh</h3>
+                                    <p className="text-xs text-slate-500 font-medium max-w-[280px]">Vui lòng chọn ít nhất một tháng ở bộ lọc phía trên để bắt đầu so sánh hiệu quả giữa các tháng.</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <GitMerge className="w-3 h-3 text-indigo-500" /> Biểu đồ so sánh hiệu quả giữa các tháng
+                                  </Label>
+                                  <p className="text-[10px] text-slate-500 font-medium">So sánh <span className="font-bold text-indigo-600">{reportSortBy === 'budget' ? 'Ngân sách' : reportSortBy === 'actual' ? 'Chi phí thực' : 'Doanh số'}</span> của {reportMonths.length} tháng đã chọn</p>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                                   <div className="flex gap-1 group">
+                                      {reportMonths.map((m, idx) => (
+                                         <div key={m} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-100 shadow-sm">
+                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChartColor(idx) }} />
+                                            <span className="text-[9px] font-black text-slate-600 uppercase">Tháng {m.split('-')[1]}</span>
+                                         </div>
+                                      ))}
+                                   </div>
+                                </div>
+                              </div>
+
+                              <div className="h-[450px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={comparisonChartData} margin={{ top: 10, right: 30, left: 20, bottom: 60 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                      dataKey="name" 
+                                      axisLine={false} 
+                                      tickLine={false} 
+                                      tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} 
+                                      interval={0}
+                                      angle={-45}
+                                      textAnchor="end"
+                                      height={60}
+                                    />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} tickFormatter={formatYAxis} />
+                                    <ChartTooltip 
+                                       content={({ active, payload, label }) => {
+                                          if (active && payload && payload.length) {
+                                            return (
+                                              <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-50 min-w-[220px] animate-in fade-in zoom-in duration-200">
+                                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+                                                  <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                                                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                  {payload.map((p: any, i: number) => (
+                                                     <div key={i} className="flex items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-1.5">
+                                                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+                                                           <span className="text-[9px] font-bold text-slate-500 uppercase">Tháng {p.name.split('-')[1]}</span>
+                                                        </div>
+                                                        <span className="text-xs font-black text-slate-900">{formatCurrency(p.value)}</span>
+                                                     </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                          return null;
+                                       }}
+                                    />
+                                    {reportMonths.map((m, idx) => (
+                                       <Line 
+                                          key={m}
+                                          type="monotone"
+                                          dataKey={m}
+                                          name={m}
+                                          stroke={getChartColor(idx)}
+                                          strokeWidth={3}
+                                          dot={{ r: 4, fill: getChartColor(idx), strokeWidth: 2, stroke: '#fff' }}
+                                          activeDot={{ r: 6, strokeWidth: 0 }}
+                                          animationDuration={1500}
+                                          animationBegin={idx * 200}
+                                       />
+                                    ))}
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-50">
+                                 <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Mục tiêu so sánh</p>
+                                    <div className="flex gap-2">
+                                       <Button 
+                                          variant={reportSortBy === 'budget' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setReportSortBy('budget')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${reportSortBy === 'budget' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'text-slate-400'}`}
+                                       >
+                                          Ngân sách
+                                       </Button>
+                                       <Button 
+                                          variant={reportSortBy === 'actual' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setReportSortBy('actual')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${reportSortBy === 'actual' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'text-slate-400'}`}
+                                       >
+                                          Chi phí thực
+                                       </Button>
+                                       <Button 
+                                          variant={reportSortBy === 'revenue' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setReportSortBy('revenue')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${reportSortBy === 'revenue' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'text-slate-400'}`}
+                                       >
+                                          Doanh số
+                                       </Button>
+                                    </div>
+                                 </div>
+                                 <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cấp độ so sánh</p>
+                                    <div className="flex gap-2">
+                                       <Button 
+                                          variant={efficiencyGroupType === 'team' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setEfficiencyGroupType('team')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${efficiencyGroupType === 'team' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400'}`}
+                                       >
+                                          Theo Team
+                                       </Button>
+                                       <Button 
+                                          variant={efficiencyGroupType === 'project' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setEfficiencyGroupType('project')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${efficiencyGroupType === 'project' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400'}`}
+                                       >
+                                          Theo Dự án
+                                       </Button>
+                                    </div>
+                                 </div>
+                                 <div className="p-4 flex items-center justify-center">
+                                    <p className="text-[10px] text-slate-400 font-medium italic text-center leading-relaxed">
+                                       * Dữ liệu được tổng hợp từ ngân sách, chi phí thực tế và báo cáo kinh doanh của các tháng đã chọn.
+                                    </p>
+                                 </div>
+                              </div>
+                            </>
+                           )}
+                         </div>
+                      </TabsContent>
 
                         <TabsContent value="team" className="mt-0">
                           <div className="h-[450px] w-full bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -10150,11 +10687,11 @@ export default function App() {
                       </div>
                       <div className="relative w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <Input 
+                        <DebouncedInput 
                           placeholder="Tìm người dùng..." 
                           className="pl-10 h-9"
                           value={userSearch}
-                          onChange={e => setUserSearch(e.target.value)}
+                          onChange={setUserSearch}
                         />
                       </div>
                     </CardHeader>
@@ -10338,11 +10875,11 @@ export default function App() {
                         </Button>
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <Input 
+                          <DebouncedInput 
                             placeholder="Tìm Email, ID, Collection..." 
                             className="pl-10 h-10 w-[250px] bg-slate-50 border-none rounded-xl"
                             value={logSearch}
-                            onChange={e => setLogSearch(e.target.value)}
+                            onChange={setLogSearch}
                           />
                         </div>
                         <Select value={logUserFilter} onValueChange={setLogUserFilter}>
@@ -11463,11 +12000,11 @@ export default function App() {
                                 </DialogDescription>
                                 <div className="mt-4 relative group">
                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors group-focus-within:text-emerald-500" />
-                                  <Input
+                                  <DebouncedInput
                                     placeholder="Tìm theo dự án, team hoặc nhân sự..."
                                     className="pl-10 h-12 bg-slate-50 border-slate-100 focus:border-emerald-200 focus:ring-emerald-100 text-sm rounded-xl"
                                     value={budgetSearch}
-                                    onChange={(e) => setBudgetSearch(e.target.value)}
+                                    onChange={setBudgetSearch}
                                   />
                                 </div>
                               </DialogHeader>
@@ -11965,11 +12502,11 @@ export default function App() {
                       <div className="p-2 sticky top-0 bg-popover z-10 border-b">
                         <div className="relative">
                           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input
+                          <DebouncedInput
                             placeholder="Tìm team..."
                             className="pl-8 h-9"
                             value={teamSearch}
-                            onChange={(e) => setTeamSearch(e.target.value)}
+                            onChange={setTeamSearch}
                             onKeyDown={(e) => e.stopPropagation()}
                           />
                         </div>
@@ -12008,11 +12545,11 @@ export default function App() {
           <div className="py-4 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input 
+              <DebouncedInput 
                 placeholder="Tìm kiếm dự án..." 
                 className="pl-10"
                 value={projectSearch}
-                onChange={e => setProjectSearch(e.target.value)}
+                onChange={setProjectSearch}
               />
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
@@ -12091,11 +12628,11 @@ export default function App() {
               <Label>Chọn Dự án ({selectedGlobalProjectIds.length})</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input 
+                <DebouncedInput 
                   placeholder="Tìm kiếm dự án..." 
                   className="pl-10 h-9"
                   value={projectSearch}
-                  onChange={e => setProjectSearch(e.target.value)}
+                  onChange={setProjectSearch}
                 />
               </div>
               <div className="max-h-[250px] overflow-y-auto border rounded-md p-2 space-y-1">
@@ -12143,11 +12680,11 @@ export default function App() {
           <div className="py-4 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input 
+              <DebouncedInput 
                 placeholder="Tìm kiếm dự án..." 
                 className="pl-10"
                 value={projectSearch}
-                onChange={e => setProjectSearch(e.target.value)}
+                onChange={setProjectSearch}
               />
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">

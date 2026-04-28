@@ -134,6 +134,22 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Support Requests
+    // ===============================================================
+    match /supportRequests/{requestId} {
+      allow read: if isAdmin() || isMod() || resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && incoming().userId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (resource.data.userId == request.auth.uid && 
+         !('adminReply' in incoming().diff(existing()).affectedKeys()) &&
+         !('repliedBy' in incoming().diff(existing()).affectedKeys()) &&
+         !('repliedAt' in incoming().diff(existing()).affectedKeys()))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
     // Audit Logs
     // ===============================================================
     match /auditLogs/{logId} {
@@ -204,6 +220,13 @@ service cloud.firestore {
       allow create: if isAdmin() || isMod();
       allow update: if isAdmin() || isMod();
       allow delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // ===============================================================
+    // Internal / Connection Test
+    // ===============================================================
+    match /_internal_/connection_test {
+      allow read: if isAuthenticated();
     }
 
     // ===============================================================

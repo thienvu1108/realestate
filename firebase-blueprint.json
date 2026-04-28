@@ -190,6 +190,36 @@
         "createdBy": { "type": "string" }
       },
       "required": ["month", "teamId", "projectId"]
+    },
+    "SupportRequest": {
+      "title": "Support Request",
+      "description": "User support requests and admin responses",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { 
+          "type": "string", 
+          "enum": ["Kỹ thuật", "Quy trình", "Ngân sách", "Khác"] 
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["Chờ xử lý", "Đang xử lý", "Đã phản hồi", "Đã đóng"] 
+        },
+        "priority": { 
+          "type": "string", 
+          "enum": ["Thấp", "Trung bình", "Cao"] 
+        },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "adminReply": { "type": "string" },
+        "repliedBy": { "type": "string" },
+        "repliedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "userId"]
     }
   },
   "firestore": {
@@ -220,6 +250,10 @@
     "/acceptances/{acceptanceId}": {
       "schema": "Acceptance",
       "description": "Monthly cost acceptance records"
+    },
+    "/supportRequests/{requestId}": {
+      "schema": "SupportRequest",
+      "description": "User support and help requests"
     },
     "/auditLogs/{logId}": {
       "schema": "AuditLog",

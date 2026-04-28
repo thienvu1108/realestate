@@ -315,7 +315,7 @@ import {
   increment,
   arrayUnion
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, testConnection } from './firebase';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -333,7 +333,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map as MapIcon, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings, Eye } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -378,12 +378,27 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
     },
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  toast.error(`Lỗi Firestore: ${errInfo.error}`);
+  
+  const errorJson = JSON.stringify(errInfo);
+  console.error('Firestore Error: ', errorJson);
+  
+  if (errInfo.error.includes('insufficient permissions') || errInfo.error.includes('offline')) {
+    toast.error(`Lỗi kết nối hoặc phân quyền Firestore: ${errInfo.error}`);
+    throw new Error(errorJson);
+  } else {
+    toast.error(`Lỗi Firestore: ${errInfo.error}`);
+  }
 }
 
 export default function App() {
@@ -402,6 +417,7 @@ export default function App() {
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
   const [acceptances, setAcceptances] = useState<any[]>([]);
   const [finalAcceptances, setFinalAcceptances] = useState<any[]>([]);
+  const [supportRequests, setSupportRequests] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('home');
   const [adminSubTab, setAdminSubTab] = useState('reports');
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -755,6 +771,7 @@ export default function App() {
   const [adminProjectTypeFilter, setAdminProjectTypeFilter] = useState('all');
   const [budgetSearch, setBudgetSearch] = useState('');
   const [isConfirmBudgetOpen, setIsConfirmBudgetOpen] = useState(false);
+  const [isConfirmingMulti, setIsConfirmingMulti] = useState(false);
   
   // Delete confirmation states
   const [isDeleteProjectDialogOpen, setIsDeleteProjectDialogOpen] = useState(false);
@@ -846,7 +863,7 @@ export default function App() {
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual' | 'revenue'>('budget');
   const [activeReportTab, setActiveReportTab] = useState('team');
-  const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project'>('team');
+  const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project' | 'region'>('team');
   const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
   const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -855,6 +872,7 @@ export default function App() {
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [selectedEfficiencyIds, setSelectedEfficiencyIds] = useState<string[]>([]);
   const [multiBudgetItems, setMultiBudgetItems] = useState<any[]>([]);
+  const [isOverBudgetDetailOpen, setIsOverBudgetDetailOpen] = useState(false);
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('1');
   const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('20');
@@ -1022,6 +1040,7 @@ export default function App() {
   const [newEfficiencyRevenue, setNewEfficiencyRevenue] = useState('');
   const [adminEfficiencySearch, setAdminEfficiencySearch] = useState('');
   const [adminEfficiencyMonthFilter, setAdminEfficiencyMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [adminEfficiencySort, setAdminEfficiencySort] = useState<{ key: 'sales' | 'revenue' | 'name' | 'month' | 'none', direction: 'asc' | 'desc' }>({ key: 'none', direction: 'desc' });
   const [isImportingEfficiencyUrl, setIsImportingEfficiencyUrl] = useState(false);
   const [efficiencySheetUrl, setEfficiencySheetUrl] = useState('');
   const [costSheetUrl, setCostSheetUrl] = useState('');
@@ -1126,6 +1145,14 @@ export default function App() {
     return map;
   }, [teams]);
 
+  const budgetAmountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    budgets.forEach(b => {
+      map[b.id] = b.amount;
+    });
+    return map;
+  }, [budgets]);
+
   const filteredBudgetsForCostSelection = useMemo(() => {
     const userEmail = user?.email?.toLowerCase();
     
@@ -1147,12 +1174,31 @@ export default function App() {
   }, [budgets, user, userProfile, isGDDA, isAdmin, isMod, costBudgetMonth, projectMap, budgetSearch]);
 
   useEffect(() => {
+    // Test Firestore connection on boot
+    testConnection();
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
           // Check/Create user profile
           const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          
+          let userDoc;
+          try {
+            // Prefer getDoc (which might use cache)
+            userDoc = await getDoc(userDocRef);
+          } catch (e: any) {
+            console.warn("getDoc failed, trying getDocFromServer:", e.message);
+            // If it failed due to being offline or something, try forcing server fetch if possible
+            // or just catch and report
+            userDoc = await getDocFromServer(userDocRef).catch(() => null);
+          }
+
+          if (!userDoc) {
+            console.error("Critical: Could not fetch user profile. System might be offline.");
+            setUser(firebaseUser); // Still set user but might be degraded
+            return;
+          }
           
           let role: 'super_admin' | 'admin' | 'mod' | 'gdda' | 'user' = 'user';
           if (firebaseUser.email === 'thienvu1108@gmail.com') {
@@ -1367,6 +1413,18 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
     }
 
+    // Listen to support requests
+    let qSupport;
+    if (isAdmin || isMod) {
+      qSupport = query(collection(db, 'supportRequests'), orderBy('createdAt', 'desc'));
+    } else {
+      qSupport = query(collection(db, 'supportRequests'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    }
+
+    const unsubSupport = onSnapshot(qSupport, (snapshot) => {
+      setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
+
     // Listen to settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
       if (doc.exists()) {
@@ -1389,6 +1447,7 @@ export default function App() {
       unsubEfficiency();
       unsubAcceptances();
       unsubFinalAcceptances();
+      unsubSupport();
       unsubSettings();
     };
   }, [user, userRole, userProfile]);
@@ -1482,10 +1541,14 @@ export default function App() {
             const hasData = Object.values(normalizedRow).some(v => v !== null && v !== undefined && v !== '');
             if (hasData) {
               const missing = [];
-              if (!pRef) missing.push('Dự án');
-              if (!tRef) missing.push('Team');
-              if (!month) missing.push('Tháng');
-              currentImportErrors.push(`Dòng ${rowNum}: Thiếu thông tin bắt buộc (${missing.join(', ')})`);
+              if (!pRef) missing.push('Dự án (Mã/Tên)');
+              if (!tRef) missing.push('Team (Mã/Tên)');
+              if (!month) missing.push('Tháng (Kỳ)');
+              currentImportErrors.push(
+                `Dòng ${rowNum}: THIẾU THÔNG TIN BẮT BUỘC (${missing.join(', ')}).\n` +
+                `• Nguyên nhân: Cột chứa thông tin này bị trống hoặc tên cột không khớp mẫu.\n` +
+                `• Cách khắc phục: Đảm bảo các cột ID/Tên Dự án, Team và Tháng được điền đầy đủ. Đối với Tháng, hãy nhập đúng định dạng YYYY-MM (Ví dụ: 2024-04).`
+              );
             }
             continue;
           }
@@ -1494,11 +1557,19 @@ export default function App() {
           const team = teams.find(t => t.id === tRef || t.teamCode === tRef || t.name.toLowerCase() === tRef.toLowerCase());
 
           if (!project) {
-            currentImportErrors.push(`Dòng ${rowNum}: Không tìm thấy dự án khớp với "${pRef}"`);
+            currentImportErrors.push(
+              `Dòng ${rowNum}: KHÔNG TÌM THẤY DỰ ÁN khớp với "${pRef}".\n` +
+              `• Nguyên nhân: Mã dự án hoặc Tên dự án trong file không tồn tại trong hệ thống.\n` +
+              `• Cách khắc phục: Kiểm tra lại mục "Quản lý Dự án" để lấy chính xác Mã ID hoặc Tên dự án. Lưu ý không có khoảng trắng thừa.`
+            );
             continue;
           }
           if (!team) {
-            currentImportErrors.push(`Dòng ${rowNum}: Không tìm thấy team khớp với "${tRef}"`);
+            currentImportErrors.push(
+              `Dòng ${rowNum}: KHÔNG TÌM THẤY TEAM khớp với "${tRef}".\n` +
+              `• Nguyên nhân: Mã team hoặc Tên team trong file không tồn tại trong hệ thống.\n` +
+              `• Cách khắc phục: Kiểm tra lại mục "Quản lý Team/Sàn" để lấy chính xác Mã ID hoặc Tên team.`
+            );
             continue;
           }
 
@@ -1664,12 +1735,18 @@ export default function App() {
               consolidatedDataMap.set(key, { pRef, tRef, month, amount, implementer });
             }
           } else if (Object.values(normalizedRow).some(v => v !== '')) {
-            skippedCount++;
             const missing = [];
             if (!pRef) missing.push('Dự án');
             if (!tRef) missing.push('Team');
             if (!month) missing.push('Tháng');
-            errorDetails.push(`Dòng ${count + skippedCount}: Thiếu ${missing.join(', ')}`);
+            if (isNaN(amount)) missing.push('Ngân sách');
+            
+            errorDetails.push(
+              `THÔNG TIN SAI HOẶC THIẾU: (${missing.join(', ')}).\n` +
+              `• Nguyên nhân: Một số ô ở Google Sheet đang trống hoặc sai định dạng số.\n` +
+              `• Cách khắc phục: Kiểm tra lại các cột Dự án, Team, Tháng và Ngân sách tại Link Google Sheet.`
+            );
+            skippedCount++;
           }
       }
 
@@ -1699,7 +1776,21 @@ export default function App() {
         const project = findProject(item.pRef);
         const team = findTeam(item.tRef);
 
-        if (!project || !team) {
+        if (!project) {
+          errorDetails.push(
+            `KHÔNG TÌM THẤY DỰ ÁN khớp với "${item.pRef}".\n` +
+            `• Nguyên nhân: Dự án mang tên "${item.pRef}" trong Google Sheet không khớp với hệ thống.\n` +
+            `• Cách khắc phục: Sửa lại tên Dự án trong Google Sheet cho đúng với danh sách hệ thống.`
+          );
+          skippedCount++;
+          continue;
+        }
+        if (!team) {
+          errorDetails.push(
+            `KHÔNG TÌM THẤY TEAM khớp với "${item.tRef}".\n` +
+            `• Nguyên nhân: Mã hoặc tên Team "${item.tRef}" không tồn tại.\n` +
+            `• Cách khắc phục: Sửa lại tên Team trong Google Sheet cho đúng với danh sách hệ thống.`
+          );
           skippedCount++;
           continue;
         }
@@ -2163,11 +2254,28 @@ export default function App() {
       const matchMonth = !adminEfficiencyMonthFilter || r.month === adminEfficiencyMonthFilter;
       return matchSearch && matchMonth;
     }).sort((a, b) => {
-      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return timeB - timeA;
+      if (adminEfficiencySort.key === 'none') {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return timeB - timeA;
+      }
+      
+      let comparison = 0;
+      if (adminEfficiencySort.key === 'sales') {
+        comparison = a.salesCount - b.salesCount;
+      } else if (adminEfficiencySort.key === 'revenue') {
+        comparison = a.revenue - b.revenue;
+      } else if (adminEfficiencySort.key === 'name') {
+        const nameA = (projectMap[a.projectId] || a.projectName || '').toLowerCase();
+        const nameB = (projectMap[b.projectId] || b.projectName || '').toLowerCase();
+        comparison = nameA.localeCompare(nameB);
+      } else if (adminEfficiencySort.key === 'month') {
+        comparison = a.month.localeCompare(b.month);
+      }
+      
+      return adminEfficiencySort.direction === 'asc' ? comparison : -comparison;
     });
-  }, [efficiencyReports, adminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap]);
+  }, [efficiencyReports, adminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap, adminEfficiencySort]);
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
@@ -3617,7 +3725,32 @@ export default function App() {
     setMultiBudgetItems([...multiBudgetItems, newItem]);
     setBudgetAmount('');
     setSelectedProjectId('');
-    toast.success('Đã thêm vào danh sách chờ đăng ký');
+    // Notice: Not calling toast.success here if we are about to show confirm dialog
+    return true;
+  };
+
+  const handleRegisterBudgetMain = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // If form has data, try to add it to list first
+    if (selectedProjectId && budgetAmount && selectedTeamId && budgetMonth && implementerName) {
+      const success = handleAddBudget(e);
+      if (!success) return;
+    } else if (multiBudgetItems.length === 0) {
+      toast.error('Vui lòng nhập đầy đủ thông tin đăng ký');
+      return;
+    }
+
+    setIsConfirmingMulti(true);
+    setIsConfirmBudgetOpen(true);
+  };
+
+  const handleAddBudgetToListOnly = (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = handleAddBudget(e);
+    if (success) {
+      toast.success('Đã thêm dự án vào danh sách chờ');
+    }
   };
 
   const removeMultiBudgetItem = (tempId: string) => {
@@ -3727,6 +3860,7 @@ export default function App() {
 
       setMultiBudgetItems([]);
       setIsConfirmBudgetOpen(false);
+      setIsConfirmingMulti(false);
       toast.success('Đã hoàn tất đăng ký ngân sách');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'budgets');
@@ -3838,6 +3972,7 @@ export default function App() {
         projectId: actualProjectId,
         projectName: project?.name || 'N/A',
         budgetId: selectedBudgetId,
+        teamId: budget.teamId || null,
         implementerName: budget.implementerName || 'N/A',
         teamName: budget.teamName || 'N/A',
         assignedUserEmail: budget.assignedUserEmail || null,
@@ -4788,7 +4923,12 @@ export default function App() {
              if (!tRef) missing.push('Team');
              if (!month) missing.push('Tháng/Kỳ');
              if (isNaN(amount)) missing.push('Ngân sách (không phải số)');
-             errorDetailsList.push(`Dòng lỗi: Thiếu hoặc sai định dạng: ${missing.join(', ')} (Dự án: "${pRef || '?'}")`);
+             
+             errorDetailsList.push(
+               `THÔNG TIN SAI ĐỊNH DẠNG HOẶC THIẾU: (${missing.join(', ')}).\n` +
+               `• Nguyên nhân: Cột "${missing[0]}" đang để trống hoặc chứa ký tự không hợp lệ (đối với số tiền).\n` +
+               `• Cách khắc phục: Điền đầy đủ thông tin Dự án, Team, Tháng (YYYY-MM). Đối với Ngân sách chỉ điền chữ số, không kèm đơn vị VNĐ hay dấu chấm phân cách.`
+             );
              errorsCount++;
           }
         }
@@ -4820,12 +4960,20 @@ export default function App() {
           const team = findTeamAddress(item.tRef);
 
           if (!project) {
-            errorDetailsList.push(`Không tìm thấy Dự án khớp với "${item.pRef}"`);
+            errorDetailsList.push(
+              `KHÔNG TÌM THẤY DỰ ÁN khớp với "${item.pRef}".\n` +
+              `• Nguyên nhân: Tên hoặc mã Dự án không tồn tại. "Dự án" hiển thị trong file là "${item.pRef}".\n` +
+              `• Cách khắc phục: Đối chiếu với danh sách Dự án trong hệ thống để lấy đúng tên hoặc ID.`
+            );
             errorsCount++;
             continue;
           }
           if (!team) {
-            errorDetailsList.push(`Không tìm thấy Team khớp với "${item.tRef}"`);
+            errorDetailsList.push(
+              `KHÔNG TÌM THẤY TEAM khớp với "${item.tRef}".\n` +
+              `• Nguyên nhân: Tên hoặc mã Team không tồn tại. "Team" hiển thị trong file là "${item.tRef}".\n` +
+              `• Cách khắc phục: Đối chiếu với danh sách Team trong hệ thống để lấy đúng tên hoặc ID.`
+            );
             errorsCount++;
             continue;
           }
@@ -5025,7 +5173,15 @@ export default function App() {
           if (!pRef || !tRef || !month) {
             const hasData = Object.values(row).some(v => v !== '');
             if (hasData) {
-              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án: "${pRef}", Team: "${tRef}", Kỳ: "${month}")`);
+              const missingFields = [];
+              if (!pRef) missingFields.push('Dự án');
+              if (!tRef) missingFields.push('Team');
+              if (!month) missingFields.push('Tháng');
+              errorDetailsList.push(
+                `Dòng ${rowIndex}: THIẾU THÔNG TIN BẮT BUỘC (${missingFields.join(', ')}).\n` +
+                `• Nguyên nhân: Một trong các cột bắt buộc bị trống.\n` +
+                `• Cách khắc phục: Hãy điền đầy đủ Dự án, Team và Tháng thực chi.`
+              );
               errorsCount++;
             }
             continue;
@@ -5035,12 +5191,20 @@ export default function App() {
           const team = findTeamInternal(tRef);
 
           if (!project) {
-            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Dự án khớp với "${pRef}"`);
+            errorDetailsList.push(
+              `Dòng ${rowIndex}: KHÔNG TÌM THẤY DỰ ÁN khớp với "${pRef}".\n` +
+              `• Nguyên nhân: Hệ thống không nhận diện được dự án này.\n` +
+              `• Cách khắc phục: Kiểm tra lại tên hoặc ID Dự án trong danh sách Quản lý Dự án.`
+            );
             errorsCount++;
             continue;
           }
           if (!team) {
-            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy Team khớp với "${tRef}"`);
+            errorDetailsList.push(
+              `Dòng ${rowIndex}: KHÔNG TÌM THẤY TEAM khớp với "${tRef}".\n` +
+              `• Nguyên nhân: Hệ thống không nhận diện được team này.\n` +
+              `• Cách khắc phục: Kiểm tra lại tên hoặc ID Team trong danh sách Quản lý Team.`
+            );
             errorsCount++;
             continue;
           }
@@ -5055,7 +5219,11 @@ export default function App() {
           );
 
           if (!matchingBudget) {
-            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy ngân sách đã duyệt cho [${project.name}] - [${team.name}] tháng ${month}`);
+            errorDetailsList.push(
+              `Dòng ${rowIndex}: KHÔNG CÓ NGÂN SÁCH ĐÃ DUYỆT cho [${project.name}] - [${team.name}] tháng ${month}.\n` +
+              `• Nguyên nhân: Bạn đang nhập chi phí cho một dự án/team chưa được khai báo ngân sách trong tháng này.\n` +
+              `• Cách khắc phục: Vui lòng nhập Ngân sách cho dự án này trước khi nhập chi phí thực tế.`
+            );
             errorsCount++;
             continue;
           }
@@ -5709,9 +5877,21 @@ export default function App() {
       const bTeamName = teamMap[b.teamId] || b.teamName;
       if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
 
+      const bProject = projects.find(p => p.id === b.projectId);
+      const bRegion = bProject?.region || 'Khác';
       const tId = b.teamId || b.teamName;
-      const mainKey = efficiencyGroupType === 'project' ? b.projectId : tId;
-      const detailKey = efficiencyGroupType === 'project' ? tId : b.projectId;
+      
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = b.projectId;
+        detailKey = tId;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = bRegion;
+        detailKey = b.projectId;
+      } else {
+        mainKey = tId;
+        detailKey = b.projectId;
+      }
       
       const target = getTarget(mainKey, detailKey);
       if (target) {
@@ -5740,9 +5920,21 @@ export default function App() {
         if (c.weekNumber?.toString() !== reportWeek) return;
       }
 
+      const cProject = projects.find(p => p.id === c.projectId);
+      const cRegion = cProject?.region || 'Khác';
       const tId = c.teamId || c.teamName;
-      const mainKey = efficiencyGroupType === 'project' ? c.projectId : tId;
-      const detailKey = efficiencyGroupType === 'project' ? tId : c.projectId;
+      
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = c.projectId;
+        detailKey = tId;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = cRegion;
+        detailKey = c.projectId;
+      } else {
+        mainKey = tId;
+        detailKey = c.projectId;
+      }
 
       const target = getTarget(mainKey, detailKey);
       if (target) target.cost += c.amount || 0;
@@ -5752,11 +5944,22 @@ export default function App() {
     efficiencyReports.forEach(r => {
       if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
+      const rProject = projects.find(p => p.id === r.projectId);
+      const rRegion = rProject?.region || 'Khác';
       const currentTeamName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
 
-      const mainKey = efficiencyGroupType === 'project' ? r.projectId : r.teamId;
-      const detailKey = efficiencyGroupType === 'project' ? r.teamId : r.projectId;
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = r.projectId;
+        detailKey = r.teamId;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = rRegion;
+        detailKey = r.projectId;
+      } else {
+        mainKey = r.teamId;
+        detailKey = r.projectId;
+      }
 
       const target = getTarget(mainKey, detailKey);
       if (target) {
@@ -5773,10 +5976,25 @@ export default function App() {
     });
 
     return Object.keys(rawData).map(mainKey => {
-      const name = efficiencyGroupType === 'project' ? (projectMap[mainKey] || mainKey) : (teamMap[mainKey] || mainKey);
+      let name;
+      if (efficiencyGroupType === 'project') {
+        name = projectMap[mainKey] || mainKey;
+      } else if (efficiencyGroupType === 'region') {
+        name = mainKey;
+      } else {
+        name = teamMap[mainKey] || mainKey;
+      }
       
       const details = Object.keys(rawData[mainKey]).map(detailKey => {
-        const detailName = efficiencyGroupType === 'project' ? (teamMap[detailKey] || detailKey) : (projectMap[detailKey] || detailKey);
+        let detailName;
+        if (efficiencyGroupType === 'project') {
+          detailName = teamMap[detailKey] || detailKey;
+        } else if (efficiencyGroupType === 'region') {
+          detailName = projectMap[detailKey] || detailKey;
+        } else {
+          detailName = projectMap[detailKey] || detailKey;
+        }
+        
         return {
           name: detailName,
           ...rawData[mainKey][detailKey]
@@ -5808,14 +6026,44 @@ export default function App() {
     });
   }, [efficiencyReports, costs, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
 
+  const pendingSupportCount = useMemo(() => {
+    return supportRequests.filter((r: any) => r.status === 'Chờ xử lý').length;
+  }, [supportRequests]);
+
   const overBudgetStats = useMemo(() => {
-    const overItems = efficiencyChartData.filter(item => item.cost > item.budget);
+    // Collect all granular items (Project-Team pairings) that are over budget
+    const granularOverItems: any[] = [];
+    let totalExcess = 0;
+
+    efficiencyChartData.forEach(item => {
+      // item is either a Project (with Team details) or a Team (with Project details)
+      // Both ways cover all Project-Team combinations
+      item.details.forEach((detail: any) => {
+        if (detail.cost > detail.budget) {
+          const excess = detail.cost - detail.budget;
+          totalExcess += excess;
+          granularOverItems.push({
+            id: `${item.id}-${detail.name}`, // Unique ID for the pair
+            name: efficiencyGroupType === 'project' ? `${item.name} - ${detail.name}` : `${detail.name} - ${item.name}`,
+            mainName: item.name,
+            detailName: detail.name,
+            budget: detail.budget,
+            cost: detail.cost,
+            sales: detail.sales,
+            revenue: detail.revenue,
+            excess: excess,
+            details: detail.details || [] // In case details were nested further down, but usually one level
+          });
+        }
+      });
+    });
+
     return {
-      count: overItems.length,
-      totalExcess: overItems.reduce((acc, curr) => acc + (curr.cost - curr.budget), 0),
-      items: overItems
+      count: granularOverItems.length,
+      totalExcess: totalExcess,
+      items: granularOverItems
     };
-  }, [efficiencyChartData]);
+  }, [efficiencyChartData, efficiencyGroupType]);
 
   const salesGeneratingData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
@@ -6064,10 +6312,17 @@ export default function App() {
       rawData[rName].revenue += rev;
     });
 
-    return Object.keys(rawData).map(name => ({
-      name,
-      ...rawData[name]
-    })).filter(d => reportRegion === 'all' || d.name === reportRegion)
+    return Object.keys(rawData).map(name => {
+      let displayName = name;
+      if (name.includes('Quảng Ninh') && name.includes('Hải Phòng')) {
+        displayName = 'QN - HP';
+      }
+      
+      return {
+        name: displayName,
+        ...rawData[name]
+      };
+    }).filter(d => reportRegion === 'all' || d.name === reportRegion)
       .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
   }, [regions, uniqueRegions, budgets, costs, efficiencyReports, projects, reportMonths, reportProject, reportTeam, reportRegion, teamMap, chartTimeType, reportWeek, isAdmin, isMod, isGDDA, user, userProfile, reportSortBy, getMarketingMonth]);
 
@@ -6553,6 +6808,14 @@ export default function App() {
             <TabsTrigger value="history" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
               <History className="w-4 h-4 mr-2" /> Lịch sử
             </TabsTrigger>
+            <TabsTrigger value="support" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none relative">
+              <MessageCircle className="w-4 h-4 mr-2" /> Hỗ trợ
+              {pendingSupportCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
+                  {pendingSupportCount}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* Home / Dashboard Tab */}
@@ -6721,8 +6984,9 @@ export default function App() {
                 <Table>
                   <TableHeader className="bg-slate-50/80">
                     <TableRow className="hover:bg-transparent border-none">
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 h-12 w-16">STT</TableHead>
                       <TableHead 
-                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-400 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
                         onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
                       >
                         <div className="flex items-center gap-1">
@@ -6792,10 +7056,11 @@ export default function App() {
                         const isOverBudget = item.cost > item.budget;
                         return (
                           <TableRow key={idx} className="group hover:bg-indigo-50/20 transition-colors border-b-slate-100/50 h-20">
-                            <TableCell className="pl-8">
+                            <TableCell className="pl-8 font-bold text-slate-400 text-xs">{idx + 1}</TableCell>
+                            <TableCell>
                               <div className="flex items-center gap-4">
                                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm ${item.revenue > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                  {idx + 1}
+                                  {item.name.charAt(0)}
                                 </div>
                                 <div>
                                   <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{item.name}</p>
@@ -6892,7 +7157,7 @@ export default function App() {
                           }`}
                           onClick={() => setAdminSubTab('regions')}
                         >
-                          <Map className={`mr-3 h-4 w-4 ${adminSubTab === 'regions' ? 'text-white' : 'text-emerald-500'}`} />
+                          <MapIcon className={`mr-3 h-4 w-4 ${adminSubTab === 'regions' ? 'text-white' : 'text-emerald-500'}`} />
                           <span className="text-sm">Vùng miền</span>
                         </Button>
                         <Button 
@@ -7272,7 +7537,8 @@ export default function App() {
                               <Table>
                                 <TableHeader className="bg-slate-50/50">
                                   <TableRow>
-                                    <TableHead className="w-10 pl-4">
+                                    <TableHead className="w-12 pl-4 py-3 text-[10px] uppercase font-black text-slate-400">STT</TableHead>
+                                    <TableHead className="w-10 px-2 py-3">
                                       <input 
                                       type="checkbox" 
                                       className="h-4 w-4 rounded border-slate-300 accent-blue-600"
@@ -7286,17 +7552,46 @@ export default function App() {
                                       }}
                                     />
                                   </TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Dự án / Team</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Tháng</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Số căn</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Doanh số</TableHead>
+                                  <TableHead 
+                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onClick={() => setAdminEfficiencySort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      Dự án / Team <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead 
+                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onClick={() => setAdminEfficiencySort(prev => ({ key: 'month', direction: prev.key === 'month' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                  >
+                                    <div className="flex items-center justify-center gap-1">
+                                      Tháng <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead 
+                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onClick={() => setAdminEfficiencySort(prev => ({ key: 'sales', direction: prev.key === 'sales' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                  >
+                                    <div className="flex items-center justify-center gap-1">
+                                      Số căn <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead 
+                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onClick={() => setAdminEfficiencySort(prev => ({ key: 'revenue', direction: prev.key === 'revenue' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                  >
+                                    <div className="flex items-center justify-end gap-1">
+                                      Doanh số <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                    </div>
+                                  </TableHead>
                                   <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-[120px]">Thao tác</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {filteredEfficiencyReports.map((report) => (
+                                {filteredEfficiencyReports.map((report, idx) => (
                                   <TableRow key={report.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <TableCell className="w-10 pl-4">
+                                    <TableCell className="w-12 pl-4 py-3 font-black text-slate-400 text-xs text-center border-r border-slate-50/50">{idx + 1}</TableCell>
+                                    <TableCell className="w-10 px-2 py-3">
                                       <input 
                                         type="checkbox" 
                                         className="h-4 w-4 rounded border-slate-300 accent-blue-600"
@@ -7357,12 +7652,30 @@ export default function App() {
                                 ))}
                                 {filteredEfficiencyReports.length === 0 && (
                                   <TableRow>
-                                    <TableCell colSpan={5} className="h-32 text-center text-slate-400 italic">
+                                    <TableCell colSpan={6} className="h-32 text-center text-slate-400 italic">
                                       Chưa có dữ liệu hiệu quả kinh doanh cho kỳ này
                                     </TableCell>
                                   </TableRow>
                                 )}
                               </TableBody>
+                              {filteredEfficiencyReports.length > 0 && (
+                                <TableFooter className="bg-slate-50/80 border-t-2 border-slate-200">
+                                  <TableRow className="hover:bg-transparent">
+                                    <TableCell colSpan={4} className="pl-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Tổng cộng lọc được:</TableCell>
+                                    <TableCell className="text-center py-4">
+                                      <div className="flex flex-col items-center">
+                                        <Badge className="bg-blue-600 text-white font-black px-3 py-0.5 text-[10px] h-5 min-w-[60px] justify-center">
+                                          {filteredEfficiencyReports.reduce((acc, curr) => acc + curr.salesCount, 0)} căn
+                                        </Badge>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-right py-4 font-black text-slate-900 font-mono text-xs pr-4" colSpan={1}>
+                                      {formatCurrency(filteredEfficiencyReports.reduce((acc, curr) => acc + curr.revenue, 0))}
+                                    </TableCell>
+                                    <TableCell className="w-[120px]" />
+                                  </TableRow>
+                                </TableFooter>
+                              )}
                             </Table>
                           </div>
                           </CardContent>
@@ -7405,7 +7718,7 @@ export default function App() {
                                     <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleImportProjectsCSV} />
                                   </Button>
                                   <Dialog>
-                                    <DialogTrigger nativeButton={false} render={<Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-100 font-bold px-4" />}>
+                                    <DialogTrigger nativeButton={true} render={<Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-100 font-bold px-4" />}>
                                       <Plus className="w-4 h-4 mr-2" /> Thêm dự án
                                     </DialogTrigger>
                                     <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl">
@@ -7476,7 +7789,7 @@ export default function App() {
                                 <Select value={adminProjectRegionFilter} onValueChange={setAdminProjectRegionFilter}>
                                   <SelectTrigger className="h-11 bg-white border-none shadow-sm rounded-xl text-[13px] font-medium text-slate-600">
                                     <div className="flex items-center gap-2">
-                                      <Map className="w-3.5 h-3.5 text-emerald-500" />
+                                      <MapIcon className="w-3.5 h-3.5 text-emerald-500" />
                                       <SelectValue placeholder="Tất cả khu vực" />
                                     </div>
                                   </SelectTrigger>
@@ -7527,7 +7840,7 @@ export default function App() {
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
-                                <DialogTrigger nativeButton={false} render={
+                                <DialogTrigger nativeButton={true} render={
                                   <Button 
                                     variant="ghost" 
                                     size="sm" 
@@ -7535,7 +7848,7 @@ export default function App() {
                                     disabled={selectedProjectIds.length === 0}
                                   />
                                 }>
-                                  <Map className="w-3.5 h-3.5 mr-1.5" /> Vùng ({selectedProjectIds.length})
+                                  <MapIcon className="w-3.5 h-3.5 mr-1.5" /> Vùng ({selectedProjectIds.length})
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
                                   <DialogHeader>
@@ -7566,7 +7879,7 @@ export default function App() {
                               <div className="w-px h-4 bg-slate-200 mx-1" />
 
                               <Dialog open={isBulkUpdateTypeDialogOpen} onOpenChange={setIsBulkUpdateTypeDialogOpen}>
-                                <DialogTrigger nativeButton={false} render={
+                                <DialogTrigger nativeButton={true} render={
                                   <Button 
                                     variant="ghost" 
                                     size="sm" 
@@ -7753,7 +8066,7 @@ export default function App() {
                                       </Select>
                                     ) : (
                                       <div className="flex items-center gap-1.5 font-medium text-slate-600 text-sm">
-                                        <Map className="w-3 h-3 text-emerald-500" />
+                                        <MapIcon className="w-3 h-3 text-emerald-500" />
                                         {p.region || 'Chưa xác định'}
                                       </div>
                                     )}
@@ -7805,7 +8118,7 @@ export default function App() {
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
                                             <Dialog>
-                                              <DialogTrigger nativeButton={false} render={
+                                              <DialogTrigger nativeButton={true} render={
                                                 <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
                                               }>
                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -7915,7 +8228,7 @@ export default function App() {
                       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
                         <div className="flex items-center gap-3">
                           <div className="bg-emerald-600 p-2 rounded-xl">
-                            <Map className="w-5 h-5 text-white" />
+                            <MapIcon className="w-5 h-5 text-white" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -8095,7 +8408,7 @@ export default function App() {
                                   <TableCell colSpan={isAdmin ? 5 : 4} className="h-64 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-4">
                                       <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
-                                        <Map className="h-8 w-8 text-slate-300" />
+                                        <MapIcon className="h-8 w-8 text-slate-300" />
                                       </div>
                                       <div className="space-y-1">
                                         <p className="font-bold text-slate-900">Chưa có vùng nào</p>
@@ -9108,13 +9421,25 @@ export default function App() {
                     <CardContent className="space-y-8">
                     {/* Alert for Over Budget */}
                     {overBudgetStats.count > 0 && (
-                      <div className="mx-6 mt-2 p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
-                        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200">
+                      <div className="mx-6 mt-2 p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-8 bg-red-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-red-200/30 transition-colors" />
+                        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200 z-10">
                           <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Cảnh báo vượt ngân sách ({overBudgetStats.count} mục)</h4>
-                          <p className="text-xs text-red-700/80 font-medium leading-relaxed mt-1">
+                        <div className="flex-1 z-10">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Cảnh báo vượt ngân sách ({overBudgetStats.count} mục)</h4>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => setIsOverBudgetDetailOpen(true)}
+                              className="h-8 rounded-xl border-red-200 bg-white text-red-600 hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Xem chi tiết
+                            </Button>
+                          </div>
+                          <p className="text-xs text-red-700/80 font-medium leading-relaxed mt-1 pr-0 md:pr-24">
                             Tổng chi phí thực tế đã vượt ngân sách đăng ký của <strong>{overBudgetStats.count}</strong> đơn vị với tổng số tiền vượt là 
                             <span className="font-black ml-1 text-red-800">{formatCurrency(overBudgetStats.totalExcess)}</span>. 
                             Vui lòng kiểm tra lại các mục được đánh dấu màu đỏ dưới bảng.
@@ -9153,7 +9478,7 @@ export default function App() {
 
                       <div className="space-y-2 min-w-0">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <Map className="w-3 h-3" /> Miền / Vùng
+                          <MapIcon className="w-3 h-3" /> Miền / Vùng
                         </Label>
                         <SearchableRegionSelect
                           value={reportRegion}
@@ -9277,7 +9602,7 @@ export default function App() {
                     </div>
 
                     {/* Summary Cards - Viewable by all but tailored by role */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4 mb-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-4 mb-8">
                       {/* 0. Tổng dự án (Admin only) */}
                       {isAdmin && (
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
@@ -9359,27 +9684,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* 5. ROMI / Cost Ratio */}
-                        {(() => {
-                           const totalRevenue = efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-                           const totalCost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-                           const romi = totalCost > 0 ? (totalRevenue / totalCost).toFixed(2) : '0';
-                           const costRatio = totalRevenue > 0 ? (totalCost / totalRevenue * 100).toFixed(1) : '0';
-                           
-                           return (
-                             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-amber-200">
-                               <div className="flex items-center justify-between mb-1">
-                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">ROMI / CP Marketing</p>
-                                 <BarChart3 className="w-3 h-3 text-amber-500" />
-                               </div>
-                               <div className="flex items-baseline gap-2">
-                                 <p className="text-lg font-black text-amber-600 leading-none">{romi}x</p>
-                                 <span className="text-[9px] font-bold text-slate-400 border-l pl-2 border-slate-200">{costRatio}%</span>
-                               </div>
-                               <p className="text-[8px] font-bold text-slate-400 mt-2 uppercase">ROMI | CP/Doanh thu</p>
-                             </div>
-                           );
-                        })()}
 
                         {/* 6. Tỉ lệ Thực chi / Ngân sách */}
                         {(() => {
@@ -9590,6 +9894,14 @@ export default function App() {
                                           className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${efficiencyGroupType === 'project' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400'}`}
                                        >
                                           Theo Dự án
+                                       </Button>
+                                       <Button 
+                                          variant={efficiencyGroupType === 'region' ? 'secondary' : 'ghost'} 
+                                          size="sm" 
+                                          onClick={() => setEfficiencyGroupType('region')}
+                                          className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${efficiencyGroupType === 'region' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-400'}`}
+                                       >
+                                          Theo Khu vực
                                        </Button>
                                     </div>
                                  </div>
@@ -10241,59 +10553,60 @@ export default function App() {
                               </CardHeader>
                               <CardContent className="p-0">
                                 <div className="overflow-x-auto">
-                                  <Table>
-                                    <TableHeader className="bg-slate-50/50">
-                                      <TableRow className="hover:bg-transparent">
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center gap-1">
-                                            Đối tượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Chi phí thực <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'sales', direction: prev.key === 'sales' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-center gap-1">
-                                            Sản lượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'revenue', direction: prev.key === 'revenue' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Doanh số <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'roi', direction: prev.key === 'roi' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Chỉ số ROI <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                      </TableRow>
-                                    </TableHeader>
+                                    <Table className="border-separate border-spacing-0">
+                                      <TableHeader className="bg-slate-50/80 sticky top-0 z-10 shadow-sm">
+                                        <TableRow className="hover:bg-transparent border-b border-slate-200">
+                                          <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 w-16 text-center border-b border-slate-200 whitespace-nowrap">STT</TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-slate-900 h-12 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200 whitespace-nowrap"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center gap-1">
+                                              Đối tượng <ArrowUpDown className="w-3 h-3 text-indigo-500" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200 whitespace-nowrap font-mono"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200 whitespace-nowrap font-mono"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              Chi phí thực <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-emerald-700 text-center h-12 cursor-pointer hover:bg-emerald-50 transition-colors border-b border-emerald-100 whitespace-nowrap bg-emerald-50/20"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'sales', direction: prev.key === 'sales' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-center gap-1">
+                                              Số căn <ArrowUpDown className="w-3 h-3 text-emerald-500" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-emerald-700 text-right h-12 cursor-pointer hover:bg-emerald-50 transition-colors border-b border-emerald-100 whitespace-nowrap bg-emerald-50/20"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'revenue', direction: prev.key === 'revenue' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              Doanh số <ArrowUpDown className="w-3 h-3 text-emerald-500" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-blue-700 text-right pr-8 h-12 cursor-pointer hover:bg-blue-50 transition-colors border-b border-blue-100 whitespace-nowrap bg-blue-50/20"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'roi', direction: prev.key === 'roi' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              ROI <ArrowUpDown className="w-3 h-3 text-blue-500" />
+                                            </div>
+                                          </TableHead>
+                                        </TableRow>
+                                      </TableHeader>
                                     <TableBody>
                                       {salesGeneratingData.map((item, idx) => {
                                         const roi = item.cost > 0 ? (item.revenue / item.cost).toFixed(2) : '0';
@@ -10307,18 +10620,16 @@ export default function App() {
                                               else setReportTeam(item.id);
                                             }}
                                           >
-                                            <TableCell className="pl-8 py-4">
-                                              <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                                  {idx + 1}
-                                                </div>
+                                            <TableCell className="pl-8 py-4 font-black text-slate-400 text-xs border-r border-slate-50/50 w-16 text-center">{idx + 1}</TableCell>
+                                            <TableCell className="py-4">
+                                              <div className="flex items-center gap-3 ml-2">
                                                 <div>
                                                   <div className="flex items-center gap-2">
-                                                    <p className="font-black text-slate-900 transition-colors uppercase tracking-tight">{item.name}</p>
+                                                    <p className="font-black text-slate-900 transition-colors uppercase tracking-tight text-xs">{item.name}</p>
                                                     {isOverBudget && (
                                                       <TooltipProvider>
                                                         <UITooltip>
-                                                          <TooltipTrigger nativeButton={false}>
+                                                          <TooltipTrigger nativeButton={true}>
                                                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
                                                           </TooltipTrigger>
                                                           <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
@@ -10352,27 +10663,32 @@ export default function App() {
                                         );
                                       })}
                                     </TableBody>
-                                    {salesGeneratingData.length > 0 && (
-                                      <TableFooter className="bg-slate-50/80 font-black border-t-2 border-slate-100">
-                                        <TableRow>
-                                          <TableCell className="pl-8 py-4 uppercase text-[10px] text-slate-500">TỔNG CỘNG ĐƠN VỊ CÓ DOANH SỐ:</TableCell>
-                                          <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
-                                          <TableCell className="text-right py-4 font-black font-mono text-[11px] text-slate-900">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
-                                          <TableCell className="text-center py-4">
-                                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 font-black border-none px-2 h-5 text-[9px]">{salesGeneratingData.reduce((acc, curr) => acc + curr.sales, 0)} căn</Badge>
-                                          </TableCell>
-                                          <TableCell className="text-right py-4 font-black text-emerald-600 font-mono text-[11px]">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0))}</TableCell>
-                                          <TableCell className="text-right pr-8 py-4">
-                                            <div className="text-xs font-black font-mono text-emerald-600">
-                                              {(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0) > 0 
-                                                ? (salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0) / salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0)) 
-                                                : 0).toFixed(2)}x
-                                            </div>
-                                            <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">ROI Trung bình</div>
-                                          </TableCell>
-                                        </TableRow>
-                                      </TableFooter>
-                                    )}
+                                      {salesGeneratingData.length > 0 && (
+                                        <TableFooter className="bg-emerald-50/80 font-black border-t-4 border-emerald-200">
+                                          <TableRow className="hover:bg-transparent">
+                                            <TableCell colSpan={2} className="pl-8 py-6 uppercase text-xs text-emerald-800 font-bold tracking-widest">TỔNG CỘNG HIỆU QUẢ KINH DOANH:</TableCell>
+                                            <TableCell className="text-right py-6 font-black text-slate-500 font-mono text-base">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
+                                            <TableCell className="text-right py-6 font-black font-mono text-base text-red-600">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
+                                            <TableCell className="text-center py-6">
+                                              <div className="flex flex-col items-center">
+                                                <Badge className="bg-emerald-700 text-white font-black px-4 py-1.5 text-sm shadow-lg ring-2 ring-emerald-100 ring-offset-2">{salesGeneratingData.reduce((acc, curr) => acc + curr.sales, 0)} căn</Badge>
+                                                <span className="text-[9px] text-emerald-600 mt-2 font-bold uppercase tracking-tighter">Tổng số căn chốt</span>
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="text-right py-6 font-black text-emerald-800 font-mono text-base drop-shadow-sm">{formatCurrency(salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0))}</TableCell>
+                                            <TableCell className="text-right pr-8 py-6">
+                                              <div className="text-lg font-black font-mono text-blue-700 italic flex flex-col items-end">
+                                                <span>
+                                                  {(salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0) > 0 
+                                                    ? (salesGeneratingData.reduce((acc, curr) => acc + curr.revenue, 0) / salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0)) 
+                                                    : 0).toFixed(2)}x
+                                                </span>
+                                                <span className="text-[8px] text-blue-500 font-bold uppercase tracking-tighter not-italic mt-1">ROI Tổng</span>
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        </TableFooter>
+                                      )}
                                   </Table>
                                 </div>
                               </CardContent>
@@ -10393,36 +10709,37 @@ export default function App() {
                               </CardHeader>
                               <CardContent className="p-0">
                                 <div className="overflow-x-auto">
-                                  <Table>
-                                    <TableHeader className="bg-slate-50/50">
-                                      <TableRow className="hover:bg-transparent">
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center gap-1">
-                                            Đối tượng <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead 
-                                          className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors"
-                                          onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
-                                        >
-                                          <div className="flex items-center justify-end gap-1">
-                                            Chi phí thực <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                                          </div>
-                                        </TableHead>
-                                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right pr-8 h-12">Số dự án/team liên quan</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
+                                    <Table className="border-separate border-spacing-0">
+                                      <TableHeader className="bg-slate-50/80 sticky top-0 z-10 shadow-sm">
+                                        <TableRow className="hover:bg-transparent border-b border-slate-200">
+                                          <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8 h-12 w-16 text-center border-b border-slate-200 whitespace-nowrap">STT</TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-red-900 h-12 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200 whitespace-nowrap"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center gap-1">
+                                              Đối tượng <ArrowUpDown className="w-3 h-3 text-red-500" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-right h-12 cursor-pointer hover:bg-slate-100 transition-colors border-b border-slate-200 whitespace-nowrap font-mono"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'budget', direction: prev.key === 'budget' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead 
+                                            className="text-[10px] font-black uppercase tracking-widest text-red-700 text-right h-12 cursor-pointer hover:bg-red-50 transition-colors border-b border-red-100 whitespace-nowrap bg-red-50/20"
+                                            onClick={() => setEfficiencyTableSort(prev => ({ key: 'cost', direction: prev.key === 'cost' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                                          >
+                                            <div className="flex items-center justify-end gap-1">
+                                              Thực chi <ArrowUpDown className="w-3 h-3 text-red-500" />
+                                            </div>
+                                          </TableHead>
+                                          <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-8 h-12 border-b border-slate-200">Liên quan</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
                                     <TableBody>
                                       {noSalesData.map((item, idx) => {
                                         const isOverBudget = item.cost > item.budget;
@@ -10435,18 +10752,16 @@ export default function App() {
                                               else setReportTeam(item.id);
                                             }}
                                           >
-                                            <TableCell className="pl-8 py-4">
-                                              <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isOverBudget ? 'bg-red-200 text-red-700' : 'bg-red-100 text-red-600'}`}>
-                                                  {idx + 1}
-                                                </div>
+                                            <TableCell className="pl-8 py-4 font-black text-slate-400 text-xs border-r border-slate-100/50 w-16 text-center">{idx + 1}</TableCell>
+                                            <TableCell className="py-4">
+                                              <div className="flex items-center gap-3 ml-2">
                                                 <div>
                                                   <div className="flex items-center gap-2">
-                                                    <p className="font-black text-slate-900 uppercase tracking-tight">{item.name}</p>
+                                                    <p className="font-black text-slate-900 transition-colors uppercase tracking-tight text-xs">{item.name}</p>
                                                     {isOverBudget && (
                                                       <TooltipProvider>
                                                         <UITooltip>
-                                                          <TooltipTrigger nativeButton={false}>
+                                                          <TooltipTrigger nativeButton={true}>
                                                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-bounce" />
                                                           </TooltipTrigger>
                                                           <TooltipContent className="bg-red-600 text-white border-none font-bold text-xs p-2 rounded-xl">
@@ -10479,15 +10794,18 @@ export default function App() {
                                       )}
                                     </TableBody>
                                     {noSalesData.length > 0 && (
-                                      <TableFooter className="bg-red-50/30 font-black border-t border-red-100">
-                                        <TableRow>
-                                          <TableCell className="pl-8 py-4 uppercase text-[10px] text-red-700">TỔNG CỘNG ĐƠN VỊ CHƯA DOANH SỐ:</TableCell>
-                                          <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
-                                          <TableCell className="text-right py-4 font-black font-mono text-[11px] text-red-600">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
-                                          <TableCell colSpan={1} className="pr-8 text-right">
-                                             <Badge variant="outline" className="text-[9px] font-bold text-slate-500">
-                                              {noSalesData.length} Đơn vị
-                                            </Badge>
+                                      <TableFooter className="bg-red-50/50 font-black border-t-2 border-red-100">
+                                        <TableRow className="hover:bg-transparent">
+                                          <TableCell colSpan={2} className="pl-8 py-5 uppercase text-[10px] text-red-700 tracking-widest font-black">TỔNG CỘNG CHƯA PHÁT SINH:</TableCell>
+                                          <TableCell className="text-right py-5 font-black text-slate-500 font-mono text-sm">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.budget, 0))}</TableCell>
+                                          <TableCell className="text-right py-5 font-black font-mono text-sm text-red-600">{formatCurrency(noSalesData.reduce((acc, curr) => acc + curr.cost, 0))}</TableCell>
+                                          <TableCell colSpan={1} className="pr-8 text-right py-5">
+                                            <div className="flex flex-col items-end">
+                                              <Badge variant="outline" className="text-[10px] font-black text-red-700 border-red-200 bg-white shadow-sm">
+                                                {noSalesData.length} Đơn vị
+                                              </Badge>
+                                              <span className="text-[8px] text-slate-400 mt-1 uppercase">Chưa doanh số</span>
+                                            </div>
                                           </TableCell>
                                         </TableRow>
                                       </TableFooter>
@@ -10738,7 +11056,7 @@ export default function App() {
                                   {(u.role === 'mod' || u.role === 'gdda') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
-                                        <DialogTrigger nativeButton={false} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
+                                        <DialogTrigger nativeButton={true} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
                                           Gán dự án ({u.assignedProjects?.length || 0})
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-[400px]">
@@ -11582,9 +11900,22 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex items-end">
-                      <Button type="submit" variant="outline" className="w-full h-11 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 font-bold transition-all">
-                        <Plus className="w-4 h-4 mr-2" /> Thêm Dự Án Vào Danh Sách
+                    <div className="flex flex-col md:flex-row items-stretch gap-4 md:col-span-2 lg:col-span-1">
+                      <Button 
+                        type="button" 
+                        onClick={handleRegisterBudgetMain}
+                        className="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 group"
+                      >
+                        <Wallet className="w-5 h-5 group-hover:animate-bounce" />
+                        ĐĂNG KÝ NGÂN SÁCH
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={handleAddBudgetToListOnly}
+                        className="flex-1 h-11 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 font-bold transition-all rounded-xl"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Bổ sung ngân sách dự án khác
                       </Button>
                     </div>
                   </div>
@@ -11598,13 +11929,16 @@ export default function App() {
                           <Database className="w-5 h-5 text-indigo-500" />
                           Danh sách dự án chờ đăng ký ({multiBudgetItems.length})
                         </h3>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider italic">Gợi ý: Hệ thống sẽ tự động gộp các dự án trùng Team & Tháng</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider italic">Gợi ý: Bạn có thể đăng ký nhiều dự án cùng một lúc.</p>
                       </div>
                       <Button 
-                        onClick={() => setIsConfirmBudgetOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-6 px-10 rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-3"
+                        onClick={() => {
+                          setIsConfirmingMulti(true);
+                          setIsConfirmBudgetOpen(true);
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 px-10 rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-3"
                       >
-                         Xác Nhận Đăng Ký Tất Cả ({formatCurrency(multiBudgetItems.reduce((acc, curr) => acc + curr.amount, 0))})
+                         Xác Nhận Đăng Ký ({formatCurrency(multiBudgetItems.reduce((acc, curr) => acc + curr.amount, 0))})
                          <ArrowRight className="w-5 h-5" />
                       </Button>
                     </div>
@@ -11649,48 +11983,88 @@ export default function App() {
             </Card>
 
             {/* Confirmation Dialog */}
-            <Dialog open={isConfirmBudgetOpen} onOpenChange={setIsConfirmBudgetOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Xác nhận đăng ký ngân sách</DialogTitle>
-                  <DialogDescription>
-                    Vui lòng kiểm tra lại thông tin trước khi xác nhận.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right font-bold">Dự án:</Label>
-                    <div className="col-span-3">
-                      {projectMap[selectedProjectId]} ({projects.find(p => p.id === selectedProjectId)?.projectCode || ''})
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right font-bold">Team:</Label>
-                    <div className="col-span-3">
-                      {selectedTeamName} ({teams.find(t => t.id === selectedTeamId)?.teamCode || ''})
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right font-bold">Người triển khai:</Label>
-                    <div className="col-span-3">{implementerName}</div>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right font-bold">Tháng:</Label>
-                    <div className="col-span-3">{budgetMonth} <span className="text-blue-600 text-xs ml-1">{getReportingPeriod(budgetMonth)}</span></div>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right font-bold">Số tiền:</Label>
-                    <div className="col-span-3 font-mono font-bold text-blue-600">
-                      {Number(budgetAmount).toLocaleString()} đ
-                    </div>
+            <Dialog open={isConfirmBudgetOpen} onOpenChange={(open) => {
+              setIsConfirmBudgetOpen(open);
+              if (!open) setIsConfirmingMulti(false);
+            }}>
+              <DialogContent className="sm:max-w-lg bg-white border-none shadow-2xl p-0 overflow-hidden rounded-[32px]">
+                <div className="bg-indigo-600 p-6 text-white overflow-hidden relative">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                  <div className="relative z-10">
+                    <DialogTitle className="text-2xl font-black tracking-tight mb-1">Xác nhận đăng ký</DialogTitle>
+                    <DialogDescription className="text-indigo-100 font-medium">
+                      {isConfirmingMulti ? `Bạn đang thực hiện đăng ký cho ${multiBudgetItems.length} dự án` : 'Vui lòng kiểm tra lại thông tin đăng ký bên dưới'}
+                    </DialogDescription>
                   </div>
                 </div>
-                <DialogFooter className="flex sm:justify-between gap-2">
-                  <Button variant="outline" onClick={() => setIsConfirmBudgetOpen(false)}>
+
+                <div className="p-6 space-y-6">
+                  {isConfirmingMulti ? (
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      {multiBudgetItems.map((item, idx) => (
+                        <div key={idx} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 text-sm truncate">{projectMap[item.projectId]}</p>
+                            <p className="text-[10px] text-slate-500 font-medium">{item.teamName} • Tháng {item.month}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-black text-indigo-600 text-sm">{formatCurrency(item.amount)}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="pt-4 border-t border-dashed border-slate-200 flex justify-between items-center px-2">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Tổng cộng</span>
+                        <span className="text-xl font-black text-slate-900">{formatCurrency(multiBudgetItems.reduce((acc, curr) => acc + curr.amount, 0))}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dự án</p>
+                          <p className="text-xs font-bold text-slate-900 truncate">{projectMap[selectedProjectId]}</p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Team</p>
+                          <p className="text-xs font-bold text-slate-900 truncate">{selectedTeamName}</p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tháng</p>
+                          <p className="text-xs font-bold text-slate-900">{budgetMonth}</p>
+                        </div>
+                      </div>
+                      <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col items-center justify-center gap-1 text-center">
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Số tiền đăng ký</p>
+                        <p className="text-3xl font-black text-indigo-600">{formatCurrency(Number(budgetAmount))}</p>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                        <p className="text-[10px] font-bold text-amber-800 leading-tight">
+                          Đảm bảo ngân sách thực tế không biến động quá 30% so với con số này.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter className="p-6 bg-slate-50 flex sm:justify-between items-center gap-3">
+                  <Button variant="ghost" onClick={() => setIsConfirmBudgetOpen(false)} className="rounded-xl font-bold text-slate-500">
                     Hủy bỏ
                   </Button>
-                  <Button onClick={confirmAddBudget} className="bg-blue-600 hover:bg-blue-700">
-                    Xác nhận đăng ký
+                  <Button 
+                    onClick={() => {
+                      if (isConfirmingMulti) {
+                        confirmAddBudget();
+                      } else {
+                        // Current confirmAddBudget handles multiBudgetItems list. 
+                        // If we are not in multi mode, we need to temporarily add current item then confirm.
+                        // But wait, my handleRegisterBudgetMain already added it to list.
+                        confirmAddBudget();
+                      }
+                    }} 
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-6 rounded-2xl shadow-xl shadow-indigo-100 h-auto"
+                  >
+                    Xác nhận đăng ký ngay
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -11944,7 +12318,7 @@ export default function App() {
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
                           <Dialog open={isBudgetSelectionDialogOpen} onOpenChange={setIsBudgetSelectionDialogOpen}>
-                            <DialogTrigger nativeButton={false} render={
+                            <DialogTrigger nativeButton={true} render={
                               <Button 
                                 variant="outline" 
                                 className="w-full h-auto py-3 px-4 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 justify-start text-left focus:ring-green-500 rounded-xl transition-all"
@@ -12052,7 +12426,7 @@ export default function App() {
                                           <span>{b.implementerName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                          <Map className="w-3 h-3 opacity-60" />
+                                          <MapIcon className="w-3 h-3 opacity-60" />
                                           <span>{projects.find(p => p.id === b.projectId)?.region || 'N/A'}</span>
                                         </div>
                                       </div>
@@ -12309,6 +12683,8 @@ export default function App() {
                               Số tiền <ArrowUpDown className="w-3 h-3 text-slate-400" />
                             </div>
                           </TableHead>
+                          <TableHead className="text-right font-bold text-slate-400 uppercase text-[10px]">Ngân sách</TableHead>
+                          <TableHead className="text-right font-bold text-slate-400 uppercase text-[10px]">%</TableHead>
                           <TableHead>Ghi chú</TableHead>
                           <TableHead className="text-right">Thao tác</TableHead>
                         </TableRow>
@@ -12353,6 +12729,16 @@ export default function App() {
                                   onChange={handleNumberInputChange(setEditingCostAmount)} 
                                 />
                               ) : `${c.amount.toLocaleString()} đ`}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs text-slate-500">
+                              {budgetAmountMap[c.budgetId] ? `${budgetAmountMap[c.budgetId].toLocaleString()} đ` : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {budgetAmountMap[c.budgetId] ? (
+                                <Badge variant="outline" className={`text-[10px] font-mono ${(c.amount / budgetAmountMap[c.budgetId]) > 1 ? 'text-red-600 bg-red-50 border-red-100' : 'text-emerald-600 bg-emerald-50 border-emerald-100'}`}>
+                                  {((c.amount / budgetAmountMap[c.budgetId]) * 100).toFixed(1)}%
+                                </Badge>
+                              ) : '-'}
                             </TableCell>
                             <TableCell className="text-xs italic text-slate-500 max-w-[150px] truncate">
                               {editingCostId === c.id ? (
@@ -12401,16 +12787,32 @@ export default function App() {
                         ))}
                         {costs.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
+                            <TableCell colSpan={isAdmin ? 10 : 9} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
                       {costs.length > 0 && (
                         <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng chi phí kỳ này:</TableCell>
+                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng:</TableCell>
                             <TableCell className="text-right font-mono text-emerald-600 font-black">
                               {costs.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-500 text-xs">
+                              {costs.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0).toLocaleString()} đ
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {(() => {
+                                const totalBudget = costs.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0);
+                                const totalCost = costs.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                                if (totalBudget === 0) return '-';
+                                const percent = (totalCost / totalBudget) * 100;
+                                return (
+                                  <Badge className={percent > 100 ? "bg-red-600" : percent < 70 ? "bg-amber-600" : "bg-emerald-600"}>
+                                    {percent.toFixed(1)}%
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell colSpan={2}></TableCell>
                           </TableRow>
@@ -12458,6 +12860,15 @@ export default function App() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="support" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            <SupportManager 
+              isAdmin={isAdmin || isMod} 
+              user={user} 
+              supportRequests={supportRequests}
+              handleFirestoreError={handleFirestoreError}
+            />
           </TabsContent>
         </Tabs>
       </main>
@@ -12830,11 +13241,23 @@ export default function App() {
               Hệ thống tìm thấy <strong>{importErrors.length}</strong> dòng không thể xử lý trong file của bạn.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto my-4 p-4 bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] space-y-2">
+          <div className="flex-1 overflow-y-auto my-4 p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
             {importErrors.map((err, idx) => (
-              <div key={idx} className="flex gap-3 text-slate-700 bg-white p-2 rounded border border-slate-200 shadow-sm">
-                <span className="text-red-400 font-bold shrink-0">{idx + 1}.</span>
-                <span className="break-words">{err}</span>
+              <div key={idx} className="flex gap-3 text-[11px] leading-relaxed text-slate-700 bg-white p-3 rounded-lg border border-slate-200 shadow-sm whitespace-pre-wrap">
+                <div className="bg-red-50 text-red-600 font-black shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">
+                  {idx + 1}
+                </div>
+                <div className="flex-1">
+                  {err.split('\n').map((line, lIdx) => {
+                    if (line.includes('• Nguyên nhân:')) {
+                      return <p key={lIdx} className="text-amber-700 font-medium mt-1">{line}</p>;
+                    }
+                    if (line.includes('• Cách khắc phục:')) {
+                      return <p key={lIdx} className="text-emerald-700 font-bold mt-1 bg-emerald-50/50 p-1 rounded">{line}</p>;
+                    }
+                    return <p key={lIdx} className="font-bold text-slate-900 border-b border-slate-100 pb-1 mb-1">{line}</p>;
+                  })}
+                </div>
               </div>
             ))}
           </div>
@@ -13741,7 +14164,96 @@ export default function App() {
             <History className={`w-5 h-5 ${activeTab === 'history' ? 'animate-in zoom-in duration-300' : ''}`} />
             <span className="text-[10px] font-black uppercase tracking-tighter">Nhật ký</span>
           </button>
+
+          <button 
+            onClick={() => setActiveTab('support')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 relative ${activeTab === 'support' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <MessageCircle className={`w-5 h-5 ${activeTab === 'support' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Hỗ trợ</span>
+            {pendingSupportCount > 0 && (
+              <span className="absolute top-1 right-4 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white shadow-lg shadow-rose-200">
+                {pendingSupportCount}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* Over Budget Detail Dialog */}
+        <Dialog open={isOverBudgetDetailOpen} onOpenChange={setIsOverBudgetDetailOpen}>
+          <DialogContent className="max-w-[95vw] md:max-w-4xl p-0 overflow-hidden rounded-[32px] border-none shadow-2xl bg-white animate-in fade-in zoom-in duration-300">
+            <div className="bg-red-600 p-8 text-white relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full -ml-12 -mb-12 blur-xl" />
+              
+              <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                Chi tiết cảnh báo vượt ngân sách
+              </DialogTitle>
+              <p className="text-red-100 text-xs font-black uppercase tracking-widest relative z-10 leading-relaxed opacity-80">
+                Danh sách các đơn vị có chi phí thực tế cao hơn ngân sách dự kiến ({overBudgetStats.count} mục)
+              </p>
+            </div>
+
+            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+               <div className="grid grid-cols-1 gap-6">
+                  {overBudgetStats.items.map((item: any) => (
+                    <Card key={item.id} className="border border-red-100 bg-red-50/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group">
+                      <CardHeader className="bg-red-50/50 p-6 border-b border-red-100">
+                        <div className="flex items-center justify-between">
+                           <div className="space-y-1">
+                              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1">
+                                 {efficiencyGroupType === 'project' ? <Building2 className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
+                                 {item.mainName}
+                              </span>
+                              <h4 className="text-lg font-black text-red-900 leading-none flex items-center gap-2">
+                                {efficiencyGroupType === 'project' ? <Users className="w-4 h-4 text-red-300" /> : <Building2 className="w-4 h-4 text-red-300" />}
+                                {item.detailName}
+                              </h4>
+                           </div>
+                           <Badge className="bg-red-600 text-white border-none py-1 px-3 rounded-xl text-xs font-black shadow-lg shadow-red-100 flex items-center gap-1.5 animate-pulse">
+                              <TrendingUp className="w-3 h-3" />
+                              Vượt {formatCurrency(item.excess)}
+                           </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-red-100 border-b border-red-100">
+                           <div className="p-4 text-center">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ngân sách</p>
+                              <p className="text-base font-black text-slate-700">{formatCurrency(item.budget)}</p>
+                           </div>
+                           <div className="p-4 text-center bg-red-50/50">
+                              <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">Thực chi</p>
+                              <p className="text-base font-black text-red-600">{formatCurrency(item.cost)}</p>
+                           </div>
+                           <div className="p-4 text-center">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Tỷ lệ</p>
+                              <p className="text-base font-black text-red-600">{(item.cost / item.budget * 100).toFixed(1)}%</p>
+                           </div>
+                           <div className="p-4 text-center">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Doanh số</p>
+                              <p className="text-base font-black text-emerald-600">{item.sales} căn</p>
+                           </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+               </div>
+            </div>
+
+            <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <Button 
+                  onClick={() => setIsOverBudgetDetailOpen(false)}
+                  className="h-12 px-10 bg-slate-900 hover:bg-black text-white font-black rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-95 uppercase tracking-widest text-xs"
+              >
+                  Đóng cửa sổ
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </nav>
     </div>
   );
@@ -14983,6 +15495,366 @@ const AcceptanceManager = React.memo(({
                 }}
               >
                 Xác nhận chốt
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+});
+
+/**
+ * SupportManager Component
+ * Allows users to submit issues and admins to reply.
+ */
+const SupportManager = React.memo(({ 
+  isAdmin, user, supportRequests, handleFirestoreError 
+}: any) => {
+  const [isAddingRequest, setIsAddingRequest] = useState(false);
+  const [requestTitle, setRequestTitle] = useState('');
+  const [requestContent, setRequestContent] = useState('');
+  const [requestCategory, setRequestCategory] = useState('Kỹ thuật');
+  const [requestPriority, setRequestPriority] = useState('Trung bình');
+  
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [adminReply, setAdminReply] = useState('');
+  const [replyStatus, setReplyStatus] = useState('');
+
+  const handleSubmitRequest = async () => {
+    if (!requestTitle || !requestContent) {
+      toast.error('Vui lòng nhập đầy đủ tiêu đề và nội dung');
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'supportRequests'), {
+        title: requestTitle,
+        content: requestContent,
+        category: requestCategory,
+        priority: requestPriority,
+        status: 'Chờ xử lý',
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName || user.email.split('@')[0],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      setRequestTitle('');
+      setRequestContent('');
+      setIsAddingRequest(false);
+      toast.success('Gửi yêu cầu hỗ trợ thành công');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'supportRequests');
+    }
+  };
+
+  const handleAdminReply = async () => {
+    if (!adminReply) {
+      toast.error('Vui lòng nhập nội dung phản hồi');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'supportRequests', replyingTo.id), {
+        adminReply: adminReply,
+        status: replyStatus || 'Đã phản hồi',
+        repliedBy: user.email,
+        repliedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      setAdminReply('');
+      setReplyingTo(null);
+      toast.success('Đã gửi phản hồi');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'supportRequests');
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Chờ xử lý': return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none px-2 py-0.5 rounded-full text-[10px] font-black uppercase">Chờ xử lý</Badge>;
+      case 'Đang xử lý': return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none px-2 py-0.5 rounded-full text-[10px] font-black uppercase">Đang xử lý</Badge>;
+      case 'Đã phản hồi': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-2 py-0.5 rounded-full text-[10px] font-black uppercase">Đã phản hồi</Badge>;
+      case 'Đã đóng': return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 border-none px-2 py-0.5 rounded-full text-[10px] font-black uppercase">Đã đóng</Badge>;
+      default: return null;
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'Cao': return <Badge className="bg-rose-50 text-rose-600 border-rose-100 px-2 py-0 text-[9px] font-bold">Cao</Badge>;
+      case 'Trung bình': return <Badge className="bg-amber-50 text-amber-600 border-amber-100 px-2 py-0 text-[9px] font-bold">Trung bình</Badge>;
+      case 'Thấp': return <Badge className="bg-slate-50 text-slate-600 border-slate-100 px-2 py-0 text-[9px] font-bold">Thấp</Badge>;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+              <MessageCircle className="w-5 h-5 text-white" />
+            </div>
+            Phòng Hỗ trợ & Giải quyết Vấn đề
+          </h2>
+          <p className="text-slate-500 text-sm mt-1 font-medium italic">Gửi thắc mắc hoặc báo cáo lỗi cho đội ngũ quản trị viên</p>
+        </div>
+        
+        {!isAdmin && (
+          <Button 
+            onClick={() => setIsAddingRequest(true)}
+            className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 group"
+          >
+            <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+            TẠO YÊU CẦU MỚI
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        {supportRequests.length === 0 ? (
+          <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50 rounded-[32px]">
+            <CardContent className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+              <div className="w-20 h-20 bg-white rounded-3xl shadow-xl flex items-center justify-center rotate-3">
+                <MessageCircle className="w-10 h-10 text-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-slate-400 font-black uppercase tracking-widest text-xs">Hộp thư trống</p>
+                <p className="text-slate-400 text-sm font-medium">Hiện chưa có yêu cầu hỗ trợ nào được ghi nhận</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {supportRequests.map((req: any) => (
+              <Card key={req.id} className="border-none shadow-xl shadow-slate-100 bg-white rounded-[32px] overflow-hidden group hover:shadow-2xl hover:shadow-indigo-100/50 transition-all duration-500 flex flex-col h-full border border-slate-100/50 relative">
+                {req.status === 'Chờ xử lý' && <div className="absolute top-4 right-4 w-2 h-2 bg-rose-500 rounded-full animate-ping" />}
+                <CardHeader className="p-6 pb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                       <Badge variant="outline" className="bg-slate-50 text-slate-500 border-none text-[9px] font-black tracking-widest uppercase py-0.5 px-2">{req.category}</Badge>
+                       {getPriorityBadge(req.priority)}
+                    </div>
+                    {getStatusBadge(req.status)}
+                  </div>
+                  <CardTitle className="text-lg font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors">
+                    {req.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 pt-0 flex-1 space-y-4">
+                  <p className="text-slate-600 text-sm font-medium leading-relaxed italic line-clamp-3">
+                    "{req.content}"
+                  </p>
+                  
+                  <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-indigo-50 rounded-full flex items-center justify-center">
+                        <UserCircle className="w-4 h-4 text-indigo-600" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{req.userName}</span>
+                        <span className="text-[8px] font-bold text-slate-400">{req.userEmail?.split('@')[0]}</span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                      {req.createdAt ? format(req.createdAt.toDate ? req.createdAt.toDate() : new Date(req.createdAt), 'dd/MM/yyyy HH:mm') : ''}
+                    </span>
+                  </div>
+
+                  {req.adminReply ? (
+                    <div className="mt-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2 relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-[0.05]">
+                        <ShieldCheck className="w-12 h-12 text-emerald-600" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-600 text-white border-none py-0 px-2 text-[8px] font-black uppercase">Admin Phản hồi</Badge>
+                        <span className="text-[8px] font-bold text-emerald-500 uppercase italic">
+                          {req.repliedAt ? format(req.repliedAt.toDate ? req.repliedAt.toDate() : new Date(req.repliedAt), 'dd/MM HH:mm') : ''}
+                        </span>
+                      </div>
+                      <p className="text-emerald-900 text-xs font-bold leading-relaxed">
+                        {req.adminReply}
+                      </p>
+                      <span className="text-[8px] font-black text-emerald-600/50 uppercase tracking-tighter text-right">By: {req.repliedBy?.split('@')[0]}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center py-6">
+                       <Clock className="w-5 h-5 text-slate-300 mb-2" />
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đang chờ xử lý</p>
+                    </div>
+                  )}
+                </CardContent>
+                
+                {isAdmin && (
+                  <div className="p-4 bg-slate-50/50 border-t border-slate-100">
+                    <Button 
+                      onClick={() => {
+                        setReplyingTo(req);
+                        setAdminReply(req.adminReply || '');
+                        setReplyStatus(req.status);
+                      }}
+                      className="w-full h-10 bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 border border-indigo-100 rounded-xl font-bold text-[11px] shadow-sm transition-all"
+                    >
+                      {req.adminReply ? 'CẬP NHẬT PHẢN HỒI' : 'PHẢN HỒI NGAY'}
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* New Request Modal */}
+      <Dialog open={isAddingRequest} onOpenChange={setIsAddingRequest}>
+        <DialogContent className="sm:max-w-lg bg-white border-none shadow-2xl p-0 overflow-hidden rounded-[32px]">
+          <div className="bg-indigo-600 p-8 text-white relative h-32 flex flex-col justify-end">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
+            <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10">Tạo yêu cầu mới</DialogTitle>
+            <p className="text-indigo-100 text-xs font-medium relative z-10 leading-relaxed uppercase tracking-widest">Gửi thắc mắc hoặc báo lỗi tới ban quản trị</p>
+          </div>
+          
+          <div className="p-8 space-y-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vấn đề</Label>
+                  <Select value={requestCategory} onValueChange={setRequestCategory}>
+                    <SelectTrigger className="h-12 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl">
+                      <SelectItem value="Kỹ thuật">Kỹ thuật</SelectItem>
+                      <SelectItem value="Quy trình">Quy trình</SelectItem>
+                      <SelectItem value="Ngân sách">Ngân sách</SelectItem>
+                      <SelectItem value="Khác">Khác</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mức độ ưu tiên</Label>
+                  <Select value={requestPriority} onValueChange={setRequestPriority}>
+                    <SelectTrigger className="h-12 bg-slate-50 border-none rounded-xl text-xs font-bold focus:ring-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl">
+                      <SelectItem value="Thấp">Thấp</SelectItem>
+                      <SelectItem value="Trung bình">Trung bình</SelectItem>
+                      <SelectItem value="Cao">Cao</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiêu đề yêu cầu</Label>
+                <Input 
+                  placeholder="Vd: Lỗi không hiển thị doanh số..." 
+                  className="h-12 bg-slate-50 border-none rounded-xl text-sm font-bold placeholder:text-slate-300"
+                  value={requestTitle}
+                  onChange={(e) => setRequestTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nội dung chi tiết</Label>
+                <textarea 
+                  className="w-full min-h-[120px] p-4 bg-slate-50 border-none rounded-[20px] text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+                  placeholder="Mô tả kỹ lỗi bạn gặp phải hoặc thắc mắc cần giải đáp..."
+                  value={requestContent}
+                  onChange={(e) => setRequestContent(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="ghost" 
+                className="flex-1 h-14 rounded-2xl font-black text-slate-400 uppercase tracking-widest"
+                onClick={() => setIsAddingRequest(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-2 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all"
+                onClick={handleSubmitRequest}
+              >
+                GỬI YÊU CẦU NGAY
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Reply Modal */}
+      <Dialog open={!!replyingTo} onOpenChange={(open) => !open && setReplyingTo(null)}>
+        <DialogContent className="sm:max-w-lg bg-white border-none shadow-2xl p-0 overflow-hidden rounded-[32px]">
+          <div className="bg-slate-900 p-8 text-white relative h-32 flex flex-col justify-end">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-3xl" />
+            <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10">Phản hồi yêu cầu</DialogTitle>
+            <p className="text-slate-400 text-[10px] font-black relative z-10 leading-relaxed uppercase tracking-[0.2em]">Đang xử lý cho: "{replyingTo?.userName}"</p>
+          </div>
+          
+          <div className="p-8 space-y-6">
+            <div className="p-4 bg-slate-50 rounded-2xl space-y-2 mb-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[8px] font-black uppercase bg-white">{replyingTo?.category}</Badge>
+                <h4 className="text-xs font-black text-slate-900">{replyingTo?.title}</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium italic leading-relaxed">"{replyingTo?.content}"</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Trạng thái xử lý</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Đang xử lý', 'Đã phản hồi', 'Đã đóng'].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setReplyStatus(status)}
+                      className={`h-10 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                        replyStatus === status 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100 scale-105' 
+                          : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nội dung phản hồi</Label>
+                <textarea 
+                  className="w-full min-h-[150px] p-4 bg-slate-50 border-none rounded-[24px] text-sm font-bold placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all shadow-inner"
+                  placeholder="Nhập nội dung phản hồi chi tiết tới người dùng..."
+                  value={adminReply}
+                  onChange={(e) => setAdminReply(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button 
+                variant="ghost" 
+                className="flex-1 h-14 rounded-2xl font-black text-slate-400 uppercase tracking-widest"
+                onClick={() => setReplyingTo(null)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button 
+                className="flex-2 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest shadow-xl shadow-indigo-100"
+                onClick={handleAdminReply}
+              >
+                GỬI PHẢN HỒI NGAY
+                <Check className="w-5 h-5 ml-2" />
               </Button>
             </div>
           </div>

@@ -5878,6 +5878,9 @@ export default function App() {
       if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
 
       const bProject = projects.find(p => p.id === b.projectId);
+      if (reportRegion !== 'all' && (bProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (bProject?.type || 'Khác') !== reportType) return;
+      
       const bRegion = bProject?.region || 'Khác';
       const tId = b.teamId || b.teamName;
       
@@ -5915,12 +5918,15 @@ export default function App() {
       const cTeamName = teamMap[c.teamId] || c.teamName;
       if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
 
+      const cProject = projects.find(p => p.id === c.projectId);
+      if (reportRegion !== 'all' && (cProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (cProject?.type || 'Khác') !== reportType) return;
+      
       // Week filter
       if (chartTimeType === 'week' && reportWeek !== 'all') {
         if (c.weekNumber?.toString() !== reportWeek) return;
       }
 
-      const cProject = projects.find(p => p.id === c.projectId);
       const cRegion = cProject?.region || 'Khác';
       const tId = c.teamId || c.teamName;
       
@@ -5945,6 +5951,9 @@ export default function App() {
       if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
       if (reportProject !== 'all' && r.projectId !== reportProject) return;
       const rProject = projects.find(p => p.id === r.projectId);
+      if (reportRegion !== 'all' && (rProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (rProject?.type || 'Khác') !== reportType) return;
+      
       const rRegion = rProject?.region || 'Khác';
       const currentTeamName = teamMap[r.teamId] || r.teamName;
       if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
@@ -6031,31 +6040,73 @@ export default function App() {
   }, [supportRequests]);
 
   const overBudgetStats = useMemo(() => {
-    // Collect all granular items (Project-Team pairings) that are over budget
+    // Group all budgets and costs by {projectId, teamId} for the selected filters
+    // to ensure we catch overruns at the most granular level (per team, per project)
+    const pairMap: { [key: string]: { budget: number, cost: number, projectName: string, teamName: string } } = {};
+    
+    budgets.forEach(b => {
+      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
+      if (reportProject !== 'all' && b.projectId !== reportProject) return;
+      const bTeamName = teamMap[b.teamId] || b.teamName;
+      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
+
+      const project = projects.find(p => p.id === b.projectId);
+      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
+
+      const key = `${b.projectId}-${b.teamId || b.teamName}`;
+      if (!pairMap[key]) {
+        pairMap[key] = { budget: 0, cost: 0, projectName: projectMap[b.projectId] || 'N/A', teamName: bTeamName };
+      }
+      let amount = b.amount || 0;
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        amount = amount / 4;
+      }
+      pairMap[key].budget += amount;
+    });
+
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
+      if (reportProject !== 'all' && c.projectId !== reportProject) return;
+      const cTeamName = teamMap[c.teamId] || c.teamName;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+
+      const project = projects.find(p => p.id === c.projectId);
+      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
+
+      // Week filter for costs
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        if (c.weekNumber?.toString() !== reportWeek) return;
+      }
+
+      const key = `${c.projectId}-${c.teamId || c.teamName}`;
+      if (!pairMap[key]) {
+        pairMap[key] = { budget: 0, cost: 0, projectName: projectMap[c.projectId] || 'N/A', teamName: cTeamName };
+      }
+      pairMap[key].cost += c.amount || 0;
+    });
+
     const granularOverItems: any[] = [];
     let totalExcess = 0;
 
-    efficiencyChartData.forEach(item => {
-      // item is either a Project (with Team details) or a Team (with Project details)
-      // Both ways cover all Project-Team combinations
-      item.details.forEach((detail: any) => {
-        if (detail.cost > detail.budget) {
-          const excess = detail.cost - detail.budget;
-          totalExcess += excess;
-          granularOverItems.push({
-            id: `${item.id}-${detail.name}`, // Unique ID for the pair
-            name: efficiencyGroupType === 'project' ? `${item.name} - ${detail.name}` : `${detail.name} - ${item.name}`,
-            mainName: item.name,
-            detailName: detail.name,
-            budget: detail.budget,
-            cost: detail.cost,
-            sales: detail.sales,
-            revenue: detail.revenue,
-            excess: excess,
-            details: detail.details || [] // In case details were nested further down, but usually one level
-          });
-        }
-      });
+    Object.keys(pairMap).forEach(key => {
+      const item = pairMap[key];
+      // Use a small epsilon to avoid floating point issues
+      if (item.cost > item.budget + 0.01) {
+        const excess = item.cost - item.budget;
+        totalExcess += excess;
+        granularOverItems.push({
+          id: key,
+          name: `${item.projectName} - ${item.teamName}`,
+          mainName: item.projectName,
+          detailName: item.teamName,
+          budget: item.budget,
+          cost: item.cost,
+          excess: excess
+        });
+      }
     });
 
     return {
@@ -6063,7 +6114,7 @@ export default function App() {
       totalExcess: totalExcess,
       items: granularOverItems
     };
-  }, [efficiencyChartData, efficiencyGroupType]);
+  }, [budgets, costs, reportMonths, reportProject, reportTeam, reportRegion, reportType, projects, projectMap, teamMap, getMarketingMonth, chartTimeType, reportWeek]);
 
   const salesGeneratingData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
@@ -6329,30 +6380,69 @@ export default function App() {
   const comparisonChartData = useMemo(() => {
     if (reportMonths.length === 0) return [];
 
-    const categories = efficiencyGroupType === 'team' ? uniqueTeams : Array.from(new Set(projects.map(p => p.id)));
+    let categories: string[] = [];
+    if (efficiencyGroupType === 'team') {
+      categories = uniqueTeams;
+    } else if (efficiencyGroupType === 'region') {
+      categories = uniqueRegions;
+    } else {
+      categories = Array.from(new Set(projects.map(p => p.id)));
+    }
     
     return categories.map(catId => {
-      const name = efficiencyGroupType === 'team' ? catId : projectMap[catId] || 'N/A';
+      let name;
+      if (efficiencyGroupType === 'team') {
+        name = catId;
+      } else if (efficiencyGroupType === 'region') {
+        name = catId;
+      } else {
+        name = projectMap[catId] || 'N/A';
+      }
+
       const row: any = { name };
 
       reportMonths.forEach(month => {
         let value = 0;
         if (reportSortBy === 'budget') {
           const mBudgets = budgets.filter(b => {
-            const matchCat = efficiencyGroupType === 'team' ? (teamMap[b.teamId] || b.teamName) === catId : b.projectId === catId;
+            let matchCat = false;
+            if (efficiencyGroupType === 'team') {
+              matchCat = (teamMap[b.teamId] || b.teamName) === catId;
+            } else if (efficiencyGroupType === 'region') {
+              const project = projects.find(p => p.id === b.projectId);
+              matchCat = (project?.region || 'Khác') === catId;
+            } else {
+              matchCat = b.projectId === catId;
+            }
             return b.month === month && matchCat;
           });
           value = mBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
         } else if (reportSortBy === 'actual') {
           const mCosts = costs.filter(c => {
              const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-             const matchCat = efficiencyGroupType === 'team' ? (teamMap[c.teamId] || c.teamName) === catId : c.projectId === catId;
+             let matchCat = false;
+             if (efficiencyGroupType === 'team') {
+               matchCat = (teamMap[c.teamId] || c.teamName) === catId;
+             } else if (efficiencyGroupType === 'region') {
+               const project = projects.find(p => p.id === c.projectId);
+               matchCat = (project?.region || 'Khác') === catId;
+             } else {
+               matchCat = c.projectId === catId;
+             }
              return mMonth === month && matchCat;
           });
           value = mCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
         } else if (reportSortBy === 'revenue') {
           const mRevs = efficiencyReports.filter(r => {
-             const matchCat = efficiencyGroupType === 'team' ? (teamMap[r.teamId] || r.teamName) === catId : r.projectId === catId;
+             let matchCat = false;
+             if (efficiencyGroupType === 'team') {
+               matchCat = (teamMap[r.teamId] || r.teamName) === catId;
+             } else if (efficiencyGroupType === 'region') {
+               const project = projects.find(p => p.id === r.projectId);
+               matchCat = (project?.region || 'Khác') === catId;
+             } else {
+               matchCat = r.projectId === catId;
+             }
              return r.month === month && matchCat;
           });
           value = mRevs.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
@@ -6369,7 +6459,7 @@ export default function App() {
       const primaryMonth = reportMonths[0];
       return (b[primaryMonth] || 0) - (a[primaryMonth] || 0);
     });
-  }, [reportMonths, efficiencyGroupType, uniqueTeams, projects, budgets, costs, efficiencyReports, projectMap, teamMap, reportSortBy, getMarketingMonth]);
+  }, [reportMonths, efficiencyGroupType, uniqueTeams, uniqueRegions, projects, budgets, costs, efficiencyReports, projectMap, teamMap, reportSortBy, getMarketingMonth]);
 
   const reportTableData = useMemo(() => {
     // 1. Process Teams group
@@ -7937,7 +8027,7 @@ export default function App() {
                             </Button>
 
                             <Dialog>
-                              <DialogTrigger nativeButton={false} render={
+                              <DialogTrigger nativeButton={true} render={
                                 <Button 
                                   variant="destructive" 
                                   size="sm" 
@@ -8186,7 +8276,7 @@ export default function App() {
                           
                           {isAdmin && (
                             <Dialog>
-                              <DialogTrigger nativeButton={false} render={
+                              <DialogTrigger nativeButton={true} render={
                                 <Button className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100 px-6 transition-all transform active:scale-95 flex items-center gap-2">
                                   <Plus className="w-5 h-5" /> Thêm Vùng / Khu vực
                                 </Button>
@@ -8254,7 +8344,7 @@ export default function App() {
                             </Button>
 
                             <Dialog>
-                              <DialogTrigger nativeButton={false} render={
+                              <DialogTrigger nativeButton={true} render={
                                 <Button 
                                   variant="destructive" 
                                   size="sm" 
@@ -8379,7 +8469,7 @@ export default function App() {
                                                   <Edit2 className="h-3.5 w-3.5" />
                                                 </Button>
                                                 <Dialog>
-                                                  <DialogTrigger nativeButton={false} render={
+                                                  <DialogTrigger nativeButton={true} render={
                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
                                                   }>
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -8447,7 +8537,7 @@ export default function App() {
                           </div>
                           {isAdmin && (
                             <Dialog>
-                              <DialogTrigger nativeButton={false} render={
+                              <DialogTrigger nativeButton={true} render={
                                 <Button className="bg-blue-600 hover:bg-blue-700">
                                   <Plus className="w-4 h-4 mr-2" /> Thêm Loại hình
                                 </Button>
@@ -8539,7 +8629,7 @@ export default function App() {
                             </Button>
 
                             <Dialog>
-                              <DialogTrigger nativeButton={false} render={
+                              <DialogTrigger nativeButton={true} render={
                                 <Button 
                                   variant="destructive" 
                                   size="sm" 
@@ -8665,7 +8755,7 @@ export default function App() {
                                                   <Edit2 className="h-3.5 w-3.5" />
                                                 </Button>
                                                 <Dialog>
-                                                  <DialogTrigger nativeButton={false} render={
+                                                  <DialogTrigger nativeButton={true} render={
                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" />
                                                   }>
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -8754,7 +8844,7 @@ export default function App() {
                                 <Download className="w-4 h-4 mr-2" /> Xuất Excel
                               </Button>
                               <Dialog>
-                                <DialogTrigger nativeButton={false} render={
+                                <DialogTrigger nativeButton={true} render={
                                   <Button className="bg-blue-600 hover:bg-blue-700">
                                     <Plus className="w-4 h-4 mr-2" /> Thêm Team
                                   </Button>

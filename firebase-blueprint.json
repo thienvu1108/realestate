@@ -170,6 +170,7 @@
         "facebookCost": { "type": "number" },
         "zaloCost": { "type": "number" },
         "googleCost": { "type": "number" },
+        "tiktokCost": { "type": "number" },
         "postingCost": { "type": "number" },
         "otherCost": { "type": "number" },
         "totalCost": { "type": "number" },

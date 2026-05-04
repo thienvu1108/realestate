@@ -689,9 +689,7 @@ export default function App() {
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
       const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
       
-      const hasAccess = isAdmin || isMod || 
-                         (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) ||
-                         (isOwner || isAssigned);
+      const hasAccess = isAdmin || isMod || isGDDA || (isOwner || isAssigned);
       
       if (!hasAccess) return false;
 
@@ -723,9 +721,7 @@ export default function App() {
       const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
       const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
       
-      const hasAccess = isAdmin || isMod || 
-                         (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) ||
-                         (isOwner || isAssigned);
+      const hasAccess = isAdmin || isMod || isGDDA || (isOwner || isAssigned);
       
       if (!hasAccess) return false;
 
@@ -2048,9 +2044,8 @@ export default function App() {
         const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
         const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
         const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-        const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
         
-        const canSee = isAdmin || isMod || isOwner || isAssigned || isAssignedGDDA;
+        const canSee = isAdmin || isMod || isGDDA || isOwner || isAssigned;
         return canSee && b.month === costBudgetMonth;
       })
       .filter(b => 
@@ -2166,12 +2161,11 @@ export default function App() {
 
     // Listen to projects
     let qProjects;
-    if (isAdmin || isMod || isUser) {
+    if (isAdmin || isMod || isUser || isGDDA) {
       qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+    } else if (userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
     } else {
-      // If GDDA has no projects, they see nothing
       qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
     }
 
@@ -2199,10 +2193,8 @@ export default function App() {
 
     // Listen to budgets
     let qBudgets;
-    if (isAdmin || isMod) {
+    if (isAdmin || isMod || isGDDA) {
       qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qBudgets = query(
         collection(db, 'budgets'), 
@@ -2228,10 +2220,8 @@ export default function App() {
 
     // Listen to costs
     let qCosts;
-    if (isAdmin || isMod) {
+    if (isAdmin || isMod || isGDDA) {
       qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qCosts = query(
         collection(db, 'costs'), 
@@ -6607,7 +6597,7 @@ export default function App() {
                 {budgets
                   .filter(b => {
                     const matchMonth = b.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod) {
+                    if (!isAdmin && !isMod && !isGDDA) {
                       const userEmail = user?.email?.toLowerCase();
                       const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
                       return matchMonth && (budgetEmail === userEmail || b.createdBy === user?.uid);
@@ -6633,7 +6623,7 @@ export default function App() {
                     const matchWeek = c.weekNumber === getCurrentPeriod();
                     const isMatchTime = matchMonth && matchWeek;
                     
-                    if (!isAdmin && !isMod) {
+                    if (!isAdmin && !isMod && !isGDDA) {
                       const userEmail = user?.email?.toLowerCase();
                       const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
                       return isMatchTime && (costEmail === userEmail || c.createdBy === user?.uid);
@@ -6656,7 +6646,7 @@ export default function App() {
                 {efficiencyReports
                   .filter(r => {
                     const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod) {
+                    if (!isAdmin && !isMod && !isGDDA) {
                       return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
                     }
                     return matchMonth;
@@ -6677,7 +6667,7 @@ export default function App() {
                 {efficiencyReports
                   .filter(r => {
                     const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod) {
+                    if (!isAdmin && !isMod && !isGDDA) {
                       return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
                     }
                     return matchMonth;
@@ -7031,7 +7021,7 @@ export default function App() {
                     </div>
 
                     {/* Category: Quản lý Dữ liệu gốc */}
-                    {(isAdmin || isMod) && (
+                    {(isAdmin || isMod || isGDDA) && (
                       <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
                         <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
                           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Dữ liệu nền tảng</h2>
@@ -7092,7 +7082,7 @@ export default function App() {
                       <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
                         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Vận hành & Tài chính</h2>
                       </div>
-                      {(isAdmin || isMod) && (
+                      {(isAdmin || isMod || isGDDA) && (
                         <>
                           <Button 
                             variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
@@ -8899,32 +8889,38 @@ export default function App() {
                           >
                             <Download className="w-3 h-3 mr-1" /> Xuất Excel
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                            onClick={() => setIsImportBudgetsDialogOpen(true)}
-                          >
-                            <FileUp className="w-3 h-3 mr-1" /> Nhập File
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                            onClick={handleBulkDeleteBudgets}
-                            disabled={selectedBudgetIds.length === 0}
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedBudgetIds.length})
-                          </Button>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="h-8 text-[10px]"
-                            onClick={handleDeleteAllBudgets}
-                            disabled={budgets.length === 0}
-                          >
-                            <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                          </Button>
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                              onClick={() => setIsImportBudgetsDialogOpen(true)}
+                            >
+                              <FileUp className="w-3 h-3 mr-1" /> Nhập File
+                            </Button>
+                          )}
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={handleBulkDeleteBudgets}
+                              disabled={selectedBudgetIds.length === 0}
+                            >
+                              <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedBudgetIds.length})
+                            </Button>
+                          )}
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="h-8 text-[10px]"
+                              onClick={handleDeleteAllBudgets}
+                              disabled={budgets.length === 0}
+                            >
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
+                            </Button>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -9047,24 +9043,28 @@ export default function App() {
                                       >
                                         <History className="w-3.5 h-3.5" />
                                       </Button>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-blue-600"
-                                        onClick={() => handleOpenEditBudget(b)}
-                                        title="Sửa ngân sách"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </Button>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                        onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                        title="Xóa ngân sách"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
+                                      {(isAdmin || isMod) && (
+                                        <>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                            onClick={() => handleOpenEditBudget(b)}
+                                            title="Sửa ngân sách"
+                                          >
+                                            <Edit2 className="w-4 h-4" />
+                                          </Button>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                            onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                            title="Xóa ngân sách"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        </>
+                                      )}
                                     </div>
                                   </TableCell>
                                 </TableRow>
@@ -9118,32 +9118,38 @@ export default function App() {
                           >
                             <Download className="w-3 h-3 mr-1" /> Xuất Excel
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                            onClick={() => setIsImportCostsDialogOpen(true)}
-                          >
-                            <FileUp className="w-3 h-3 mr-1" /> Nhập File
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                            onClick={handleBulkDeleteCosts}
-                            disabled={selectedCostIds.length === 0}
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedCostIds.length})
-                          </Button>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="h-8 text-[10px]"
-                            onClick={handleDeleteAllCosts}
-                            disabled={costs.length === 0}
-                          >
-                            <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                          </Button>
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                              onClick={() => setIsImportCostsDialogOpen(true)}
+                            >
+                              <FileUp className="w-3 h-3 mr-1" /> Nhập File
+                            </Button>
+                          )}
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={handleBulkDeleteCosts}
+                              disabled={selectedCostIds.length === 0}
+                            >
+                              <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedCostIds.length})
+                            </Button>
+                          )}
+                          {(isAdmin || isMod) && (
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="h-8 text-[10px]"
+                              onClick={handleDeleteAllCosts}
+                              disabled={costs.length === 0}
+                            >
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
+                            </Button>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -9257,14 +9263,16 @@ export default function App() {
                                         >
                                           <History className="w-3.5 h-3.5" />
                                         </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                          onClick={() => handleDeleteCost(c.id, c.projectName)}
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </Button>
+                                        {(isAdmin || isMod) && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                            onClick={() => handleDeleteCost(c.id, c.projectName)}
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        )}
                                       </div>
                                     </TableCell>
                                   </TableRow>
@@ -12639,7 +12647,7 @@ export default function App() {
                       </TableHeader>
                       <TableBody>
                         {costs
-                          .filter(c => isAdmin || isMod || c.userEmail === user.email)
+                          .filter(c => isAdmin || isMod || isGDDA || c.userEmail === user.email)
                           .slice(0, 50)
                           .map((c, idx) => (
                           <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
@@ -14337,6 +14345,7 @@ const AcceptanceManager = React.memo(({
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
   const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
+  const [isEditingFinalized, setIsEditingFinalized] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [acceptanceToFinalize, setAcceptanceToFinalize] = useState<any>(null);
 
@@ -14353,6 +14362,8 @@ const AcceptanceManager = React.memo(({
   const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
   const [acceptanceType, setAcceptanceType] = useState('Chi phí không đổi');
   const [acceptanceRealCost, setAcceptanceRealCost] = useState('');
+  const [visaAmount, setVisaAmount] = useState('');
+  const [digitalAmount, setDigitalAmount] = useState('');
   const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [acceptanceToDelete, setAcceptanceToDelete] = useState<string | null>(null);
@@ -14495,11 +14506,14 @@ const AcceptanceManager = React.memo(({
       total: acc.total + (a.totalCost || 0),
       after: acc.after + (a.afterAcceptanceCost || 0),
       fb: acc.fb + (a.facebookCost || 0),
+      tiktok: acc.tiktok + (a.tiktokCost || 0),
       zalo: acc.zalo + (a.zaloCost || 0),
       google: acc.google + (a.googleCost || 0),
       posting: acc.posting + (a.postingCost || 0),
-      other: acc.other + (a.otherCost + a.visaCost + a.digitalCost || 0)
-    }), { total: 0, after: 0, fb: 0, zalo: 0, google: 0, posting: 0, other: 0 });
+      other: acc.other + (a.otherCost || 0),
+      visa: acc.visa + (a.visaCost || 0),
+      digital: acc.digital + (a.digitalCost || 0)
+    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0 });
   }, [filteredAcceptances]);
 
   const finalizedTotals = useMemo(() => {
@@ -14507,11 +14521,14 @@ const AcceptanceManager = React.memo(({
       total: acc.total + (a.beforeAcceptanceCost || 0),
       after: acc.after + (a.totalActualCost || 0),
       fb: acc.fb + (a.facebookCost || 0),
+      tiktok: acc.tiktok + (a.tiktokCost || 0),
       zalo: acc.zalo + (a.zaloCost || 0),
       google: acc.google + (a.googleCost || 0),
       posting: acc.posting + (a.postingCost || 0),
-      other: acc.other + (a.otherCost + a.visaCost + a.digitalCost || 0)
-    }), { total: 0, after: 0, fb: 0, zalo: 0, google: 0, posting: 0, other: 0 });
+      other: acc.other + (a.otherCost || 0),
+      visa: acc.visa + (a.visaCost || 0),
+      digital: acc.digital + (a.digitalCost || 0)
+    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0 });
   }, [filteredFinalAcceptances]);
 
   const handleAddAcceptance = async (e: React.FormEvent) => {
@@ -14524,15 +14541,16 @@ const AcceptanceManager = React.memo(({
     setIsAddingAcceptance(true);
     try {
       const fb = calculateChannelTotal('facebook');
+      const tiktok = calculateChannelTotal('tiktok');
       const zalo = calculateChannelTotal('zalo');
       const google = calculateChannelTotal('google');
       const posting = calculateChannelTotal('posting');
       const other = calculateChannelTotal('other');
-      const visa = calculateChannelTotal('visa');
-      const digital = calculateChannelTotal('digital');
+      const visa = parseFloat(visaAmount.replace(/\./g, '')) || 0;
+      const digital = parseFloat(digitalAmount.replace(/\./g, '')) || 0;
       const realCost = parseFloat(acceptanceRealCost.replace(/\./g, '')) || 0;
       
-      const beforeAcceptanceTotal = fb + zalo + google + posting + other + visa + digital;
+      const beforeAcceptanceTotal = fb + tiktok + zalo + google + posting + other;
       const afterTotal = (acceptanceStatus === 'Đã nghiệm thu' && acceptanceType === 'Chi phí thay đổi') ? realCost : beforeAcceptanceTotal;
 
       const team = teams.find((t: any) => t.id === acceptanceTeam);
@@ -14540,7 +14558,7 @@ const AcceptanceManager = React.memo(({
 
       // Process breakdown for storage (convert strings to numbers)
       const processedBreakdown: any = {};
-      const channelKeys = ['facebook', 'zalo', 'google', 'posting', 'visa', 'digital', 'other'];
+      const channelKeys = ['facebook', 'tiktok', 'zalo', 'google', 'posting', 'other'];
       
       channelKeys.forEach(key => {
         processedBreakdown[key] = entries
@@ -14553,7 +14571,7 @@ const AcceptanceManager = React.memo(({
           }));
       });
 
-      const payload = {
+      const payload: any = {
         month: acceptanceMonth,
         teamId: acceptanceTeam,
         teamName: team?.name || '',
@@ -14562,6 +14580,7 @@ const AcceptanceManager = React.memo(({
         projectName: project?.name || '',
         projectCode: project?.projectCode || '',
         facebookCost: fb,
+        tiktokCost: tiktok,
         zaloCost: zalo,
         googleCost: google,
         postingCost: posting,
@@ -14580,9 +14599,22 @@ const AcceptanceManager = React.memo(({
       };
 
       if (editingAcceptance) {
-        await updateDoc(doc(db, 'acceptances', editingAcceptance.id), payload);
-        toast.success('Cập nhật nghiệm thu thành công');
+        if (isEditingFinalized) {
+          payload.totalActualCost = afterTotal;
+          await updateDoc(doc(db, 'finalAcceptances', editingAcceptance.id), payload);
+          if (editingAcceptance.originalAcceptanceId) {
+            await updateDoc(doc(db, 'acceptances', editingAcceptance.originalAcceptanceId), {
+              ...payload,
+              status: 'Đã nghiệm thu'
+            });
+          }
+          toast.success('Cập nhật bản ghi thực tế thành công');
+        } else {
+          await updateDoc(doc(db, 'acceptances', editingAcceptance.id), payload);
+          toast.success('Cập nhật nghiệm thu thành công');
+        }
         setEditingAcceptance(null);
+        setIsEditingFinalized(false);
       } else {
         await addDoc(collection(db, 'acceptances'), {
           ...payload,
@@ -14598,9 +14630,11 @@ const AcceptanceManager = React.memo(({
       setAcceptanceProject('');
       setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
       setAcceptanceRealCost('');
+      setVisaAmount('');
+      setDigitalAmount('');
       setAcceptanceStatus('Trước nghiệm thu');
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.WRITE, 'acceptances');
+      handleFirestoreError(error, OperationType.WRITE, isEditingFinalized ? 'finalAcceptances' : 'acceptances');
     } finally {
       setIsAddingAcceptance(false);
     }
@@ -14665,6 +14699,40 @@ const AcceptanceManager = React.memo(({
     }
   };
 
+  const handleExportAcceptances = () => {
+    const dataToExport = acceptanceListView === 'pending' ? filteredAcceptances : filteredFinalAcceptances;
+    
+    if (dataToExport.length === 0) {
+      toast.error('Không có dữ liệu để xuất');
+      return;
+    }
+
+    const data = dataToExport.map((a: any) => ({
+      'Tháng': a.month,
+      'Dự án': a.projectName,
+      'Mã dự án': a.projectCode,
+      'Team': a.teamName,
+      'Facebook Ads': a.facebookCost || 0,
+      'Tiktok Ads': a.tiktokCost || 0,
+      'Zalo Ads': a.zaloCost || 0,
+      'Google Ads': a.googleCost || 0,
+      'Đăng tin': a.postingCost || 0,
+      'Khác': a.otherCost || 0,
+      'VISA': a.visaCost || 0,
+      'Digital': a.digitalCost || 0,
+      'Tổng tạm tính': a.totalCost || 0,
+      'Quyết toán': a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || a.totalActualCost || 0) : '-',
+      'Trạng thái': a.status,
+      'Ngày cập nhật': a.updatedAt ? format(a.updatedAt.toDate ? a.updatedAt.toDate() : new Date(a.updatedAt), 'dd/MM/yyyy HH:mm') : ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Nghiệm thu');
+    XLSX.writeFile(workbook, `Nghiem_thu_${acceptanceListView === 'pending' ? 'Chưa_chốt' : 'Đã_chốt'}_${format(new Date(), 'dd_MM_yyyy')}.xlsx`);
+    toast.success('Đã xuất file Excel thành công');
+  };
+
   const handleFinalizeAcceptance = async (acc: any) => {
     if (!acc) return;
     
@@ -14685,6 +14753,7 @@ const AcceptanceManager = React.memo(({
         facebookCost: acc.facebookCost || 0,
         zaloCost: acc.zaloCost || 0,
         googleCost: acc.googleCost || 0,
+        tiktokCost: acc.tiktokCost || 0,
         postingCost: acc.postingCost || 0,
         otherCost: acc.otherCost || 0,
         visaCost: acc.visaCost || 0,
@@ -14827,12 +14896,11 @@ const AcceptanceManager = React.memo(({
                                 <SelectValue placeholder="Kênh..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="facebook">Facebook</SelectItem>
-                                <SelectItem value="zalo">Zalo</SelectItem>
-                                <SelectItem value="google">Google</SelectItem>
+                                <SelectItem value="facebook">Facebook Ads</SelectItem>
+                                <SelectItem value="tiktok">Tiktok Ads</SelectItem>
+                                <SelectItem value="google">Google Ads</SelectItem>
+                                <SelectItem value="zalo">Zalo Ads</SelectItem>
                                 <SelectItem value="posting">Đăng tin</SelectItem>
-                                <SelectItem value="visa">Visa</SelectItem>
-                                <SelectItem value="digital">Digital</SelectItem>
                                 <SelectItem value="other">Khác</SelectItem>
                               </SelectContent>
                             </Select>
@@ -14875,6 +14943,27 @@ const AcceptanceManager = React.memo(({
                       <span className="text-lg font-black text-indigo-700 font-mono italic">
                         {formatCurrency(entries.reduce((sum, e) => sum + (parseFloat(e.amount.replace(/\./g, '')) || 0), 0))}
                       </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tự chạy qua thẻ VISA (Ngoài tổng chi)</Label>
+                        <Input 
+                          placeholder="Nhập số tiền..." 
+                          className="h-11 bg-white border-slate-200 rounded-xl text-sm font-mono"
+                          value={visaAmount}
+                          onChange={e => setVisaAmount(formatCurrencyInput(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chạy qua team Digital (Ngoài tổng chi)</Label>
+                        <Input 
+                          placeholder="Nhập số tiền..." 
+                          className="h-11 bg-white border-slate-200 rounded-xl text-sm font-mono"
+                          value={digitalAmount}
+                          onChange={e => setDigitalAmount(formatCurrencyInput(e.target.value))}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -14946,11 +15035,14 @@ const AcceptanceManager = React.memo(({
                       className="w-full mt-2 text-slate-400 font-bold"
                       onClick={() => {
                         setEditingAcceptance(null);
+                        setIsEditingFinalized(false);
                         setAcceptanceMonth('');
                         setAcceptanceTeam('');
                         setAcceptanceProject('');
                         setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
                         setAcceptanceRealCost('');
+                        setVisaAmount('');
+                        setDigitalAmount('');
                         setAcceptanceStatus('Trước nghiệm thu');
                         setAcceptanceType('Chi phí không đổi');
                       }}
@@ -14973,6 +15065,14 @@ const AcceptanceManager = React.memo(({
                   <CardDescription className="text-slate-500 font-medium tracking-tight">Chi tiết báo cáo và quyết toán chi phí hàng tháng</CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-10 px-4 rounded-xl font-black text-[10px] uppercase gap-2 border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
+                    onClick={handleExportAcceptances}
+                  >
+                    <Download className="w-4 h-4" /> Xuất File Excel
+                  </Button>
                   {selectedAcceptanceIds.length > 0 && (isAdmin || isSuperAdmin) && (
                     <Button 
                       variant="destructive" 
@@ -15051,9 +15151,12 @@ const AcceptanceManager = React.memo(({
                      <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
                      <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Tiktok</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Visa</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Digital</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
                      <TableHead className="text-right font-black text-[10px] bg-amber-50/50 text-amber-600 uppercase">Tạm tính</TableHead>
                      <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Thực thu</TableHead>
@@ -15092,10 +15195,13 @@ const AcceptanceManager = React.memo(({
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0)}</TableCell>
                         <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost)}</TableCell>
                         <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost)}</TableCell>
                         <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost + a.visaCost + a.digitalCost)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0)}</TableCell>
+                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost)}</TableCell>
                         <TableCell className="text-right bg-amber-50/30">
                           <p className="font-mono text-xs font-black text-amber-700">{formatCurrency(a.totalCost)}</p>
                         </TableCell>
@@ -15127,65 +15233,68 @@ const AcceptanceManager = React.memo(({
                             >
                               {a.status !== 'Đã nghiệm thu' ? 'Nghiệm thu' : 'Chi tiết'}
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                              onClick={() => {
-                                setEditingAcceptance(a);
-                                setAcceptanceMonth(a.month);
-                                setAcceptanceTeam(a.teamId);
-                                setAcceptanceProject(a.projectId);
-                                
-                                const flatEntries: any[] = [];
-                                if (a.breakdown) {
-                                  Object.keys(a.breakdown).forEach(channel => {
-                                    if (Array.isArray(a.breakdown[channel])) {
-                                      a.breakdown[channel].forEach((item: any) => {
+                            {(isAdmin || isMod || isSuperAdmin) && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                onClick={() => {
+                                  setEditingAcceptance(a);
+                                  setAcceptanceMonth(a.month);
+                                  setAcceptanceTeam(a.teamId);
+                                  setAcceptanceProject(a.projectId);
+                                  setVisaAmount(formatCurrencyInput(String(a.visaCost || 0)));
+                                  setDigitalAmount(formatCurrencyInput(String(a.digitalCost || 0)));
+                                  
+                                  const flatEntries: any[] = [];
+                                  if (a.breakdown) {
+                                    Object.keys(a.breakdown).forEach(channel => {
+                                      if (Array.isArray(a.breakdown[channel])) {
+                                        a.breakdown[channel].forEach((item: any) => {
+                                          flatEntries.push({
+                                            id: Math.random().toString(36).substring(7),
+                                            channel,
+                                            account: item.account || '',
+                                            amount: formatCurrencyInput(String(item.amount || 0)),
+                                            isConfirmed: item.isConfirmed || false,
+                                            finalAmount: item.finalAmount
+                                          });
+                                        });
+                                      }
+                                    });
+                                  }
+                                  
+                                  if (flatEntries.length === 0) {
+                                    const legacyFields = [
+                                      { key: 'facebook', val: a.facebookCost },
+                                      { key: 'tiktok', val: a.tiktokCost || 0 },
+                                      { key: 'zalo', val: a.zaloCost },
+                                      { key: 'google', val: a.googleCost },
+                                      { key: 'posting', val: a.postingCost },
+                                      { key: 'other', val: a.otherCost },
+                                    ];
+                                    legacyFields.forEach(f => {
+                                      if (f.val > 0) {
                                         flatEntries.push({
                                           id: Math.random().toString(36).substring(7),
-                                          channel,
-                                          account: item.account || '',
-                                          amount: formatCurrencyInput(String(item.amount || 0)),
-                                          isConfirmed: item.isConfirmed || false,
-                                          finalAmount: item.finalAmount
+                                          channel: f.key,
+                                          account: 'Hệ thống',
+                                          amount: formatCurrencyInput(String(f.val))
                                         });
-                                      });
-                                    }
-                                  });
-                                }
-                                
-                                if (flatEntries.length === 0) {
-                                  const legacyFields = [
-                                    { key: 'facebook', val: a.facebookCost },
-                                    { key: 'zalo', val: a.zaloCost },
-                                    { key: 'google', val: a.googleCost },
-                                    { key: 'posting', val: a.postingCost },
-                                    { key: 'visa', val: a.visaCost },
-                                    { key: 'digital', val: a.digitalCost },
-                                    { key: 'other', val: a.otherCost },
-                                  ];
-                                  legacyFields.forEach(f => {
-                                    if (f.val > 0) {
-                                      flatEntries.push({
-                                        id: Math.random().toString(36).substring(7),
-                                        channel: f.key,
-                                        account: 'Hệ thống',
-                                        amount: formatCurrencyInput(String(f.val))
-                                      });
-                                    }
-                                  });
-                                }
-                                setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
-                                setAcceptanceStatus(a.status);
-                                setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
-                                setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                            {(isAdmin || isSuperAdmin) && (
+                                      }
+                                    });
+                                  }
+                                  setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                                  setAcceptanceStatus(a.status);
+                                  setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
+                                  setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {(isAdmin || isMod || isSuperAdmin) && (
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -15294,17 +15403,19 @@ const AcceptanceManager = React.memo(({
                                       </div>
                                    </div>
 
-                                   <Button 
-                                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 transition-all gap-2"
-                                      disabled={isFinalizing === a.id}
-                                      onClick={() => {
-                                        setAcceptanceToFinalize(a);
-                                        setIsFinalizeDialogOpen(true);
-                                      }}
-                                   >
-                                      {isFinalizing === a.id ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                                      Chốt số liệu
-                                   </Button>
+                                   {(isAdmin || isMod || isSuperAdmin) && (
+                                     <Button 
+                                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 transition-all gap-2"
+                                        disabled={isFinalizing === a.id}
+                                        onClick={() => {
+                                          setAcceptanceToFinalize(a);
+                                          setIsFinalizeDialogOpen(true);
+                                        }}
+                                     >
+                                        {isFinalizing === a.id ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                                        Chốt số liệu
+                                     </Button>
+                                   )}
                                    <p className="text-[9px] text-center text-slate-400 font-bold px-4 italic leading-relaxed uppercase tracking-tighter">
                                      Hành động này sẽ đóng bảng nghiệm thu tháng này và chuyển dữ liệu sang báo cáo thực tế chính thức
                                    </p>
@@ -15320,9 +15431,12 @@ const AcceptanceManager = React.memo(({
                     <TableRow className="bg-slate-50/50 border-t-2 border-slate-100">
                       <TableCell colSpan={(isAdmin || isSuperAdmin) ? 3 : 2} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.fb)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.tiktok)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.zalo)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.google)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.posting)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.visa)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.digital)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.other)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-slate-400">{formatCurrency(pendingTotals.total)}</TableCell>
                       <TableCell className="text-right bg-emerald-50/30">
@@ -15346,9 +15460,12 @@ const AcceptanceManager = React.memo(({
                      <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
                      <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Tiktok</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Visa</TableHead>
+                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Digital</TableHead>
                      <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
                      <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Quyết toán</TableHead>
                      <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
@@ -15369,10 +15486,13 @@ const AcceptanceManager = React.memo(({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost || 0)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost || 0)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency((a.otherCost || 0) + (a.visaCost || 0) + (a.digitalCost || 0))}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost || 0)}</TableCell>
                       <TableCell className="text-right bg-emerald-50/30">
                         <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(a.totalActualCost)}</p>
                       </TableCell>
@@ -15394,19 +15514,81 @@ const AcceptanceManager = React.memo(({
                         </div>
                       </TableCell>
                       <TableCell className="text-right pr-4">
-                        {(isAdmin || isSuperAdmin) && (
+                        <div className="flex justify-end gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors rounded-full"
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
                             onClick={() => {
-                              setFinalAcceptanceToDelete(a.id);
-                              setIsDeleteFinalDialogOpen(true);
-                             }}
-                           >
-                             <Trash2 className="h-3.5 w-3.5" />
-                           </Button>
-                         )}
+                              setEditingAcceptance(a);
+                              setIsEditingFinalized(true);
+                              setAcceptanceMonth(a.month);
+                              setAcceptanceTeam(a.teamId);
+                              setAcceptanceProject(a.projectId);
+                              setVisaAmount(formatCurrencyInput(String(a.visaCost || 0)));
+                              setDigitalAmount(formatCurrencyInput(String(a.digitalCost || 0)));
+                              
+                              const flatEntries: any[] = [];
+                              if (a.breakdown) {
+                                Object.keys(a.breakdown).forEach(channel => {
+                                  if (Array.isArray(a.breakdown[channel])) {
+                                    a.breakdown[channel].forEach((item: any) => {
+                                      flatEntries.push({
+                                        id: Math.random().toString(36).substring(7),
+                                        channel,
+                                        account: item.account || '',
+                                        amount: formatCurrencyInput(String(item.amount || 0)),
+                                        isConfirmed: item.isConfirmed || false,
+                                        finalAmount: item.finalAmount
+                                      });
+                                    });
+                                  }
+                                });
+                              }
+                              
+                              if (flatEntries.length === 0) {
+                                const legacyFields = [
+                                  { key: 'facebook', val: a.facebookCost },
+                                  { key: 'tiktok', val: a.tiktokCost || 0 },
+                                  { key: 'zalo', val: a.zaloCost },
+                                  { key: 'google', val: a.googleCost },
+                                  { key: 'posting', val: a.postingCost },
+                                  { key: 'other', val: a.otherCost },
+                                ];
+                                legacyFields.forEach(f => {
+                                  if (f.val > 0) {
+                                    flatEntries.push({
+                                      id: Math.random().toString(36).substring(7),
+                                      channel: f.key,
+                                      account: 'Hệ thống',
+                                      amount: formatCurrencyInput(String(f.val))
+                                    });
+                                  }
+                                });
+                              }
+                              setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                              setAcceptanceStatus(a.status);
+                              setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
+                              setAcceptanceRealCost(formatCurrencyInput(String(a.totalActualCost || a.afterAcceptanceCost || 0)));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          {(isAdmin || isSuperAdmin) && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors rounded-full"
+                              onClick={() => {
+                                setFinalAcceptanceToDelete(a.id);
+                                setIsDeleteFinalDialogOpen(true);
+                               }}
+                             >
+                               <Trash2 className="h-3.5 w-3.5" />
+                             </Button>
+                           )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -15414,9 +15596,12 @@ const AcceptanceManager = React.memo(({
                     <TableRow className="bg-emerald-50/20 border-t-2 border-emerald-100">
                       <TableCell colSpan={2} className="text-right font-black text-[10px] text-emerald-600 uppercase tracking-wider">TỔNG CỘNG</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.fb)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.tiktok)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.zalo)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.google)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.posting)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.visa)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.digital)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.other)}</TableCell>
                       <TableCell className="text-right bg-emerald-100/30">
                         <p className="font-mono text-xs font-black text-emerald-800">{formatCurrency(finalizedTotals.after)}</p>

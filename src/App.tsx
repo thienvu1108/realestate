@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -333,7 +333,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map as MapIcon, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings, Eye } from 'lucide-react';
+import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map as MapIcon, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings, Eye, ShieldAlert } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -401,11 +401,88 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   }
 }
 
+const normalizeMonth = (val: any): string => {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const d = new Date(val.getTime() + 12 * 60 * 60 * 1000);
+    return format(d, 'yyyy-MM');
+  }
+  const str = String(val).trim().normalize('NFC').replace(/^\uFEFF/, '');
+  const parts = str.split(/[-/.]/);
+  if (parts.length === 2) {
+    let year = '';
+    let month = '';
+    if (parts[0].length === 4) {
+      year = parts[0];
+      month = parts[1].padStart(2, '0');
+    } else {
+      month = parts[0].padStart(2, '0');
+      year = parts[1].length === 2 ? `20${parts[1]}` : parts[1];
+    }
+    if (year.length === 4 && (parseInt(month) >= 1 && parseInt(month) <= 12)) return `${year}-${month}`;
+  }
+  return str;
+};
+
+const getMarketingMonth = (date: Date | any) => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const day = d.getDate();
+  if (day >= 21) {
+    d.setMonth(d.getMonth() + 1);
+  }
+  return format(d, 'yyyy-MM');
+};
+
+const safeFormat = (date: any, formatStr: string) => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return format(d, formatStr);
+};
+
+const formatYAxis = (value: number) => {
+  return value.toLocaleString('vi-VN');
+};
+
+const parseVal = (val: any) => {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  const cleanVal = String(val).replace(/[.,]/g, '');
+  const num = Number(cleanVal);
+  return isNaN(num) ? 0 : num;
+};
+
+const extractEmail = (text: string): string | null => {
+  if (!text) return null;
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const matches = text.match(emailRegex);
+  return matches ? matches[0].toLowerCase().trim() : null;
+};
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'user' | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState('');
+  const debouncedUserSearch = useDebounce(userSearch, 300);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
   const [regions, setRegions] = useState<any[]>([]);
@@ -418,27 +495,908 @@ export default function App() {
   const [acceptances, setAcceptances] = useState<any[]>([]);
   const [finalAcceptances, setFinalAcceptances] = useState<any[]>([]);
   const [supportRequests, setSupportRequests] = useState<any[]>([]);
+
+  // Report states moved up
+  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[] } | null>(null);
+  const [budgetWarningThreshold, setBudgetWarningThreshold] = useState(80);
+  const [budgetCriticalThreshold, setBudgetCriticalThreshold] = useState(100);
+
+  const isAdmin = useMemo(() => userRole === 'admin' || userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
+  const isSuperAdmin = useMemo(() => userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
+  const isMod = useMemo(() => userRole === 'mod', [userRole]);
+  const isGDDA = useMemo(() => userProfile?.role === 'GDDA', [userProfile]);
+
   const [activeTab, setActiveTab] = useState('home');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingName, setOnboardingName] = useState('');
+  const [onboardingTeam, setOnboardingTeam] = useState('');
+
+  const projectMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    projects.forEach(p => {
+      map[p.id] = p.name;
+    });
+    return map;
+  }, [projects]);
+
+  const teamMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    teams.forEach(t => {
+      map[t.id] = t.name;
+    });
+    return map;
+  }, [teams]);
+
+  const [budgetReportSort, setBudgetReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
+  const [costReportSort, setCostReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
+
+  const [reportProject, setReportProject] = useState('all');
+  const [reportTeam, setReportTeam] = useState('all');
+  const [reportRegion, setReportRegion] = useState('all');
+  const [reportType, setReportType] = useState('all');
+  const [reportMonths, setReportMonths] = useState<string[]>([getMarketingMonth(new Date())]);
+  const [reportWeek, setReportWeek] = useState('all');
+  const [costPeriod, setCostPeriod] = useState('1');
+  const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
+  const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
+  const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual' | 'revenue'>('budget');
+  const [activeReportTab, setActiveReportTab] = useState('team');
+  const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project' | 'region'>('team');
+
+  const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
+  const debouncedAdminBudgetSearch = useDebounce(adminBudgetSearch, 300);
+  const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [adminCostSearch, setAdminCostSearch] = useState('');
+  const debouncedAdminCostSearch = useDebounce(adminCostSearch, 300);
+  const [adminCostMonthFilter, setAdminCostMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
+  const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<any>(null);
+  const [selectedLogForRestore, setSelectedLogForRestore] = useState<any>(null);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
+  const [selectedEfficiencyIds, setSelectedEfficiencyIds] = useState<string[]>([]);
+  const [multiBudgetItems, setMultiBudgetItems] = useState<any[]>([]);
+  const [isOverBudgetDetailOpen, setIsOverBudgetDetailOpen] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
+  const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('1');
+  const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('20');
+  const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
+  const [isAlertManagementOpen, setIsAlertManagementOpen] = useState(false);
+
   const [adminSubTab, setAdminSubTab] = useState('reports');
+
+  const comparisonChartData = useMemo(() => {
+    return reportMonths.map(month => {
+      const displayMonth = month.split('-')[1] + '/' + month.split('-')[0];
+      const data: any = { name: displayMonth };
+      
+      const monthlyBudget = budgets.filter(b => b.month === month).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const monthlyActual = costs.filter(c => {
+        const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+        return normalizeMonth(mm) === month;
+      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const monthlyRevenue = efficiencyReports.filter(r => r.month === month).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+      data['Ngân sách'] = monthlyBudget;
+      data['Chi phí thực'] = monthlyActual;
+      data['Doanh số'] = monthlyRevenue;
+      
+      return data;
+    });
+  }, [reportMonths, budgets, costs, efficiencyReports]);
+
+  const projectChartData = useMemo(() => {
+    return projects.map(p => {
+      const projBudgets = budgets.filter(b => b.projectId === p.id && reportMonths.includes(b.month));
+      const projCosts = costs.filter(c => {
+         const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+         return c.projectId === p.id && reportMonths.includes(normalizeMonth(mm));
+      });
+      const bTotal = projBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const cTotal = projCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      return {
+        name: p.name,
+        budget: bTotal,
+        actual: cTotal,
+        revenue: efficiencyReports.filter(r => r.projectId === p.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
+      };
+    }).filter(d => d.budget > 0 || d.actual > 0).sort((a,b) => b.actual - a.actual);
+  }, [projects, budgets, costs, efficiencyReports, reportMonths]);
+
+  const regionChartData = useMemo(() => {
+    return regions.map(reg => {
+      const regBudgets = budgets.filter(b => b.regionId === reg.id && reportMonths.includes(b.month));
+      const regCosts = costs.filter(c => {
+         const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+         return c.regionId === reg.id && reportMonths.includes(normalizeMonth(mm));
+      });
+      return {
+        name: reg.name,
+        budget: regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0),
+        actual: regCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0),
+        revenue: efficiencyReports.filter(r => r.regionId === reg.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
+      };
+    }).filter(d => d.budget > 0 || d.actual > 0);
+  }, [regions, budgets, costs, efficiencyReports, reportMonths]);
+
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoringData, setIsRestoringData] = useState(false);
   const [isRestoreBudgetsDialogOpen, setIsRestoreBudgetsDialogOpen] = useState(false);
   const [isRestoreCheckpointDialogOpen, setIsRestoreCheckpointDialogOpen] = useState(false);
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState<any>(null);
-  const [selectedLogForRestore, setSelectedLogForRestore] = useState<any>(null);
 
-  // Helper for Marketing Month (21st of prev month to 20th of current month)
-  const getMarketingMonth = (date: Date | any) => {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date);
-    if (isNaN(d.getTime())) return '';
-    const day = d.getDate();
-    // Month M starts on 21/(M-1)
-    if (day >= 21) {
-      d.setMonth(d.getMonth() + 1);
+  const handleUpdateCost = async (id: string, data: any) => {
+    try {
+      await updateDoc(doc(db, 'costs', id), {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+      await logAction('UPDATE_COST', id, 'cost', data);
+      toast.success('Đã cập nhật chi phí');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `costs/${id}`);
     }
-    return format(d, 'yyyy-MM');
   };
+  // Reporting Helpers
+  const normalizedReportMonths = useMemo(() => reportMonths.map(m => normalizeMonth(m)), [reportMonths]);
+
+  const dataDrivenTeamMap = useMemo(() => {
+    const map: Record<string, string> = { ...teamMap };
+    budgets.forEach(b => { if (b.teamId && b.teamName && !map[b.teamId]) map[b.teamId] = b.teamName; });
+    costs.forEach(c => { if (c.teamId && c.teamName && !map[c.teamId]) map[c.teamId] = c.teamName; });
+    return map;
+  }, [budgets, costs, teamMap]);
+
+  const dataDrivenProjectMap = useMemo(() => {
+    const map: Record<string, string> = { ...projectMap };
+    budgets.forEach(b => { if (b.projectId && b.projectName && !map[b.projectId]) map[b.projectId] = b.projectName; });
+    costs.forEach(c => { if (c.projectId && c.projectName && !map[c.projectName]) map[c.projectName] = c.projectName; });
+    return map;
+  }, [budgets, costs, projectMap]);
+
+  const resolveTeamName = useCallback((id: string | undefined, name: string | undefined) => {
+    if (id && teamMap[id]) return teamMap[id];
+    if (id && dataDrivenTeamMap[id]) return dataDrivenTeamMap[id];
+    if (name) {
+      const isIdLike = name.length > 10 && !name.includes(' ') && /^[a-zA-Z0-9]+$/.test(name);
+      if (isIdLike && dataDrivenTeamMap[name]) return dataDrivenTeamMap[name];
+      return name;
+    }
+    return id || 'N/A';
+  }, [teamMap, dataDrivenTeamMap]);
+
+  const resolveProjectName = useCallback((id: string | undefined, name: string | undefined) => {
+    if (id && projectMap[id]) return projectMap[id];
+    if (id && dataDrivenProjectMap[id]) return dataDrivenProjectMap[id];
+    if (name) {
+      const isIdLike = name.length > 10 && !name.includes(' ') && /^[a-zA-Z0-9]+$/.test(name);
+      if (isIdLike && dataDrivenProjectMap[name]) return dataDrivenProjectMap[name];
+      return name;
+    }
+    return id || 'N/A';
+  }, [projectMap, dataDrivenProjectMap]);
+
+  const filteredBudgets = useMemo(() => {
+    return budgets.filter(b => {
+      const bProjectName = resolveProjectName(b.projectId, b.projectName);
+      const bTeamName = resolveTeamName(b.teamId, b.teamName);
+      const project = projects.find(p => p.id === b.projectId || p.name === bProjectName);
+      
+      const userEmail = user?.email?.toLowerCase();
+      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+      const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+      const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
+      
+      const hasAccess = isAdmin || isMod || 
+                         (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) ||
+                         (isOwner || isAssigned);
+      
+      if (!hasAccess) return false;
+
+      const matchProject = reportProject === 'all' || b.projectId === reportProject || bProjectName === projectMap[reportProject];
+      const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
+      const matchMonth = normalizedReportMonths.length === 0 || normalizedReportMonths.includes(normalizeMonth(b.month));
+      const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
+      const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
+      
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType;
+    }).sort((a, b) => {
+      const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
+      if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
+      if (budgetReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
+      if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
+      if (budgetReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
+      return 0;
+    });
+  }, [budgets, costs, projectMap, teamMap, dataDrivenTeamMap, dataDrivenProjectMap, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, isAdmin, isMod, isGDDA, userProfile, budgetReportSort, user, resolveProjectName, resolveTeamName]);
+
+  const filteredCosts = useMemo(() => {
+    return costs.filter(c => {
+      const cProjectName = resolveProjectName(c.projectId, c.projectName);
+      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+      const project = projects.find(p => p.id === c.projectId || p.name === cProjectName);
+      
+      const userEmail = user?.email?.toLowerCase();
+      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
+      const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
+      const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
+      
+      const hasAccess = isAdmin || isMod || 
+                         (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) ||
+                         (isOwner || isAssigned);
+      
+      if (!hasAccess) return false;
+
+      const matchProject = reportProject === 'all' || c.projectId === reportProject || cProjectName === projectMap[reportProject];
+      const matchTeam = reportTeam === 'all' || cTeamName === reportTeam;
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      const normalizedMMonth = normalizeMonth(mMonth);
+      const matchMonth = normalizedReportMonths.length === 0 || (normalizedMMonth && normalizedReportMonths.includes(normalizedMMonth));
+      const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
+      const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
+      const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+      
+      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek;
+    }).sort((a, b) => {
+      const factor = costReportSort.direction === 'asc' ? 1 : -1;
+      if (costReportSort.key === 'amount') return (a.amount - b.amount) * factor;
+      if (costReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
+      if (costReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
+      if (costReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
+      if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
+      return 0;
+    });
+  }, [costs, projects, projectMap, teamMap, dataDrivenTeamMap, dataDrivenProjectMap, reportProject, reportTeam, normalizedReportMonths, getMarketingMonth, reportRegion, reportType, reportWeek, isAdmin, isMod, isGDDA, userProfile, costReportSort, user, resolveProjectName, resolveTeamName]);
+
+  const budgetReportWithActuals = useMemo(() => {
+    return filteredBudgets.map(b => {
+      const bTeamName = resolveTeamName(b.teamId, b.teamName);
+      const bProjectName = resolveProjectName(b.projectId, b.projectName);
+      const normalizedBMonth = normalizeMonth(b.month);
+      
+      const relatedCosts = costs.filter(c => {
+        if (c.budgetId && b.id && c.budgetId === b.id) return true;
+        const cProjectName = resolveProjectName(c.projectId, c.projectName);
+        if (cProjectName !== bProjectName) return false;
+        const cTeamName = resolveTeamName(c.teamId, c.teamName);
+        if (cTeamName !== bTeamName) return false;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+        return normalizeMonth(mMonth) === normalizedBMonth;
+      });
+
+      const actualCost = relatedCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      
+      return {
+        ...b,
+        actualCost
+      };
+    }).sort((a, b) => {
+      const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
+      if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
+      if (budgetReportSort.key === 'actual') return (a.actualCost - b.actualCost) * factor;
+      if (budgetReportSort.key === 'month') return (a.month || '').localeCompare(b.month || '') * factor;
+      if (budgetReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
+      if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
+      return 0;
+    });
+  }, [filteredBudgets, costs, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, getMarketingMonth, budgetReportSort, resolveProjectName, resolveTeamName]);
+
+  const overBudgetStats = useMemo(() => {
+    const pairMap: { [key: string]: { budget: number, cost: number, sales: number, revenue: number, projectName: string, teamName: string, teamId?: string } } = {};
+    const normalizedReportMonths = reportMonths.map(m => normalizeMonth(m));
+    
+    budgets.forEach(b => {
+      const normalizedBMonth = normalizeMonth(b.month);
+      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedBMonth)) return;
+      
+      const bProjectName = resolveProjectName(b.projectId, b.projectName);
+      const bTeamName = resolveTeamName(b.teamId, b.teamName);
+      
+      if (reportProject !== 'all' && b.projectId !== reportProject && bProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
+
+      const project = projects.find(p => p.id === b.projectId || p.name === bProjectName);
+      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
+
+      const key = `${bProjectName.trim().toLowerCase()}|${bTeamName.trim().toLowerCase()}`;
+      
+      if (!pairMap[key]) {
+        pairMap[key] = { 
+          budget: 0, 
+          cost: 0, 
+          sales: 0, 
+          revenue: 0, 
+          projectName: bProjectName, 
+          teamName: bTeamName,
+          teamId: b.teamId 
+        };
+      }
+      let amount = b.amount || 0;
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        amount = amount / 4;
+      }
+      pairMap[key].budget += amount;
+    });
+
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      const normalizedMMonth = normalizeMonth(mMonth);
+      if (normalizedMMonth && normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedMMonth)) return;
+      
+      const cProjectName = resolveProjectName(c.projectId, c.projectName);
+      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+
+      if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+
+      const project = projects.find(p => p.id === c.projectId || p.name === cProjectName);
+      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
+
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        if (c.weekNumber?.toString() !== reportWeek) return;
+      }
+
+      const key = `${cProjectName.trim().toLowerCase()}|${cTeamName.trim().toLowerCase()}`;
+      
+      if (!pairMap[key]) {
+        pairMap[key] = { 
+          budget: 0, 
+          cost: 0, 
+          sales: 0, 
+          revenue: 0, 
+          projectName: cProjectName, 
+          teamName: cTeamName,
+          teamId: c.teamId
+        };
+      }
+      pairMap[key].cost += c.amount || 0;
+    });
+
+    efficiencyReports.forEach(r => {
+      const normalizedRMonth = normalizeMonth(r.month);
+      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedRMonth)) return;
+      
+      const rProjectName = resolveProjectName(r.projectId, r.projectName);
+      const rTeamName = resolveTeamName(r.teamId, r.teamName);
+
+      if (reportProject !== 'all' && r.projectId !== reportProject && rProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && rTeamName !== reportTeam) return;
+
+      const rProject = projects.find(p => p.id === r.projectId || p.name === rProjectName);
+      if (reportRegion !== 'all' && (rProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (rProject?.type || 'Khác') !== reportType) return;
+      
+      const key = `${rProjectName.trim().toLowerCase()}|${rTeamName.trim().toLowerCase()}`;
+      
+      if (!pairMap[key]) {
+        pairMap[key] = { 
+          budget: 0, 
+          cost: 0, 
+          sales: 0, 
+          revenue: 0, 
+          projectName: rProjectName, 
+          teamName: rTeamName,
+          teamId: r.teamId
+        };
+      }
+      
+      let sales = r.salesCount || 0;
+      let revenue = r.revenue || 0;
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        sales = sales / 4;
+        revenue = revenue / 4;
+      }
+      
+      pairMap[key].sales += sales;
+      pairMap[key].revenue += revenue;
+    });
+
+    const granularOverItems: any[] = [];
+    const warningItems: any[] = [];
+    let totalExcess = 0;
+
+    Object.keys(pairMap).forEach(key => {
+      const item = pairMap[key];
+      const usagePercent = item.budget > 0 ? (item.cost / item.budget) * 100 : (item.cost > 0 ? Infinity : 0);
+
+      if (usagePercent >= budgetWarningThreshold) {
+        const excess = item.cost - item.budget;
+        const alertItem = {
+          id: key,
+          name: `${item.projectName} - ${item.teamName}`,
+          mainName: item.projectName,
+          detailName: item.teamName,
+          budget: item.budget,
+          cost: item.cost,
+          sales: item.sales,
+          revenue: item.revenue,
+          excess: excess > 0 ? excess : 0,
+          usagePercent: usagePercent,
+          status: usagePercent >= budgetCriticalThreshold ? 'critical' : 'warning'
+        };
+
+        if (usagePercent >= budgetCriticalThreshold) {
+          totalExcess += (excess > 0 ? excess : 0);
+          granularOverItems.push(alertItem);
+        } else {
+          warningItems.push(alertItem);
+        }
+      }
+    });
+
+    return {
+      count: granularOverItems.length,
+      warningCount: warningItems.length,
+      totalExcess: totalExcess,
+      items: granularOverItems,
+      warningItems: warningItems
+    };
+  }, [budgets, costs, efficiencyReports, reportMonths, reportProject, reportTeam, reportRegion, reportType, projects, projectMap, teamMap, getMarketingMonth, chartTimeType, reportWeek, budgetWarningThreshold, budgetCriticalThreshold, resolveProjectName, resolveTeamName]);
+
+  const uniqueTeams = useMemo(() => {
+    const set = new Set(teams.map(t => t.name));
+    budgets.forEach(b => {
+      const name = teamMap[b.teamId] || b.teamName;
+      if (name) set.add(name);
+    });
+    costs.forEach(c => {
+      const name = teamMap[c.teamId] || c.teamName;
+      if (name) set.add(name);
+    });
+    return Array.from(set).filter(n => n && n !== 'N/A' && n !== 'undefined').sort() as string[];
+  }, [teams, budgets, costs, teamMap]);
+
+  const uniqueRegions = useMemo(() => {
+    return regions.map(r => r.name).sort();
+  }, [regions]);
+
+  const uniqueTypes = useMemo(() => {
+    return types.map(t => t.name).sort();
+  }, [types]);
+
+  const overBudgetProjectIds = useMemo(() => {
+    const currentMonth = getMarketingMonth(new Date());
+    const projectBudgets: {[key: string]: number} = {};
+    const projectCosts: {[key: string]: number} = {};
+    
+    budgets.forEach(b => {
+      const normalizedBMonth = normalizeMonth(b.month);
+      if (normalizedBMonth === currentMonth) {
+        const pName = resolveProjectName(b.projectId, b.projectName);
+        projectBudgets[pName] = (projectBudgets[pName] || 0) + b.amount;
+      }
+    });
+    
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (normalizeMonth(mMonth) === currentMonth) {
+        const pName = resolveProjectName(c.projectId, c.projectName);
+        projectCosts[pName] = (projectCosts[pName] || 0) + c.amount;
+      }
+    });
+
+    const overLimitNames = new Set<string>();
+    Object.entries(projectBudgets).forEach(([pName, budget]) => {
+      if ((projectCosts[pName] || 0) > budget) {
+        overLimitNames.add(pName);
+      }
+    });
+
+    const overLimitIds = new Set<string>();
+    overLimitNames.forEach(name => {
+      const foundId = Object.keys(dataDrivenProjectMap).find(id => dataDrivenProjectMap[id] === name);
+      if (foundId) overLimitIds.add(foundId);
+      else overLimitIds.add(name);
+    });
+
+    return overLimitIds;
+  }, [budgets, costs, getMarketingMonth, dataDrivenProjectMap, resolveProjectName]);
+
+  const channelReportData = useMemo(() => {
+    const keyData: { [key: string]: any } = {};
+    
+    filteredCosts.forEach(c => {
+      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+      const cProjectName = resolveProjectName(c.projectId, c.projectName);
+      const key = `${cProjectName}_${cTeamName}`;
+      
+      if (!keyData[key]) {
+        keyData[key] = {
+          projectId: c.projectId,
+          projectName: cProjectName,
+          teamName: cTeamName,
+          fbAds: 0,
+          googleAds: 0,
+          zaloAds: 0,
+          posting: 0,
+          visaAmount: 0,
+          digitalAmount: 0,
+          otherCost: 0,
+          total: 0
+        };
+      }
+      
+      const p = keyData[key];
+      const ch = c.channels || {};
+      p.fbAds += ch.fbAds || 0;
+      p.googleAds += ch.googleAds || 0;
+      p.zaloAds += ch.zaloAds || 0;
+      p.posting += ch.posting || 0;
+      p.visaAmount += ch.visaAmount || 0;
+      p.digitalAmount += ch.digitalAmount || 0;
+      p.otherCost += ch.otherCost || 0;
+      p.total += c.amount || 0;
+    });
+
+    return Object.values(keyData).sort((a: any, b: any) => {
+       if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
+       return b.total - a.total;
+    });
+  }, [filteredCosts, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, resolveProjectName, resolveTeamName]);
+
+  const chartData = useMemo(() => {
+    return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
+      const teamBudgets = budgets.filter(b => {
+        const project = projects.find(p => p.id === b.projectId);
+        const matchProject = reportProject === 'all' || b.projectId === reportProject;
+        const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
+        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+        const matchType = reportType === 'all' || (project?.type === reportType);
+        const bTeamName = resolveTeamName(b.teamId, b.teamName);
+        return matchProject && bTeamName === team && matchMonth && matchRegion && matchType;
+      });
+      
+      let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      if (chartTimeType === 'week' && reportWeek !== 'all') teamTotalBudget = teamTotalBudget / 4;
+
+      let teamTotalCost = costs.filter(c => {
+        const project = projects.find(p => p.id === c.projectId);
+        const matchProject = reportProject === 'all' || c.projectId === reportProject;
+        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
+        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+        const matchType = reportType === 'all' || (project?.type === reportType);
+        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+        const cTeamName = resolveTeamName(c.teamId, c.teamName);
+        
+        return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
+      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+      const teamProjectDetails = projects.map(p => {
+        const pBudgets = teamBudgets.filter(b => b.projectId === p.id);
+        const pCosts = costs.filter(c => {
+          const project = projects.find(proj => proj.id === c.projectId);
+          const matchProject = c.projectId === p.id;
+          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
+          const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+          const matchType = reportType === 'all' || (project?.type === reportType);
+          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
+          const cTeamName = resolveTeamName(c.teamId, c.teamName);
+          
+          return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
+        });
+
+        let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          pTotalBudget = pTotalBudget / 4;
+        }
+
+        let pRevenue = efficiencyReports
+          .filter(r => r.projectId === p.id && resolveTeamName(r.teamId, r.teamName) === team && (reportMonths.length === 0 || reportMonths.includes(r.month)))
+          .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          pRevenue = pRevenue / 4;
+        }
+
+        return {
+          name: p.name,
+          budget: pTotalBudget,
+          actual: pTotalCost,
+          revenue: pRevenue
+        };
+      }).filter(d => d.budget > 0 || d.actual > 0)
+        .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
+
+      let teamRevenue = efficiencyReports
+        .filter(r => resolveTeamName(r.teamId, r.teamName) === team && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportProject === 'all' || r.projectId === reportProject))
+        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        teamRevenue = teamRevenue / 4;
+      }
+      
+      return {
+        name: team,
+        budget: teamTotalBudget,
+        actual: teamTotalCost,
+        revenue: teamRevenue,
+        details: teamProjectDetails,
+        isTeamReport: true
+      };
+    }).filter(d => d.budget > 0 || d.actual > 0)
+      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
+  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonths, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, teamMap, efficiencyReports, resolveTeamName]);
+
+  const efficiencyChartData = useMemo(() => {
+    const rawData: { [key: string]: { [detailKey: string]: { budget: number, cost: number, revenue: number, sales: number } } } = {};
+
+    const getTarget = (mainKey: string, detailKey: string) => {
+      if (!mainKey || !detailKey) return null;
+      if (!rawData[mainKey]) rawData[mainKey] = {};
+      if (!rawData[mainKey][detailKey]) rawData[mainKey][detailKey] = { budget: 0, cost: 0, revenue: 0, sales: 0 };
+      return rawData[mainKey][detailKey];
+    };
+
+    budgets.forEach(b => {
+      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
+      
+      const bProjectName = resolveProjectName(b.projectId, b.projectName);
+      const bTeamName = resolveTeamName(b.teamId, b.teamName);
+
+      if (reportProject !== 'all' && b.projectId !== reportProject && bProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
+
+      const bProject = projects.find(p => p.id === b.projectId || p.name === bProjectName);
+      if (reportRegion !== 'all' && (bProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (bProject?.type || 'Khác') !== reportType) return;
+      
+      const bRegion = bProject?.region || 'Khác';
+      const bTeamIdOrName = bTeamName;
+      
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = bProjectName;
+        detailKey = bTeamIdOrName;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = bRegion;
+        detailKey = bProjectName;
+      } else {
+        mainKey = bTeamIdOrName;
+        detailKey = bProjectName;
+      }
+      
+      const target = getTarget(mainKey, detailKey);
+      if (target) {
+        let amount = b.amount || 0;
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          amount = amount / 4;
+        }
+        target.budget += amount;
+      }
+    });
+
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
+      
+      const cProjectName = resolveProjectName(c.projectId, c.projectName);
+      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+
+      if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+
+      const cProject = projects.find(p => p.id === c.projectId || p.name === cProjectName);
+      if (reportRegion !== 'all' && (cProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (cProject?.type || 'Khác') !== reportType) return;
+      
+      if (chartTimeType === 'week' && reportWeek !== 'all') {
+        if (c.weekNumber?.toString() !== reportWeek) return;
+      }
+
+      const cRegion = cProject?.region || 'Khác';
+      const cTeamIdOrName = cTeamName;
+      
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = cProjectName;
+        detailKey = cTeamIdOrName;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = cRegion;
+        detailKey = cProjectName;
+      } else {
+        mainKey = cTeamIdOrName;
+        detailKey = cProjectName;
+      }
+
+      const target = getTarget(mainKey, detailKey);
+      if (target) target.cost += c.amount || 0;
+    });
+
+    efficiencyReports.forEach(r => {
+      if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
+      
+      const rProjectName = resolveProjectName(r.projectId, r.projectName);
+      const rTeamName = resolveTeamName(r.teamId, r.teamName);
+
+      if (reportProject !== 'all' && r.projectId !== reportProject && rProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && rTeamName !== reportTeam) return;
+
+      const rProject = projects.find(p => p.id === r.projectId || p.name === rProjectName);
+      if (reportRegion !== 'all' && (rProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (rProject?.type || 'Khác') !== reportType) return;
+      
+      const rRegion = rProject?.region || 'Khác';
+      const rTeamIdOrName = rTeamName;
+
+      let mainKey, detailKey;
+      if (efficiencyGroupType === 'project') {
+        mainKey = rProjectName;
+        detailKey = rTeamIdOrName;
+      } else if (efficiencyGroupType === 'region') {
+        mainKey = rRegion;
+        detailKey = rProjectName;
+      } else {
+        mainKey = rTeamIdOrName;
+        detailKey = rProjectName;
+      }
+
+      const target = getTarget(mainKey, detailKey);
+      if (target) {
+        let rev = r.revenue || 0;
+        let sales = r.salesCount || 0;
+        if (chartTimeType === 'week' && reportWeek !== 'all') {
+          rev = rev / 4;
+          sales = sales / 4;
+        }
+        target.sales += sales;
+        target.revenue += rev;
+      }
+    });
+
+    return Object.keys(rawData).map(mainKey => {
+      const details = Object.keys(rawData[mainKey]).map(detailKey => {
+        return {
+          name: detailKey,
+          ...rawData[mainKey][detailKey]
+        };
+      }).sort((a, b) => {
+        if (reportSortBy === 'budget') return b.budget - a.budget;
+        if (reportSortBy === 'actual') return b.cost - a.cost;
+        return b.revenue - a.revenue || b.cost - a.cost;
+      });
+
+      const totals = details.reduce((acc, curr) => ({
+        sales: acc.sales + curr.sales,
+        revenue: acc.revenue + curr.revenue,
+        cost: acc.cost + curr.cost,
+        budget: acc.budget + curr.budget
+      }), { sales: 0, revenue: 0, cost: 0, budget: 0 });
+
+      return {
+        id: mainKey,
+        name: mainKey,
+        ...totals,
+        details
+      };
+    }).sort((a, b) => {
+      if (reportSortBy === 'budget') return b.budget - a.budget;
+      if (reportSortBy === 'actual') return b.cost - a.cost;
+      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      return b.cost - a.cost;
+    });
+  }, [efficiencyReports, costs, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, reportRegion, reportType, resolveProjectName, resolveTeamName]);
+
+  const salesGeneratingData = useMemo(() => 
+    efficiencyChartData.filter(d => d.revenue > 0), [efficiencyChartData]
+  );
+
+  const noSalesData = useMemo(() => 
+    efficiencyChartData.filter(d => d.revenue === 0), [efficiencyChartData]
+  );
+
+  const efficiencyPieData = useMemo(() => {
+    const costWithSales = salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0);
+    const costWithoutSales = noSalesData.reduce((acc, curr) => acc + curr.cost, 0);
+    
+    return [
+      { name: 'Phát sinh doanh số', value: costWithSales, color: '#10b981' },
+      { name: 'Không phát sinh doanh số', value: costWithoutSales, color: '#f87171' }
+    ];
+  }, [salesGeneratingData, noSalesData]);
+
+  const efficiencyTrendData = useMemo(() => {
+    const monthlyMap: { [key: string]: { month: string, sales: number, revenue: number, cost: number, roi: number } } = {};
+    const year = reportYear || new Date().getFullYear().toString();
+    for (let m = 1; m <= 12; m++) {
+      const monthStr = `${year}-${m.toString().padStart(2, '0')}`;
+      monthlyMap[monthStr] = { month: monthStr, sales: 0, revenue: 0, cost: 0, roi: 0 };
+    }
+
+    efficiencyReports.forEach(r => {
+      if (!r.month || !r.month.startsWith(year)) return;
+      const rProjectName = resolveProjectName(r.projectId, r.projectName);
+      const rTeamName = resolveTeamName(r.teamId, r.teamName);
+      if (reportProject !== 'all' && r.projectId !== reportProject && rProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && rTeamName !== reportTeam) return;
+      if (monthlyMap[r.month]) {
+        monthlyMap[r.month].sales += r.salesCount || 0;
+        monthlyMap[r.month].revenue += r.revenue || 0;
+      }
+    });
+
+    costs.forEach(c => {
+      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
+      if (!mMonth || !mMonth.startsWith(year)) return;
+      const cProjectName = resolveProjectName(c.projectId, c.projectName);
+      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+      if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+      if (monthlyMap[mMonth]) {
+        monthlyMap[mMonth].cost += c.amount || 0;
+      }
+    });
+
+    return Object.values(monthlyMap).map(m => ({
+      ...m,
+      roi: m.cost > 0 ? (m.revenue / m.cost) : 0
+    }));
+  }, [efficiencyReports, costs, reportYear, reportProject, reportTeam, getMarketingMonth, projectMap, resolveProjectName, resolveTeamName]);
+
+  const pendingSupportCount = useMemo(() => {
+    return supportRequests.filter((r: any) => r.status === 'Chờ xử lý').length;
+  }, [supportRequests]);
+
+  const adminFilteredBudgets = useMemo(() => {
+    return budgets.filter(b => {
+      const bTeamName = teamMap[b.teamId] || b.teamName || '';
+      const matchesSearch = 
+        (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        bTeamName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        (b.implementerName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase());
+      const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
+      return matchesSearch && matchesMonth;
+    }).sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [budgets, debouncedAdminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap]);
+
+  const adminFilteredCosts = useMemo(() => {
+    return costs
+      .filter(c => {
+        const matchesSearch = 
+          (projectMap[c.projectId] || c.projectName || '').toLowerCase().includes(debouncedAdminCostSearch.toLowerCase()) ||
+          (teamMap[c.teamId] || c.teamName || '').toLowerCase().includes(debouncedAdminCostSearch.toLowerCase()) ||
+          (c.implementerName || '').toLowerCase().includes(debouncedAdminCostSearch.toLowerCase());
+        
+        const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+        const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
+        
+        return matchesSearch && matchesMonth;
+      })
+      .sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [costs, debouncedAdminCostSearch, adminCostMonthFilter, projectMap, teamMap, getMarketingMonth]);
+
+  const getWeekRange = (weekStr: string) => {
+    if (!weekStr) return '';
+    try {
+      const [year, week] = weekStr.split('-W').map(Number);
+      const d = new Date(year, 0, 1);
+      const dayNum = d.getDay() || 7;
+      if (dayNum <= 4) d.setDate(d.getDate() - d.getDay() + 1);
+      else d.setDate(d.getDate() + 8 - d.getDay());
+      const monday = new Date(d.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+      const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000);
+      return `${safeFormat(monday, 'dd/MM')} - ${safeFormat(sunday, 'dd/MM')}`;
+    } catch (e) {
+      return '';
+    }
+  };
+
+
 
   const getReportingPeriod = (monthStr: string) => {
     if (!monthStr) return '';
@@ -498,16 +1456,7 @@ export default function App() {
     }
   };
 
-  const safeFormat = (date: any, formatStr: string) => {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date);
-    if (isNaN(d.getTime())) return '';
-    return format(d, formatStr);
-  };
 
-  const formatYAxis = (value: number) => {
-    return value.toLocaleString('vi-VN');
-  };
 
   const EfficiencyDetailedTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -737,6 +1686,31 @@ export default function App() {
     return null;
   };
 
+  // Thêm component footer thông tin phát triển
+  const DeveloperFooter = ({ className = "", isHeader = false }: { className?: string, isHeader?: boolean }) => (
+    <div className={`flex flex-col items-center justify-center gap-3 text-slate-400 ${className}`}>
+      <div className={`flex items-center gap-2 font-black uppercase tracking-[0.2em] ${isHeader ? 'text-[12px]' : 'text-[9px]'}`}>
+        <span className="opacity-60">Phát triển bởi</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+        <span className={isHeader ? 'text-slate-800' : 'text-slate-600'}>Thiên Vũ - Digital Marketing Mayhomes</span>
+      </div>
+      <a 
+        href="https://zalo.me/0854642555" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className={`flex items-center gap-3 border transition-all duration-300 group ${isHeader ? 'px-6 py-2.5 bg-white border-blue-200 rounded-2xl shadow-lg shadow-blue-100/50 hover:shadow-xl hover:border-blue-400 hover:translate-y-[-2px]' : 'px-3 py-1 bg-slate-50 border-slate-100 rounded-full hover:bg-white hover:shadow-sm'}`}
+      >
+        <div className={`bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200 group-hover:rotate-[10deg] transition-all ${isHeader ? 'w-8 h-8' : 'w-5 h-5'}`}>
+          <MessageCircle className={`${isHeader ? 'w-5 h-5' : 'w-3 h-3'} fill-current`} />
+        </div>
+        <div className="flex flex-col items-start leading-none">
+          <span className={`font-black uppercase tracking-tight ${isHeader ? 'text-sm text-blue-700' : 'text-[10px] text-slate-600'}`}>Liên hệ hỗ trợ Zalo</span>
+          {isHeader && <span className="text-[11px] font-bold text-blue-500/70 mt-0.5">0854.642.555</span>}
+        </div>
+      </a>
+    </div>
+  );
+
   const getMarketingMonthDisplayRange = (monthStr: string) => {
     if (!monthStr) return '';
     try {
@@ -766,10 +1740,13 @@ export default function App() {
   
   // Search and Confirmation states
   const [projectSearch, setProjectSearch] = useState('');
+  const debouncedProjectSearch = useDebounce(projectSearch, 300);
   const [teamSearch, setTeamSearch] = useState('');
+  const debouncedTeamSearch = useDebounce(teamSearch, 300);
   const [adminProjectRegionFilter, setAdminProjectRegionFilter] = useState('all');
   const [adminProjectTypeFilter, setAdminProjectTypeFilter] = useState('all');
   const [budgetSearch, setBudgetSearch] = useState('');
+  const debouncedBudgetSearch = useDebounce(budgetSearch, 300);
   const [isConfirmBudgetOpen, setIsConfirmBudgetOpen] = useState(false);
   const [isConfirmingMulti, setIsConfirmingMulti] = useState(false);
   
@@ -782,8 +1759,7 @@ export default function App() {
   // Sorting states
   const [projectSort, setProjectSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [teamSort, setTeamSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
-  const [budgetReportSort, setBudgetReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
-  const [costReportSort, setCostReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
+
   const [efficiencyTableSort, setEfficiencyTableSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
   const [costAmount, setCostAmount] = useState('');
@@ -845,38 +1821,7 @@ export default function App() {
   const [typeForProjects, setTypeForProjects] = useState<any>(null);
   const [selectedProjectIdsForType, setSelectedProjectIdsForType] = useState<string[]>([]);
 
-  // Onboarding states
-  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[] } | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingName, setOnboardingName] = useState('');
-  const [onboardingTeam, setOnboardingTeam] = useState('');
 
-  // Report filters
-  const [reportProject, setReportProject] = useState('all');
-  const [reportTeam, setReportTeam] = useState('all');
-  const [reportRegion, setReportRegion] = useState('all');
-  const [reportType, setReportType] = useState('all');
-  const [reportMonths, setReportMonths] = useState<string[]>([getMarketingMonth(new Date())]);
-  const [reportWeek, setReportWeek] = useState('all');
-  const [costPeriod, setCostPeriod] = useState('1');
-  const [chartTimeType, setChartTimeType] = useState<'week' | 'month'>('month');
-  const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
-  const [reportSortBy, setReportSortBy] = useState<'budget' | 'actual' | 'revenue'>('budget');
-  const [activeReportTab, setActiveReportTab] = useState('team');
-  const [efficiencyGroupType, setEfficiencyGroupType] = useState<'team' | 'project' | 'region'>('team');
-  const [selectedBudgetIds, setSelectedBudgetIds] = useState<string[]>([]);
-  const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
-  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
-  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
-  const [selectedEfficiencyIds, setSelectedEfficiencyIds] = useState<string[]>([]);
-  const [multiBudgetItems, setMultiBudgetItems] = useState<any[]>([]);
-  const [isOverBudgetDetailOpen, setIsOverBudgetDetailOpen] = useState(false);
-  const [systemSettings, setSystemSettings] = useState<any>(null);
-  const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('1');
-  const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('20');
-  const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
   
   const formatCurrencyInput = (value: string) => {
     const number = value.replace(/\D/g, '');
@@ -896,10 +1841,6 @@ export default function App() {
     otherCost: '',
     note: ''
   });
-  const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
-  const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
-  const [adminCostSearch, setAdminCostSearch] = useState('');
-  const [adminCostMonthFilter, setAdminCostMonthFilter] = useState(getMarketingMonth(new Date()));
   const [costBudgetMonth, setCostBudgetMonth] = useState(getMarketingMonth(new Date()));
   const [isBudgetSelectionDialogOpen, setIsBudgetSelectionDialogOpen] = useState(false);
   const [selectedRegionForBulk, setSelectedRegionForBulk] = useState('');
@@ -1039,6 +1980,7 @@ export default function App() {
   const [newEfficiencySales, setNewEfficiencySales] = useState('');
   const [newEfficiencyRevenue, setNewEfficiencyRevenue] = useState('');
   const [adminEfficiencySearch, setAdminEfficiencySearch] = useState('');
+  const debouncedAdminEfficiencySearch = useDebounce(adminEfficiencySearch, 300);
   const [adminEfficiencyMonthFilter, setAdminEfficiencyMonthFilter] = useState(getMarketingMonth(new Date()));
   const [adminEfficiencySort, setAdminEfficiencySort] = useState<{ key: 'sales' | 'revenue' | 'name' | 'month' | 'none', direction: 'asc' | 'desc' }>({ key: 'none', direction: 'desc' });
   const [isImportingEfficiencyUrl, setIsImportingEfficiencyUrl] = useState(false);
@@ -1084,66 +2026,11 @@ export default function App() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [isImportErrorsDialogOpen, setIsImportErrorsDialogOpen] = useState(false);
 
-  const isAdmin = userRole === 'super_admin' || userRole === 'admin';
-  const isSuperAdmin = userRole === 'super_admin';
-  const isMod = userRole === 'mod';
-  const isGDDA = userRole === 'gdda';
 
-  const normalizeMonth = (val: any): string => {
-    if (!val) return '';
-    if (val instanceof Date) {
-      const d = new Date(val.getTime() + 12 * 60 * 60 * 1000);
-      return format(d, 'yyyy-MM');
-    }
-    const str = String(val).trim().normalize('NFC').replace(/^\uFEFF/, '');
-    const parts = str.split(/[-/.]/);
-    if (parts.length === 2) {
-      let year = '';
-      let month = '';
-      if (parts[0].length === 4) {
-        year = parts[0];
-        month = parts[1].padStart(2, '0');
-      } else {
-        month = parts[0].padStart(2, '0');
-        year = parts[1].length === 2 ? `20${parts[1]}` : parts[1];
-      }
-      if (year.length === 4 && (parseInt(month) >= 1 && parseInt(month) <= 12)) return `${year}-${month}`;
-    }
-    return str;
-  };
-
-  const parseVal = (val: any) => {
-    if (typeof val === 'number') return val;
-    if (!val) return 0;
-    const cleanVal = String(val).replace(/[.,]/g, '');
-    const num = Number(cleanVal);
-    return isNaN(num) ? 0 : num;
-  };
-
-  const extractEmail = (text: string): string | null => {
-    if (!text) return null;
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const matches = text.match(emailRegex);
-    return matches ? matches[0].toLowerCase().trim() : null;
-  };
   const isUser = userRole === 'user';
 
   // Project name lookup map
-  const projectMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    projects.forEach(p => {
-      map[p.id] = p.name;
-    });
-    return map;
-  }, [projects]);
 
-  const teamMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    teams.forEach(t => {
-      map[t.id] = t.name;
-    });
-    return map;
-  }, [teams]);
 
   const budgetAmountMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1167,11 +2054,11 @@ export default function App() {
         return canSee && b.month === costBudgetMonth;
       })
       .filter(b => 
-        (projectMap[b.projectId] || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
-        (b.teamName || '').toLowerCase().includes(budgetSearch.toLowerCase()) ||
-        (b.implementerName || '').toLowerCase().includes(budgetSearch.toLowerCase())
+        (projectMap[b.projectId] || '').toLowerCase().includes(debouncedBudgetSearch.toLowerCase()) ||
+        (b.teamName || '').toLowerCase().includes(debouncedBudgetSearch.toLowerCase()) ||
+        (b.implementerName || '').toLowerCase().includes(debouncedBudgetSearch.toLowerCase())
       );
-  }, [budgets, user, userProfile, isGDDA, isAdmin, isMod, costBudgetMonth, projectMap, budgetSearch]);
+  }, [budgets, user, userProfile, isGDDA, isAdmin, isMod, costBudgetMonth, projectMap, debouncedBudgetSearch]);
 
   useEffect(() => {
     // Test Firestore connection on boot
@@ -2249,8 +3136,8 @@ export default function App() {
     return efficiencyReports.filter(r => {
       const pName = projectMap[r.projectId] || r.projectName || '';
       const tName = teamMap[r.teamId] || r.teamName || '';
-      const matchSearch = (pName.toLowerCase().includes(adminEfficiencySearch.toLowerCase())) ||
-                        (tName.toLowerCase().includes(adminEfficiencySearch.toLowerCase()));
+      const matchSearch = (pName.toLowerCase().includes(debouncedAdminEfficiencySearch.toLowerCase())) ||
+                        (tName.toLowerCase().includes(debouncedAdminEfficiencySearch.toLowerCase()));
       const matchMonth = !adminEfficiencyMonthFilter || r.month === adminEfficiencyMonthFilter;
       return matchSearch && matchMonth;
     }).sort((a, b) => {
@@ -2275,7 +3162,7 @@ export default function App() {
       
       return adminEfficiencySort.direction === 'asc' ? comparison : -comparison;
     });
-  }, [efficiencyReports, adminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap, adminEfficiencySort]);
+  }, [efficiencyReports, debouncedAdminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap, adminEfficiencySort]);
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
@@ -2605,7 +3492,7 @@ export default function App() {
 
   const sortedProjects = useMemo(() => {
     let filtered = projects.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase());
+      const matchSearch = p.name.toLowerCase().includes(debouncedProjectSearch.toLowerCase());
       const matchRegion = adminProjectRegionFilter === 'all' || p.region === adminProjectRegionFilter;
       const matchType = adminProjectTypeFilter === 'all' || p.type === adminProjectTypeFilter;
       
@@ -2630,7 +3517,7 @@ export default function App() {
       if (aValue > bValue) return projectSort.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [projects, projectSort, projectSearch, adminProjectRegionFilter, adminProjectTypeFilter]);
+  }, [projects, projectSort, debouncedProjectSearch, adminProjectRegionFilter, adminProjectTypeFilter, userRole, userProfile]);
 
   const extractTeamCode = (name: string) => {
     // Pattern MH follow by digits and dots (e.g., MH17, MH79.28, MH04.1)
@@ -2650,7 +3537,7 @@ export default function App() {
 
   const sortedTeams = useMemo(() => {
     let filtered = teams.filter(t => 
-      t.name.toLowerCase().includes(teamSearch.toLowerCase())
+      t.name.toLowerCase().includes(debouncedTeamSearch.toLowerCase())
     );
 
     return filtered.sort((a, b) => {
@@ -2660,7 +3547,7 @@ export default function App() {
       if (aValue > bValue) return teamSort.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [teams, teamSort, teamSearch]);
+  }, [teams, teamSort, debouncedTeamSearch]);
 
   const handleSaveOnboarding = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4304,6 +5191,7 @@ export default function App() {
   const [isRestoreAllDialogOpen, setIsRestoreAllDialogOpen] = useState(false);
   const [logLimit, setLogLimit] = useState(50);
   const [logSearch, setLogSearch] = useState('');
+  const debouncedLogSearch = useDebounce(logSearch, 300);
   const [logTypeFilter, setLogTypeFilter] = useState('all');
   const [logUserFilter, setLogUserFilter] = useState('all');
 
@@ -4318,9 +5206,9 @@ export default function App() {
   const filteredLogs = useMemo(() => {
     return auditLogs.filter(log => {
       const matchesSearch = 
-        (log.userEmail || '').toLowerCase().includes(logSearch.toLowerCase()) ||
-        (log.collection || '').toLowerCase().includes(logSearch.toLowerCase()) ||
-        (log.docId || '').toLowerCase().includes(logSearch.toLowerCase());
+        (log.userEmail || '').toLowerCase().includes(debouncedLogSearch.toLowerCase()) ||
+        (log.collection || '').toLowerCase().includes(debouncedLogSearch.toLowerCase()) ||
+        (log.docId || '').toLowerCase().includes(debouncedLogSearch.toLowerCase());
       
       const matchesType = logTypeFilter === 'all' || 
         (logTypeFilter === 'WRITE' && (log.action === 'CREATE' || log.action === 'UPDATE' || log.action?.startsWith('IMPORT'))) ||
@@ -4331,7 +5219,7 @@ export default function App() {
 
       return matchesSearch && matchesType && matchesUser;
     });
-  }, [auditLogs, logSearch, logTypeFilter, logUserFilter]);
+  }, [auditLogs, debouncedLogSearch, logTypeFilter, logUserFilter]);
 
   const RenderLogData = ({ data, action }: { data: any, action: string }) => {
     if (!data) return null;
@@ -5504,1089 +6392,50 @@ export default function App() {
               userEmail: user?.email?.toLowerCase()
             });
             costCount++;
-          } else {
-            errorDetails.push(`Dòng ${rowIndex}: Không tìm thấy Ngân sách cho [${project.name}] - [${team.name}] vào tháng ${month}. Vui lòng đăng ký ngân sách trước.`);
-            skippedCount++;
           }
         }
 
-        // 2. Process Efficiency (always process if values exist)
+        // 2. Process Efficiency (if efficiency values exist)
         if (salesCount > 0 || revenue > 0) {
-          const existingEfficiency = efficiencyReports.find(r => 
-            r.projectId === projectId && 
-            r.teamId === teamId && 
-            r.month === month
-          );
-
-          if (existingEfficiency) {
-            const docRef = doc(db, 'efficiencyReports', existingEfficiency.id);
-            batch.update(docRef, {
-              salesCount,
-              revenue,
-              updatedAt: serverTimestamp()
-            });
-          } else {
-            const docRef = doc(collection(db, 'efficiencyReports'));
-            batch.set(docRef, {
-              projectId,
-              projectName: project.name,
-              teamId,
-              teamName: team.name,
-              month,
-              salesCount,
-              revenue,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              createdBy: user?.uid,
-              createdByEmail: user?.email
-            });
-          }
+          const docRef = doc(collection(db, 'efficiencyReports'));
+          batch.set(docRef, {
+            projectId,
+            projectName: project.name,
+            teamName: team.name,
+            teamId: teamId,
+            month,
+            year,
+            salesCount,
+            revenue,
+            createdAt: serverTimestamp(),
+            createdBy: user?.uid,
+            createdByEmail: user?.email?.toLowerCase()
+          });
           efficiencyCount++;
         }
       }
 
       if (costCount > 0 || efficiencyCount > 0) {
         await batch.commit();
-        await logAction('IMPORT_UNIFIED_URL', 'multiple', spreadsheetId, { costCount, efficiencyCount, errors: skippedCount });
-        
-        let msg = `Nhập thành công: ${costCount} chi phí, ${efficiencyCount} hiệu quả.`;
-        if (skippedCount > 0) {
-          msg += ` Bỏ qua ${skippedCount} dòng không hợp lệ.`;
-          setImportErrors(errorDetails);
-          setIsImportErrorsDialogOpen(true);
-        }
-        toast.success(msg);
-        
-        setIsImportCostsDialogOpen(false);
-        setCostSheetUrl('');
+        await logAction('IMPORT_URL', 'multiple', 'bulk', { costs: costCount, efficiency: efficiencyCount, skipped: skippedCount });
+        toast.success(`Đã xử lý xong dữ liệu Google Sheet.\n- Thành công: ${costCount} chi phí, ${efficiencyCount} hiệu quả.\n- Bỏ qua: ${skippedCount} dòng.`);
       } else {
-        if (errorDetails.length > 0) {
-          setImportErrors(errorDetails);
-          setIsImportErrorsDialogOpen(true);
-        } else {
-          toast.error(`Không tìm thấy dữ liệu hợp lệ để nhập.`);
-        }
+        toast.warning(`Không phát hiện dữ liệu chi phí/hiệu quả mới nào để nhập.`);
       }
+
+      if (errorDetails.length > 0) {
+        setImportErrors(errorDetails);
+        setIsImportErrorsDialogOpen(true);
+      }
+
+      setIsImportCostsDialogOpen(false);
     } catch (error) {
-      console.error("Unified Import Error:", error);
-      toast.error("Lỗi khi nhập dữ liệu. Hãy kiểm tra lại link và định dạng file.");
+       handleFirestoreError(error, OperationType.WRITE, 'import');
     } finally {
-      setIsImportingCostsUrl(false);
-      setIsImportingCosts(false);
+       setIsImportingCostsUrl(false);
+       setIsImportingCosts(false);
     }
   };
-
-  const handleUpdateCost = async (id: string) => {
-    if (!editingCostAmount || isNaN(Number(editingCostAmount))) {
-      toast.error('Vui lòng nhập số tiền hợp lệ');
-      return;
-    }
-    try {
-      const existingCost = costs.find(c => c.id === id);
-      await updateDoc(doc(db, 'costs', id), {
-        amount: Number(editingCostAmount),
-        note: editingCostNote,
-        updatedAt: serverTimestamp(),
-        editHistory: arrayUnion({
-          action: 'UPDATE',
-          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
-          editorEmail: user?.email,
-          timestamp: new Date().toISOString(),
-          changes: {
-            amount: { old: existingCost?.amount, new: Number(editingCostAmount) },
-            note: { old: existingCost?.note, new: editingCostNote }
-          }
-        })
-      });
-      await logAction('UPDATE', 'costs', id, { amount: editingCostAmount, note: editingCostNote });
-      toast.success('Đã cập nhật chi phí');
-      setEditingCostId(null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'costs');
-    }
-  };
-
-  // Reporting Logic
-  const filteredBudgets = useMemo(() => {
-    return budgets.filter(b => {
-      const project = projects.find(p => p.id === b.projectId);
-      const userEmail = user?.email?.toLowerCase();
-      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-      const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-      const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-      
-      // Role-based access control
-      const hasAccess = isAdmin || isMod || 
-                         (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) ||
-                         (isOwner || isAssigned);
-      
-      if (!hasAccess) return false;
-
-      const matchProject = reportProject === 'all' || b.projectId === reportProject;
-      const bTeamName = teamMap[b.teamId] || b.teamName;
-      const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
-      const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
-      const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-      const matchType = reportType === 'all' || (project?.type === reportType);
-      
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType;
-    }).sort((a, b) => {
-      const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
-      if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
-      if (budgetReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
-      if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
-      if (budgetReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
-      return 0;
-    });
-  }, [budgets, reportProject, reportTeam, reportMonths, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, budgetReportSort]);
-
-  const filteredCosts = useMemo(() => {
-    return costs.filter(c => {
-      const project = projects.find(p => p.id === c.projectId);
-      const userEmail = user?.email?.toLowerCase();
-      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
-      const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
-      const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
-      
-      // Role-based access control
-      const hasAccess = isAdmin || isMod || 
-                         (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) ||
-                         (isOwner || isAssigned);
-      
-      if (!hasAccess) return false;
-
-      const matchProject = reportProject === 'all' || c.projectId === reportProject;
-      const cTeamName = teamMap[c.teamId] || c.teamName;
-      const matchTeam = reportTeam === 'all' || cTeamName === reportTeam;
-      
-      // Map cost date to marketing month
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-      const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-      const matchType = reportType === 'all' || (project?.type === reportType);
-      const matchWeek = reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-      
-      return matchProject && matchTeam && matchMonth && matchRegion && matchType && matchWeek;
-    }).sort((a, b) => {
-      const factor = costReportSort.direction === 'asc' ? 1 : -1;
-      if (costReportSort.key === 'amount') return (a.amount - b.amount) * factor;
-      if (costReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
-      if (costReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
-      if (costReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
-      if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
-      return 0;
-    });
-  }, [costs, reportProject, reportTeam, reportMonths, getMarketingMonth, reportRegion, reportType, projects, isAdmin, isMod, isGDDA, isUser, userProfile, reportWeek, costReportSort]);
-
-  const adminFilteredBudgets = useMemo(() => {
-    return budgets.filter(b => {
-      const matchesSearch = 
-        (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-        (teamMap[b.teamId] || b.teamName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase()) ||
-        (b.implementerName || '').toLowerCase().includes(adminBudgetSearch.toLowerCase());
-      const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
-      return matchesSearch && matchesMonth;
-    }).sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-      return dateB - dateA;
-    });
-  }, [budgets, adminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap]);
-
-  const uniqueTeams = useMemo(() => {
-    return Array.from(new Set(teams.map(t => t.name)));
-  }, [teams]);
-
-  const uniqueRegions = useMemo(() => {
-    return regions.map(r => r.name).sort();
-  }, [regions]);
-
-  const uniqueTypes = useMemo(() => {
-    return types.map(t => t.name).sort();
-  }, [types]);
-
-  const overBudgetProjectIds = useMemo(() => {
-    const currentMonth = getMarketingMonth(new Date());
-    const projectBudgets: {[key: string]: number} = {};
-    const projectCosts: {[key: string]: number} = {};
-    
-    budgets.forEach(b => {
-      if (b.month === currentMonth) {
-        projectBudgets[b.projectId] = (projectBudgets[b.projectId] || 0) + b.amount;
-      }
-    });
-    
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (mMonth === currentMonth) {
-        projectCosts[c.projectId] = (projectCosts[c.projectId] || 0) + c.amount;
-      }
-    });
-
-    const set = new Set<string>();
-    Object.entries(projectBudgets).forEach(([pid, budget]) => {
-      if ((projectCosts[pid] || 0) > budget) {
-        set.add(pid);
-      }
-    });
-    return set;
-  }, [budgets, costs, getMarketingMonth]);
-
-  const channelReportData = useMemo(() => {
-    const keyData: { [key: string]: any } = {};
-    
-    filteredCosts.forEach(c => {
-      const key = `${c.projectId}_${c.teamName}`;
-      if (!keyData[key]) {
-        keyData[key] = {
-          projectId: c.projectId,
-          projectName: c.projectName,
-          teamName: c.teamName,
-          fbAds: 0,
-          googleAds: 0,
-          zaloAds: 0,
-          posting: 0,
-          visaAmount: 0,
-          digitalAmount: 0,
-          otherCost: 0,
-          total: 0
-        };
-      }
-      
-      const p = keyData[key];
-      const ch = c.channels || {};
-      p.fbAds += ch.fbAds || 0;
-      p.googleAds += ch.googleAds || 0;
-      p.zaloAds += ch.zaloAds || 0;
-      p.posting += ch.posting || 0;
-      p.visaAmount += ch.visaAmount || 0;
-      p.digitalAmount += ch.digitalAmount || 0;
-      p.otherCost += ch.otherCost || 0;
-      p.total += c.amount || 0;
-    });
-
-    return Object.values(keyData).sort((a: any, b: any) => {
-       if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
-       return b.total - a.total;
-    });
-  }, [filteredCosts]);
-
-  const chartData = useMemo(() => {
-    return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
-      const teamBudgets = budgets.filter(b => {
-        const project = projects.find(p => p.id === b.projectId);
-        const matchProject = reportProject === 'all' || b.projectId === reportProject;
-        const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
-        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-        const matchType = reportType === 'all' || (project?.type === reportType);
-        const bTeamName = teamMap[b.teamId] || b.teamName;
-        return matchProject && bTeamName === team && matchMonth && matchRegion && matchType;
-      });
-      
-      let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      if (chartTimeType === 'week' && reportWeek !== 'all') teamTotalBudget = teamTotalBudget / 4;
-
-      let teamTotalCost = costs.filter(c => {
-        const project = projects.find(p => p.id === c.projectId);
-        const matchProject = reportProject === 'all' || c.projectId === reportProject;
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-        const matchType = reportType === 'all' || (project?.type === reportType);
-        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-        const cTeamName = teamMap[c.teamId] || c.teamName;
-        
-        return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
-      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-      // Project breakdown for team
-      const teamProjectDetails = projects.map(p => {
-        const pBudgets = teamBudgets.filter(b => b.projectId === p.id);
-        const pCosts = costs.filter(c => {
-          const project = projects.find(proj => proj.id === c.projectId);
-          const matchProject = c.projectId === p.id;
-          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-          const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-          const matchType = reportType === 'all' || (project?.type === reportType);
-          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-          const cTeamName = teamMap[c.teamId] || c.teamName;
-          
-          return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
-        });
-
-        let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          pTotalBudget = pTotalBudget / 4;
-        }
-
-        let pRevenue = efficiencyReports
-          .filter(r => r.projectId === p.id && (teamMap[r.teamId] === team || r.teamName === team) && (reportMonths.length === 0 || reportMonths.includes(r.month)))
-          .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          pRevenue = pRevenue / 4;
-        }
-
-        return {
-          name: p.name,
-          budget: pTotalBudget,
-          actual: pTotalCost,
-          revenue: pRevenue
-        };
-      }).filter(d => d.budget > 0 || d.actual > 0)
-        .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-
-      let teamRevenue = efficiencyReports
-        .filter(r => (teamMap[r.teamId] === team || r.teamName === team) && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportProject === 'all' || r.projectId === reportProject))
-        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        teamRevenue = teamRevenue / 4;
-      }
-      
-      return {
-        name: team,
-        budget: teamTotalBudget,
-        actual: teamTotalCost,
-        revenue: teamRevenue,
-        details: teamProjectDetails,
-        isTeamReport: true
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
-  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonths, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
-
-  const efficiencyChartData = useMemo(() => {
-    // rawData structure: rawData[mainKey][detailKey] = { budget, cost, revenue, sales }
-    const rawData: { [key: string]: { [detailKey: string]: { budget: number, cost: number, revenue: number, sales: number } } } = {};
-
-    const getTarget = (mainKey: string, detailKey: string) => {
-      if (!mainKey || !detailKey) return null;
-      if (!rawData[mainKey]) rawData[mainKey] = {};
-      if (!rawData[mainKey][detailKey]) rawData[mainKey][detailKey] = { budget: 0, cost: 0, revenue: 0, sales: 0 };
-      return rawData[mainKey][detailKey];
-    };
-
-    // Budgets - Normalize by period
-    budgets.forEach(b => {
-      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
-      if (reportProject !== 'all' && b.projectId !== reportProject) return;
-      const bTeamName = teamMap[b.teamId] || b.teamName;
-      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
-
-      const bProject = projects.find(p => p.id === b.projectId);
-      if (reportRegion !== 'all' && (bProject?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (bProject?.type || 'Khác') !== reportType) return;
-      
-      const bRegion = bProject?.region || 'Khác';
-      const tId = b.teamId || b.teamName;
-      
-      let mainKey, detailKey;
-      if (efficiencyGroupType === 'project') {
-        mainKey = b.projectId;
-        detailKey = tId;
-      } else if (efficiencyGroupType === 'region') {
-        mainKey = bRegion;
-        detailKey = b.projectId;
-      } else {
-        mainKey = tId;
-        detailKey = b.projectId;
-      }
-      
-      const target = getTarget(mainKey, detailKey);
-      if (target) {
-        let amount = b.amount || 0;
-        if (chartTimeType === 'week') {
-          // If a specific week is selected, show 1/4 of budget. 
-          // If "All" weeks, we keep it as month total for the overview.
-          if (reportWeek !== 'all') {
-            amount = amount / 4;
-          }
-        }
-        target.budget += amount;
-      }
-    });
-
-    // Costs - Filter by week if needed
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
-      if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      const cTeamName = teamMap[c.teamId] || c.teamName;
-      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
-
-      const cProject = projects.find(p => p.id === c.projectId);
-      if (reportRegion !== 'all' && (cProject?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (cProject?.type || 'Khác') !== reportType) return;
-      
-      // Week filter
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        if (c.weekNumber?.toString() !== reportWeek) return;
-      }
-
-      const cRegion = cProject?.region || 'Khác';
-      const tId = c.teamId || c.teamName;
-      
-      let mainKey, detailKey;
-      if (efficiencyGroupType === 'project') {
-        mainKey = c.projectId;
-        detailKey = tId;
-      } else if (efficiencyGroupType === 'region') {
-        mainKey = cRegion;
-        detailKey = c.projectId;
-      } else {
-        mainKey = tId;
-        detailKey = c.projectId;
-      }
-
-      const target = getTarget(mainKey, detailKey);
-      if (target) target.cost += c.amount || 0;
-    });
-
-    // Efficiency Reports - Note: Revenue is monthly in this app's current schema
-    efficiencyReports.forEach(r => {
-      if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
-      if (reportProject !== 'all' && r.projectId !== reportProject) return;
-      const rProject = projects.find(p => p.id === r.projectId);
-      if (reportRegion !== 'all' && (rProject?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (rProject?.type || 'Khác') !== reportType) return;
-      
-      const rRegion = rProject?.region || 'Khác';
-      const currentTeamName = teamMap[r.teamId] || r.teamName;
-      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
-
-      let mainKey, detailKey;
-      if (efficiencyGroupType === 'project') {
-        mainKey = r.projectId;
-        detailKey = r.teamId;
-      } else if (efficiencyGroupType === 'region') {
-        mainKey = rRegion;
-        detailKey = r.projectId;
-      } else {
-        mainKey = r.teamId;
-        detailKey = r.projectId;
-      }
-
-      const target = getTarget(mainKey, detailKey);
-      if (target) {
-        // If we are looking at a single week, prorate revenue/sales
-        let rev = r.revenue || 0;
-        let sales = r.salesCount || 0;
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          rev = rev / 4;
-          sales = sales / 4;
-        }
-        target.sales += sales;
-        target.revenue += rev;
-      }
-    });
-
-    return Object.keys(rawData).map(mainKey => {
-      let name;
-      if (efficiencyGroupType === 'project') {
-        name = projectMap[mainKey] || mainKey;
-      } else if (efficiencyGroupType === 'region') {
-        name = mainKey;
-      } else {
-        name = teamMap[mainKey] || mainKey;
-      }
-      
-      const details = Object.keys(rawData[mainKey]).map(detailKey => {
-        let detailName;
-        if (efficiencyGroupType === 'project') {
-          detailName = teamMap[detailKey] || detailKey;
-        } else if (efficiencyGroupType === 'region') {
-          detailName = projectMap[detailKey] || detailKey;
-        } else {
-          detailName = projectMap[detailKey] || detailKey;
-        }
-        
-        return {
-          name: detailName,
-          ...rawData[mainKey][detailKey]
-        };
-      }).sort((a, b) => {
-        if (reportSortBy === 'budget') return b.budget - a.budget;
-        if (reportSortBy === 'actual') return b.cost - a.cost;
-        return b.revenue - a.revenue || b.cost - a.cost;
-      });
-
-      const totals = details.reduce((acc, curr) => ({
-        sales: acc.sales + curr.sales,
-        revenue: acc.revenue + curr.revenue,
-        cost: acc.cost + curr.cost,
-        budget: acc.budget + curr.budget
-      }), { sales: 0, revenue: 0, cost: 0, budget: 0 });
-
-      return {
-        id: mainKey,
-        name,
-        ...totals,
-        details
-      };
-    }).sort((a, b) => {
-      if (reportSortBy === 'budget') return b.budget - a.budget;
-      if (reportSortBy === 'actual') return b.cost - a.cost;
-      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
-      return b.cost - a.cost;
-    });
-  }, [efficiencyReports, costs, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, teamMap, teams, chartTimeType, reportWeek, getMarketingMonth, reportSortBy]);
-
-  const pendingSupportCount = useMemo(() => {
-    return supportRequests.filter((r: any) => r.status === 'Chờ xử lý').length;
-  }, [supportRequests]);
-
-  const overBudgetStats = useMemo(() => {
-    // Group all budgets and costs by {projectId, teamId} for the selected filters
-    // to ensure we catch overruns at the most granular level (per team, per project)
-    const pairMap: { [key: string]: { budget: number, cost: number, projectName: string, teamName: string } } = {};
-    
-    budgets.forEach(b => {
-      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
-      if (reportProject !== 'all' && b.projectId !== reportProject) return;
-      const bTeamName = teamMap[b.teamId] || b.teamName;
-      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
-
-      const project = projects.find(p => p.id === b.projectId);
-      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
-
-      const key = `${b.projectId}-${b.teamId || b.teamName}`;
-      if (!pairMap[key]) {
-        pairMap[key] = { budget: 0, cost: 0, projectName: projectMap[b.projectId] || 'N/A', teamName: bTeamName };
-      }
-      let amount = b.amount || 0;
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        amount = amount / 4;
-      }
-      pairMap[key].budget += amount;
-    });
-
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
-      if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      const cTeamName = teamMap[c.teamId] || c.teamName;
-      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
-
-      const project = projects.find(p => p.id === c.projectId);
-      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
-
-      // Week filter for costs
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        if (c.weekNumber?.toString() !== reportWeek) return;
-      }
-
-      const key = `${c.projectId}-${c.teamId || c.teamName}`;
-      if (!pairMap[key]) {
-        pairMap[key] = { budget: 0, cost: 0, projectName: projectMap[c.projectId] || 'N/A', teamName: cTeamName };
-      }
-      pairMap[key].cost += c.amount || 0;
-    });
-
-    const granularOverItems: any[] = [];
-    let totalExcess = 0;
-
-    Object.keys(pairMap).forEach(key => {
-      const item = pairMap[key];
-      // Use a small epsilon to avoid floating point issues
-      if (item.cost > item.budget + 0.01) {
-        const excess = item.cost - item.budget;
-        totalExcess += excess;
-        granularOverItems.push({
-          id: key,
-          name: `${item.projectName} - ${item.teamName}`,
-          mainName: item.projectName,
-          detailName: item.teamName,
-          budget: item.budget,
-          cost: item.cost,
-          excess: excess
-        });
-      }
-    });
-
-    return {
-      count: granularOverItems.length,
-      totalExcess: totalExcess,
-      items: granularOverItems
-    };
-  }, [budgets, costs, reportMonths, reportProject, reportTeam, reportRegion, reportType, projects, projectMap, teamMap, getMarketingMonth, chartTimeType, reportWeek]);
-
-  const salesGeneratingData = useMemo(() => 
-    efficiencyChartData.filter(d => d.revenue > 0).sort((a, b) => {
-      const factor = efficiencyTableSort.direction === 'asc' ? 1 : -1;
-      if (efficiencyTableSort.key === 'revenue') return (a.revenue - b.revenue) * factor;
-      if (efficiencyTableSort.key === 'cost') return (a.cost - b.cost) * factor;
-      if (efficiencyTableSort.key === 'budget') return (a.budget - b.budget) * factor;
-      if (efficiencyTableSort.key === 'name') return (a.name || '').localeCompare(b.name || '') * factor;
-      if (efficiencyTableSort.key === 'sales') return (a.sales - b.sales) * factor;
-      if (efficiencyTableSort.key === 'roi') {
-        const roiA = a.cost > 0 ? a.revenue / a.cost : 0;
-        const roiB = b.cost > 0 ? b.revenue / b.cost : 0;
-        return (roiA - roiB) * factor;
-      }
-      // Default to the global reportSortBy if no table sort or default revenue
-      if (reportSortBy === 'budget') return (b.budget - a.budget) || ((b.revenue - a.revenue) * factor);
-      if (reportSortBy === 'actual') return (b.cost - a.cost) || ((b.revenue - a.revenue) * factor);
-      if (b.revenue !== a.revenue) return (b.revenue - a.revenue);
-      return b.cost - a.cost;
-    }), 
-    [efficiencyChartData, reportSortBy, efficiencyTableSort]
-  );
-
-  const noSalesData = useMemo(() => 
-    efficiencyChartData.filter(d => d.revenue === 0).sort((a, b) => {
-      const factor = efficiencyTableSort.direction === 'asc' ? 1 : -1;
-      if (efficiencyTableSort.key === 'cost') return (a.cost - b.cost) * factor;
-      if (efficiencyTableSort.key === 'budget') return (a.budget - b.budget) * factor;
-      if (efficiencyTableSort.key === 'name') return (a.name || '').localeCompare(b.name || '') * factor;
-      
-      if (reportSortBy === 'budget') return b.budget - a.budget;
-      return b.cost - a.cost;
-    }), 
-    [efficiencyChartData, reportSortBy, efficiencyTableSort]
-  );
-
-  const efficiencyPieData = useMemo(() => {
-    const costWithSales = salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0);
-    const costWithoutSales = noSalesData.reduce((acc, curr) => acc + curr.cost, 0);
-    
-    return [
-      { name: 'Phát sinh doanh số', value: costWithSales, color: '#10b981' },
-      { name: 'Không phát sinh doanh số', value: costWithoutSales, color: '#f87171' }
-    ];
-  }, [salesGeneratingData, noSalesData]);
-
-  const efficiencyTrendData = useMemo(() => {
-    const monthlyMap: { [key: string]: { month: string, sales: number, revenue: number, cost: number, roi: number } } = {};
-    
-    // Fill all months for the selected year
-    const year = reportYear || new Date().getFullYear().toString();
-    for (let m = 1; m <= 12; m++) {
-      const monthStr = `${year}-${m.toString().padStart(2, '0')}`;
-      monthlyMap[monthStr] = { month: monthStr, sales: 0, revenue: 0, cost: 0, roi: 0 };
-    }
-
-    efficiencyReports.forEach(r => {
-      if (!r.month || !r.month.startsWith(year)) return;
-      if (reportProject !== 'all' && r.projectId !== reportProject) return;
-      const currentTeamName = teamMap[r.teamId] || r.teamName;
-      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
-
-      if (monthlyMap[r.month]) {
-        monthlyMap[r.month].sales += r.salesCount || 0;
-        monthlyMap[r.month].revenue += r.revenue || 0;
-      }
-    });
-
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (!mMonth || !mMonth.startsWith(year)) return;
-      if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      const currentTeamName = teamMap[c.teamId] || c.teamName;
-      if (reportTeam !== 'all' && currentTeamName !== reportTeam) return;
-
-      if (monthlyMap[mMonth]) {
-        monthlyMap[mMonth].cost += c.amount || 0;
-      }
-    });
-
-    return Object.values(monthlyMap).map(m => ({
-      ...m,
-      roi: m.cost > 0 ? (m.revenue / m.cost) : 0
-    }));
-  }, [efficiencyReports, costs, reportYear, reportProject, reportTeam, teamMap, getMarketingMonth]);
-
-  const projectChartData = useMemo(() => {
-    const projectIds = Array.from(new Set([
-      ...budgets.filter(b => reportMonths.length === 0 || reportMonths.includes(b.month)).map(b => b.projectId),
-      ...costs.filter(c => {
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        return mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-      }).map(c => c.projectId)
-    ]));
-
-    return projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
-      const projectName = projectMap[id] || 'N/A';
-      const projectBudgets = budgets.filter(b => b.projectId === id && (reportMonths.length === 0 || reportMonths.includes(b.month)));
-      
-      let totalBudget = projectBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      if (chartTimeType === 'week' && reportWeek !== 'all') totalBudget = totalBudget / 4;
-
-      let totalCost = costs.filter(c => {
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-        return c.projectId === id && matchMonth && matchWeek;
-      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-      // Team breakdown for project
-      const projectTeamDetails = uniqueTeams.map(teamName => {
-        const tBudgets = projectBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === teamName);
-        const tCosts = costs.filter(c => {
-          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-          const cTeamName = teamMap[c.teamId] || c.teamName;
-          return c.projectId === id && cTeamName === teamName && matchMonth && matchWeek;
-        });
-
-        let tTotalBudget = tBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        let tTotalCost = tCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          tTotalBudget = tTotalBudget / 4;
-        }
-
-        let tRevenue = efficiencyReports
-          .filter(r => r.projectId === id && (teamMap[r.teamId] || r.teamName) === teamName && (reportMonths.length === 0 || reportMonths.includes(r.month)))
-          .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-        
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          tRevenue = tRevenue / 4;
-        }
-
-        return {
-          name: teamName,
-          budget: tTotalBudget,
-          actual: tTotalCost,
-          revenue: tRevenue
-        };
-      }).filter(d => d.budget > 0 || d.actual > 0)
-        .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-
-      let projectRevenue = efficiencyReports
-        .filter(r => r.projectId === id && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportTeam === 'all' || (teamMap[r.teamId] || r.teamName) === reportTeam))
-        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        projectRevenue = projectRevenue / 4;
-      }
-
-      return {
-        id: id,
-        name: projectName,
-        budget: totalBudget,
-        actual: totalCost,
-        revenue: projectRevenue,
-        details: projectTeamDetails,
-        isProjectReport: true
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-  }, [budgets, costs, projectMap, reportMonths, reportProject, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, uniqueTeams, teamMap, efficiencyReports]);
-
-  const regionMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    regions.forEach(r => {
-      map[r.id] = r.name;
-    });
-    return map;
-  }, [regions]);
-
-  const regionChartData = useMemo(() => {
-    const rawData: Record<string, { budget: number, actual: number, revenue: number }> = {};
-    
-    uniqueRegions.forEach(regionName => {
-      rawData[regionName] = { budget: 0, actual: 0, revenue: 0 };
-    });
-
-    budgets.forEach(b => {
-      const project = projects.find(p => p.id === b.projectId);
-      const rName = project?.region || 'Chưa xác định';
-      
-      const userEmail = user?.email?.toLowerCase();
-      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-      const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-      const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-      const hasAccess = isAdmin || isMod || (isGDDA && userProfile?.assignedProjects?.includes(b.projectId)) || (isOwner || isAssigned);
-      if (!hasAccess) return;
-
-      if (reportMonths.length > 0 && !reportMonths.includes(b.month)) return;
-      if (reportProject !== 'all' && b.projectId !== reportProject) return;
-      const bTeamName = teamMap[b.teamId] || b.teamName;
-      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
-
-      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
-      
-      let amount = b.amount || 0;
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        amount = amount / 4;
-      }
-      rawData[rName].budget += amount;
-    });
-
-    costs.forEach(c => {
-      const project = projects.find(p => p.id === c.projectId);
-      const rName = project?.region || 'Chưa xác định';
-
-      const userEmail = user?.email?.toLowerCase();
-      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
-      const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
-      const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
-      const hasAccess = isAdmin || isMod || (isGDDA && userProfile?.assignedProjects?.includes(c.projectId)) || (isOwner || isAssigned);
-      if (!hasAccess) return;
-
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
-      if (reportProject !== 'all' && c.projectId !== reportProject) return;
-      const cTeamName = teamMap[c.teamId] || c.teamName;
-      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
-
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        if (c.weekNumber?.toString() !== reportWeek) return;
-      }
-
-      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
-      rawData[rName].actual += c.amount || 0;
-    });
-
-    efficiencyReports.forEach(r => {
-      const project = projects.find(p => p.id === r.projectId);
-      const rName = project?.region || 'Chưa xác định';
-
-      if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
-      if (reportProject !== 'all' && r.projectId !== reportProject) return;
-      const tName = teamMap[r.teamId] || r.teamName;
-      if (reportTeam !== 'all' && tName !== reportTeam) return;
-
-      if (!rawData[rName]) rawData[rName] = { budget: 0, actual: 0, revenue: 0 };
-      
-      let rev = r.revenue || 0;
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        rev = rev / 4;
-      }
-      rawData[rName].revenue += rev;
-    });
-
-    return Object.keys(rawData).map(name => {
-      let displayName = name;
-      if (name.includes('Quảng Ninh') && name.includes('Hải Phòng')) {
-        displayName = 'QN - HP';
-      }
-      
-      return {
-        name: displayName,
-        ...rawData[name]
-      };
-    }).filter(d => reportRegion === 'all' || d.name === reportRegion)
-      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-  }, [regions, uniqueRegions, budgets, costs, efficiencyReports, projects, reportMonths, reportProject, reportTeam, reportRegion, teamMap, chartTimeType, reportWeek, isAdmin, isMod, isGDDA, user, userProfile, reportSortBy, getMarketingMonth]);
-
-  const comparisonChartData = useMemo(() => {
-    if (reportMonths.length === 0) return [];
-
-    let categories: string[] = [];
-    if (efficiencyGroupType === 'team') {
-      categories = uniqueTeams;
-    } else if (efficiencyGroupType === 'region') {
-      categories = uniqueRegions;
-    } else {
-      categories = Array.from(new Set(projects.map(p => p.id)));
-    }
-    
-    return categories.map(catId => {
-      let name;
-      if (efficiencyGroupType === 'team') {
-        name = catId;
-      } else if (efficiencyGroupType === 'region') {
-        name = catId;
-      } else {
-        name = projectMap[catId] || 'N/A';
-      }
-
-      const row: any = { name };
-
-      reportMonths.forEach(month => {
-        let value = 0;
-        if (reportSortBy === 'budget') {
-          const mBudgets = budgets.filter(b => {
-            let matchCat = false;
-            if (efficiencyGroupType === 'team') {
-              matchCat = (teamMap[b.teamId] || b.teamName) === catId;
-            } else if (efficiencyGroupType === 'region') {
-              const project = projects.find(p => p.id === b.projectId);
-              matchCat = (project?.region || 'Khác') === catId;
-            } else {
-              matchCat = b.projectId === catId;
-            }
-            return b.month === month && matchCat;
-          });
-          value = mBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        } else if (reportSortBy === 'actual') {
-          const mCosts = costs.filter(c => {
-             const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-             let matchCat = false;
-             if (efficiencyGroupType === 'team') {
-               matchCat = (teamMap[c.teamId] || c.teamName) === catId;
-             } else if (efficiencyGroupType === 'region') {
-               const project = projects.find(p => p.id === c.projectId);
-               matchCat = (project?.region || 'Khác') === catId;
-             } else {
-               matchCat = c.projectId === catId;
-             }
-             return mMonth === month && matchCat;
-          });
-          value = mCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        } else if (reportSortBy === 'revenue') {
-          const mRevs = efficiencyReports.filter(r => {
-             let matchCat = false;
-             if (efficiencyGroupType === 'team') {
-               matchCat = (teamMap[r.teamId] || r.teamName) === catId;
-             } else if (efficiencyGroupType === 'region') {
-               const project = projects.find(p => p.id === r.projectId);
-               matchCat = (project?.region || 'Khác') === catId;
-             } else {
-               matchCat = r.projectId === catId;
-             }
-             return r.month === month && matchCat;
-          });
-          value = mRevs.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-        }
-        row[month] = value;
-      });
-
-      return row;
-    }).filter(row => {
-      // Only show rows that have at least one value > 0 across selected months
-      return reportMonths.some(m => row[m] > 0);
-    }).sort((a, b) => {
-      // Sort by the first selected month's value
-      const primaryMonth = reportMonths[0];
-      return (b[primaryMonth] || 0) - (a[primaryMonth] || 0);
-    });
-  }, [reportMonths, efficiencyGroupType, uniqueTeams, uniqueRegions, projects, budgets, costs, efficiencyReports, projectMap, teamMap, reportSortBy, getMarketingMonth]);
-
-  const reportTableData = useMemo(() => {
-    // 1. Process Teams group
-    const teams = uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
-       const teamBudgets = filteredBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === team);
-       
-       const teamCosts = filteredCosts.filter(c => {
-         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-         const cTeamName = teamMap[c.teamId] || c.teamName;
-         return cTeamName === team && matchWeek;
-       });
-
-       let totalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-       let totalCost = teamCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-       if (chartTimeType === 'week' && reportWeek !== 'all') {
-         totalBudget = totalBudget / 4;
-       }
-
-       // Use project IDs to avoid name collision and ensure correct filtering
-       const projectsInTeamIds = Array.from(new Set([
-         ...teamBudgets.map(b => b.projectId),
-         ...teamCosts.map(c => c.projectId)
-       ]));
-
-       const aggregatedProjects = projectsInTeamIds.map(projectId => {
-         const pBudgets = teamBudgets.filter(b => b.projectId === projectId);
-         const pCosts = teamCosts.filter(c => c.projectId === projectId);
-
-         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-         let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-         if (chartTimeType === 'week') {
-           pTotalBudget = pTotalBudget / 4;
-           if (reportWeek === 'all') pTotalCost = pTotalCost / 4;
-         }
-
-         return {
-           id: `${team}-${projectId}`,
-           teamName: team,
-           projectId,
-           projectName: projectMap[projectId] || 'N/A',
-           implementerName: projectMap[projectId] || 'N/A',
-           userEmail: 'Project Summary',
-           amount: pTotalBudget,
-           actual: pTotalCost
-         };
-       }).filter(d => d.amount > 0 || d.actual > 0)
-         .sort((a, b) => {
-            if (reportSortBy === 'budget') return (b.amount || 0) - (a.amount || 0);
-            return (b.actual || 0) - (a.actual || 0);
-         });
-
-       return {
-         id: team,
-         name: team,
-         budget: totalBudget,
-         actual: totalCost,
-         projects: projectsInTeamIds.map(id => projectMap[id]),
-         items: aggregatedProjects
-       };
-    }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-
-    const projectIds = Array.from(new Set([
-      ...filteredBudgets.map(b => b.projectId),
-      ...filteredCosts.map(c => c.projectId)
-    ]));
-
-    const projects = projectIds.filter(id => reportProject === 'all' || id === reportProject).map(id => {
-       const pBudgets = filteredBudgets.filter(b => b.projectId === id);
-       const pCosts = filteredCosts.filter(c => {
-         const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-         return c.projectId === id && matchWeek;
-       });
-
-       let totalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-       let totalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-       if (chartTimeType === 'week' && reportWeek !== 'all') {
-         totalBudget = totalBudget / 4;
-       }
-
-       const teamsInProjectNames = Array.from(new Set([
-         ...pBudgets.map(b => teamMap[b.teamId] || b.teamName),
-         ...pCosts.map(c => teamMap[c.teamId] || c.teamName)
-       ]));
-
-       const aggregatedTeams = teamsInProjectNames.map(teamName => {
-         const tBudgets = pBudgets.filter(b => (teamMap[b.teamId] || b.teamName) === teamName);
-         const tCosts = pCosts.filter(c => (teamMap[c.teamId] || c.teamName) === teamName);
-
-         let tTotalBudget = tBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-         let tTotalCost = tCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-         if (chartTimeType === 'week' && reportWeek !== 'all') {
-           tTotalBudget = tTotalBudget / 4;
-         }
-
-         return {
-           id: `${id}-${teamName}`,
-           teamName,
-           implementerName: teamName,
-           userEmail: 'Team Summary',
-           amount: tTotalBudget,
-           actual: tTotalCost
-         };
-       }).filter(d => d.amount > 0 || d.actual > 0)
-         .sort((a, b) => {
-            if (reportSortBy === 'budget') return (b.amount || 0) - (a.amount || 0);
-            return (b.actual || 0) - (a.actual || 0);
-         });
-
-       return {
-         id,
-         name: projectMap[id] || 'N/A',
-         budget: totalBudget,
-         actual: totalCost,
-         teams: teamsInProjectNames,
-         items: aggregatedTeams
-       };
-    }).filter(d => d.budget > 0 || d.actual > 0)
-      .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
-
-    return { teams, projects };
-  }, [uniqueTeams, reportTeam, reportProject, filteredBudgets, filteredCosts, chartTimeType, reportWeek, reportSortBy, projectMap, teamMap]);
-
 
 
   const getCurrentPeriod = () => {
@@ -6630,46 +6479,7 @@ export default function App() {
     }
   };
 
-  const getWeekRange = (weekStr: string) => {
-    if (!weekStr) return '';
-    try {
-      const [year, week] = weekStr.split('-W').map(Number);
-      const d = new Date(year, 0, 1);
-      const dayNum = d.getDay() || 7;
-      if (dayNum <= 4) d.setDate(d.getDate() - d.getDay() + 1);
-      else d.setDate(d.getDate() + 8 - d.getDay());
-      const monday = new Date(d.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
-      const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000);
-      return `${safeFormat(monday, 'dd/MM')} - ${safeFormat(sunday, 'dd/MM')}`;
-    } catch (e) {
-      return '';
-    }
-  };
 
-  // Thêm component footer thông tin phát triển
-  const DeveloperFooter = ({ className = "", isHeader = false }: { className?: string, isHeader?: boolean }) => (
-    <div className={`flex flex-col items-center justify-center gap-3 text-slate-400 ${className}`}>
-      <div className={`flex items-center gap-2 font-black uppercase tracking-[0.2em] ${isHeader ? 'text-[12px]' : 'text-[9px]'}`}>
-        <span className="opacity-60">Phát triển bởi</span>
-        <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-        <span className={isHeader ? 'text-slate-800' : 'text-slate-600'}>Thiên Vũ - Digital Marketing Mayhomes</span>
-      </div>
-      <a 
-        href="https://zalo.me/0854642555" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className={`flex items-center gap-3 border transition-all duration-300 group ${isHeader ? 'px-6 py-2.5 bg-white border-blue-200 rounded-2xl shadow-lg shadow-blue-100/50 hover:shadow-xl hover:border-blue-400 hover:translate-y-[-2px]' : 'px-3 py-1 bg-slate-50 border-slate-100 rounded-full hover:bg-white hover:shadow-sm'}`}
-      >
-        <div className={`bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200 group-hover:rotate-[10deg] transition-all ${isHeader ? 'w-8 h-8' : 'w-5 h-5'}`}>
-          <MessageCircle className={`${isHeader ? 'w-5 h-5' : 'w-3 h-3'} fill-current`} />
-        </div>
-        <div className="flex flex-col items-start leading-none">
-          <span className={`font-black uppercase tracking-tight ${isHeader ? 'text-sm text-blue-700' : 'text-[10px] text-slate-600'}`}>Liên hệ hỗ trợ Zalo</span>
-          {isHeader && <span className="text-[11px] font-bold text-blue-500/70 mt-0.5">0854.642.555</span>}
-        </div>
-      </a>
-    </div>
-  );
 
   if (loading) {
     return (
@@ -9415,25 +9225,8 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {costs
-                                .filter(c => {
-                                  const matchesSearch = 
-                                    (projectMap[c.projectId] || c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    (teamMap[c.teamId] || c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    (c.implementerName || '').toLowerCase().includes(adminCostSearch.toLowerCase());
-                                  
-                                  const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-                                  const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
-                                  
-                                  return matchesSearch && matchesMonth;
-                                })
-                                .sort((a, b) => {
-                                  const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-                                  const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-                                  return dateB - dateA;
-                                })
-                                .map(c => (
-                                  <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
+                              {adminFilteredCosts.map(c => (
+                                <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
                                     <TableCell>
                                       <input 
                                         type="checkbox" 
@@ -9476,15 +9269,7 @@ export default function App() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
-                              {costs.filter(c => {
-                                  const matchesSearch = 
-                                    (c.projectName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    (c.teamName || '').toLowerCase().includes(adminCostSearch.toLowerCase()) ||
-                                    (c.implementerName || '').toLowerCase().includes(adminCostSearch.toLowerCase());
-                                  const costDate = c.createdAt?.toDate ? c.createdAt.toDate() : null;
-                                  const matchesMonth = !adminCostMonthFilter || (costDate && getMarketingMonth(costDate) === adminCostMonthFilter);
-                                  return matchesSearch && matchesMonth;
-                                }).length === 0 && (
+                              {adminFilteredCosts.length === 0 && (
                                   <TableRow>
                                     <TableCell colSpan={7} className="h-24 text-center text-slate-500">
                                       Không tìm thấy bản ghi thực chi nào phù hợp
@@ -9492,6 +9277,18 @@ export default function App() {
                                   </TableRow>
                                 )}
                             </TableBody>
+                            {adminFilteredCosts.length > 0 && (
+                              <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
+                                <TableRow>
+                                  <TableCell></TableCell>
+                                  <TableCell colSpan={4} className="text-slate-900 uppercase text-[10px] tracking-wider">Tổng cộng</TableCell>
+                                  <TableCell className="text-right font-mono text-blue-700">
+                                    {adminFilteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
+                                  </TableCell>
+                                  <TableCell></TableCell>
+                                </TableRow>
+                              </TableFooter>
+                            )}
                           </Table>
                         </div>
                       </CardContent>
@@ -9503,40 +9300,80 @@ export default function App() {
                 <TabsContent value="reports" className="space-y-6">
                   <Card className="border-none shadow-sm">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-blue-600" /> Báo cáo & Phân tích chuyên sâu
+                      <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-blue-600" /> Báo cáo & Phân tích chuyên sâu
+                        </div>
+                        {isAdmin && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setIsAlertManagementOpen(true)}
+                            className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm rounded-xl py-4 h-9"
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                            Cấu hình Cảnh báo
+                          </Button>
+                        )}
                       </CardTitle>
                       <CardDescription>Theo dõi hiệu quả sử dụng ngân sách & Hiệu quả kinh doanh thực tế</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                    {/* Alert for Over Budget */}
-                    {overBudgetStats.count > 0 && (
-                      <div className="mx-6 mt-2 p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-8 bg-red-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-red-200/30 transition-colors" />
-                        <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200 z-10">
-                          <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
-                        </div>
-                        <div className="flex-1 z-10">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Cảnh báo vượt ngân sách ({overBudgetStats.count} mục)</h4>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => setIsOverBudgetDetailOpen(true)}
-                              className="h-8 rounded-xl border-red-200 bg-white text-red-600 hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              Xem chi tiết
-                            </Button>
+                    {/* Alert for Over Budget & Warning */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 mb-2">
+                      {overBudgetStats.count > 0 && (
+                        <div className="p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-8 bg-red-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-red-200/30 transition-colors" />
+                          <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200 z-10">
+                            <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
                           </div>
-                          <p className="text-xs text-red-700/80 font-medium leading-relaxed mt-1 pr-0 md:pr-24">
-                            Tổng chi phí thực tế đã vượt ngân sách đăng ký của <strong>{overBudgetStats.count}</strong> đơn vị với tổng số tiền vượt là 
-                            <span className="font-black ml-1 text-red-800">{formatCurrency(overBudgetStats.totalExcess)}</span>. 
-                            Vui lòng kiểm tra lại các mục được đánh dấu màu đỏ dưới bảng.
-                          </p>
+                          <div className="flex-1 z-10">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Vượt ngân sách ({overBudgetStats.count} mục)</h4>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setIsOverBudgetDetailOpen(true)}
+                                className="h-8 rounded-xl border-red-200 bg-white text-red-600 hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                Xem
+                              </Button>
+                            </div>
+                            <p className="text-[11px] text-red-700/80 font-medium leading-relaxed mt-1 pr-0">
+                               <strong>{overBudgetStats.count}</strong> mục đã chi vượt 
+                              <span className="font-black ml-1 text-red-800">{formatCurrency(overBudgetStats.totalExcess)}</span>.
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      {overBudgetStats.warningCount > 0 && (
+                        <div className="p-5 bg-amber-50 border-2 border-amber-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-8 bg-amber-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-amber-200/30 transition-colors" />
+                          <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200 z-10">
+                            <ShieldAlert className="w-6 h-6 text-amber-600" />
+                          </div>
+                          <div className="flex-1 z-10">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-black text-amber-900 uppercase tracking-tighter text-sm">Mức độ cảnh báo ({overBudgetStats.warningCount} mục)</h4>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setIsOverBudgetDetailOpen(true)}
+                                className="h-8 rounded-xl border-amber-200 bg-white text-amber-600 hover:bg-amber-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                Xem
+                              </Button>
+                            </div>
+                            <p className="text-[11px] text-amber-700/80 font-medium leading-relaxed mt-1">
+                              <strong>{overBudgetStats.warningCount}</strong> mục đã chi trên <strong>{budgetWarningThreshold}%</strong> ngân sách được duyệt.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Filters Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8 overflow-hidden">
@@ -11003,13 +10840,19 @@ export default function App() {
                                 Ngân sách <ArrowUpDown className="w-3 h-3 text-slate-400" />
                               </div>
                             </TableHead>
+                            <TableHead className="text-right">
+                              Thực chi
+                            </TableHead>
+                            <TableHead className="text-right">
+                              Chênh lệch
+                            </TableHead>
                             <TableHead>Người đăng ký</TableHead>
                             {isAdmin && <TableHead className="text-right">Thao tác</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredBudgets.map((b, idx) => (
-                            <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
+                          {budgetReportWithActuals.map((b, idx) => (
+                            <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : b.actualCost > b.amount ? "bg-red-50/30" : ""}>
                               <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
                               {isAdmin && (
                                 <TableCell>
@@ -11031,6 +10874,12 @@ export default function App() {
                               <TableCell className="text-xs">{b.implementerName}</TableCell>
                               <TableCell className="text-xs">{projectMap[b.projectId] || b.projectName || 'N/A'}</TableCell>
                               <TableCell className="text-right font-mono text-xs font-bold">{b.amount.toLocaleString()} đ</TableCell>
+                              <TableCell className={`text-right font-mono text-xs font-bold ${b.actualCost > b.amount ? 'text-red-600' : 'text-emerald-600'}`}>
+                                {b.actualCost.toLocaleString()} đ
+                              </TableCell>
+                              <TableCell className={`text-right font-mono text-xs font-bold ${b.actualCost > b.amount ? 'text-red-600' : 'text-slate-400'}`}>
+                                {(b.amount - b.actualCost).toLocaleString()} đ
+                              </TableCell>
                               <TableCell className="text-[10px] text-slate-500">{b.userEmail}</TableCell>
                               {isAdmin && (
                                 <TableCell className="text-right">
@@ -11064,14 +10913,23 @@ export default function App() {
                             </TableRow>
                           )}
                         </TableBody>
-                        {filteredBudgets.length > 0 && (
+                        {budgetReportWithActuals.length > 0 && (
                           <TableFooter className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                             <TableRow>
                               <TableCell colSpan={isAdmin ? 5 : 4} className="text-right py-4 text-slate-500 uppercase text-[10px] tracking-widest font-black">
-                                TỔNG CỘNG NGÂN SÁCH ĐĂNG KÝ {chartTimeType === 'week' ? '(ƯỚC TÍNH THEO KỲ)' : '(THÁNG)'}:
+                                TỔNG CỘNG:
                               </TableCell>
-                              <TableCell className="text-right py-4 font-black font-mono text-[13px] text-indigo-700">
-                                {formatCurrency(filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1))}
+                              <TableCell className="text-right py-4 font-black font-mono text-[12px] text-indigo-700">
+                                {formatCurrency(budgetReportWithActuals.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1))}
+                              </TableCell>
+                              <TableCell className="text-right py-4 font-black font-mono text-[12px] text-red-600">
+                                {formatCurrency(budgetReportWithActuals.reduce((acc, curr) => acc + (curr.actualCost || 0), 0))}
+                              </TableCell>
+                              <TableCell className="text-right py-4 font-black font-mono text-[12px] text-slate-600">
+                                {formatCurrency(
+                                  budgetReportWithActuals.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1) - 
+                                  budgetReportWithActuals.reduce((acc, curr) => acc + (curr.actualCost || 0), 0)
+                                )}
                               </TableCell>
                               <TableCell colSpan={isAdmin ? 2 : 1}></TableCell>
                             </TableRow>
@@ -12844,7 +12702,13 @@ export default function App() {
                                 <>
                                   {editingCostId === c.id ? (
                                     <div className="flex justify-end gap-1">
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => handleUpdateCost(c.id)}>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => {
+                                        handleUpdateCost(c.id, { 
+                                          amount: parseFloat(editingCostAmount.replace(/\./g, '')) || 0, 
+                                          note: editingCostNote 
+                                        });
+                                        setEditingCostId(null);
+                                      }}>
                                         <Check className="h-4 w-4" />
                                       </Button>
                                       <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400" onClick={() => setEditingCostId(null)}>
@@ -14272,75 +14136,185 @@ export default function App() {
         {/* Over Budget Detail Dialog */}
         <Dialog open={isOverBudgetDetailOpen} onOpenChange={setIsOverBudgetDetailOpen}>
           <DialogContent className="max-w-[95vw] md:max-w-4xl p-0 overflow-hidden rounded-[32px] border-none shadow-2xl bg-white animate-in fade-in zoom-in duration-300">
-            <div className="bg-red-600 p-8 text-white relative">
+            <div className={`p-8 text-white relative transition-colors duration-500 ${overBudgetStats.items.length > 0 ? 'bg-red-600' : 'bg-amber-500'}`}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full -ml-12 -mb-12 blur-xl" />
               
-              <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                  <AlertTriangle className="w-6 h-6 text-white" />
+              <div className="flex items-center justify-between relative z-10">
+                <div>
+                  <DialogTitle className="text-2xl font-black tracking-tight mb-1 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-white" />
+                    </div>
+                    Chi tiết quản lý cảnh báo chi phí
+                  </DialogTitle>
+                  <p className="text-white/80 text-xs font-black uppercase tracking-widest leading-relaxed">
+                    Theo dõi các đơn vị đạt ngưỡng cảnh báo hoặc vượt ngân sách
+                  </p>
                 </div>
-                Chi tiết cảnh báo vượt ngân sách
-              </DialogTitle>
-              <p className="text-red-100 text-xs font-black uppercase tracking-widest relative z-10 leading-relaxed opacity-80">
-                Danh sách các đơn vị có chi phí thực tế cao hơn ngân sách dự kiến ({overBudgetStats.count} mục)
-              </p>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="bg-white/20 text-white border-white/30 px-3 py-1 font-black text-[10px] uppercase">
+                    {overBudgetStats.count} Vi phạm
+                  </Badge>
+                  <Badge variant="outline" className="bg-white/20 text-white border-white/30 px-3 py-1 font-black text-[10px] uppercase">
+                    {overBudgetStats.warningCount} Cảnh báo
+                  </Badge>
+                </div>
+              </div>
             </div>
 
             <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-               <div className="grid grid-cols-1 gap-6">
-                  {overBudgetStats.items.map((item: any) => (
-                    <Card key={item.id} className="border border-red-100 bg-red-50/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group">
-                      <CardHeader className="bg-red-50/50 p-6 border-b border-red-100">
-                        <div className="flex items-center justify-between">
-                           <div className="space-y-1">
-                              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1">
-                                 {efficiencyGroupType === 'project' ? <Building2 className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
-                                 {item.mainName}
-                              </span>
-                              <h4 className="text-lg font-black text-red-900 leading-none flex items-center gap-2">
-                                {efficiencyGroupType === 'project' ? <Users className="w-4 h-4 text-red-300" /> : <Building2 className="w-4 h-4 text-red-300" />}
-                                {item.detailName}
-                              </h4>
-                           </div>
-                           <Badge className="bg-red-600 text-white border-none py-1 px-3 rounded-xl text-xs font-black shadow-lg shadow-red-100 flex items-center gap-1.5 animate-pulse">
-                              <TrendingUp className="w-3 h-3" />
-                              Vượt {formatCurrency(item.excess)}
-                           </Badge>
+               <div className="grid grid-cols-1 gap-4">
+                  {[...overBudgetStats.items, ...overBudgetStats.warningItems].map((item: any) => (
+                    <div key={item.id} className={`p-5 rounded-[28px] border transition-all hover:shadow-lg ${item.status === 'critical' ? 'bg-red-50/50 border-red-100' : 'bg-amber-50/50 border-amber-100'}`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.status === 'critical' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                            {item.status === 'critical' ? <AlertTriangle className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
+                          </div>
+                          <div>
+                            <h5 className="font-black text-slate-900 text-base uppercase tracking-tighter">{item.name}</h5>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge className={`${item.status === 'critical' ? 'bg-red-600' : 'bg-amber-500'} text-white border-none text-[8px] font-black uppercase h-4 px-1.5`}>
+                                {item.status === 'critical' ? 'Nghiêm trọng' : 'Cảnh báo'}
+                              </Badge>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{item.mainName} • {item.detailName}</p>
+                            </div>
+                          </div>
                         </div>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-red-100 border-b border-red-100">
-                           <div className="p-4 text-center">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ngân sách</p>
-                              <p className="text-base font-black text-slate-700">{formatCurrency(item.budget)}</p>
-                           </div>
-                           <div className="p-4 text-center bg-red-50/50">
-                              <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">Thực chi</p>
-                              <p className="text-base font-black text-red-600">{formatCurrency(item.cost)}</p>
-                           </div>
-                           <div className="p-4 text-center">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Tỷ lệ</p>
-                              <p className="text-base font-black text-red-600">{(item.cost / item.budget * 100).toFixed(1)}%</p>
-                           </div>
-                           <div className="p-4 text-center">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Doanh số</p>
-                              <p className="text-base font-black text-emerald-600">{item.sales} căn</p>
-                           </div>
+                        <div className="text-right">
+                          <p className={`text-2xl font-black font-mono leading-none ${item.status === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
+                            {item.usagePercent === Infinity ? '∞' : item.usagePercent.toFixed(1)}%
+                          </p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Tỷ lệ ngân sách</p>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white/80 p-3 rounded-2xl border border-white/50 shadow-sm">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Ngân sách</p>
+                          <p className="text-sm font-black text-slate-700 font-mono">{formatCurrency(item.budget)}</p>
+                        </div>
+                        <div className="bg-white/80 p-3 rounded-2xl border border-white/50 shadow-sm">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Thực chi</p>
+                          <p className={`text-sm font-black font-mono ${item.status === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>{formatCurrency(item.cost)}</p>
+                        </div>
+                        <div className="bg-white/80 p-3 rounded-2xl border border-white/50 shadow-sm">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Chênh lệch</p>
+                          <p className={`text-sm font-black font-mono ${item.excess > 0 ? 'text-red-700' : 'text-emerald-600'}`}>
+                            {item.excess > 0 ? `+${formatCurrency(item.excess)}` : formatCurrency(item.budget - item.cost)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
+
+                  {(overBudgetStats.count === 0 && overBudgetStats.warningCount === 0) && (
+                    <div className="text-center py-16 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
+                      <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                        <BadgeCheck className="w-10 h-10 text-emerald-600" />
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Vận hành an toàn</h3>
+                      <p className="text-sm text-slate-500 font-medium max-w-xs mx-auto">Tất cả chi phí hiện tại đều nằm trong ngưỡng cho phép.</p>
+                    </div>
+                  )}
                </div>
             </div>
 
-            <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                 <Clock className="w-3 h-3" /> Cập nhật lúc {new Date().toLocaleTimeString()}
+              </div>
               <Button 
                   onClick={() => setIsOverBudgetDetailOpen(false)}
-                  className="h-12 px-10 bg-slate-900 hover:bg-black text-white font-black rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-95 uppercase tracking-widest text-xs"
+                  className="h-12 px-12 bg-slate-900 hover:bg-black text-white font-black rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-95 uppercase tracking-widest text-xs"
               >
-                  Đóng cửa sổ
+                  Xác nhận hệ thống
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quản lý Cấu hình Cảnh báo Dialog */}
+        <Dialog open={isAlertManagementOpen} onOpenChange={setIsAlertManagementOpen}>
+          <DialogContent className="max-w-md rounded-[40px] p-0 border-none shadow-2xl bg-white overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="p-8 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-3xl bg-indigo-600 shadow-xl shadow-indigo-100 flex items-center justify-center text-white">
+                  <Settings className="w-7 h-7" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Quản lý Cảnh báo</DialogTitle>
+                  <DialogDescription className="font-bold text-xs uppercase text-slate-400 tracking-widest">Cấu hình tham số hệ thống</DialogDescription>
+                </div>
+              </div>
+
+              <div className="space-y-6 py-4">
+                <div className="space-y-5 p-6 bg-amber-50/50 rounded-3xl border border-amber-100 shadow-sm relative overflow-hidden group">
+                  <div className="absolute -top-10 -right-10 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-600" />
+                      <Label className="font-black text-amber-900 text-[10px] uppercase tracking-widest">Ngưỡng Cảnh báo</Label>
+                    </div>
+                    <Badge className="bg-amber-100 text-amber-700 border-none font-black font-mono text-xs">{budgetWarningThreshold}%</Badge>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="50" 
+                    max="95" 
+                    step="5"
+                    value={budgetWarningThreshold}
+                    onChange={(e) => setBudgetWarningThreshold(parseInt(e.target.value))}
+                    className="w-full h-2 bg-amber-100 rounded-lg appearance-none cursor-pointer accent-amber-600 shadow-inner"
+                  />
+                  <p className="text-[10px] text-amber-700/60 font-medium italic relative z-10">
+                    * Hệ thống gắn nhãn <span className="font-black">WARNING</span> khi chi phí thực của unit chạm mốc này.
+                  </p>
+                </div>
+
+                <div className="space-y-5 p-6 bg-red-50/50 rounded-3xl border border-red-100 shadow-sm relative overflow-hidden group">
+                   <div className="absolute -top-10 -right-10 w-24 h-24 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-2">
+                       <AlertTriangle className="w-4 h-4 text-red-600" />
+                       <Label className="font-black text-red-900 text-[10px] uppercase tracking-widest">Ngưỡng Vượt hạn mức</Label>
+                    </div>
+                    <Badge className="bg-red-100 text-red-700 border-none font-black font-mono text-xs">{budgetCriticalThreshold}%</Badge>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="100" 
+                    max="150" 
+                    step="5"
+                    value={budgetCriticalThreshold}
+                    onChange={(e) => setBudgetCriticalThreshold(parseInt(e.target.value))}
+                    className="w-full h-2 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-600 shadow-inner"
+                  />
+                  <p className="text-[10px] text-red-700/60 font-medium italic relative z-10">
+                    * Hệ thống kích hoạt trạng thái <span className="font-black">CRITICAL</span> và trừ vào tổng excess.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Button 
+                    variant="outline"
+                    className="h-12 rounded-2xl font-black uppercase text-[10px] tracking-widest border-slate-200 text-slate-500 hover:bg-slate-50"
+                    onClick={() => setIsAlertManagementOpen(false)}
+                >
+                  Bỏ qua
+                </Button>
+                <Button 
+                  className="h-12 rounded-2xl bg-indigo-600 text-white font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-all active:scale-[0.98] shadow-lg shadow-indigo-100"
+                  onClick={() => {
+                    setIsAlertManagementOpen(false);
+                    toast.success('Cấu hình cảnh báo hệ thống đã được cập nhật');
+                  }}
+                >
+                  Lưu & Áp dụng
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -14358,6 +14332,7 @@ const AcceptanceManager = React.memo(({
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput 
 }: any) => {
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
+  const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
@@ -14495,25 +14470,25 @@ const AcceptanceManager = React.memo(({
   const filteredAcceptances = useMemo(() => {
     return acceptances.filter((a: any) => {
       const matchesSearch = 
-        (a.projectName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
-        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
-        (a.teamCode || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
+        (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       const isPending = a.status !== 'Đã nghiệm thu';
       return matchesSearch && matchesMonth && isPending;
     });
-  }, [acceptances, acceptanceSearch, acceptanceMonthFilter]);
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter]);
 
   const filteredFinalAcceptances = useMemo(() => {
     return (finalAcceptances || []).filter((a: any) => {
       const matchesSearch = 
-        (a.projectName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
-        (a.teamName || '').toLowerCase().includes(acceptanceSearch.toLowerCase()) ||
-        (a.teamCode || '').toLowerCase().includes(acceptanceSearch.toLowerCase());
+        (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       return matchesSearch && matchesMonth;
     });
-  }, [finalAcceptances, acceptanceSearch, acceptanceMonthFilter]);
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter]);
 
   const pendingTotals = useMemo(() => {
     return filteredAcceptances.reduce((acc, a) => ({
@@ -15032,11 +15007,11 @@ const AcceptanceManager = React.memo(({
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input 
+                  <DebouncedInput 
                     placeholder="Tìm dự án, đội ngũ..." 
                     className="pl-10 h-10 bg-slate-50 border-none rounded-xl text-xs font-bold"
                     value={acceptanceSearch}
-                    onChange={(e) => setAcceptanceSearch(e.target.value)}
+                    onChange={setAcceptanceSearch}
                   />
                 </div>
                 <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>

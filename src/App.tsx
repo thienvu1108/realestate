@@ -4925,9 +4925,7 @@ export default function App() {
 
   const handleAddCost = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalVisa = isAdmin ? Number(visaAmount) : 0;
-    const finalDigital = isAdmin ? Number(digitalAmount) : 0;
-    const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost) + finalVisa + finalDigital;
+    const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost);
     if (!actualProjectId || totalAmount <= 0 || !selectedBudgetId) return;
     const project = projects.find(p => p.id === actualProjectId);
     const budget = budgets.find(b => b.id === selectedBudgetId);
@@ -4971,8 +4969,6 @@ export default function App() {
           posting: Number(posting),
           zaloAds: Number(zaloAds),
           googleAds: Number(googleAds),
-          visaAmount: finalVisa,
-          digitalAmount: finalDigital,
           otherCost: Number(otherCost)
         },
         note: costNote,
@@ -4991,8 +4987,6 @@ export default function App() {
         posting: Number(posting),
         zaloAds: Number(zaloAds),
         googleAds: Number(googleAds),
-        visaAmount: finalVisa,
-        digitalAmount: finalDigital,
         otherCost: Number(otherCost),
         totalAmount,
         note: costNote,
@@ -5002,8 +4996,6 @@ export default function App() {
       setPosting('');
       setZaloAds('');
       setGoogleAds('');
-      setVisaAmount('');
-      setDigitalAmount('');
       setOtherCost('');
       setCostNote('');
       setActualProjectId('');
@@ -12614,14 +12606,6 @@ export default function App() {
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Đăng tin</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(posting)} onChange={handleNumberInputChange(setPosting)} />
                           </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Visa Công ty</Label>
-                            <Input type="text" className="h-9 text-xs font-mono border-blue-100 bg-blue-50/20" placeholder="0" value={formatNumberWithCommas(visaAmount)} onChange={handleNumberInputChange(setVisaAmount)} disabled={!isAdmin} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Digital Agency</Label>
-                            <Input type="text" className="h-9 text-xs font-mono border-purple-100 bg-purple-50/20" placeholder="0" value={formatNumberWithCommas(digitalAmount)} onChange={handleNumberInputChange(setDigitalAmount)} disabled={!isAdmin} />
-                          </div>
                           <div className="space-y-1.5 col-span-2">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase">Khác</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(otherCost)} onChange={handleNumberInputChange(setOtherCost)} />
@@ -12629,7 +12613,7 @@ export default function App() {
                           <div className="col-span-2 pt-3 border-t border-slate-200 flex justify-between items-center">
                             <span className="text-xs font-bold text-slate-600">Tổng cộng:</span>
                             <span className="text-base font-bold text-blue-600 font-mono">
-                              {(Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost) + Number(visaAmount) + Number(digitalAmount)).toLocaleString()} đ
+                              {(Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost)).toLocaleString()} đ
                             </span>
                           </div>
                         </div>
@@ -12929,6 +12913,7 @@ export default function App() {
             <SupportManager 
               isAdmin={isAdmin || isMod} 
               user={user} 
+              userProfile={userProfile}
               supportRequests={supportRequests}
               handleFirestoreError={handleFirestoreError}
             />
@@ -15882,7 +15867,7 @@ const AcceptanceManager = React.memo(({
  * Allows users to submit issues and admins to reply.
  */
 const SupportManager = React.memo(({ 
-  isAdmin, user, supportRequests, handleFirestoreError 
+  isAdmin, user, userProfile, supportRequests, handleFirestoreError 
 }: any) => {
   const [isAddingRequest, setIsAddingRequest] = useState(false);
   const [requestTitle, setRequestTitle] = useState('');
@@ -15901,18 +15886,20 @@ const SupportManager = React.memo(({
     }
 
     try {
-      await addDoc(collection(db, 'supportRequests'), {
-        title: requestTitle,
-        content: requestContent,
-        category: requestCategory,
-        priority: requestPriority,
-        status: 'Chờ xử lý',
-        userId: user.uid,
-        userEmail: user.email,
-        userName: user.displayName || user.email.split('@')[0],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+        await addDoc(collection(db, 'supportRequests'), {
+          title: requestTitle,
+          content: requestContent,
+          category: requestCategory,
+          priority: requestPriority,
+          status: 'Chờ xử lý',
+          userId: user.uid,
+          userEmail: user.email,
+          userName: userProfile?.fullName || user.displayName || user.email.split('@')[0],
+          fullName: userProfile?.fullName || user.displayName || 'N/A',
+          department: userProfile?.teamName || 'Khác',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
 
       setRequestTitle('');
       setRequestContent('');
@@ -15984,8 +15971,17 @@ const SupportManager = React.memo(({
             className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 group"
           >
             <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-            TẠO YÊU CẦU MỚI
+            TẠO HỖ TRỢ
           </Button>
+        )}
+        {isAdmin && (
+           <Button 
+             onClick={() => setIsAddingRequest(true)}
+             className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 group"
+           >
+             <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+             TẠO HỖ TRỢ (ADMIN)
+           </Button>
         )}
       </div>
 
@@ -16031,7 +16027,10 @@ const SupportManager = React.memo(({
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{req.userName}</span>
-                        <span className="text-[8px] font-bold text-slate-400">{req.userEmail?.split('@')[0]}</span>
+                        <div className="flex gap-2">
+                          <span className="text-[8px] font-bold text-slate-400">{req.userEmail?.split('@')[0]}</span>
+                          {req.department && <span className="text-[8px] font-black text-indigo-400 uppercase">| {req.department}</span>}
+                        </div>
                       </div>
                     </div>
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
@@ -16088,11 +16087,22 @@ const SupportManager = React.memo(({
         <DialogContent className="sm:max-w-lg bg-white border-none shadow-2xl p-0 overflow-hidden rounded-[32px]">
           <div className="bg-indigo-600 p-8 text-white relative h-32 flex flex-col justify-end">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
-            <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10">Tạo yêu cầu mới</DialogTitle>
-            <p className="text-indigo-100 text-xs font-medium relative z-10 leading-relaxed uppercase tracking-widest">Gửi thắc mắc hoặc báo lỗi tới ban quản trị</p>
+            <DialogTitle className="text-2xl font-black tracking-tight mb-1 relative z-10">Tạo hỗ trợ mới</DialogTitle>
+            <p className="text-indigo-100 text-xs font-medium relative z-10 leading-relaxed uppercase tracking-widest">Hệ thống tự động ghi nhận thông tin của bạn</p>
           </div>
           
           <div className="p-8 space-y-6">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Người gửi:</span>
+                <span className="text-xs font-bold text-slate-900">{userProfile?.fullName || user.displayName || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phòng ban:</span>
+                <span className="text-xs font-bold text-slate-900">{userProfile?.teamName || 'Khác'}</span>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -16135,10 +16145,10 @@ const SupportManager = React.memo(({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nội dung chi tiết</Label>
+                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Thông tin hỗ trợ</Label>
                 <textarea 
                   className="w-full min-h-[120px] p-4 bg-slate-50 border-none rounded-[20px] text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
-                  placeholder="Mô tả kỹ lỗi bạn gặp phải hoặc thắc mắc cần giải đáp..."
+                  placeholder="Mô tả kỹ nội dung bạn cần hỗ trợ hoặc thắc mắc..."
                   value={requestContent}
                   onChange={(e) => setRequestContent(e.target.value)}
                 />

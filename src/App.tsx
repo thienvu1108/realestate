@@ -574,10 +574,15 @@ export default function App() {
       const data: any = { name: displayMonth };
       
       const monthlyBudget = budgets.filter(b => b.month === month).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const monthlyActual = costs.filter(c => {
+      
+      // Use finalized acceptance cost if available, otherwise use team's cost updates
+      const monthlyFinalAcceptance = (finalAcceptances || []).filter(a => a.month === month).reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
+      
+      const monthlyActual = monthlyFinalAcceptance > 0 ? monthlyFinalAcceptance : costs.filter(c => {
         const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
         return normalizeMonth(mm) === month;
       }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
       const monthlyRevenue = efficiencyReports.filter(r => r.month === month).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
       data['Ngân sách'] = monthlyBudget;
@@ -591,12 +596,20 @@ export default function App() {
   const projectChartData = useMemo(() => {
     return projects.map(p => {
       const projBudgets = budgets.filter(b => b.projectId === p.id && reportMonths.includes(b.month));
+      
+      // Use finalized acceptance cost if available
+      const projFinalAcceptanceTotal = finalAcceptances
+        .filter(a => a.projectId === p.id && reportMonths.includes(a.month))
+        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
+
       const projCosts = costs.filter(c => {
          const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
          return c.projectId === p.id && reportMonths.includes(normalizeMonth(mm));
       });
+      
       const bTotal = projBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const cTotal = projCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const cTotal = projFinalAcceptanceTotal > 0 ? projFinalAcceptanceTotal : projCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      
       return {
         name: p.name,
         budget: bTotal,
@@ -604,23 +617,35 @@ export default function App() {
         revenue: efficiencyReports.filter(r => r.projectId === p.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
       };
     }).filter(d => d.budget > 0 || d.actual > 0).sort((a,b) => b.actual - a.actual);
-  }, [projects, budgets, costs, efficiencyReports, reportMonths]);
+  }, [projects, budgets, costs, finalAcceptances, efficiencyReports, reportMonths]);
 
   const regionChartData = useMemo(() => {
     return regions.map(reg => {
       const regBudgets = budgets.filter(b => b.regionId === reg.id && reportMonths.includes(b.month));
+      
+      const regFinalAcceptanceTotal = finalAcceptances
+        .filter(a => {
+          const project = projects.find(p => p.id === a.projectId);
+          return project?.regionId === reg.id && reportMonths.includes(a.month);
+        })
+        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
+
       const regCosts = costs.filter(c => {
          const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
          return c.regionId === reg.id && reportMonths.includes(normalizeMonth(mm));
       });
+      
+      const bTotal = regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const cTotal = regFinalAcceptanceTotal > 0 ? regFinalAcceptanceTotal : regCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
       return {
         name: reg.name,
-        budget: regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0),
-        actual: regCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0),
+        budget: bTotal,
+        actual: cTotal,
         revenue: efficiencyReports.filter(r => r.regionId === reg.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
       };
     }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [regions, budgets, costs, efficiencyReports, reportMonths]);
+  }, [regions, projects, budgets, costs, finalAcceptances, efficiencyReports, reportMonths]);
 
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoringData, setIsRestoringData] = useState(false);
@@ -629,11 +654,19 @@ export default function App() {
 
   const handleUpdateCost = async (id: string, data: any) => {
     try {
-      await updateDoc(doc(db, 'costs', id), {
+      const docRef = doc(db, 'costs', id);
+      await updateDoc(docRef, {
         ...data,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'UPDATE_COST',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: data
+        })
       });
-      await logAction('UPDATE_COST', id, 'cost', data);
+      await logAction('UPDATE_COST', 'costs', id, data);
       toast.success('Đã cập nhật chi phí');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `costs/${id}`);
@@ -741,7 +774,11 @@ export default function App() {
       if (costReportSort.key === 'team') return (a.teamName || '').localeCompare(b.teamName || '') * factor;
       if (costReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
       if (costReportSort.key === 'implementer') return (a.implementerName || '').localeCompare(b.implementerName || '') * factor;
-      if (costReportSort.key === 'week') return (a.weekNumber - b.weekNumber) * factor;
+      if (costReportSort.key === 'createdAt') {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return (timeA - timeB) * factor;
+      }
       return 0;
     });
   }, [costs, projects, projectMap, teamMap, dataDrivenTeamMap, dataDrivenProjectMap, reportProject, reportTeam, normalizedReportMonths, getMarketingMonth, reportRegion, reportType, reportWeek, isAdmin, isMod, isGDDA, userProfile, costReportSort, user, resolveProjectName, resolveTeamName]);
@@ -752,6 +789,14 @@ export default function App() {
       const bProjectName = resolveProjectName(b.projectId, b.projectName);
       const normalizedBMonth = normalizeMonth(b.month);
       
+      const relatedFinalAcceptance = finalAcceptances.find(a => {
+        const aProjectName = resolveProjectName(a.projectId, a.projectName);
+        if (aProjectName !== bProjectName) return false;
+        const aTeamName = resolveTeamName(a.teamId, a.teamName);
+        if (aTeamName !== bTeamName) return false;
+        return normalizeMonth(a.month) === normalizedBMonth;
+      });
+
       const relatedCosts = costs.filter(c => {
         if (c.budgetId && b.id && c.budgetId === b.id) return true;
         const cProjectName = resolveProjectName(c.projectId, c.projectName);
@@ -762,11 +807,12 @@ export default function App() {
         return normalizeMonth(mMonth) === normalizedBMonth;
       });
 
-      const actualCost = relatedCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const actualCost = relatedFinalAcceptance ? (relatedFinalAcceptance.totalActualCost || 0) : relatedCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
       
       return {
         ...b,
-        actualCost
+        actualCost,
+        isFinalized: !!relatedFinalAcceptance
       };
     }).sort((a, b) => {
       const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
@@ -777,7 +823,7 @@ export default function App() {
       if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
       return 0;
     });
-  }, [filteredBudgets, costs, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, getMarketingMonth, budgetReportSort, resolveProjectName, resolveTeamName]);
+  }, [filteredBudgets, costs, finalAcceptances, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, getMarketingMonth, budgetReportSort, resolveProjectName, resolveTeamName]);
 
   const overBudgetStats = useMemo(() => {
     const pairMap: { [key: string]: { budget: number, cost: number, sales: number, revenue: number, projectName: string, teamName: string, teamId?: string } } = {};
@@ -817,6 +863,33 @@ export default function App() {
       pairMap[key].budget += amount;
     });
 
+    // 2. Final Acceptances (Priority)
+    const finalizedPairs = new Set<string>();
+    (finalAcceptances || []).forEach(a => {
+      const normalizedAMonth = normalizeMonth(a.month);
+      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedAMonth)) return;
+      
+      const aProjectName = resolveProjectName(a.projectId, a.projectName);
+      const aTeamName = resolveTeamName(a.teamId, a.teamName);
+      
+      if (reportProject !== 'all' && a.projectId !== reportProject && aProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && aTeamName !== reportTeam) return;
+      
+      const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
+      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
+      
+      const key = `${aProjectName.trim().toLowerCase()}|${aTeamName.trim().toLowerCase()}`;
+      const compositeKey = `${key}|${normalizedAMonth}`;
+      
+      if (!pairMap[key]) {
+        pairMap[key] = { budget: 0, cost: 0, sales: 0, revenue: 0, projectName: aProjectName, teamName: aTeamName, teamId: a.teamId };
+      }
+      
+      pairMap[key].cost += (a.totalActualCost || 0);
+      finalizedPairs.add(compositeKey);
+    });
+
     costs.forEach(c => {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       const normalizedMMonth = normalizeMonth(mMonth);
@@ -824,6 +897,12 @@ export default function App() {
       
       const cProjectName = resolveProjectName(c.projectId, c.projectName);
       const cTeamName = resolveTeamName(c.teamId, c.teamName);
+
+      const key = `${cProjectName.trim().toLowerCase()}|${cTeamName.trim().toLowerCase()}`;
+      const compositeKey = `${key}|${normalizedMMonth}`;
+      
+      // Skip if this month is finalized
+      if (finalizedPairs.has(compositeKey)) return;
 
       if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
       if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
@@ -836,8 +915,6 @@ export default function App() {
         if (c.weekNumber?.toString() !== reportWeek) return;
       }
 
-      const key = `${cProjectName.trim().toLowerCase()}|${cTeamName.trim().toLowerCase()}`;
-      
       if (!pairMap[key]) {
         pairMap[key] = { 
           budget: 0, 
@@ -1049,7 +1126,16 @@ export default function App() {
       let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
       if (chartTimeType === 'week' && reportWeek !== 'all') teamTotalBudget = teamTotalBudget / 4;
 
-      let teamTotalCost = costs.filter(c => {
+      // Use finalized acceptance cost if available
+      const teamFinalAcceptanceTotal = (finalAcceptances || [])
+        .filter(a => {
+           const matchMonth = reportMonths.length === 0 || reportMonths.includes(a.month);
+           const aTeamName = resolveTeamName(a.teamId, a.teamName);
+           return aTeamName === team && matchMonth;
+        })
+        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
+
+      let teamTotalCost = teamFinalAcceptanceTotal > 0 ? teamFinalAcceptanceTotal : costs.filter(c => {
         const project = projects.find(p => p.id === c.projectId);
         const matchProject = reportProject === 'all' || c.projectId === reportProject;
         const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
@@ -1064,6 +1150,17 @@ export default function App() {
 
       const teamProjectDetails = projects.map(p => {
         const pBudgets = teamBudgets.filter(b => b.projectId === p.id);
+        
+        // Use finalized acceptance cost if available
+        const pFinalAcceptanceTotal = (finalAcceptances || [])
+          .filter(a => {
+            const matchProject = a.projectId === p.id;
+            const matchMonth = reportMonths.length === 0 || reportMonths.includes(a.month);
+            const aTeamName = resolveTeamName(a.teamId, a.teamName);
+            return matchProject && aTeamName === team && matchMonth;
+          })
+          .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
+
         const pCosts = costs.filter(c => {
           const project = projects.find(proj => proj.id === c.projectId);
           const matchProject = c.projectId === p.id;
@@ -1078,7 +1175,7 @@ export default function App() {
         });
 
         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        let pTotalCost = pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        let pTotalCost = pFinalAcceptanceTotal > 0 ? pFinalAcceptanceTotal : pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
         if (chartTimeType === 'week' && reportWeek !== 'all') {
           pTotalBudget = pTotalBudget / 4;
@@ -4831,7 +4928,7 @@ export default function App() {
     const finalVisa = isAdmin ? Number(visaAmount) : 0;
     const finalDigital = isAdmin ? Number(digitalAmount) : 0;
     const totalAmount = Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost) + finalVisa + finalDigital;
-    if (!actualProjectId || totalAmount <= 0 || !costPeriod || !selectedBudgetId) return;
+    if (!actualProjectId || totalAmount <= 0 || !selectedBudgetId) return;
     const project = projects.find(p => p.id === actualProjectId);
     const budget = budgets.find(b => b.id === selectedBudgetId);
     
@@ -4842,7 +4939,19 @@ export default function App() {
     
     const [yearStr] = costBudgetMonth.split('-');
     const year = Number(yearStr);
-    const periodNumber = Number(costPeriod);
+    
+    // Automatically determine period based on current date
+    const now = new Date();
+    const day = now.getDate();
+    let autoPeriod = 1;
+    if (day >= 21) {
+       // Start of a new marketing month (usually counted towards next month)
+       autoPeriod = 1;
+    } else {
+       if (day <= 7) autoPeriod = 2; // Rough estimation or just use time-based logic
+       else if (day <= 14) autoPeriod = 3;
+       else autoPeriod = 4;
+    }
 
     try {
       const docRef = await addDoc(collection(db, 'costs'), {
@@ -4853,7 +4962,7 @@ export default function App() {
         implementerName: budget.implementerName || 'N/A',
         teamName: budget.teamName || 'N/A',
         assignedUserEmail: budget.assignedUserEmail || null,
-        weekNumber: periodNumber, // Using weekNumber field to store periodNumber for compatibility
+        weekNumber: autoPeriod, // Still kept for compatibility but auto-calculated
         year,
         month: costBudgetMonth,
         amount: totalAmount,
@@ -12478,24 +12587,14 @@ export default function App() {
                       )}
 
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ cập nhật</Label>
-                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                              {getPeriodRange(costBudgetMonth, costPeriod)}
-                            </span>
+                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">
+                          <div className="p-2 bg-white rounded-lg shadow-sm">
+                            <Clock className="w-4 h-4 text-blue-600" />
                           </div>
-                          <Select value={costPeriod} onValueChange={setCostPeriod}>
-                            <SelectTrigger className="bg-slate-50 border-slate-200 h-11">
-                              <SelectValue placeholder="Chọn kỳ cập nhật" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">Kỳ 1 (Ngày 21 - 27)</SelectItem>
-                              <SelectItem value="2">Kỳ 2 (Ngày 28 - 04)</SelectItem>
-                              <SelectItem value="3">Kỳ 3 (Ngày 05 - 11)</SelectItem>
-                              <SelectItem value="4">Kỳ 4 (Ngày 12 - 18)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="flex-1">
+                            <Label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-0.5">Thời gian cập nhật</Label>
+                            <p className="text-xs font-bold text-blue-700">Tự động ghi nhận theo thời điểm hiện tại</p>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -12625,10 +12724,10 @@ export default function App() {
                           </TableHead>
                           <TableHead 
                             className="cursor-pointer hover:bg-slate-50 transition-colors"
-                            onClick={() => setCostReportSort(prev => ({ key: 'week', direction: prev.key === 'week' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            onClick={() => setCostReportSort(prev => ({ key: 'createdAt', direction: prev.key === 'createdAt' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
                           >
                             <div className="flex items-center gap-1">
-                              Thời gian <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              Thời gian cập nhật <ArrowUpDown className="w-3 h-3 text-slate-400" />
                             </div>
                           </TableHead>
                           <TableHead 
@@ -12675,7 +12774,9 @@ export default function App() {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs">{c.implementerName}</TableCell>
-                            <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
+                            <TableCell className="text-[10px] font-medium text-slate-500">
+                              {c.createdAt ? format(c.createdAt.toDate ? c.createdAt.toDate() : new Date(c.createdAt), 'HH:mm dd/MM') : 'N/A'}
+                            </TableCell>
                             <TableCell className="text-right font-mono font-medium text-xs">
                               {editingCostId === c.id ? (
                                 <Input 
@@ -14355,8 +14456,8 @@ const AcceptanceManager = React.memo(({
   const [acceptanceProject, setAcceptanceProject] = useState('');
   
   // Dynamic line items (flat list)
-  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
-    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }
+  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; tax?: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
+    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }
   ]);
 
   const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
@@ -14375,19 +14476,19 @@ const AcceptanceManager = React.memo(({
   const [editingBreakdownValues, setEditingBreakdownValues] = useState<Record<string, string>>({});
 
   const addEntry = () => {
-    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
   };
 
   const removeEntry = (id: string) => {
     setEntries(prev => {
       if (prev.length <= 1) {
-        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }];
+        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }];
       }
       return prev.filter(e => e.id !== id);
     });
   };
 
-  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount', value: string) => {
+  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount' | 'tax', value: string) => {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
   };
 
@@ -14396,7 +14497,8 @@ const AcceptanceManager = React.memo(({
       .filter(e => e.channel === channelKey)
       .reduce((sum, item) => {
         const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
-        return sum + val;
+        const taxVal = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
+        return sum + val + taxVal;
       }, 0);
   };
 
@@ -14417,7 +14519,7 @@ const AcceptanceManager = React.memo(({
     items[itemIdx] = {
       ...items[itemIdx],
       isConfirmed: !isCurrentlyConfirmed,
-      finalAmount: !isCurrentlyConfirmed ? items[itemIdx].amount : null
+      finalAmount: !isCurrentlyConfirmed ? (items[itemIdx].amount + (items[itemIdx].tax || 0)) : null
     };
     newBreakdown[channel] = items;
 
@@ -14453,7 +14555,7 @@ const AcceptanceManager = React.memo(({
     let newAfterAcceptanceTotal = 0;
     Object.keys(newBreakdown).forEach(ch => {
       newBreakdown[ch].forEach((it: any) => {
-        newAfterAcceptanceTotal += (it.finalAmount !== undefined && it.finalAmount !== null) ? it.finalAmount : it.amount;
+        newAfterAcceptanceTotal += (it.finalAmount !== undefined && it.finalAmount !== null) ? it.finalAmount : (it.amount + (it.tax || 0));
       });
     });
 
@@ -14562,10 +14664,11 @@ const AcceptanceManager = React.memo(({
       
       channelKeys.forEach(key => {
         processedBreakdown[key] = entries
-          .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== ''))
+          .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''))
           .map(e => ({
             account: e.account,
             amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
+            tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
             isConfirmed: e.isConfirmed || false,
             finalAmount: e.finalAmount !== undefined ? e.finalAmount : null
           }));
@@ -14628,7 +14731,7 @@ const AcceptanceManager = React.memo(({
       // Reset form
       setAcceptanceTeam('');
       setAcceptanceProject('');
-      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
       setAcceptanceRealCost('');
       setVisaAmount('');
       setDigitalAmount('');
@@ -14922,6 +15025,15 @@ const AcceptanceManager = React.memo(({
                             />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">đ</span>
                           </div>
+                          <div className="w-[100px] relative">
+                            <Input 
+                              placeholder="Thuế..." 
+                              className="h-9 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-bold text-amber-600"
+                              value={entry.tax || ''}
+                              onChange={e => updateEntry(entry.id, 'tax', formatCurrencyInput(e.target.value))}
+                            />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold">Thuế</span>
+                          </div>
                           {entries.length > 1 && (
                             <Button 
                               type="button" 
@@ -14941,7 +15053,11 @@ const AcceptanceManager = React.memo(({
                     <div className="p-4 bg-indigo-50 rounded-2xl flex items-center justify-between border border-indigo-100 shadow-sm">
                       <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Tổng chi tạm tính</span>
                       <span className="text-lg font-black text-indigo-700 font-mono italic">
-                        {formatCurrency(entries.reduce((sum, e) => sum + (parseFloat(e.amount.replace(/\./g, '')) || 0), 0))}
+                        {formatCurrency(entries.reduce((sum, e) => {
+                          const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
+                          const t = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+                          return sum + amt + t;
+                        }, 0))}
                       </span>
                     </div>
 
@@ -15256,6 +15372,7 @@ const AcceptanceManager = React.memo(({
                                             channel,
                                             account: item.account || '',
                                             amount: formatCurrencyInput(String(item.amount || 0)),
+                                            tax: formatCurrencyInput(String(item.tax || 0)),
                                             isConfirmed: item.isConfirmed || false,
                                             finalAmount: item.finalAmount
                                           });
@@ -15279,12 +15396,13 @@ const AcceptanceManager = React.memo(({
                                           id: Math.random().toString(36).substring(7),
                                           channel: f.key,
                                           account: 'Hệ thống',
-                                          amount: formatCurrencyInput(String(f.val))
+                                          amount: formatCurrencyInput(String(f.val)),
+                                          tax: ''
                                         });
                                       }
                                     });
                                   }
-                                  setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                                  setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
                                   setAcceptanceStatus(a.status);
                                   setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
                                   setAcceptanceRealCost(formatCurrencyInput(String(a.afterAcceptanceCost)));
@@ -15331,8 +15449,13 @@ const AcceptanceManager = React.memo(({
                                               </div>
                                               <div className="flex items-center gap-4">
                                                 <div className="text-right">
-                                                  <p className="text-[10px] font-black text-slate-400 line-through opacity-50">{formatCurrency(item.amount)}</p>
-                                                  <p className="text-xs font-black text-indigo-600">{formatCurrency(item.finalAmount || item.amount)}</p>
+                                                  <p className="text-[10px] font-black text-slate-400 line-through opacity-50">
+                                                    {formatCurrency(item.amount)}
+                                                    {item.tax > 0 && <span className="text-amber-600 ml-1">({formatCurrency(item.tax)} Thuế)</span>}
+                                                  </p>
+                                                  <p className="text-xs font-black text-indigo-600">
+                                                    {formatCurrency(item.finalAmount !== null && item.finalAmount !== undefined ? item.finalAmount : (item.amount + (item.tax || 0)))}
+                                                  </p>
                                                 </div>
                                                 <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100">
                                                   <Button 
@@ -15345,7 +15468,7 @@ const AcceptanceManager = React.memo(({
                                                   </Button>
                                                   <Input 
                                                     className="w-24 h-6 text-right text-[10px] font-black font-mono border-none bg-slate-50 rounded"
-                                                    value={editingBreakdownValues[`${a.id}-${channel}-${i}`] || formatCurrencyInput(String(item.finalAmount || item.amount))}
+                                                    value={editingBreakdownValues[`${a.id}-${channel}-${i}`] || formatCurrencyInput(String(item.finalAmount !== null && item.finalAmount !== undefined ? item.finalAmount : (item.amount + (item.tax || 0))))}
                                                     onChange={e => {
                                                       const val = formatCurrencyInput(e.target.value);
                                                       setEditingBreakdownValues(prev => ({...prev, [`${a.id}-${channel}-${i}`]: val}));

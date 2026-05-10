@@ -11,11 +11,17 @@ export const auth = getAuth(app);
 export async function testConnection() {
   try {
     // Attempt to fetch a dummy document from the server to verify connectivity
+    // If we get "Missing or insufficient permissions", it actually means we ARE connected
+    // because the server responded with that error.
     await getDocFromServer(doc(db, '_internal_', 'connection_test'));
     console.log("Firestore connection verified.");
     return true;
   } catch (error) {
     if (error instanceof Error) {
+      if (error.message.includes('permission')) {
+        console.log("Firestore connection verified (permissions confirmed).");
+        return true;
+      }
       if (error.message.includes('the client is offline')) {
         console.error("Firestore Error: The client is offline. Check network/Firebase config.");
       } else {

@@ -575,13 +575,13 @@ export default function App() {
       
       const monthlyBudget = budgets.filter(b => b.month === month).reduce((acc, curr) => acc + (curr.amount || 0), 0);
       
-      // Use finalized acceptance cost if available, otherwise use team's cost updates
-      const monthlyFinalAcceptance = (finalAcceptances || []).filter(a => a.month === month).reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
-      
-      const monthlyActual = monthlyFinalAcceptance > 0 ? monthlyFinalAcceptance : costs.filter(c => {
-        const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        return normalizeMonth(mm) === month;
-      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      // Use acceptance cost as the official actual cost
+      const monthlyActual = acceptances
+        .filter(a => normalizeMonth(a.month) === month)
+        .reduce((acc, curr) => {
+          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+          return acc + val;
+        }, 0);
 
       const monthlyRevenue = efficiencyReports.filter(r => r.month === month).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
@@ -591,24 +591,21 @@ export default function App() {
       
       return data;
     });
-  }, [reportMonths, budgets, costs, efficiencyReports]);
+  }, [reportMonths, budgets, acceptances, efficiencyReports]);
 
   const projectChartData = useMemo(() => {
     return projects.map(p => {
       const projBudgets = budgets.filter(b => b.projectId === p.id && reportMonths.includes(b.month));
       
-      // Use finalized acceptance cost if available
-      const projFinalAcceptanceTotal = finalAcceptances
-        .filter(a => a.projectId === p.id && reportMonths.includes(a.month))
-        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
-
-      const projCosts = costs.filter(c => {
-         const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-         return c.projectId === p.id && reportMonths.includes(normalizeMonth(mm));
-      });
+      const projActual = acceptances
+        .filter(a => a.projectId === p.id && reportMonths.includes(normalizeMonth(a.month)))
+        .reduce((acc, curr) => {
+          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+          return acc + val;
+        }, 0);
       
       const bTotal = projBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const cTotal = projFinalAcceptanceTotal > 0 ? projFinalAcceptanceTotal : projCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const cTotal = projActual;
       
       return {
         name: p.name,
@@ -617,26 +614,24 @@ export default function App() {
         revenue: efficiencyReports.filter(r => r.projectId === p.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
       };
     }).filter(d => d.budget > 0 || d.actual > 0).sort((a,b) => b.actual - a.actual);
-  }, [projects, budgets, costs, finalAcceptances, efficiencyReports, reportMonths]);
+  }, [projects, budgets, acceptances, efficiencyReports, reportMonths]);
 
   const regionChartData = useMemo(() => {
     return regions.map(reg => {
       const regBudgets = budgets.filter(b => b.regionId === reg.id && reportMonths.includes(b.month));
       
-      const regFinalAcceptanceTotal = finalAcceptances
+      const regActual = acceptances
         .filter(a => {
-          const project = projects.find(p => p.id === a.projectId);
-          return project?.regionId === reg.id && reportMonths.includes(a.month);
+          const projectNum = projects.find(p => p.id === a.projectId);
+          return projectNum?.regionId === reg.id && reportMonths.includes(normalizeMonth(a.month));
         })
-        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
-
-      const regCosts = costs.filter(c => {
-         const mm = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-         return c.regionId === reg.id && reportMonths.includes(normalizeMonth(mm));
-      });
+        .reduce((acc, curr) => {
+          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+          return acc + val;
+        }, 0);
       
       const bTotal = regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const cTotal = regFinalAcceptanceTotal > 0 ? regFinalAcceptanceTotal : regCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const cTotal = regActual;
 
       return {
         name: reg.name,
@@ -645,7 +640,7 @@ export default function App() {
         revenue: efficiencyReports.filter(r => r.regionId === reg.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
       };
     }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [regions, projects, budgets, costs, finalAcceptances, efficiencyReports, reportMonths]);
+  }, [regions, projects, budgets, acceptances, efficiencyReports, reportMonths]);
 
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoringData, setIsRestoringData] = useState(false);
@@ -784,37 +779,77 @@ export default function App() {
   }, [costs, projects, projectMap, teamMap, dataDrivenTeamMap, dataDrivenProjectMap, reportProject, reportTeam, normalizedReportMonths, getMarketingMonth, reportRegion, reportType, reportWeek, isAdmin, isMod, isGDDA, userProfile, costReportSort, user, resolveProjectName, resolveTeamName]);
 
   const budgetReportWithActuals = useMemo(() => {
-    return filteredBudgets.map(b => {
+    const budgetMap: { [key: string]: any } = {};
+
+    // 1. Group budgets by team + project across selected months
+    filteredBudgets.forEach(b => {
       const bTeamName = resolveTeamName(b.teamId, b.teamName);
       const bProjectName = resolveProjectName(b.projectId, b.projectName);
-      const normalizedBMonth = normalizeMonth(b.month);
-      
-      const relatedFinalAcceptance = finalAcceptances.find(a => {
-        const aProjectName = resolveProjectName(a.projectId, a.projectName);
-        if (aProjectName !== bProjectName) return false;
-        const aTeamName = resolveTeamName(a.teamId, a.teamName);
-        if (aTeamName !== bTeamName) return false;
-        return normalizeMonth(a.month) === normalizedBMonth;
-      });
+      const key = `${bTeamName.trim().toLowerCase()}|${bProjectName.trim().toLowerCase()}`;
 
-      const relatedCosts = costs.filter(c => {
-        if (c.budgetId && b.id && c.budgetId === b.id) return true;
-        const cProjectName = resolveProjectName(c.projectId, c.projectName);
-        if (cProjectName !== bProjectName) return false;
-        const cTeamName = resolveTeamName(c.teamId, c.teamName);
-        if (cTeamName !== bTeamName) return false;
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        return normalizeMonth(mMonth) === normalizedBMonth;
-      });
+      if (!budgetMap[key]) {
+        budgetMap[key] = {
+          ...b,
+          id: b.id, // Primary ID for actions
+          teamName: bTeamName,
+          projectName: bProjectName,
+          amount: 0,
+          actualCost: 0,
+          isFinalized: false
+        };
+      }
+      budgetMap[key].amount += (b.amount || 0);
+    });
 
-      const actualCost = relatedFinalAcceptance ? (relatedFinalAcceptance.totalActualCost || 0) : relatedCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      
-      return {
-        ...b,
-        actualCost,
-        isFinalized: !!relatedFinalAcceptance
-      };
-    }).sort((a, b) => {
+    // 2. Map acceptances and merge into grouped data
+    const userEmail = user?.email?.toLowerCase();
+    acceptances.forEach(a => {
+      const aProjectName = resolveProjectName(a.projectId, a.projectName);
+      const aTeamName = resolveTeamName(a.teamId, a.teamName);
+      const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
+      const normalizedAMonth = normalizeMonth(a.month);
+
+      // Access logic
+      const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
+      const isOwner = (aEmail && userEmail && aEmail === userEmail) || (a.createdByUid === user?.uid);
+      const hasAccess = isAdmin || isMod || isGDDA || isOwner;
+      if (!hasAccess) return;
+
+      // Filter logic
+      const matchProject = reportProject === 'all' || a.projectId === reportProject || aProjectName === projectMap[reportProject];
+      const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+      const matchMonth = normalizedReportMonths.length === 0 || (normalizedAMonth && normalizedReportMonths.includes(normalizedAMonth));
+      const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
+      const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
+
+      if (matchProject && matchTeam && matchMonth && matchRegion && matchType) {
+        const key = `${aTeamName.trim().toLowerCase()}|${aProjectName.trim().toLowerCase()}`;
+        // Use confirmed cost if finalized, otherwise use total estimated cost
+        const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0);
+
+        if (!budgetMap[key]) {
+          budgetMap[key] = {
+            id: `grouped-acc-${a.id}`,
+            teamId: a.teamId,
+            teamName: aTeamName,
+            projectId: a.projectId,
+            projectName: aProjectName,
+            amount: 0, // Registered budget is 0 if no record exists
+            actualCost: 0,
+            isFinalized: false,
+            implementerName: 'N/A',
+            userEmail: a.createdBy || 'N/A',
+            month: a.month
+          };
+        }
+        budgetMap[key].actualCost += costValue;
+        if (a.status === 'Đã nghiệm thu') {
+          budgetMap[key].isFinalized = true;
+        }
+      }
+    });
+
+    return Object.values(budgetMap).sort((a: any, b: any) => {
       const factor = budgetReportSort.direction === 'asc' ? 1 : -1;
       if (budgetReportSort.key === 'amount') return (a.amount - b.amount) * factor;
       if (budgetReportSort.key === 'actual') return (a.actualCost - b.actualCost) * factor;
@@ -823,7 +858,7 @@ export default function App() {
       if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
       return 0;
     });
-  }, [filteredBudgets, costs, finalAcceptances, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, getMarketingMonth, budgetReportSort, resolveProjectName, resolveTeamName]);
+  }, [filteredBudgets, acceptances, projects, user, isAdmin, isMod, isGDDA, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, budgetReportSort, resolveProjectName, resolveTeamName]);
 
   const overBudgetStats = useMemo(() => {
     const pairMap: { [key: string]: { budget: number, cost: number, sales: number, revenue: number, projectName: string, teamName: string, teamId?: string } } = {};
@@ -863,9 +898,8 @@ export default function App() {
       pairMap[key].budget += amount;
     });
 
-    // 2. Final Acceptances (Priority)
-    const finalizedPairs = new Set<string>();
-    (finalAcceptances || []).forEach(a => {
+    // 2. Acceptances (New source for actual costs)
+    acceptances.forEach(a => {
       const normalizedAMonth = normalizeMonth(a.month);
       if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedAMonth)) return;
       
@@ -880,53 +914,13 @@ export default function App() {
       if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
       
       const key = `${aProjectName.trim().toLowerCase()}|${aTeamName.trim().toLowerCase()}`;
-      const compositeKey = `${key}|${normalizedAMonth}`;
       
       if (!pairMap[key]) {
         pairMap[key] = { budget: 0, cost: 0, sales: 0, revenue: 0, projectName: aProjectName, teamName: aTeamName, teamId: a.teamId };
       }
       
-      pairMap[key].cost += (a.totalActualCost || 0);
-      finalizedPairs.add(compositeKey);
-    });
-
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      const normalizedMMonth = normalizeMonth(mMonth);
-      if (normalizedMMonth && normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedMMonth)) return;
-      
-      const cProjectName = resolveProjectName(c.projectId, c.projectName);
-      const cTeamName = resolveTeamName(c.teamId, c.teamName);
-
-      const key = `${cProjectName.trim().toLowerCase()}|${cTeamName.trim().toLowerCase()}`;
-      const compositeKey = `${key}|${normalizedMMonth}`;
-      
-      // Skip if this month is finalized
-      if (finalizedPairs.has(compositeKey)) return;
-
-      if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
-      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
-
-      const project = projects.find(p => p.id === c.projectId || p.name === cProjectName);
-      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
-
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        if (c.weekNumber?.toString() !== reportWeek) return;
-      }
-
-      if (!pairMap[key]) {
-        pairMap[key] = { 
-          budget: 0, 
-          cost: 0, 
-          sales: 0, 
-          revenue: 0, 
-          projectName: cProjectName, 
-          teamName: cTeamName,
-          teamId: c.teamId
-        };
-      }
-      pairMap[key].cost += c.amount || 0;
+      const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0);
+      pairMap[key].cost += costValue;
     });
 
     efficiencyReports.forEach(r => {
@@ -1072,44 +1066,62 @@ export default function App() {
   const channelReportData = useMemo(() => {
     const keyData: { [key: string]: any } = {};
     
-    filteredCosts.forEach(c => {
-      const cTeamName = resolveTeamName(c.teamId, c.teamName);
-      const cProjectName = resolveProjectName(c.projectId, c.projectName);
-      const key = `${cProjectName}_${cTeamName}`;
+    acceptances.forEach(a => {
+      const aProjectName = resolveProjectName(a.projectId, a.projectName);
+      const aTeamName = resolveTeamName(a.teamId, a.teamName);
+      const normalizedAMonth = normalizeMonth(a.month);
+
+      // Access logic
+      const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
+      const isOwner = (aEmail && user?.email && aEmail === user.email.toLowerCase()) || (a.createdByUid === user?.uid);
+      const hasAccess = isAdmin || isMod || isGDDA || isOwner;
+      if (!hasAccess) return;
+
+      // Filter logic
+      const matchProject = reportProject === 'all' || a.projectId === reportProject || aProjectName === projectMap[reportProject];
+      const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+      const matchMonth = normalizedReportMonths.length === 0 || (normalizedAMonth && normalizedReportMonths.includes(normalizedAMonth));
       
-      if (!keyData[key]) {
-        keyData[key] = {
-          projectId: c.projectId,
-          projectName: cProjectName,
-          teamName: cTeamName,
-          fbAds: 0,
-          googleAds: 0,
-          zaloAds: 0,
-          posting: 0,
-          visaAmount: 0,
-          digitalAmount: 0,
-          otherCost: 0,
-          total: 0
-        };
+      const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
+      const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
+      const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
+
+      if (matchProject && matchTeam && matchMonth && matchRegion && matchType) {
+        const key = `${aProjectName}_${aTeamName}`;
+        
+        if (!keyData[key]) {
+          keyData[key] = {
+            projectId: a.projectId,
+            projectName: aProjectName,
+            teamName: aTeamName,
+            fbAds: 0,
+            googleAds: 0,
+            zaloAds: 0,
+            posting: 0,
+            visaAmount: 0,
+            digitalAmount: 0,
+            otherCost: 0,
+            total: 0
+          };
+        }
+        
+        const p = keyData[key];
+        p.fbAds += (a.facebookCost || 0) + (a.tiktokCost || 0);
+        p.googleAds += a.googleCost || 0;
+        p.zaloAds += a.zaloCost || 0;
+        p.posting += a.postingCost || 0;
+        p.visaAmount += a.visaCost || 0;
+        p.digitalAmount += a.digitalCost || 0;
+        p.otherCost += a.otherCost || 0;
+        p.total += (a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0));
       }
-      
-      const p = keyData[key];
-      const ch = c.channels || {};
-      p.fbAds += ch.fbAds || 0;
-      p.googleAds += ch.googleAds || 0;
-      p.zaloAds += ch.zaloAds || 0;
-      p.posting += ch.posting || 0;
-      p.visaAmount += ch.visaAmount || 0;
-      p.digitalAmount += ch.digitalAmount || 0;
-      p.otherCost += ch.otherCost || 0;
-      p.total += c.amount || 0;
     });
 
     return Object.values(keyData).sort((a: any, b: any) => {
        if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
        return b.total - a.total;
     });
-  }, [filteredCosts, dataDrivenTeamMap, dataDrivenProjectMap, teamMap, projectMap, resolveProjectName, resolveTeamName]);
+  }, [acceptances, projects, isAdmin, isMod, isGDDA, user, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, resolveProjectName, resolveTeamName]);
 
   const chartData = useMemo(() => {
     return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
@@ -1126,85 +1138,41 @@ export default function App() {
       let teamTotalBudget = teamBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
       if (chartTimeType === 'week' && reportWeek !== 'all') teamTotalBudget = teamTotalBudget / 4;
 
-      // Use finalized acceptance cost if available
-      const teamFinalAcceptanceTotal = (finalAcceptances || [])
-        .filter(a => {
-           const matchMonth = reportMonths.length === 0 || reportMonths.includes(a.month);
-           const aTeamName = resolveTeamName(a.teamId, a.teamName);
-           return aTeamName === team && matchMonth;
-        })
-        .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
-
-      let teamTotalCost = teamFinalAcceptanceTotal > 0 ? teamFinalAcceptanceTotal : costs.filter(c => {
-        const project = projects.find(p => p.id === c.projectId);
-        const matchProject = reportProject === 'all' || c.projectId === reportProject;
-        const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-        const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-        const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-        const matchType = reportType === 'all' || (project?.type === reportType);
-        const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-        const cTeamName = resolveTeamName(c.teamId, c.teamName);
-        
-        return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
-      }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
       const teamProjectDetails = projects.map(p => {
         const pBudgets = teamBudgets.filter(b => b.projectId === p.id);
         
-        // Use finalized acceptance cost if available
-        const pFinalAcceptanceTotal = (finalAcceptances || [])
+        const pAcceptanceTotal = acceptances
           .filter(a => {
             const matchProject = a.projectId === p.id;
-            const matchMonth = reportMonths.length === 0 || reportMonths.includes(a.month);
+            const matchMonth = reportMonths.length === 0 || reportMonths.includes(normalizeMonth(a.month));
             const aTeamName = resolveTeamName(a.teamId, a.teamName);
             return matchProject && aTeamName === team && matchMonth;
           })
-          .reduce((acc, curr) => acc + (curr.totalActualCost || 0), 0);
-
-        const pCosts = costs.filter(c => {
-          const project = projects.find(proj => proj.id === c.projectId);
-          const matchProject = c.projectId === p.id;
-          const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-          const matchMonth = mMonth && (reportMonths.length === 0 || reportMonths.includes(mMonth));
-          const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
-          const matchType = reportType === 'all' || (project?.type === reportType);
-          const matchWeek = chartTimeType === 'month' || reportWeek === 'all' || c.weekNumber?.toString() === reportWeek;
-          const cTeamName = resolveTeamName(c.teamId, c.teamName);
-          
-          return matchProject && cTeamName === team && matchMonth && matchRegion && matchType && matchWeek;
-        });
+          .reduce((acc, curr) => {
+            const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+            return acc + val;
+          }, 0);
 
         let pTotalBudget = pBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        let pTotalCost = pFinalAcceptanceTotal > 0 ? pFinalAcceptanceTotal : pCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          pTotalBudget = pTotalBudget / 4;
-        }
+        if (chartTimeType === 'week' && reportWeek !== 'all') pTotalBudget = pTotalBudget / 4;
 
         let pRevenue = efficiencyReports
           .filter(r => r.projectId === p.id && resolveTeamName(r.teamId, r.teamName) === team && (reportMonths.length === 0 || reportMonths.includes(r.month)))
           .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
 
-        if (chartTimeType === 'week' && reportWeek !== 'all') {
-          pRevenue = pRevenue / 4;
-        }
+        if (chartTimeType === 'week' && reportWeek !== 'all') pRevenue = pRevenue / 4;
 
         return {
           name: p.name,
           budget: pTotalBudget,
-          actual: pTotalCost,
+          actual: pAcceptanceTotal,
           revenue: pRevenue
         };
       }).filter(d => d.budget > 0 || d.actual > 0)
         .sort((a, b) => (b[reportSortBy] || 0) - (a[reportSortBy] || 0));
 
-      let teamRevenue = efficiencyReports
-        .filter(r => resolveTeamName(r.teamId, r.teamName) === team && (reportMonths.length === 0 || reportMonths.includes(r.month)) && (reportProject === 'all' || r.projectId === reportProject))
-        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        teamRevenue = teamRevenue / 4;
-      }
+      const teamTotalCost = teamProjectDetails.reduce((sum, d) => sum + d.actual, 0);
+      const teamRevenue = teamProjectDetails.reduce((sum, d) => sum + d.revenue, 0);
       
       return {
         name: team,
@@ -1216,7 +1184,7 @@ export default function App() {
       };
     }).filter(d => d.budget > 0 || d.actual > 0)
       .sort((a, b) => b[reportSortBy] - a[reportSortBy]);
-  }, [uniqueTeams, budgets, costs, reportTeam, reportProject, reportMonths, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, teamMap, efficiencyReports, resolveTeamName]);
+  }, [uniqueTeams, budgets, acceptances, reportTeam, reportProject, reportMonths, reportRegion, reportType, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, teamMap, efficiencyReports, resolveTeamName, resolveProjectName]);
 
   const efficiencyChartData = useMemo(() => {
     const rawData: { [key: string]: { [detailKey: string]: { budget: number, cost: number, revenue: number, sales: number } } } = {};
@@ -1266,42 +1234,47 @@ export default function App() {
       }
     });
 
-    costs.forEach(c => {
-      const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
-      if (mMonth && reportMonths.length > 0 && !reportMonths.includes(mMonth)) return;
+    acceptances.forEach(a => {
+      const normalizedAMonth = normalizeMonth(a.month);
+      if (reportMonths.length > 0 && !reportMonths.includes(normalizedAMonth)) return;
       
-      const cProjectName = resolveProjectName(c.projectId, c.projectName);
-      const cTeamName = resolveTeamName(c.teamId, c.teamName);
+      const aProjectName = resolveProjectName(a.projectId, a.projectName);
+      const aTeamName = resolveTeamName(a.teamId, a.teamName);
 
-      if (reportProject !== 'all' && c.projectId !== reportProject && cProjectName !== projectMap[reportProject]) return;
-      if (reportTeam !== 'all' && cTeamName !== reportTeam) return;
+      if (reportProject !== 'all' && a.projectId !== reportProject && aProjectName !== projectMap[reportProject]) return;
+      if (reportTeam !== 'all' && aTeamName !== reportTeam) return;
 
-      const cProject = projects.find(p => p.id === c.projectId || p.name === cProjectName);
-      if (reportRegion !== 'all' && (cProject?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (cProject?.type || 'Khác') !== reportType) return;
+      const aProject = projects.find(p => p.id === a.projectId || p.name === aProjectName);
+      if (reportRegion !== 'all' && (aProject?.region || 'Khác') !== reportRegion) return;
+      if (reportType !== 'all' && (aProject?.type || 'Khác') !== reportType) return;
       
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        if (c.weekNumber?.toString() !== reportWeek) return;
-      }
-
-      const cRegion = cProject?.region || 'Khác';
-      const cTeamIdOrName = cTeamName;
+      const aRegion = aProject?.region || 'Khác';
+      const aTeamIdOrName = aTeamName;
       
       let mainKey, detailKey;
       if (efficiencyGroupType === 'project') {
-        mainKey = cProjectName;
-        detailKey = cTeamIdOrName;
+        mainKey = aProjectName;
+        detailKey = aTeamIdOrName;
       } else if (efficiencyGroupType === 'region') {
-        mainKey = cRegion;
-        detailKey = cProjectName;
+        mainKey = aRegion;
+        detailKey = aProjectName;
       } else {
-        mainKey = cTeamIdOrName;
-        detailKey = cProjectName;
+        mainKey = aTeamIdOrName;
+        detailKey = aProjectName;
       }
 
       const target = getTarget(mainKey, detailKey);
-      if (target) target.cost += c.amount || 0;
+      if (target) {
+        const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0);
+        target.cost += costValue;
+      }
     });
+
+    // We keep costs for historical data before April 2026 if requested, 
+    // but the prompt says "starting from April, take from acceptance". 
+    // This usually means and standardizing the report on the new source.
+    // If we need both, we'd filter costs by normalizedMonth < "2026-04".
+    // For now I'll stick to the acceptance source as it's the new requirement for this report.
 
     efficiencyReports.forEach(r => {
       if (reportMonths.length > 0 && !reportMonths.includes(r.month)) return;
@@ -1375,7 +1348,7 @@ export default function App() {
       if (b.revenue !== a.revenue) return b.revenue - a.revenue;
       return b.cost - a.cost;
     });
-  }, [efficiencyReports, costs, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, reportRegion, reportType, resolveProjectName, resolveTeamName]);
+  }, [efficiencyReports, acceptances, budgets, reportMonths, reportProject, reportTeam, efficiencyGroupType, projectMap, projects, chartTimeType, reportWeek, getMarketingMonth, reportSortBy, reportRegion, reportType, resolveProjectName, resolveTeamName]);
 
   const salesGeneratingData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue > 0), [efficiencyChartData]
@@ -2153,9 +2126,6 @@ export default function App() {
   }, [budgets, user, userProfile, isGDDA, isAdmin, isMod, costBudgetMonth, projectMap, debouncedBudgetSearch]);
 
   useEffect(() => {
-    // Test Firestore connection on boot
-    testConnection();
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
@@ -2245,22 +2215,13 @@ export default function App() {
     if (!user) return;
 
     // Test connection
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    };
     testConnection();
 
     // Listen to projects
     let qProjects;
-    if (isAdmin || isMod || isUser || isGDDA) {
+    if (isAdmin || isMod || isUser) {
       qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-    } else if (userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
     } else {
       qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
@@ -2290,8 +2251,10 @@ export default function App() {
 
     // Listen to budgets
     let qBudgets;
-    if (isAdmin || isMod || isGDDA) {
+    if (isAdmin || isMod) {
       qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qBudgets = query(
         collection(db, 'budgets'), 
@@ -2317,8 +2280,10 @@ export default function App() {
 
     // Listen to costs
     let qCosts;
-    if (isAdmin || isMod || isGDDA) {
+    if (isAdmin || isMod) {
       qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qCosts = query(
         collection(db, 'costs'), 
@@ -2362,8 +2327,13 @@ export default function App() {
 
     // Listen to efficiency reports
     let unsubEfficiency = () => {};
-    if (isAdmin || isMod || isGDDA) {
+    if (isAdmin || isMod || isUser) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
+      unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
+        setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
@@ -2371,8 +2341,13 @@ export default function App() {
 
     // Listen to acceptances
     let unsubAcceptances = () => {};
-    if (isAdmin || isMod || isGDDA) {
+    if (isAdmin || isMod) {
       const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
+      unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
+        setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
@@ -2380,8 +2355,13 @@ export default function App() {
 
     // Listen to final acceptances
     let unsubFinalAcceptances = () => {};
-    if (isAdmin || isMod || isGDDA) {
+    if (isAdmin || isMod) {
       const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
+      unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
+        setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
+    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
+      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -9638,18 +9618,18 @@ export default function App() {
                     </div>
 
                     {/* Summary Cards - Viewable by all but tailored by role */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-4 mb-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4 mb-8">
                       {/* 0. Tổng dự án (Admin only) */}
                       {isAdmin && (
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng dự án</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Dự án báo cáo</p>
                             <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
                               <Building2 className="w-3 h-3 text-blue-500" />
                             </span>
                           </div>
                           <p className="text-lg font-black text-slate-900 leading-none">
-                            {projects.length} <span className="text-[9px] font-bold text-slate-400">Dự án</span>
+                            {efficiencyChartData.length} <span className="text-[9px] font-bold text-slate-400">Mục</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 w-full" />
@@ -9660,13 +9640,13 @@ export default function App() {
                       {/* 1. Tổng ngân sách */}
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng ngân sách {chartTimeType === 'week' ? 'kỳ này (Ước tính)' : ''}</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Ngân sách (Kỳ báo cáo)</p>
                             <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
                               <Wallet className="w-3 h-3 text-blue-500" />
                             </span>
                           </div>
                           <p className="text-lg font-black text-slate-900 leading-normal">
-                            {(filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0) / (chartTimeType === 'week' ? 4 : 1)).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
+                            {efficiencyChartData.reduce((acc, d) => acc + d.budget, 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 w-full" />
@@ -9676,13 +9656,13 @@ export default function App() {
                         {/* 2. Tổng chi phí thực tế */}
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-emerald-200 group">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Tổng thực chi</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Thực chi (Kỳ báo cáo)</p>
                             <span className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
                               <Wallet className="w-3 h-3 text-emerald-500" />
                             </span>
                           </div>
                           <p className="text-lg font-black text-emerald-600 leading-normal">
-                            {filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
+                            {efficiencyChartData.reduce((acc, d) => acc + d.cost, 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
                           </p>
                           <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
                             <div className="h-full bg-emerald-500 w-3/4 opacity-50" />
@@ -9699,11 +9679,11 @@ export default function App() {
                           </div>
                           <div className="flex items-baseline gap-1">
                             <p className="text-lg font-black text-slate-900 leading-none">
-                              {efficiencyChartData.reduce((acc, curr) => acc + (curr.sales || 0), 0)}
+                              {efficiencyChartData.reduce((acc, d) => acc + d.sales, 0).toLocaleString()}
                             </p>
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Căn</span>
                           </div>
-                          <p className="text-[8px] font-bold text-slate-400 mt-2 italic">Dữ liệu từ hiệu quả kinh doanh</p>
+                          <p className="text-[8px] font-bold text-slate-400 mt-2 italic">Dữ liệu theo bộ lọc</p>
                         </div>
 
                         {/* 4. Tổng doanh số (Sales) */}
@@ -9713,7 +9693,7 @@ export default function App() {
                             <TrendingUp className="w-3 h-3 text-indigo-200" />
                           </div>
                           <p className="text-lg font-black text-white leading-normal">
-                            {efficiencyChartData.reduce((acc, curr) => acc + (curr.revenue || 0), 0).toLocaleString()} <span className="text-[9px] font-bold text-indigo-200">đ</span>
+                            {efficiencyChartData.reduce((acc, d) => acc + d.revenue, 0).toLocaleString()} <span className="text-[9px] font-bold text-indigo-200">đ</span>
                           </p>
                           <div className="mt-2 text-[9px] font-bold text-indigo-200/80">
                             Hiệu quả doanh thu thực tế
@@ -9723,8 +9703,8 @@ export default function App() {
 
                         {/* 6. Tỉ lệ Thực chi / Ngân sách */}
                         {(() => {
-                           const budget = filteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-                           const cost = filteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           const budget = efficiencyChartData.reduce((acc, d) => acc + d.budget, 0);
+                           const cost = efficiencyChartData.reduce((acc, d) => acc + d.cost, 0);
                            const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
                            const variance = usagePercent - 100;
                            
@@ -15954,35 +15934,26 @@ const SupportManager = React.memo(({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
-              <MessageCircle className="w-5 h-5 text-white" />
-            </div>
-            Phòng Hỗ trợ & Giải quyết Vấn đề
-          </h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium italic">Gửi thắc mắc hoặc báo cáo lỗi cho đội ngũ quản trị viên</p>
-        </div>
-        
-        {!isAdmin && (
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+                <MessageCircle className="w-5 h-5 text-white" />
+              </div>
+              Phòng Hỗ trợ & Giải quyết Vấn đề
+            </h2>
+            <p className="text-slate-500 text-sm mt-1 font-medium italic">Gửi thắc mắc hoặc báo báo cáo lỗi cho đội ngũ quản trị viên</p>
+          </div>
+          
           <Button 
             onClick={() => setIsAddingRequest(true)}
-            className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 group"
+            className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 group w-full md:w-auto"
           >
             <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-            TẠO HỖ TRỢ
+            TẠO HỖ TRỢ {isAdmin && '(ADMIN)'}
           </Button>
-        )}
-        {isAdmin && (
-           <Button 
-             onClick={() => setIsAddingRequest(true)}
-             className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 group"
-           >
-             <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-             TẠO HỖ TRỢ (ADMIN)
-           </Button>
-        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">

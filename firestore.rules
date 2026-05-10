@@ -70,34 +70,67 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Internal / Connection Test
+    // ===============================================================
+    match /_internal_/connection_test {
+      allow read: if isAuthenticated();
+    }
+
+    match /test/connection {
+      allow read: if isAuthenticated();
+    }
+
+    // ===============================================================
     // Projects
     // ===============================================================
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             (!('projectCode' in data) || (data.projectCode is string && data.projectCode.size() <= 50));
+    }
+
     match /projects/{projectId} {
       allow read: if canViewProject(projectId);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isAdmin() && isValidProject(incoming());
+      allow update: if isAdmin() && isValidProject(incoming()) && (
+        // Identity protection: immutable fields if needed, but here mostly just admin update
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'projectCode', 'description', 'region', 'regionId', 'type', 'typeId', 'updatedAt'])
+      );
       allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Teams
     // ===============================================================
+    function isValidTeam(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200;
+    }
+
     match /teams/{teamId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isAdmin() && isValidTeam(incoming());
+      allow update: if isAdmin() && isValidTeam(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'teamCode', 'updatedAt'])
+      );
       allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Users
     // ===============================================================
+    function isValidUser(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             (!('role' in data) || data.role in ['super_admin', 'admin', 'mod', 'gdda', 'user']);
+    }
+
     match /users/{userId} {
       allow read: if isAdmin() || isMod() || isOwner(userId);
-      // Only Super Admin can change roles or assigned projects
-      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(incoming());
       allow update: if isAuthenticated() && (
-        (isOwner(userId) && request.resource.data.role == resource.data.role && !('assignedProjects' in request.resource.data.diff(resource.data).affectedKeys())) || 
+        (isOwner(userId) && 
+         incoming().role == existing().role && 
+         !('assignedProjects' in incoming().diff(existing()).affectedKeys()) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'teamName', 'displayName', 'updatedAt'])
+        ) || 
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -106,30 +139,45 @@ service cloud.firestore {
     // ===============================================================
     // Budgets
     // ===============================================================
+    function isValidBudget(data) {
+      return data.projectId is string && data.projectId.size() <= 128 &&
+             data.month is string && data.month.size() == 7 &&
+             data.amount is number && data.amount >= 0;
+    }
+
     match /budgets/{budgetId} {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
                     (resource.data.userEmail == request.auth.token.email) ||
                     (resource.data.assignedUserEmail == request.auth.token.email);
-      allow create: if isAuthenticated();
-      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid || 
-                    (resource.data.assignedUserEmail == request.auth.token.email);
+      allow create: if isAuthenticated() && isValidBudget(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if (isAdmin() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
+                    isValidBudget(incoming()) && (
+                      incoming().diff(existing()).affectedKeys().hasAny(['amount', 'verifiedAmount', 'notes', 'updatedAt', 'assignedUserEmail', 'implementerName'])
+                    );
       allow delete: if isAdmin();
     }
 
     // ===============================================================
     // Costs
     // ===============================================================
+    function isValidCost(data) {
+      return data.projectId is string && data.projectId.size() <= 128 &&
+             data.amount is number && data.amount >= 0;
+    }
+
     match /costs/{costId} {
       allow read: if isAdmin() || isMod() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
                     (resource.data.userEmail == request.auth.token.email) ||
                     (resource.data.assignedUserEmail == request.auth.token.email);
-      allow create: if isAuthenticated();
-      allow update: if isAdmin() || resource.data.createdBy == request.auth.uid ||
-                    (resource.data.assignedUserEmail == request.auth.token.email);
+      allow create: if isAuthenticated() && isValidCost(incoming()) && incoming().createdBy == request.auth.uid;
+      allow update: if (isAdmin() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
+                    isValidCost(incoming()) && (
+                      incoming().diff(existing()).affectedKeys().hasAny(['amount', 'notes', 'updatedAt', 'weekNumber', 'fbAds', 'posting', 'zaloAds', 'googleAds', 'otherCost', 'totalAmount'])
+                    );
       allow delete: if isAdmin();
     }
 
@@ -200,7 +248,8 @@ service cloud.firestore {
     }
 
     match /acceptances/{acceptanceId} {
-      allow read: if isAdmin() || isMod();
+      allow read: if isAdmin() || isMod() || 
+                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
       allow create: if (isAdmin() || isMod()) && 
                     isValidAcceptance(incoming()) &&
                     incoming().createdByUid == request.auth.uid;
@@ -216,17 +265,11 @@ service cloud.firestore {
     // Final Acceptances (Actual Costs)
     // ===============================================================
     match /finalAcceptances/{finalId} {
-      allow read: if isAdmin() || isMod();
+      allow read: if isAdmin() || isMod() || 
+                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
       allow create: if isAdmin() || isMod();
       allow update: if isAdmin() || isMod();
       allow delete: if isAdmin() || isSuperAdmin();
-    }
-
-    // ===============================================================
-    // Internal / Connection Test
-    // ===============================================================
-    match /_internal_/connection_test {
-      allow read: if isAuthenticated();
     }
 
     // ===============================================================

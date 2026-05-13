@@ -10,6 +10,115 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  browserLocalPersistence,
+  User
+} from 'firebase/auth';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  onSnapshot, 
+  orderBy, 
+  where,
+  or,
+  serverTimestamp,
+  doc,
+  getDocFromServer,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+  increment,
+  arrayUnion,
+  limit
+} from 'firebase/firestore';
+import { auth, db, testConnection } from './firebase';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverDescription, 
+  PopoverHeader, 
+  PopoverTitle, 
+  PopoverTrigger 
+} from "@/components/ui/popover";
+import { 
+  Tooltip as UITooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
+import { 
+  LogIn, LogOut, Plus, Search, Trash2, Edit2, 
+  FileBox, BarChart3, Users, Settings, Filter, Download, 
+  Upload, CheckCircle2, XCircle, AlertCircle, RefreshCw, 
+  ChevronRight, Calendar, User as UserIcon, LayoutDashboard, 
+  ArrowUpRight, ArrowDownRight, PieChart, TrendingUp, History, 
+  FileText, Check, MoreHorizontal, FileDown, Eye, Send, MessageSquare, Info, ShieldCheck, UserCheck, ChevronDown as ChevronDownIcon,
+  ChevronUp as ChevronUpIcon,
+  ExternalLink,
+  Save,
+  Undo,
+  X,
+  ArrowUpDown,
+  AlertTriangle,
+  UserCircle,
+  Map as MapIcon,
+  Layers,
+  Database,
+  FileUp,
+  FileSpreadsheet,
+  Link,
+  FileWarning,
+  Copy,
+  ArrowRight,
+  Clock,
+  Target,
+  GitMerge,
+  CheckSquare,
+  BadgeDollarSign,
+  PlusCircle,
+  MinusCircle,
+  BadgeCheck,
+  MessageCircle,
+  ShieldAlert,
+  Wallet,
+  Building2,
+  FileCheck
+} from 'lucide-react';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, BarChart, Bar, Legend, Cell, PieChart as RePieChart, Pie,
+  LineChart, Line, ComposedChart, Tooltip as ChartTooltip
+} from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
+import { format, getWeek } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 // Component Input có debounce để tránh re-render toàn bộ app khi gõ phím
 const DebouncedInput = memo(({ 
@@ -160,7 +269,7 @@ const SearchableProjectSelect = memo(({ value, onValueChange, projects, projectM
       placeholder="Tất cả dự án"
       searchPlaceholder="Tìm dự án..."
       triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
-      triggerDisplay={value === 'all' ? "Tất cả dự án" : `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})`}
+      triggerDisplay={value === 'all' ? "Tất cả dự án" : (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})`}
     />
   );
 });
@@ -204,7 +313,7 @@ const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects
       placeholder="Chọn dự án..."
       searchPlaceholder="Tìm dự án..."
       triggerClassName="bg-slate-50 border-none h-11 rounded-xl"
-      triggerDisplay={value ? `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+      triggerDisplay={value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
       renderItem={(item: any) => (
         <SelectItem key={item.value} value={item.value}>
           <div className="flex flex-col">
@@ -220,7 +329,7 @@ const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams, team
   const items = useMemo(() => {
     return teams.map((t: any) => ({
       value: t.id,
-      label: t.name,
+      label: `${t.name} (${t.teamCode || 'N/A'})`,
       searchString: `${t.name} ${t.teamCode || ''}`
     }));
   }, [teams]);
@@ -249,7 +358,7 @@ const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams, team
   const items = useMemo(() => {
     return teams.map((t: any) => ({
       value: t.id,
-      label: t.name,
+      label: `${t.name} (${t.teamCode || 'N/A'})`,
       searchString: `${t.name} ${t.teamCode || ''}`
     }));
   }, [teams]);
@@ -264,6 +373,113 @@ const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams, team
       triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
       triggerDisplay={value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn đội..."}
     />
+  );
+});
+
+const SearchableAcceptanceProjectMultiSelect = memo(({ values, onValuesChange, projects, projectMap, isEditing }: any) => {
+  const [search, setSearch] = useState('');
+  
+  const items = useMemo(() => {
+    return projects.map((p: any) => ({
+      value: p.id,
+      label: p.name,
+      projectCode: p.projectCode || '',
+      searchString: `${p.name} ${p.projectCode || ''}`.toLowerCase()
+    }));
+  }, [projects]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item: any) => 
+      item.searchString.includes(search.toLowerCase())
+    );
+  }, [items, search]);
+
+  const toggleValue = (val: string) => {
+    if (isEditing) {
+      onValuesChange([val]);
+      return;
+    }
+    
+    if (values.includes(val)) {
+      onValuesChange(values.filter((v: string) => v !== val));
+    } else {
+      onValuesChange([...values, val]);
+    }
+  };
+
+  const getDisplay = () => {
+    if (values.length === 0) return "Chọn dự án...";
+    if (values.length <= 3) {
+      return values.map((v: string) => {
+        const name = projectMap[v] || projects.find((p: any) => p.id === v)?.name || v;
+        const code = projects.find((p: any) => p.id === v)?.projectCode;
+        return code ? `${name} (${code})` : name;
+      }).join(', ');
+    }
+    return `Đã chọn ${values.length} dự án`;
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button 
+          variant="outline" 
+          className="w-full h-11 bg-slate-50 border-none rounded-xl font-bold flex items-center justify-between px-4 hover:bg-slate-100 transition-all shadow-none"
+        >
+          <span className="truncate">{getDisplay()}</span>
+          <ChevronDownIcon className="w-4 h-4 text-slate-400" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0 rounded-2xl shadow-2xl border-slate-100 overflow-hidden" align="start">
+        <div className="p-3 border-b border-slate-50">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input 
+              placeholder="Tìm dự án..." 
+              className="pl-10 h-10 bg-slate-50 border-none rounded-xl text-xs font-bold"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-2 custom-scrollbar">
+          {filteredItems.map((item: any) => (
+            <div 
+              key={item.value}
+              className="flex items-center gap-3 p-2 hover:bg-indigo-50/50 rounded-xl cursor-pointer group transition-colors"
+              onClick={() => toggleValue(item.value)}
+            >
+              <Checkbox 
+                checked={values.includes(item.value)} 
+                onCheckedChange={() => toggleValue(item.value)}
+                className="rounded-md border-slate-200 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+              />
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-700 group-hover:text-indigo-700">{item.label}</p>
+                <p className="text-[10px] font-medium text-slate-400">{item.projectCode}</p>
+              </div>
+            </div>
+          ))}
+          {filteredItems.length === 0 && (
+            <div className="p-8 text-center text-slate-400 text-xs font-medium italic">Không tìm thấy dự án</div>
+          )}
+        </div>
+        {!isEditing && values.length > 0 && (
+          <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[10px] font-black text-indigo-600 uppercase">Đã chọn {values.length}</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 text-[10px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+              onClick={() => onValuesChange([])}
+            >
+              Bỏ chọn tất cả
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 });
 
@@ -284,84 +500,10 @@ const SearchableAcceptanceProjectSelect = memo(({ value, onValueChange, projects
       placeholder="Chọn dự án..."
       searchPlaceholder="Tìm dự án..."
       triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
-      triggerDisplay={value ? `${projectMap[value] || value} (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+      triggerDisplay={value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
     />
   );
 });
-import { 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  browserLocalPersistence,
-  User
-} from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  onSnapshot, 
-  orderBy, 
-  where,
-  or,
-  serverTimestamp,
-  doc,
-  getDocFromServer,
-  setDoc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  increment,
-  arrayUnion
-} from 'firebase/firestore';
-import { auth, db, testConnection } from './firebase';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog"
-import { LogIn, LogOut, Plus, RefreshCw, History, TrendingUp, Wallet, Building2, ShieldCheck, BarChart3, Users, Edit2, Trash2, X, Check, Search, ArrowUpDown, AlertTriangle, UserCircle, Map as MapIcon, Layers, Database, FileUp, Download, Filter, Calendar, FileSpreadsheet, Link, Info, FileText, FileWarning, Copy, LayoutDashboard, ArrowRight, Clock, Save, Target, GitMerge, CheckSquare, BadgeDollarSign, PlusCircle, MinusCircle, BadgeCheck, MessageCircle, Settings, Eye, ShieldAlert } from 'lucide-react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import { toast } from 'sonner';
-import { format, getWeek } from 'date-fns';
-import { 
-  BarChart, 
-  LineChart,
-  Bar, 
-  Line,
-  ComposedChart,
-  PieChart,
-  Pie,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  Cell,
-  Tooltip as ChartTooltip
-} from 'recharts';
-import { 
-  Tooltip as UITooltip, 
-  TooltipContent, 
-  TooltipProvider, 
-  TooltipTrigger 
-} from "@/components/ui/tooltip";
-
 // Error handling for Firestore
 enum OperationType {
   CREATE = 'create',
@@ -479,7 +621,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'user' | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const debouncedUserSearch = useDebounce(userSearch, 300);
@@ -494,6 +636,7 @@ export default function App() {
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
   const [acceptances, setAcceptances] = useState<any[]>([]);
   const [finalAcceptances, setFinalAcceptances] = useState<any[]>([]);
+  const [docProcessingStatus, setDocProcessingStatus] = useState<any[]>([]);
   const [supportRequests, setSupportRequests] = useState<any[]>([]);
 
   // Report states moved up
@@ -504,6 +647,7 @@ export default function App() {
   const isAdmin = useMemo(() => userRole === 'admin' || userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
   const isSuperAdmin = useMemo(() => userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
   const isMod = useMemo(() => userRole === 'mod', [userRole]);
+  const isAccountant = useMemo(() => userRole === 'accountant', [userRole]);
   const isGDDA = useMemo(() => userProfile?.role === 'GDDA', [userProfile]);
 
   const [activeTab, setActiveTab] = useState('home');
@@ -567,6 +711,125 @@ export default function App() {
   const [isAlertManagementOpen, setIsAlertManagementOpen] = useState(false);
 
   const [adminSubTab, setAdminSubTab] = useState('reports');
+
+  const syncLogToGoogleSheets = async (logEntry: any) => {
+    try {
+      const payload = {
+        action: logEntry.action,
+        collection: logEntry.collection,
+        docId: logEntry.docId,
+        userEmail: logEntry.userEmail,
+        timestamp: new Date().toISOString(),
+        details: JSON.stringify(logEntry.data || {}).substring(0, 1000)
+      };
+
+      await fetch('https://script.google.com/macros/s/AKfycbz_m3Yc0_H69P6Pj6Uq9p5uH7U6q_R5p6s/exec', {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Google Sheets Auto-Sync Error:", e);
+    }
+  };
+
+  const logAction = async (action: string, collectionName: string, docId: string, data: any) => {
+    try {
+      const logData = {
+        action,
+        collection: collectionName,
+        docId,
+        data,
+        timestamp: serverTimestamp(),
+        userEmail: user?.email,
+        userId: user?.uid
+      };
+      
+      await addDoc(collection(db, 'auditLogs'), logData);
+      
+      // Tự động đồng bộ Nhật ký này sang Google Sheet ngay lập tức
+      syncLogToGoogleSheets({
+        action,
+        collection: collectionName,
+        docId,
+        data,
+        userEmail: user?.email
+      });
+    } catch (error) {
+      console.error('Audit log error:', error);
+    }
+  };
+
+  const [acceptanceSearch, setAcceptanceSearch] = useState('');
+  const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
+  const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
+
+  const groupedDocProcessing = useMemo(() => {
+    const groups: Record<string, any> = {};
+    
+    (finalAcceptances || []).forEach(a => {
+      const key = `${a.projectId}_${a.teamId}`;
+      if (!groups[key]) {
+        groups[key] = {
+          projectId: a.projectId,
+          projectName: projectMap[a.projectId] || a.projectName || 'N/A',
+          teamId: a.teamId,
+          teamName: teamMap[a.teamId] || a.teamName || 'N/A',
+          totalAmount: 0,
+          visaCost: 0,
+          digitalCost: 0,
+          recordCount: 0
+        };
+      }
+      groups[key].totalAmount += (a.totalActualCost || a.afterAcceptanceCost || 0);
+      groups[key].visaCost += (a.visaCost || 0);
+      groups[key].digitalCost += (a.digitalCost || 0);
+      groups[key].recordCount += 1;
+    });
+
+    return Object.values(groups).map(group => {
+      const status = docProcessingStatus.find(s => s.projectId === group.projectId && s.teamId === group.teamId);
+      return {
+        ...group,
+        id: status?.id || null,
+        confirmation: status?.confirmation || 'Chưa đối soát',
+        note: status?.note || '',
+        updatedAt: status?.updatedAt,
+        updatedByEmail: status?.updatedByEmail
+      };
+    }).filter(g => {
+      const matchesSearch = (g.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (g.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
+      const matchesProject = acceptanceProjectFilter === 'all' || g.projectId === acceptanceProjectFilter;
+      return matchesSearch && matchesProject;
+    });
+  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter]);
+
+  const handleUpdateDocProcessing = async (projectId: string, teamId: string, confirmation: string, note: string) => {
+    try {
+      const existing = docProcessingStatus.find(s => s.projectId === projectId && s.teamId === teamId);
+      const data = {
+        projectId,
+        teamId,
+        confirmation,
+        note,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid,
+        updatedByEmail: user?.email
+      };
+
+      if (existing) {
+        await updateDoc(doc(db, 'docProcessing', existing.id), data);
+      } else {
+        await addDoc(collection(db, 'docProcessing'), data);
+      }
+      toast.success('Cập nhật trạng thái thành công');
+      await logAction('UPDATE_DOC_PROCESSING', 'docProcessing', `${projectId}_${teamId}`, { confirmation, note });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'docProcessing');
+    }
+  };
 
   const comparisonChartData = useMemo(() => {
     return reportMonths.map(month => {
@@ -683,6 +946,41 @@ export default function App() {
     costs.forEach(c => { if (c.projectId && c.projectName && !map[c.projectName]) map[c.projectName] = c.projectName; });
     return map;
   }, [budgets, costs, projectMap]);
+
+  const budgetAmountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    budgets.forEach(b => {
+      map[b.id] = b.amount;
+    });
+    return map;
+  }, [budgets]);
+
+  const latestCostsByBudget = useMemo(() => {
+    const map: Record<string, any> = {};
+    costs.forEach(c => {
+      const budgetId = c.budgetId;
+      if (!budgetId) return;
+      
+      const existing = map[budgetId];
+      const currentTimestamp = c.createdAt?.toDate ? c.createdAt.toDate().getTime() : (c.createdAt ? new Date(c.createdAt).getTime() : 0);
+      const existingTimestamp = existing?.createdAt?.toDate ? existing.createdAt.toDate().getTime() : (existing?.createdAt ? new Date(existing.createdAt).getTime() : 0);
+      
+      if (!existing || currentTimestamp > existingTimestamp) {
+        map[budgetId] = c;
+      }
+    });
+    return map;
+  }, [costs]);
+
+  const latestCostsList = useMemo(() => Object.values(latestCostsByBudget), [latestCostsByBudget]);
+
+  const acceptanceMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    Object.entries(latestCostsByBudget).forEach(([budgetId, cost]: [string, any]) => {
+      map[budgetId] = cost.amount || 0;
+    });
+    return map;
+  }, [latestCostsByBudget]);
 
   const resolveTeamName = useCallback((id: string | undefined, name: string | undefined) => {
     if (id && teamMap[id]) return teamMap[id];
@@ -858,151 +1156,17 @@ export default function App() {
       if (budgetReportSort.key === 'project') return (a.projectName || '').localeCompare(b.projectName || '') * factor;
       return 0;
     });
-  }, [filteredBudgets, acceptances, projects, user, isAdmin, isMod, isGDDA, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, budgetReportSort, resolveProjectName, resolveTeamName]);
+  }, [filteredBudgets, budgetReportSort]);
 
   const overBudgetStats = useMemo(() => {
-    const pairMap: { [key: string]: { budget: number, cost: number, sales: number, revenue: number, projectName: string, teamName: string, teamId?: string } } = {};
-    const normalizedReportMonths = reportMonths.map(m => normalizeMonth(m));
-    
-    budgets.forEach(b => {
-      const normalizedBMonth = normalizeMonth(b.month);
-      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedBMonth)) return;
-      
-      const bProjectName = resolveProjectName(b.projectId, b.projectName);
-      const bTeamName = resolveTeamName(b.teamId, b.teamName);
-      
-      if (reportProject !== 'all' && b.projectId !== reportProject && bProjectName !== projectMap[reportProject]) return;
-      if (reportTeam !== 'all' && bTeamName !== reportTeam) return;
-
-      const project = projects.find(p => p.id === b.projectId || p.name === bProjectName);
-      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
-
-      const key = `${bProjectName.trim().toLowerCase()}|${bTeamName.trim().toLowerCase()}`;
-      
-      if (!pairMap[key]) {
-        pairMap[key] = { 
-          budget: 0, 
-          cost: 0, 
-          sales: 0, 
-          revenue: 0, 
-          projectName: bProjectName, 
-          teamName: bTeamName,
-          teamId: b.teamId 
-        };
-      }
-      let amount = b.amount || 0;
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        amount = amount / 4;
-      }
-      pairMap[key].budget += amount;
-    });
-
-    // 2. Acceptances (New source for actual costs)
-    acceptances.forEach(a => {
-      const normalizedAMonth = normalizeMonth(a.month);
-      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedAMonth)) return;
-      
-      const aProjectName = resolveProjectName(a.projectId, a.projectName);
-      const aTeamName = resolveTeamName(a.teamId, a.teamName);
-      
-      if (reportProject !== 'all' && a.projectId !== reportProject && aProjectName !== projectMap[reportProject]) return;
-      if (reportTeam !== 'all' && aTeamName !== reportTeam) return;
-      
-      const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
-      if (reportRegion !== 'all' && (project?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (project?.type || 'Khác') !== reportType) return;
-      
-      const key = `${aProjectName.trim().toLowerCase()}|${aTeamName.trim().toLowerCase()}`;
-      
-      if (!pairMap[key]) {
-        pairMap[key] = { budget: 0, cost: 0, sales: 0, revenue: 0, projectName: aProjectName, teamName: aTeamName, teamId: a.teamId };
-      }
-      
-      const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0);
-      pairMap[key].cost += costValue;
-    });
-
-    efficiencyReports.forEach(r => {
-      const normalizedRMonth = normalizeMonth(r.month);
-      if (normalizedReportMonths.length > 0 && !normalizedReportMonths.includes(normalizedRMonth)) return;
-      
-      const rProjectName = resolveProjectName(r.projectId, r.projectName);
-      const rTeamName = resolveTeamName(r.teamId, r.teamName);
-
-      if (reportProject !== 'all' && r.projectId !== reportProject && rProjectName !== projectMap[reportProject]) return;
-      if (reportTeam !== 'all' && rTeamName !== reportTeam) return;
-
-      const rProject = projects.find(p => p.id === r.projectId || p.name === rProjectName);
-      if (reportRegion !== 'all' && (rProject?.region || 'Khác') !== reportRegion) return;
-      if (reportType !== 'all' && (rProject?.type || 'Khác') !== reportType) return;
-      
-      const key = `${rProjectName.trim().toLowerCase()}|${rTeamName.trim().toLowerCase()}`;
-      
-      if (!pairMap[key]) {
-        pairMap[key] = { 
-          budget: 0, 
-          cost: 0, 
-          sales: 0, 
-          revenue: 0, 
-          projectName: rProjectName, 
-          teamName: rTeamName,
-          teamId: r.teamId
-        };
-      }
-      
-      let sales = r.salesCount || 0;
-      let revenue = r.revenue || 0;
-      if (chartTimeType === 'week' && reportWeek !== 'all') {
-        sales = sales / 4;
-        revenue = revenue / 4;
-      }
-      
-      pairMap[key].sales += sales;
-      pairMap[key].revenue += revenue;
-    });
-
-    const granularOverItems: any[] = [];
-    const warningItems: any[] = [];
-    let totalExcess = 0;
-
-    Object.keys(pairMap).forEach(key => {
-      const item = pairMap[key];
-      const usagePercent = item.budget > 0 ? (item.cost / item.budget) * 100 : (item.cost > 0 ? Infinity : 0);
-
-      if (usagePercent >= budgetWarningThreshold) {
-        const excess = item.cost - item.budget;
-        const alertItem = {
-          id: key,
-          name: `${item.projectName} - ${item.teamName}`,
-          mainName: item.projectName,
-          detailName: item.teamName,
-          budget: item.budget,
-          cost: item.cost,
-          sales: item.sales,
-          revenue: item.revenue,
-          excess: excess > 0 ? excess : 0,
-          usagePercent: usagePercent,
-          status: usagePercent >= budgetCriticalThreshold ? 'critical' : 'warning'
-        };
-
-        if (usagePercent >= budgetCriticalThreshold) {
-          totalExcess += (excess > 0 ? excess : 0);
-          granularOverItems.push(alertItem);
-        } else {
-          warningItems.push(alertItem);
-        }
-      }
-    });
-
     return {
-      count: granularOverItems.length,
-      warningCount: warningItems.length,
-      totalExcess: totalExcess,
-      items: granularOverItems,
-      warningItems: warningItems
+      count: 0,
+      warningCount: 0,
+      totalExcess: 0,
+      items: [],
+      warningItems: []
     };
-  }, [budgets, costs, efficiencyReports, reportMonths, reportProject, reportTeam, reportRegion, reportType, projects, projectMap, teamMap, getMarketingMonth, chartTimeType, reportWeek, budgetWarningThreshold, budgetCriticalThreshold, resolveProjectName, resolveTeamName]);
+  }, []);
 
   const uniqueTeams = useMemo(() => {
     const set = new Set(teams.map(t => t.name));
@@ -1038,17 +1202,20 @@ export default function App() {
       }
     });
     
-    costs.forEach(c => {
+    // Use the latest cost per budget instead of summing all costs
+    const latestBudgetCosts: {[key: string]: number} = {};
+    latestCostsList.forEach(c => {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       if (normalizeMonth(mMonth) === currentMonth) {
         const pName = resolveProjectName(c.projectId, c.projectName);
-        projectCosts[pName] = (projectCosts[pName] || 0) + c.amount;
+        // We sum across DIFFERENT budgets, but each budget already has its LATEST value in latestCostsList
+        latestBudgetCosts[pName] = (latestBudgetCosts[pName] || 0) + (c.amount || 0);
       }
     });
 
     const overLimitNames = new Set<string>();
     Object.entries(projectBudgets).forEach(([pName, budget]) => {
-      if ((projectCosts[pName] || 0) > budget) {
+      if ((latestBudgetCosts[pName] || 0) > budget) {
         overLimitNames.add(pName);
       }
     });
@@ -1061,7 +1228,7 @@ export default function App() {
     });
 
     return overLimitIds;
-  }, [budgets, costs, getMarketingMonth, dataDrivenProjectMap, resolveProjectName]);
+  }, [budgets, latestCostsList, getMarketingMonth, dataDrivenProjectMap, resolveProjectName]);
 
   const channelReportData = useMemo(() => {
     const keyData: { [key: string]: any } = {};
@@ -1098,8 +1265,8 @@ export default function App() {
             googleAds: 0,
             zaloAds: 0,
             posting: 0,
-            visaAmount: 0,
-            digitalAmount: 0,
+            visaCost: 0,
+            digitalCost: 0,
             otherCost: 0,
             total: 0
           };
@@ -1110,8 +1277,8 @@ export default function App() {
         p.googleAds += a.googleCost || 0;
         p.zaloAds += a.zaloCost || 0;
         p.posting += a.postingCost || 0;
-        p.visaAmount += a.visaCost || 0;
-        p.digitalAmount += a.digitalCost || 0;
+        p.visaCost += a.visaCost || 0;
+        p.digitalCost += a.digitalCost || 0;
         p.otherCost += a.otherCost || 0;
         p.total += (a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0));
       }
@@ -1388,7 +1555,7 @@ export default function App() {
       }
     });
 
-    costs.forEach(c => {
+    latestCostsList.forEach(c => {
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       if (!mMonth || !mMonth.startsWith(year)) return;
       const cProjectName = resolveProjectName(c.projectId, c.projectName);
@@ -1404,7 +1571,7 @@ export default function App() {
       ...m,
       roi: m.cost > 0 ? (m.revenue / m.cost) : 0
     }));
-  }, [efficiencyReports, costs, reportYear, reportProject, reportTeam, getMarketingMonth, projectMap, resolveProjectName, resolveTeamName]);
+  }, [efficiencyReports, latestCostsList, reportYear, reportProject, reportTeam, getMarketingMonth, projectMap, resolveProjectName, resolveTeamName]);
 
   const pendingSupportCount = useMemo(() => {
     return supportRequests.filter((r: any) => r.status === 'Chờ xử lý').length;
@@ -1833,8 +2000,7 @@ export default function App() {
   const [posting, setPosting] = useState('');
   const [zaloAds, setZaloAds] = useState('');
   const [googleAds, setGoogleAds] = useState('');
-  const [visaAmount, setVisaAmount] = useState('');
-  const [digitalAmount, setDigitalAmount] = useState('');
+  const [digitalCost, setDigitalCost] = useState('');
   const [otherCost, setOtherCost] = useState('');
   const [costNote, setCostNote] = useState('');
   const [selectedBudgetId, setSelectedBudgetId] = useState('');
@@ -1902,8 +2068,8 @@ export default function App() {
     posting: '',
     zaloAds: '',
     googleAds: '',
-    visaAmount: '',
-    digitalAmount: '',
+    visaCost: '',
+    digitalCost: '',
     otherCost: '',
     note: ''
   });
@@ -1939,7 +2105,7 @@ export default function App() {
   const [isMergingBudgets, setIsMergingBudgets] = useState(false);
 
   const handleMergeDuplicateBudgets = async () => {
-    if (!isAdmin && !isMod) return;
+    if (!isAdmin && !isMod && !isAccountant) return;
     
     setIsMergingBudgets(true);
     const toastId = toast.loading('Đang xử lý gộp ngân sách trùng lặp...');
@@ -2078,6 +2244,8 @@ export default function App() {
   const [isImportingCosts, setIsImportingCosts] = useState(false);
   const [isImportingBudgets, setIsImportingBudgets] = useState(false);
   const [isImportingProjects, setIsImportingProjects] = useState(false);
+  const [isImportingAcceptances, setIsImportingAcceptances] = useState(false);
+  const [isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen] = useState(false);
   const [costToDelete, setCostToDelete] = useState<{id: string, name: string} | null>(null);
   
   const [isBulkDeleteProjectsDialogOpen, setIsBulkDeleteProjectsDialogOpen] = useState(false);
@@ -2094,17 +2262,6 @@ export default function App() {
 
 
   const isUser = userRole === 'user';
-
-  // Project name lookup map
-
-
-  const budgetAmountMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    budgets.forEach(b => {
-      map[b.id] = b.amount;
-    });
-    return map;
-  }, [budgets]);
 
   const filteredBudgetsForCostSelection = useMemo(() => {
     const userEmail = user?.email?.toLowerCase();
@@ -2212,10 +2369,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (user) {
+      testConnection();
+    }
+  }, [user?.uid]);
 
-    // Test connection
-    testConnection();
+  useEffect(() => {
+    if (!user) return;
 
     // Listen to projects
     let qProjects;
@@ -2251,8 +2411,8 @@ export default function App() {
 
     // Listen to budgets
     let qBudgets;
-    if (isAdmin || isMod) {
-      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
+    if (isAdmin || isMod || isAccountant) {
+      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(1000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
@@ -2268,7 +2428,7 @@ export default function App() {
 
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (!(isAdmin || isMod)) {
+      if (!(isAdmin || isMod || isAccountant)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -2280,8 +2440,8 @@ export default function App() {
 
     // Listen to costs
     let qCosts;
-    if (isAdmin || isMod) {
-      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
+    if (isAdmin || isMod || isAccountant) {
+      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(1000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
@@ -2297,7 +2457,7 @@ export default function App() {
 
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (!(isAdmin || isMod)) {
+      if (!(isAdmin || isMod || isAccountant)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -2309,8 +2469,8 @@ export default function App() {
 
     // Listen to audit logs
     let unsubLogs = () => {};
-    if (isAdmin || isMod) {
-      const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'));
+    if (isAdmin || isMod || isAccountant) {
+      const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(500));
       unsubLogs = onSnapshot(qLogs, (snapshot) => {
         setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
@@ -2319,7 +2479,7 @@ export default function App() {
     // Listen to all users (for Admin)
     let unsubUsers = () => {};
     if (isAdmin) {
-      const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+      const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubUsers = onSnapshot(qUsers, (snapshot) => {
         setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
@@ -2328,7 +2488,7 @@ export default function App() {
     // Listen to efficiency reports
     let unsubEfficiency = () => {};
     if (isAdmin || isMod || isUser) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
+      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(1000));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
@@ -2341,8 +2501,8 @@ export default function App() {
 
     // Listen to acceptances
     let unsubAcceptances = () => {};
-    if (isAdmin || isMod) {
-      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
+    if (isAdmin || isMod || isAccountant) {
+      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'), limit(1000));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
@@ -2355,29 +2515,42 @@ export default function App() {
 
     // Listen to final acceptances
     let unsubFinalAcceptances = () => {};
-    if (isAdmin || isMod) {
-      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
+    let unsubDocProcessing = () => {};
+    if (isAdmin || isMod || isAccountant) {
+      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'), limit(1000));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
+
+      const qDocProcessing = query(collection(db, 'docProcessing'));
+      unsubDocProcessing = onSnapshot(qDocProcessing, (snapshot) => {
+        setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
+
+      const qDocProcessing = query(collection(db, 'docProcessing'), where('projectId', 'in', userProfile.assignedProjects));
+      unsubDocProcessing = onSnapshot(qDocProcessing, (snapshot) => {
+        setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     }
 
     // Listen to support requests
-    let qSupport;
-    if (isAdmin || isMod) {
-      qSupport = query(collection(db, 'supportRequests'), orderBy('createdAt', 'desc'));
+    let unsubSupport = () => {};
+    if (isAdmin || isMod || isAccountant) {
+      const qSupport = query(collection(db, 'supportRequests'), orderBy('createdAt', 'desc'), limit(1000));
+      unsubSupport = onSnapshot(qSupport, (snapshot) => {
+        setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
     } else {
-      qSupport = query(collection(db, 'supportRequests'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+      const qSupport = query(collection(db, 'supportRequests'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(500));
+      unsubSupport = onSnapshot(qSupport, (snapshot) => {
+        setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
     }
-
-    const unsubSupport = onSnapshot(qSupport, (snapshot) => {
-      setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
 
     // Listen to settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
@@ -2399,12 +2572,13 @@ export default function App() {
       unsubLogs();
       unsubUsers();
       unsubEfficiency();
+      unsubDocProcessing();
       unsubAcceptances();
       unsubFinalAcceptances();
       unsubSupport();
       unsubSettings();
     };
-  }, [user, userRole, userProfile]);
+  }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects)]);
 
   const handleImportEfficiency = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2464,6 +2638,7 @@ export default function App() {
         const batch = writeBatch(db);
         let count = 0;
         const currentImportErrors: string[] = [];
+        const ops: any[] = [];
 
         for (let i = 0; i < json.length; i++) {
           const row = json[i];
@@ -2541,32 +2716,47 @@ export default function App() {
           );
 
           if (existing) {
-            const docRef = doc(db, 'efficiencyReports', existing.id);
-            batch.update(docRef, {
-              salesCount: sales,
-              revenue: revenue,
-              updatedAt: serverTimestamp()
+            ops.push({
+              type: 'update',
+              ref: doc(db, 'efficiencyReports', existing.id),
+              data: {
+                salesCount: sales,
+                revenue: revenue,
+                updatedAt: serverTimestamp()
+              }
             });
           } else {
-            const docRef = doc(collection(db, 'efficiencyReports'));
-            batch.set(docRef, {
-              projectId,
-              projectName: projectMap[projectId] || 'N/A',
-              teamId,
-              teamName: teamMap[teamId] || 'N/A',
-              month,
-              salesCount: sales,
-              revenue: revenue,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              createdBy: user?.uid,
-              createdByEmail: user?.email
+            ops.push({
+              type: 'set',
+              ref: doc(collection(db, 'efficiencyReports')),
+              data: {
+                projectId,
+                projectName: projectMap[projectId] || 'N/A',
+                teamId,
+                teamName: teamMap[teamId] || 'N/A',
+                month,
+                salesCount: sales,
+                revenue: revenue,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdBy: user?.uid,
+                createdByEmail: user?.email
+              }
             });
           }
           count++;
         }
 
-        await batch.commit();
+        if (ops.length > 0) {
+          for (let i = 0; i < ops.length; i += 450) {
+            const batch = writeBatch(db);
+            ops.slice(i, i + 450).forEach(op => {
+              if (op.type === 'update') batch.update(op.ref, op.data);
+              else batch.set(op.ref, op.data);
+            });
+            await batch.commit();
+          }
+        }
         
         if (count > 0) {
           toast.success(`Đồng bộ thành công ${count} bản ghi.`);
@@ -2652,10 +2842,10 @@ export default function App() {
         rows = XLSX.utils.sheet_to_json(firstSheet);
       }
 
-      const batch = writeBatch(db);
       let count = 0;
       let skippedCount = 0;
       const errorDetails: string[] = [];
+      const ops: any[] = [];
 
       // Pre-consolidate incoming Google Sheet data
       const consolidatedDataMap = new Map();
@@ -2766,56 +2956,79 @@ export default function App() {
           // PRESERVE the total existing amount when merging duplicates
           const totalExistingAmount = existingBudgetsForMatch.reduce((sum, b) => sum + b.amount, 0);
 
-          batch.update(doc(db, 'budgets', targetBudget.id), {
-            amount: item.amount, // Set to Excel amount (if we want to replace existing with Excel value)
-            implementerName: item.implementer || targetBudget.implementerName,
-            assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
-            userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
-            updatedAt: serverTimestamp(),
-            updatedBy: user?.uid,
-            editHistory: arrayUnion({
-              action: 'URL_IMPORT_UPDATE_MERGE',
-              editorName: implementerName,
-              timestamp: new Date().toISOString(),
-              prevTotalInDb: totalExistingAmount,
-              newImportAmount: item.amount,
-              duplicatesFixed: duplicates.length
-            })
+          ops.push({
+            type: 'update',
+            ref: doc(db, 'budgets', targetBudget.id),
+            data: {
+              amount: item.amount, // Set to Excel amount (if we want to replace existing with Excel value)
+              implementerName: item.implementer || targetBudget.implementerName,
+              assignedUserEmail: assignedUserEmail || targetBudget.assignedUserEmail || null,
+              userEmail: assignedUserEmail || targetBudget.userEmail || user?.email?.toLowerCase(),
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.uid,
+              editHistory: arrayUnion({
+                action: 'URL_IMPORT_UPDATE_MERGE',
+                editorName: implementerName,
+                timestamp: new Date().toISOString(),
+                prevTotalInDb: totalExistingAmount,
+                newImportAmount: item.amount,
+                duplicatesFixed: duplicates.length
+              })
+            }
           });
 
           for (const dup of duplicates) {
             const affectedCosts = costs.filter(c => c.budgetId === dup.id);
             affectedCosts.forEach(c => {
-              batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
+              ops.push({ 
+                type: 'update', 
+                ref: doc(db, 'costs', c.id), 
+                data: { budgetId: targetBudget.id } 
+              });
             });
-            batch.delete(doc(db, 'budgets', dup.id));
+            ops.push({ 
+              type: 'delete', 
+              ref: doc(db, 'budgets', dup.id) 
+            });
           }
         } else {
-          batch.set(doc(collection(db, 'budgets')), {
-            projectId,
-            projectName: project.name,
-            teamId,
-            teamName: team.name,
-            implementerName: item.implementer || 'N/A',
-            assignedUserEmail: assignedUserEmail,
-            userEmail: assignedUserEmail || user?.email?.toLowerCase(),
-            month: item.month,
-            amount: item.amount,
-            createdAt: serverTimestamp(),
-            createdBy: user?.uid,
-            editHistory: [{
-              action: 'URL_IMPORT_CREATE',
-              editorName: implementerName,
-              timestamp: new Date().toISOString(),
-              amount: item.amount
-            }]
+          ops.push({
+            type: 'set',
+            ref: doc(collection(db, 'budgets')),
+            data: {
+              projectId,
+              projectName: project.name,
+              teamId,
+              teamName: team.name,
+              implementerName: item.implementer || 'N/A',
+              assignedUserEmail: assignedUserEmail,
+              userEmail: assignedUserEmail || user?.email?.toLowerCase(),
+              month: item.month,
+              amount: item.amount,
+              createdAt: serverTimestamp(),
+              createdBy: user?.uid,
+              editHistory: [{
+                action: 'URL_IMPORT_CREATE',
+                editorName: implementerName,
+                timestamp: new Date().toISOString(),
+                amount: item.amount
+              }]
+            }
           });
         }
         count++;
       }
 
-      if (count > 0) {
-        await batch.commit();
+      if (ops.length > 0) {
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db);
+          ops.slice(i, i + 450).forEach(op => {
+            if (op.type === 'update') batch.update(op.ref, op.data);
+            else if (op.type === 'set') batch.set(op.ref, op.data);
+            else if (op.type === 'delete') batch.delete(op.ref);
+          });
+          await batch.commit();
+        }
         await logAction('IMPORT_BUDGETS_URL', 'budgets', docId, { count, errors: skippedCount });
         
         let msg = `Đã cập nhật ${count} ngân sách từ Google Sheet.`;
@@ -3472,59 +3685,6 @@ export default function App() {
     }
   };
 
-  const syncLogToGoogleSheets = async (logEntry: any) => {
-    try {
-      const now = new Date();
-      const payload = {
-        nhatKyHanhDong: [{
-          ...logEntry,
-          timestamp: now.toISOString(),
-          // Các trường tiếng Việt đồng bộ với script Google Sheets
-          thoiGian: now.toLocaleString('vi-VN'),
-          hanhDong: logEntry.action,
-          nguoiChinhSua: logEntry.userEmail || 'Hệ thống',
-          data: typeof logEntry.data === 'object' ? JSON.stringify(logEntry.data) : String(logEntry.data)
-        }]
-      };
-      
-      await fetch(SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.error("Google Sheets Auto-Sync Error:", e);
-    }
-  };
-
-  const logAction = async (action: string, collectionName: string, docId: string, data: any) => {
-    try {
-      const logData = {
-        action,
-        collection: collectionName,
-        docId,
-        data,
-        timestamp: serverTimestamp(),
-        userEmail: user?.email,
-        userId: user?.uid
-      };
-      
-      await addDoc(collection(db, 'auditLogs'), logData);
-      
-      // Tự động đồng bộ Nhật ký này sang Google Sheet ngay lập tức
-      syncLogToGoogleSheets({
-        action,
-        collection: collectionName,
-        docId,
-        data,
-        userEmail: user?.email
-      });
-    } catch (error) {
-      console.error('Audit log error:', error);
-    }
-  };
-
   const handleUpdateUserRole = async (userId: string, newRole: string, assignedProjects: string[] = []) => {
     try {
       await updateDoc(doc(db, 'users', userId), {
@@ -3567,9 +3727,10 @@ export default function App() {
       const isSuperAdmin = userRole === 'super_admin';
       const isAdmin = userRole === 'admin';
       const isMod = userRole === 'mod';
+      const isAccountant = userRole === 'accountant';
       const isUser = userRole === 'user';
 
-      if (isSuperAdmin || isAdmin || isUser) return matchSearch && matchRegion && matchType;
+      if (isSuperAdmin || isAdmin || isAccountant || isUser) return matchSearch && matchRegion && matchType;
       if (isMod) {
         const isAssigned = userProfile?.assignedProjects?.includes(p.id);
         return isAssigned && matchSearch && matchRegion && matchType;
@@ -3872,19 +4033,24 @@ export default function App() {
   const handleSyncProjectCodes = async () => {
     setIsSyncingProjects(true);
     try {
-      const batch = writeBatch(db);
       let count = 0;
+      const ops: any[] = [];
       projects.forEach(p => {
         if (!p.projectCode) {
           const code = extractProjectCode(p.name);
           if (code) {
-            batch.update(doc(db, 'projects', p.id), { projectCode: code, updatedAt: serverTimestamp() });
+            ops.push({ ref: doc(db, 'projects', p.id), data: { projectCode: code, updatedAt: serverTimestamp() } });
             count++;
           }
         }
       });
-      if (count > 0) {
-        await batch.commit();
+
+      if (ops.length > 0) {
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db);
+          ops.slice(i, i + 450).forEach(op => batch.update(op.ref, op.data));
+          await batch.commit();
+        }
         await logAction('SYNC_PROJECT_CODES', 'projects', 'all', { count });
         toast.success(`Đã cập nhật mã cho ${count} dự án`);
       } else {
@@ -3901,20 +4067,22 @@ export default function App() {
   const handleSyncTeamCodes = async () => {
     setIsSyncingTeams(true);
     try {
-      const batch = writeBatch(db);
       let count = 0;
+      const ops: any[] = [];
       teams.forEach(t => {
         const accurateCode = extractTeamCode(t.name);
         if (accurateCode && t.teamCode !== accurateCode) {
-          batch.update(doc(db, 'teams', t.id), { 
-            teamCode: accurateCode, 
-            updatedAt: serverTimestamp() 
-          });
+          ops.push({ ref: doc(db, 'teams', t.id), data: { teamCode: accurateCode, updatedAt: serverTimestamp() } });
           count++;
         }
       });
-      if (count > 0) {
-        await batch.commit();
+
+      if (ops.length > 0) {
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db);
+          ops.slice(i, i + 450).forEach(op => batch.update(op.ref, op.data));
+          await batch.commit();
+        }
         await logAction('SYNC_TEAM_CODES', 'teams', 'all', { count });
         toast.success(`Đã chuẩn hóa mã cho ${count} team`);
       } else {
@@ -3931,45 +4099,52 @@ export default function App() {
   const handleSyncBudgetPermissions = async () => {
     setIsSyncingBudgetPermissions(true);
     try {
-      const batch = writeBatch(db);
       let count = 0;
+      const ops: any[] = [];
       
       budgets.forEach(b => {
         const implementer = b.implementerName || '';
         const emailMatch = extractEmail(implementer);
         
-        // If we found an email, we prioritize it as both assignedUserEmail AND userEmail
-        // This ensures the employee has full ownership and visibility
         if (emailMatch && (b.assignedUserEmail !== emailMatch || b.userEmail !== emailMatch)) {
-          batch.update(doc(db, 'budgets', b.id), { 
-            assignedUserEmail: emailMatch,
-            userEmail: emailMatch, // Change the registration email to the employee's email
-            updatedAt: serverTimestamp(),
-            updatedBy: user?.uid
+          ops.push({
+            ref: doc(db, 'budgets', b.id),
+            data: { 
+              assignedUserEmail: emailMatch,
+              userEmail: emailMatch,
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.uid
+            }
           });
           count++;
         }
       });
       
-      // Also sync costs to ensure they have the assigned email from their budget
       costs.forEach(c => {
         if (c.budgetId) {
           const parentBudget = budgets.find(b => b.id === c.budgetId);
           const budgetEmail = parentBudget?.assignedUserEmail || extractEmail(parentBudget?.implementerName || '');
           
           if (budgetEmail && (c.assignedUserEmail !== budgetEmail || c.userEmail !== budgetEmail)) {
-            batch.update(doc(db, 'costs', c.id), { 
-              assignedUserEmail: budgetEmail,
-              userEmail: budgetEmail, // Also update userEmail for costs to ensure total visibility
-              updatedAt: serverTimestamp()
+            ops.push({
+              ref: doc(db, 'costs', c.id),
+              data: { 
+                assignedUserEmail: budgetEmail,
+                userEmail: budgetEmail,
+                updatedAt: serverTimestamp()
+              }
             });
             count++;
           }
         }
       });
 
-      if (count > 0) {
-        await batch.commit();
+      if (ops.length > 0) {
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db);
+          ops.slice(i, i + 450).forEach(op => batch.update(op.ref, op.data));
+          await batch.commit();
+        }
         await logAction('SYNC_BUDGET_PERMISSIONS', 'budgets', 'all', { count });
         toast.success(`Đã đồng bộ phân quyền cho ${count} bản ghi`);
       } else {
@@ -6180,7 +6355,7 @@ export default function App() {
           if (!matchingBudget) {
             errorDetailsList.push(
               `Dòng ${rowIndex}: KHÔNG CÓ NGÂN SÁCH ĐÃ DUYỆT cho [${project.name}] - [${team.name}] tháng ${month}.\n` +
-              `• Nguyên nhân: Bạn đang nhập chi phí cho một dự án/team chưa được khai báo ngân sách trong tháng này.\n` +
+              `• Nguyên nhân: Dữ liệu nhập vào chưa khớp với danh sách dự án/team hiện có.\n` +
               `• Cách khắc phục: Vui lòng nhập Ngân sách cho dự án này trước khi nhập chi phí thực tế.`
             );
             errorsCount++;
@@ -6509,6 +6684,181 @@ export default function App() {
   };
 
 
+  const handleImportAcceptancesCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingAcceptances(true);
+    setImportErrors([]);
+
+    const findProjectInternal = (ref: string) => {
+      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!cleanRef) return null;
+      return projects.find(p => 
+        p.id === ref || 
+        (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+      );
+    };
+
+    const findTeamInternal = (ref: string) => {
+      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!cleanRef) return null;
+      return teams.find(t => 
+        t.id === ref || 
+        (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+      );
+    };
+
+    const processAcceptanceData = async (data: any[]) => {
+      try {
+        const batch = writeBatch(db);
+        let count = 0;
+        let errorsCount = 0;
+        const errorDetailsList: string[] = [];
+
+        for (let i = 0; i < data.length; i++) {
+          const rawRow = data[i];
+          const rowIndex = i + 2;
+          const row: any = {};
+          Object.keys(rawRow).forEach(k => {
+            const cleanKey = k.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
+            row[cleanKey] = rawRow[k];
+          });
+
+          const getVal = (possibleKeys: string[]) => {
+            for (const pk of possibleKeys) {
+              const cleanPK = pk.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '').replace(/^\uFEFF/, '');
+              if (row[cleanPK] !== undefined && row[cleanPK] !== '') return row[cleanPK];
+            }
+            return undefined;
+          };
+
+          const pRef = String(getVal(['ID Dự án', 'Mã Dự án', 'Dự án', 'ProjectID', 'idduan', 'id dự án', 'mã dự án']) || '').trim();
+          const tRef = String(getVal(['ID Team', 'Mã Team', 'Tên Team', 'TeamID', 'idteam', 'id team', 'mã team']) || '').trim();
+          const monthRaw = getVal(['Tháng', 'Kỳ tháng', 'Kỳ', 'Month', 'thang', 'tháng', 'kỳ']);
+          const month = normalizeMonth(monthRaw);
+          
+          const fbAds = parseVal(getVal(['Facebook Ads', 'FB Ads', 'FBAds', 'facebookads', 'facebook ads']));
+          const tiktokAds = parseVal(getVal(['Tiktok Ads', 'TikTok', 'tiktokads', 'tiktok ads']));
+          const zaloAds = parseVal(getVal(['Zalo Ads', 'Zalo', 'zaloads', 'zalo ads']));
+          const googleAds = parseVal(getVal(['Google Ads', 'Google', 'googleads', 'google ads']));
+          const posting = parseVal(getVal(['Đăng tin', 'Posting', 'dangtin', 'posting']));
+          const visa = parseVal(getVal(['VISA', 'visa', 'visa cost', 'chi phí visa']));
+          const digital = parseVal(getVal(['Digital', 'digital', 'digital cost', 'chi phí digital']));
+          const other = parseVal(getVal(['Khác', 'Other', 'khac', 'other cost']));
+
+          if (!pRef || !tRef || !month) {
+            const hasData = Object.values(row).some(v => v !== '');
+            if (hasData) {
+              errorDetailsList.push(`Dòng ${rowIndex}: Thiếu thông tin bắt buộc (Dự án, Team hoặc Tháng).`);
+              errorsCount++;
+            }
+            continue;
+          }
+
+          const project = findProjectInternal(pRef);
+          const team = findTeamInternal(tRef);
+
+          if (!project) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy dự án khớp với "${pRef}".`);
+            errorsCount++;
+            continue;
+          }
+          if (!team) {
+            errorDetailsList.push(`Dòng ${rowIndex}: Không tìm thấy team khớp với "${tRef}".`);
+            errorsCount++;
+            continue;
+          }
+
+          const totalCost = fbAds + tiktokAds + zaloAds + googleAds + posting + other;
+
+          const docRef = doc(collection(db, 'acceptances'));
+          batch.set(docRef, {
+            projectId: project.id,
+            projectName: project.name,
+            projectCode: project.projectCode || '',
+            teamId: team.id,
+            teamName: team.name,
+            teamCode: team.teamCode || '',
+            month,
+            facebookCost: fbAds,
+            tiktokCost: tiktokAds,
+            zaloCost: zaloAds,
+            googleCost: googleAds,
+            postingCost: posting,
+            visaCost: visa,
+            digitalCost: digital,
+            otherCost: other,
+            totalCost: totalCost,
+            beforeAcceptanceCost: totalCost,
+            afterAcceptanceCost: totalCost,
+            status: 'Trước nghiệm thu',
+            createdAt: serverTimestamp(),
+            createdBy: user?.email || '',
+            createdByUid: user?.uid || '',
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.email || '',
+            updatedByUid: user?.uid || '',
+            breakdown: {}
+          });
+          count++;
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          await logAction('IMPORT_ACCEPTANCES', 'acceptances', 'bulk', { count, errors: errorsCount });
+          toast.success(`Đã nhập thành công ${count} bản ghi nghiệm thu.`);
+        }
+
+        if (errorsCount > 0) {
+          setImportErrors(errorDetailsList);
+          setIsImportErrorsDialogOpen(true);
+        }
+        
+        setIsImportAcceptancesDialogOpen(false);
+      } catch (error: any) {
+        handleFirestoreError(error, OperationType.WRITE, 'acceptances');
+      } finally {
+        setIsImportingAcceptances(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = async (event: any) => {
+        try {
+          const buffer = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(firstSheet);
+          await processAcceptanceData(json);
+        } catch (error) {
+          console.error(error);
+          toast.error('Lỗi khi đọc file Excel');
+          setIsImportingAcceptances(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          await processAcceptanceData(results.data);
+        },
+        error: (error) => {
+          toast.error('Lỗi khi đọc file CSV');
+          setIsImportingAcceptances(false);
+        }
+      });
+    }
+  };
+
   const getCurrentPeriod = () => {
     const now = new Date();
     const mMonth = getMarketingMonth(now);
@@ -6625,6 +6975,7 @@ export default function App() {
                 {isSuperAdmin && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-purple-200 text-purple-700 bg-purple-50/50">SUPER ADMIN</Badge>}
                 {(userRole === 'admin') && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
                 {isMod && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-slate-200 text-slate-700 bg-slate-50/50">MODERATOR</Badge>}
+                {isAccountant && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-amber-200 text-amber-700 bg-amber-50/50">KẾ TOÁN</Badge>}
                 {isGDDA && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-emerald-200 text-emerald-700 bg-emerald-50/50">GDDA</Badge>}
                 {isUser && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-orange-200 text-orange-700 bg-orange-50/50">USER</Badge>}
               </div>
@@ -6678,7 +7029,7 @@ export default function App() {
                 {budgets
                   .filter(b => {
                     const matchMonth = b.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isGDDA) {
+                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
                       const userEmail = user?.email?.toLowerCase();
                       const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
                       return matchMonth && (budgetEmail === userEmail || b.createdBy === user?.uid);
@@ -6698,20 +7049,18 @@ export default function App() {
                 <TrendingUp className="w-4 h-4" /> Thực tế đã chi (Kỳ này)
               </CardDescription>
               <CardTitle className="text-3xl font-black text-slate-900">
-                {costs
+                {latestCostsList
                   .filter(c => {
-                    const matchMonth = c.month === getMarketingMonth(new Date()) || (c.year === new Date().getFullYear() && !c.month);
-                    const matchWeek = c.weekNumber === getCurrentPeriod();
-                    const isMatchTime = matchMonth && matchWeek;
+                    const matchMonth = c.month === getMarketingMonth(new Date());
                     
-                    if (!isAdmin && !isMod && !isGDDA) {
+                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
                       const userEmail = user?.email?.toLowerCase();
-                      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
-                      return isMatchTime && (costEmail === userEmail || c.createdBy === user?.uid);
+                      const costEmail = c.userEmail?.toLowerCase() || (c.userEmail && c.userEmail.toLowerCase());
+                      return matchMonth && (costEmail === userEmail || c.createdBy === user?.uid);
                     }
-                    return isMatchTime;
+                    return matchMonth;
                   })
-                  .reduce((acc, curr) => acc + curr.amount, 0)
+                  .reduce((acc, curr) => acc + (curr.amount || 0), 0)
                   .toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
@@ -6727,7 +7076,7 @@ export default function App() {
                 {efficiencyReports
                   .filter(r => {
                     const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isGDDA) {
+                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
                       return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
                     }
                     return matchMonth;
@@ -6748,7 +7097,7 @@ export default function App() {
                 {efficiencyReports
                   .filter(r => {
                     const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isGDDA) {
+                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
                       return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
                     }
                     return matchMonth;
@@ -7212,6 +7561,18 @@ export default function App() {
                           >
                             <ShieldCheck className={`mr-3 h-4 w-4 ${adminSubTab === 'acceptance' ? 'text-white' : 'text-teal-500'}`} />
                             <span className="text-sm">Nghiệm thu hồ sơ</span>
+                          </Button>
+                          <Button 
+                            variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
+                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
+                              adminSubTab === 'doc-processing' 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
+                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                            }`}
+                            onClick={() => setAdminSubTab('doc-processing')}
+                          >
+                            <FileCheck className={`mr-3 h-4 w-4 ${adminSubTab === 'doc-processing' ? 'text-white' : 'text-indigo-500'}`} />
+                            <span className="text-sm">Xử lý Hồ sơ</span>
                           </Button>
                         </>
                       )}
@@ -8016,12 +8377,6 @@ export default function App() {
                                     ) : (
                                       <div className="flex flex-col">
                                         <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{p.name}</span>
-                                        {overBudgetProjectIds.has(p.id) && (
-                                          <div className="flex items-center gap-1 mt-0.5">
-                                            <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                            <span className="text-[9px] font-black uppercase text-red-500 tracking-tighter">Vượt ngân sách</span>
-                                          </div>
-                                        )}
                                       </div>
                                     )}
                                   </TableCell>
@@ -8962,105 +9317,18 @@ export default function App() {
                           >
                             <Target className="w-3 h-3 mr-1" /> Kiểm tra dữ liệu lạc
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-[10px] text-green-600 border-green-200 hover:bg-green-50"
-                            onClick={handleExportBudgets}
-                          >
-                            <Download className="w-3 h-3 mr-1" /> Xuất Excel
-                          </Button>
-                          {(isAdmin || isMod) && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                              onClick={() => setIsImportBudgetsDialogOpen(true)}
-                            >
-                              <FileUp className="w-3 h-3 mr-1" /> Nhập File
-                            </Button>
-                          )}
-                          {(isAdmin || isMod) && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-                              onClick={handleBulkDeleteBudgets}
-                              disabled={selectedBudgetIds.length === 0}
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedBudgetIds.length})
-                            </Button>
-                          )}
-                          {(isAdmin || isMod) && (
-                            <Button 
-                              variant="destructive" 
-                              size="sm" 
-                              className="h-8 text-[10px]"
-                              onClick={handleDeleteAllBudgets}
-                              disabled={budgets.length === 0}
-                            >
-                              <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                            </Button>
-                          )}
-                        </div>
+                          </div>
                       </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="flex-1 min-w-[200px] relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <DebouncedInput 
-                              placeholder="Tìm theo dự án, team, người triển khai..." 
-                              className="pl-10 bg-white border-none shadow-sm h-10"
-                              value={adminBudgetSearch}
-                              onChange={setAdminBudgetSearch}
-                            />
-                          </div>
-                          <div className="flex gap-1">
-                            <Select 
-                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[0] : ''} 
-                              onValueChange={(val) => {
-                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
-                                const [y, m] = current.split('-');
-                                setAdminBudgetMonthFilter(`${val}-${m}`);
-                              }}
-                            >
-                              <SelectTrigger className="w-[80px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
-                                <SelectValue placeholder="Năm" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {[2024, 2025, 2026, 2027, 2028].map(y => (
-                                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select 
-                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[1] : ''} 
-                              onValueChange={(val) => {
-                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
-                                const [y, m] = current.split('-');
-                                setAdminBudgetMonthFilter(`${y}-${val}`);
-                              }}
-                            >
-                              <SelectTrigger className="w-[100px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
-                                <SelectValue placeholder="Tháng" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
-                                  <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+                      <CardContent className="space-y-6">
 
-                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
-                          <Table>
+                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                          <Table className="table-fixed w-full">
                             <TableHeader className="bg-slate-50">
-                              <TableRow>
-                                <TableHead className="w-[40px]">
+                              <TableRow className="h-9 text-[9px] font-black uppercase text-slate-400 bg-slate-50/50">
+                                <TableHead className="w-[30px] px-1 text-center">
                                   <input 
                                     type="checkbox" 
-                                    className="rounded border-slate-300"
+                                    className="rounded border-slate-300 h-3 w-3"
                                     checked={selectedBudgetIds.length === budgets.length && budgets.length > 0}
                                     onChange={(e) => {
                                       if (e.target.checked) {
@@ -9071,22 +9339,22 @@ export default function App() {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead>Dự án</TableHead>
-                                <TableHead>Team</TableHead>
-                                <TableHead>Người triển khai</TableHead>
-                                <TableHead>Kỳ</TableHead>
-                                <TableHead className="text-right">Ngân sách</TableHead>
-                                <TableHead className="text-right">Chi phí NT</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className="w-auto px-2 tracking-tighter">Dự án</TableHead>
+                                <TableHead className="w-[100px] px-1 tracking-tighter">Team</TableHead>
+                                <TableHead className="w-[100px] px-1 tracking-tighter">N.Triển khai</TableHead>
+                                <TableHead className="w-[40px] px-1 text-center tracking-tighter">Kỳ</TableHead>
+                                <TableHead className="w-[90px] px-1 text-right tracking-tighter">Ngân sách</TableHead>
+                                <TableHead className="w-[90px] px-1 text-right tracking-tighter">Thực NT</TableHead>
+                                <TableHead className="w-[60px] px-2 text-right tracking-tighter">T.Tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {adminFilteredBudgets.map(b => (
-                                <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""}>
-                                  <TableCell>
+                                <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} h-11 transition-colors border-slate-100 group`}>
+                                  <TableCell className="px-1 text-center">
                                     <input 
                                       type="checkbox" 
-                                      className="rounded border-slate-300"
+                                      className="rounded border-slate-300 h-3 w-3"
                                       checked={selectedBudgetIds.includes(b.id)}
                                       onChange={(e) => {
                                         if (e.target.checked) {
@@ -9097,54 +9365,36 @@ export default function App() {
                                       }}
                                     />
                                   </TableCell>
-                                  <TableCell className="font-medium">
-                                    <div className="flex flex-col gap-0.5">
-                                      <span>{projectMap[b.projectId] || b.projectName}</span>
-                                      <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                                  <TableCell className="px-2 py-1">
+                                    <div className="flex flex-col gap-0 max-w-[200px] overflow-hidden">
+                                      <span className="text-[10px] font-bold text-slate-800 leading-tight truncate" title={projectMap[b.projectId] || b.projectName}>{projectMap[b.projectId] || b.projectName}</span>
+                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">ID: {b.projectId.substring(0,8)}</span>
                                     </div>
                                   </TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-col gap-0.5">
-                                      <span>{teamMap[b.teamId] || b.teamName}</span>
-                                      <span className="text-[10px] text-slate-400 font-normal">({teams.find(t => t.id === b.teamId)?.teamCode || ''})</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>{b.implementerName}</TableCell>
-                                  <TableCell className="text-xs">{b.month}</TableCell>
-                                  <TableCell className="text-right font-mono font-bold">{b.amount.toLocaleString()} đ</TableCell>
-                                  <TableCell className="text-right font-mono font-bold text-blue-600">{((b.verifiedAmount || 0)).toLocaleString()} đ</TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex justify-end gap-1">
+                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase">{teamMap[b.teamId] || b.teamName}</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[100px]">{b.implementerName}</TableCell>
+                                  <TableCell className="px-1 text-[9px] text-center font-black text-slate-400">W{b.weekNumber}</TableCell>
+                                  <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px]">{b.amount.toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px]">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-2 text-right">
+                                    <div className="flex justify-end gap-0">
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                        className="h-6 w-6 text-slate-300 hover:text-indigo-600"
                                         onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
-                                        title="Lịch sử thay đổi"
                                       >
-                                        <History className="w-3.5 h-3.5" />
+                                        <History className="w-3 h-3" />
                                       </Button>
                                       {(isAdmin || isMod) && (
-                                        <>
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 text-slate-400 hover:text-blue-600"
-                                            onClick={() => handleOpenEditBudget(b)}
-                                            title="Sửa ngân sách"
-                                          >
-                                            <Edit2 className="w-4 h-4" />
-                                          </Button>
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                            onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                            title="Xóa ngân sách"
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </Button>
-                                        </>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6 text-slate-300 hover:text-rose-600"
+                                          onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
                                       )}
                                     </div>
                                   </TableCell>
@@ -9153,27 +9403,26 @@ export default function App() {
                               {adminFilteredBudgets.length === 0 && (
                                 <TableRow>
                                   <TableCell colSpan={8} className="h-24 text-center text-slate-500">
-                                    Không tìm thấy ngân sách nào phù hợp
+                                    Không tìm thấy dữ liệu ngân sách nào phù hợp
                                   </TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
                             {adminFilteredBudgets.length > 0 && (
                               <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
-                                <TableRow>
+                                <TableRow className="h-10 font-bold">
                                   <TableCell></TableCell>
-                                  <TableCell colSpan={4} className="text-slate-900 uppercase text-[10px] tracking-wider">Tổng cộng</TableCell>
-                                  <TableCell className="text-right font-mono text-blue-700">
-                                    {adminFilteredBudgets.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()} đ
+                                  <TableCell colSpan={4} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
+                                  <TableCell className="px-2 text-right font-mono text-slate-900 text-[11px]">
+                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}đ
                                   </TableCell>
-                                  <TableCell className="text-right font-mono text-indigo-700">
-                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.verifiedAmount || 0), 0).toLocaleString()} đ
+                                  <TableCell className="px-2 text-right font-mono text-emerald-700 text-[11px]">
+                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (acceptanceMap[curr.id] || 0), 0).toLocaleString()}đ
                                   </TableCell>
                                   <TableCell></TableCell>
                                 </TableRow>
                               </TableFooter>
                             )}
-
                           </Table>
                         </div>
                       </CardContent>
@@ -9181,11 +9430,11 @@ export default function App() {
                   </div>
                 </TabsContent>
 
-                {/* Cost Management Tab */}
-                <TabsContent value="costs" className="space-y-6">
+                {/* Manage Costs Tab */}
+                <TabsContent value="costs">
                   <div className="space-y-6">
-                    <Card className="border-none shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between">
+                    <Card className="border-none shadow-sm overflow-hidden">
+                      <CardHeader className="bg-white border-b border-slate-100 flex flex-row items-center justify-between py-4">
                         <div>
                           <CardTitle>Quản lý Chi phí</CardTitle>
                           <CardDescription>Xóa hoặc xem danh sách các bản ghi thực chi</CardDescription>
@@ -9234,7 +9483,7 @@ export default function App() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 mt-4">
                           <div className="flex-1 min-w-[200px] relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <DebouncedInput 
@@ -9244,45 +9493,42 @@ export default function App() {
                               onChange={setAdminCostSearch}
                             />
                           </div>
-                  <div className="space-y-4">
-                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kỳ báo cáo</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                       <Select 
-                        value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[0] : ''} 
-                        onValueChange={(val) => {
-                          const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
-                          const [, m] = current.split('-');
-                          setAdminCostMonthFilter(`${val}-${m}`);
-                        }}
-                      >
-                        <SelectTrigger className="bg-white border-none shadow-sm h-10 w-[90px]">
-                          <SelectValue placeholder="Năm" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[2024, 2025, 2026, 2027, 2028].map(y => (
-                            <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select 
-                        value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[1] : ''} 
-                        onValueChange={(val) => {
-                          const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
-                          const [y] = current.split('-');
-                          setAdminCostMonthFilter(`${y}-${val}`);
-                        }}
-                      >
-                        <SelectTrigger className="bg-white border-none shadow-sm h-10 w-[110px]">
-                          <SelectValue placeholder="Tháng" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
-                            <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                          <div className="flex items-center gap-2">
+                             <Select 
+                              value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[0] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [, m] = current.split('-');
+                                setAdminCostMonthFilter(`${val}-${m}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[90px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Năm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select 
+                              value={adminCostMonthFilter ? adminCostMonthFilter.split('-')[1] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminCostMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [y] = current.split('-');
+                                setAdminCostMonthFilter(`${y}-${val}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[110px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Tháng" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                  <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
 
                         <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
@@ -9393,78 +9639,11 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <BarChart3 className="w-5 h-5 text-blue-600" /> Báo cáo & Phân tích chuyên sâu
                         </div>
-                        {isAdmin && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setIsAlertManagementOpen(true)}
-                            className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm rounded-xl py-4 h-9"
-                          >
-                            <Settings className="w-3.5 h-3.5" />
-                            Cấu hình Cảnh báo
-                          </Button>
-                        )}
                       </CardTitle>
                       <CardDescription>Theo dõi hiệu quả sử dụng ngân sách & Hiệu quả kinh doanh thực tế</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                    {/* Alert for Over Budget & Warning */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 mb-2">
-                      {overBudgetStats.count > 0 && (
-                        <div className="p-5 bg-red-50 border-2 border-red-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 p-8 bg-red-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-red-200/30 transition-colors" />
-                          <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 border border-red-200 z-10">
-                            <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
-                          </div>
-                          <div className="flex-1 z-10">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-black text-red-900 uppercase tracking-tighter text-sm">Vượt ngân sách ({overBudgetStats.count} mục)</h4>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsOverBudgetDetailOpen(true)}
-                                className="h-8 rounded-xl border-red-200 bg-white text-red-600 hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                Xem
-                              </Button>
-                            </div>
-                            <p className="text-[11px] text-red-700/80 font-medium leading-relaxed mt-1 pr-0">
-                               <strong>{overBudgetStats.count}</strong> mục đã chi vượt 
-                              <span className="font-black ml-1 text-red-800">{formatCurrency(overBudgetStats.totalExcess)}</span>.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {overBudgetStats.warningCount > 0 && (
-                        <div className="p-5 bg-amber-50 border-2 border-amber-200 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 p-8 bg-amber-100/20 rounded-full -mr-12 -mt-12 blur-3xl group-hover:bg-amber-200/30 transition-colors" />
-                          <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200 z-10">
-                            <ShieldAlert className="w-6 h-6 text-amber-600" />
-                          </div>
-                          <div className="flex-1 z-10">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-black text-amber-900 uppercase tracking-tighter text-sm">Mức độ cảnh báo ({overBudgetStats.warningCount} mục)</h4>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setIsOverBudgetDetailOpen(true)}
-                                className="h-8 rounded-xl border-amber-200 bg-white text-amber-600 hover:bg-amber-600 hover:text-white transition-all font-black text-[10px] uppercase gap-1.5 shadow-sm active:scale-95"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                Xem
-                              </Button>
-                            </div>
-                            <p className="text-[11px] text-amber-700/80 font-medium leading-relaxed mt-1">
-                              <strong>{overBudgetStats.warningCount}</strong> mục đã chi trên <strong>{budgetWarningThreshold}%</strong> ngân sách được duyệt.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Filters Row */}
+                      {/* Filters Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8 overflow-hidden">
                       <div className="space-y-2 min-w-0">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
@@ -10216,8 +10395,8 @@ export default function App() {
                                         <TableCell className="text-right font-mono text-xs">{row.googleAds.toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono text-xs">{row.zaloAds.toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono text-xs">{row.posting.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">{row.visaAmount.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs font-bold text-purple-600 bg-purple-50/20">{row.digitalAmount.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">{row.visaCost.toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-xs font-bold text-purple-600 bg-purple-50/20">{row.digitalCost.toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono font-bold text-slate-900 text-xs">{row.total.toLocaleString()} đ</TableCell>
                                       </TableRow>
                                     ))}
@@ -10237,8 +10416,8 @@ export default function App() {
                                         <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.googleAds, 0).toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.zaloAds, 0).toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.posting, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px] text-blue-700">{channelReportData.reduce((acc, curr) => acc + curr.visaAmount, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px] text-purple-700">{channelReportData.reduce((acc, curr) => acc + curr.digitalAmount, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px] text-blue-700">{channelReportData.reduce((acc, curr) => acc + curr.visaCost, 0).toLocaleString()} đ</TableCell>
+                                        <TableCell className="text-right font-mono text-[10px] text-purple-700">{channelReportData.reduce((acc, curr) => acc + curr.digitalCost, 0).toLocaleString()} đ</TableCell>
                                         <TableCell className="text-right font-mono text-md text-slate-900 font-black">{channelReportData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString()} đ</TableCell>
                                       </TableRow>
                                     </TableFooter>
@@ -10630,7 +10809,7 @@ export default function App() {
                                         return (
                                           <TableRow 
                                             key={idx} 
-                                            className={`group transition-colors border-b-slate-50 cursor-pointer ${isOverBudget ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-emerald-50/30'}`}
+                                            className={`group transition-colors border-b-slate-50 cursor-pointer hover:bg-emerald-50/30`}
                                             onClick={() => {
                                               if (efficiencyGroupType === 'project') setReportProject(item.id);
                                               else setReportTeam(item.id);
@@ -10662,7 +10841,7 @@ export default function App() {
                                               </div>
                                             </TableCell>
                                             <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(item.budget)}</TableCell>
-                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] ${isOverBudget ? 'text-red-600 scale-110 shadow-sm' : 'text-slate-900 opacity-80'}`}>
+                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] text-slate-900 opacity-80`}>
                                               {formatCurrency(item.cost)}
                                             </TableCell>
                                             <TableCell className="text-center py-4">
@@ -10762,7 +10941,7 @@ export default function App() {
                                         return (
                                           <TableRow 
                                             key={idx} 
-                                            className={`group transition-colors border-b-slate-50 cursor-pointer ${isOverBudget ? 'bg-red-50/50 hover:bg-red-100/40' : 'hover:bg-red-50/30'}`}
+                                            className={`group transition-colors border-b-slate-50 cursor-pointer hover:bg-red-50/30`}
                                             onClick={() => {
                                               if (efficiencyGroupType === 'project') setReportProject(item.id);
                                               else setReportTeam(item.id);
@@ -10792,7 +10971,7 @@ export default function App() {
                                               </div>
                                             </TableCell>
                                             <TableCell className="text-right py-4 font-bold text-slate-500 font-mono text-[11px]">{formatCurrency(item.budget)}</TableCell>
-                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] ${isOverBudget ? 'text-red-700 scale-110' : 'text-red-600/60 font-medium'}`}>{formatCurrency(item.cost)}</TableCell>
+                                            <TableCell className={`text-right py-4 font-black font-mono text-[11px] text-red-600/60 font-medium`}>{formatCurrency(item.cost)}</TableCell>
                                           <TableCell className="text-right pr-8 py-4">
                                             <Badge variant="outline" className="text-[9px] font-bold text-slate-500">
                                               {item.details.length} {efficiencyGroupType === 'project' ? 'đội tham gia' : 'dự án triển khai'}
@@ -11084,13 +11263,14 @@ export default function App() {
                                       <SelectItem value="super_admin">Super Admin</SelectItem>
                                       <SelectItem value="admin">Admin</SelectItem>
                                       <SelectItem value="mod">Mod</SelectItem>
+                                      <SelectItem value="accountant">Kế toán</SelectItem>
                                       <SelectItem value="gdda">GDDA</SelectItem>
                                       <SelectItem value="user">User</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
                                 <TableCell>
-                                  {(u.role === 'mod' || u.role === 'gdda') ? (
+                                  {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
                                         <DialogTrigger nativeButton={true} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
@@ -11100,8 +11280,8 @@ export default function App() {
                                           <DialogHeader>
                                             <DialogTitle>Gán dự án cho {u.fullName || u.email}</DialogTitle>
                                             <DialogDescription>
-                                              {u.role === 'mod' 
-                                                ? 'Chọn các dự án mà Mod này có quyền xem.' 
+                                              {(u.role === 'mod' || u.role === 'accountant')
+                                                ? 'Chọn các dự án mà Mod/Kế toán này có quyền xem.' 
                                                 : 'Chọn các dự án mà GDDA này có quyền xem báo cáo.'}
                                             </DialogDescription>
                                           </DialogHeader>
@@ -11179,6 +11359,7 @@ export default function App() {
                       isAdmin={isAdmin}
                       isSuperAdmin={isSuperAdmin}
                       isMod={isMod}
+                      isAccountant={isAccountant}
                       user={user}
                       teams={teams}
                       projects={projects}
@@ -11190,6 +11371,28 @@ export default function App() {
                       getMarketingMonth={getMarketingMonth}
                       handleFirestoreError={handleFirestoreError}
                       formatCurrencyInput={formatCurrencyInput}
+                      isImportingAcceptances={isImportingAcceptances}
+                      setIsImportingAcceptances={setIsImportingAcceptances}
+                      isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
+                      setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
+                      handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="doc-processing" className="space-y-6">
+                    <DocProcessingManager 
+                      projects={projects}
+                      projectMap={projectMap}
+                      teamMap={teamMap}
+                      groupedDocProcessing={groupedDocProcessing}
+                      handleUpdateDocProcessing={handleUpdateDocProcessing}
+                      formatCurrency={formatCurrency}
+                      debouncedAcceptanceSearch={debouncedAcceptanceSearch}
+                      setAcceptanceSearch={setAcceptanceSearch}
+                      acceptanceProjectFilter={acceptanceProjectFilter}
+                      setAcceptanceProjectFilter={setAcceptanceProjectFilter}
+                      isAdmin={isAdmin}
+                      isAccountant={isAccountant}
                     />
                   </TabsContent>
 
@@ -11798,12 +12001,7 @@ export default function App() {
                 <CardDescription className="text-slate-500 font-medium">Nhập ngân sách dự kiến cho các chiến dịch marketing của bạn</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-xs font-bold text-amber-800 leading-relaxed">
-                    Chú ý : Ngân sách chạy thực tế không được Vượt quá hoặc Thấp hơn 70% so với ngân sách đã đăng kí .
-                  </p>
-                </div>
+
                 <form onSubmit={handleAddBudget} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="space-y-2 lg:col-span-2">
@@ -12041,7 +12239,7 @@ export default function App() {
                       {multiBudgetItems.map((item, idx) => (
                         <div key={idx} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between gap-4">
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900 text-sm truncate">{projectMap[item.projectId]}</p>
+                            <p className="font-bold text-slate-900 text-sm truncate">{projectMap[item.projectId] || projects.find((p: any) => p.id === item.projectId)?.name || item.projectId}</p>
                             <p className="text-[10px] text-slate-500 font-medium">{item.teamName} • Tháng {item.month}</p>
                           </div>
                           <div className="text-right shrink-0">
@@ -12059,7 +12257,7 @@ export default function App() {
                       <div className="grid grid-cols-3 gap-2">
                         <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dự án</p>
-                          <p className="text-xs font-bold text-slate-900 truncate">{projectMap[selectedProjectId]}</p>
+                          <p className="text-xs font-bold text-slate-900 truncate">{projectMap[selectedProjectId] || projects.find((p: any) => p.id === selectedProjectId)?.name || selectedProjectId}</p>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Team</p>
@@ -12074,12 +12272,7 @@ export default function App() {
                         <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Số tiền đăng ký</p>
                         <p className="text-3xl font-black text-indigo-600">{formatCurrency(Number(budgetAmount))}</p>
                       </div>
-                      <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                        <p className="text-[10px] font-bold text-amber-800 leading-tight">
-                          Đảm bảo ngân sách thực tế không biến động quá 30% so với con số này.
-                        </p>
-                      </div>
+
                     </div>
                   )}
                 </div>
@@ -12371,7 +12564,7 @@ export default function App() {
                                       </div>
                                       <div className="flex flex-col min-w-0 flex-1" key={b.id}>
                                         <div className="flex items-center gap-2">
-                                          <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId]}</span>
+                                          <span className="font-bold text-slate-900 truncate">{projectMap[b.projectId] || b.projectName || b.projectId}</span>
                                           <span className="text-[10px] text-slate-400 font-normal shrink-0">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px] text-slate-500">
@@ -12445,7 +12638,7 @@ export default function App() {
                                       <div className="flex justify-between items-start gap-2 mb-1">
                                         <div className="flex items-center gap-2 truncate">
                                           <h4 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
-                                            {projectMap[b.projectId]}
+                                            {projectMap[b.projectId] || b.projectName || b.projectId}
                                           </h4>
                                           <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
                                         </div>
@@ -12498,9 +12691,7 @@ export default function App() {
                           {(() => {
                             const budget = budgets.find(b => b.id === selectedBudgetId);
                             const project = projects.find(p => p.id === budget?.projectId);
-                            const spent = costs
-                              .filter(c => c.budgetId === selectedBudgetId)
-                              .reduce((acc, curr) => acc + curr.amount, 0);
+                            const spent = acceptanceMap[selectedBudgetId] || 0;
                             const percent = budget ? (spent / budget.amount) * 100 : 0;
                             const remaining = budget ? budget.amount - spent : 0;
                             
@@ -12525,9 +12716,9 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                 <div className="grid grid-cols-2 gap-4">
                                   <div className="space-y-1">
-                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Đã thực chi</p>
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Đã thực chi (Hiện tại)</p>
                                     <p className="text-sm font-black text-slate-900 font-mono">
                                       {spent.toLocaleString()} <span className="text-[10px]">đ</span>
                                     </p>
@@ -12539,6 +12730,27 @@ export default function App() {
                                     </p>
                                   </div>
                                 </div>
+
+                                {latestCostsByBudget[selectedBudgetId] && (
+                                  <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <History className="w-3 h-3 text-indigo-500" />
+                                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Lần cập nhật cuối</span>
+                                    </div>
+                                    <div className="flex justify-between items-end">
+                                      <p className="text-[10px] font-bold text-slate-600">
+                                        {latestCostsByBudget[selectedBudgetId].createdAt?.toDate 
+                                          ? format(latestCostsByBudget[selectedBudgetId].createdAt.toDate(), 'HH:mm - dd/MM/yyyy') 
+                                          : 'N/A'}
+                                      </p>
+                                      {latestCostsByBudget[selectedBudgetId].note && (
+                                        <p className="text-[9px] text-indigo-600 font-medium italic max-w-[150px] truncate">
+                                          "{latestCostsByBudget[selectedBudgetId].note}"
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
 
                                 <div className="space-y-1.5">
                                   <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
@@ -12564,34 +12776,34 @@ export default function App() {
                             <Clock className="w-4 h-4 text-blue-600" />
                           </div>
                           <div className="flex-1">
-                            <Label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-0.5">Thời gian cập nhật</Label>
-                            <p className="text-xs font-bold text-blue-700">Tự động ghi nhận theo thời điểm hiện tại</p>
+                            <Label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-0.5">Quy tắc cập nhật</Label>
+                            <p className="text-xs font-bold text-blue-700">Nhập tổng chi phí CỘNG DỒN từ đầu kỳ đến hiện tại</p>
                           </div>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Facebook Ads</Label>
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Facebook Ads (Cộng dồn)</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(fbAds)} onChange={handleNumberInputChange(setFbAds)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Google Ads</Label>
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Google Ads (Cộng dồn)</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(googleAds)} onChange={handleNumberInputChange(setGoogleAds)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Zalo Ads</Label>
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Zalo Ads (Cộng dồn)</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(zaloAds)} onChange={handleNumberInputChange(setZaloAds)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Đăng tin</Label>
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Đăng tin (Cộng dồn)</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(posting)} onChange={handleNumberInputChange(setPosting)} />
                           </div>
                           <div className="space-y-1.5 col-span-2">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Khác</Label>
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Khác (Cộng dồn)</Label>
                             <Input type="text" className="h-9 text-xs font-mono" placeholder="0" value={formatNumberWithCommas(otherCost)} onChange={handleNumberInputChange(setOtherCost)} />
                           </div>
                           <div className="col-span-2 pt-3 border-t border-slate-200 flex justify-between items-center">
-                            <span className="text-xs font-bold text-slate-600">Tổng cộng:</span>
+                            <span className="text-xs font-bold text-slate-600">Tổng cộng (Cộng dồn):</span>
                             <span className="text-base font-bold text-blue-600 font-mono">
                               {(Number(fbAds) + Number(posting) + Number(zaloAds) + Number(googleAds) + Number(otherCost)).toLocaleString()} đ
                             </span>
@@ -12611,8 +12823,7 @@ export default function App() {
                     <div className="mt-6 p-4 rounded-lg bg-amber-50 border border-amber-100 space-y-2">
                       <p className="text-[10px] font-bold text-amber-800 uppercase">Quy định chi phí:</p>
                       <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
-                        <li>Không vượt quá 100% ngân sách.</li>
-                        <li>Không thấp hơn 70% ngân sách.</li>
+
                       </ul>
                     </div>
                   </CardContent>
@@ -12821,17 +13032,17 @@ export default function App() {
                       {costs.length > 0 && (
                         <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng:</TableCell>
+                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng thực chi:</TableCell>
                             <TableCell className="text-right font-mono text-emerald-600 font-black">
-                              {costs.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
+                              {latestCostsList.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
                             </TableCell>
                             <TableCell className="text-right font-mono text-slate-500 text-xs">
-                              {costs.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0).toLocaleString()} đ
+                              {latestCostsList.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0).toLocaleString()} đ
                             </TableCell>
                             <TableCell className="text-right">
                               {(() => {
-                                const totalBudget = costs.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0);
-                                const totalCost = costs.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                                const totalBudget = latestCostsList.reduce((acc, curr) => acc + (budgetAmountMap[curr.budgetId] || 0), 0);
+                                const totalCost = latestCostsList.reduce((acc, curr) => acc + (curr.amount || 0), 0);
                                 if (totalBudget === 0) return '-';
                                 const percent = (totalCost / totalBudget) * 100;
                                 return (
@@ -13613,7 +13824,7 @@ export default function App() {
               <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
                 <SelectTrigger className="bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Chọn dự án">
-                    {editingBudgetProject ? `${projectMap[editingBudgetProject] || editingBudgetProject} (${projects.find(p => p.id === editingBudgetProject)?.projectCode || ''})` : "Chọn dự án"}
+                    {editingBudgetProject ? `${projectMap[editingBudgetProject] || projects.find((p: any) => p.id === editingBudgetProject)?.name || editingBudgetProject} (${projects.find(p => p.id === editingBudgetProject)?.projectCode || ''})` : "Chọn dự án"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="w-[400px] md:w-[550px]">
@@ -14223,7 +14434,7 @@ export default function App() {
                     Chi tiết quản lý cảnh báo chi phí
                   </DialogTitle>
                   <p className="text-white/80 text-xs font-black uppercase tracking-widest leading-relaxed">
-                    Theo dõi các đơn vị đạt ngưỡng cảnh báo hoặc vượt ngân sách
+                    Giám sát hiệu quả sử dụng ngân sách & Hiệu quả kinh doanh thực tế
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -14402,12 +14613,15 @@ export default function App() {
  * Encapsulates the Acceptance tab logic and UI to improve performance and reduce input lag.
  */
 const AcceptanceManager = React.memo(({ 
-  isAdmin, isSuperAdmin, isMod, user, teams, projects, acceptances, finalAcceptances, teamMap, projectMap, 
-  formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput 
+  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams, projects, acceptances, finalAcceptances, teamMap, projectMap, 
+  formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
+  isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,
+  handleImportAcceptancesCSV
 }: any) => {
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
+  const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
   const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
@@ -14418,18 +14632,18 @@ const AcceptanceManager = React.memo(({
   // Form states (Local to this component to avoid App-wide lag)
   const [acceptanceMonth, setAcceptanceMonth] = useState('');
   const [acceptanceTeam, setAcceptanceTeam] = useState('');
-  const [acceptanceProject, setAcceptanceProject] = useState('');
+  const [acceptanceProjects, setAcceptanceProjects] = useState<string[]>([]);
   
   // Dynamic line items (flat list)
-  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; tax?: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
-    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }
+  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; tax?: string; projectId?: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
+    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }
   ]);
 
   const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
   const [acceptanceType, setAcceptanceType] = useState('Chi phí không đổi');
   const [acceptanceRealCost, setAcceptanceRealCost] = useState('');
-  const [visaAmount, setVisaAmount] = useState('');
-  const [digitalAmount, setDigitalAmount] = useState('');
+  const [visaAmounts, setVisaAmounts] = useState<Record<string, string>>({});
+  const [digitalAmounts, setDigitalAmounts] = useState<Record<string, string>>({});
   const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [acceptanceToDelete, setAcceptanceToDelete] = useState<string | null>(null);
@@ -14440,20 +14654,26 @@ const AcceptanceManager = React.memo(({
   const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
   const [editingBreakdownValues, setEditingBreakdownValues] = useState<Record<string, string>>({});
 
+  const filteredProjectsForAdd = useMemo(() => {
+    // If a team is selected, we could filter by team, but the user wants to see the list first.
+    // Let's show all projects to avoid the "no projects found" issue.
+    return projects;
+  }, [projects]);
+
   const addEntry = () => {
-    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
+    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }]);
   };
 
   const removeEntry = (id: string) => {
     setEntries(prev => {
       if (prev.length <= 1) {
-        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }];
+        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }];
       }
       return prev.filter(e => e.id !== id);
     });
   };
 
-  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount' | 'tax', value: string) => {
+  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount' | 'tax' | 'projectId', value: string) => {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
   };
 
@@ -14466,6 +14686,16 @@ const AcceptanceManager = React.memo(({
         return sum + val + taxVal;
       }, 0);
   };
+
+  // Auto-sync project selection for entries
+  useEffect(() => {
+    setEntries(prev => prev.map(e => {
+      if (e.projectId && !acceptanceProjects.includes(e.projectId)) {
+        return { ...e, projectId: '' };
+      }
+      return e;
+    }));
+  }, [acceptanceProjects]);
 
   const [expandingAcceptance, setExpandingAcceptance] = useState<string | null>(null);
 
@@ -14552,10 +14782,11 @@ const AcceptanceManager = React.memo(({
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
+      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
       const isPending = a.status !== 'Đã nghiệm thu';
-      return matchesSearch && matchesMonth && isPending;
+      return matchesSearch && matchesMonth && matchesProject && isPending;
     });
-  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter]);
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter]);
 
   const filteredFinalAcceptances = useMemo(() => {
     return (finalAcceptances || []).filter((a: any) => {
@@ -14564,9 +14795,11 @@ const AcceptanceManager = React.memo(({
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
-      return matchesSearch && matchesMonth;
+      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
+      return matchesSearch && matchesMonth && matchesProject;
     });
-  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter]);
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter]);
+
 
   const pendingTotals = useMemo(() => {
     return filteredAcceptances.reduce((acc, a) => ({
@@ -14600,73 +14833,75 @@ const AcceptanceManager = React.memo(({
 
   const handleAddAcceptance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!acceptanceMonth || !acceptanceTeam || !acceptanceProject) {
-      toast.error('Vui lòng chọn đầy đủ Tháng, Đội và Dự án');
+    if (!acceptanceMonth || !acceptanceTeam || (editingAcceptance ? !acceptanceProjects[0] : acceptanceProjects.length === 0)) {
+      toast.error('Vui lòng chọn đầy đủ Tháng, Đội và ít nhất một Dự án');
       return;
     }
 
     setIsAddingAcceptance(true);
     try {
-      const fb = calculateChannelTotal('facebook');
-      const tiktok = calculateChannelTotal('tiktok');
-      const zalo = calculateChannelTotal('zalo');
-      const google = calculateChannelTotal('google');
-      const posting = calculateChannelTotal('posting');
-      const other = calculateChannelTotal('other');
-      const visa = parseFloat(visaAmount.replace(/\./g, '')) || 0;
-      const digital = parseFloat(digitalAmount.replace(/\./g, '')) || 0;
-      const realCost = parseFloat(acceptanceRealCost.replace(/\./g, '')) || 0;
-      
-      const beforeAcceptanceTotal = fb + tiktok + zalo + google + posting + other;
-      const afterTotal = (acceptanceStatus === 'Đã nghiệm thu' && acceptanceType === 'Chi phí thay đổi') ? realCost : beforeAcceptanceTotal;
-
       const team = teams.find((t: any) => t.id === acceptanceTeam);
-      const project = projects.find((p: any) => p.id === acceptanceProject);
-
-      // Process breakdown for storage (convert strings to numbers)
-      const processedBreakdown: any = {};
+      const realCostValue = parseFloat(acceptanceRealCost.replace(/\./g, '')) || 0;
       const channelKeys = ['facebook', 'tiktok', 'zalo', 'google', 'posting', 'other'];
-      
-      channelKeys.forEach(key => {
-        processedBreakdown[key] = entries
-          .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''))
-          .map(e => ({
-            account: e.account,
-            amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
-            tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
-            isConfirmed: e.isConfirmed || false,
-            finalAmount: e.finalAmount !== undefined ? e.finalAmount : null
-          }));
-      });
-
-      const payload: any = {
-        month: acceptanceMonth,
-        teamId: acceptanceTeam,
-        teamName: team?.name || '',
-        teamCode: team?.teamCode || '',
-        projectId: acceptanceProject,
-        projectName: project?.name || '',
-        projectCode: project?.projectCode || '',
-        facebookCost: fb,
-        tiktokCost: tiktok,
-        zaloCost: zalo,
-        googleCost: google,
-        postingCost: posting,
-        otherCost: other,
-        visaCost: visa,
-        digitalCost: digital,
-        totalCost: beforeAcceptanceTotal,
-        beforeAcceptanceCost: beforeAcceptanceTotal,
-        afterAcceptanceCost: afterTotal,
-        status: acceptanceStatus,
-        acceptanceType: acceptanceStatus === 'Đã nghiệm thu' ? acceptanceType : null,
-        breakdown: processedBreakdown,
-        updatedAt: serverTimestamp(),
-        updatedBy: user?.email || '',
-        updatedByUid: user?.uid || ''
-      };
 
       if (editingAcceptance) {
+        // Edit mode (single record)
+        const projectId = acceptanceProjects[0];
+        const visa = parseFloat((visaAmounts[projectId] || '').replace(/\./g, '')) || 0;
+        const digital = parseFloat((digitalAmounts[projectId] || '').replace(/\./g, '')) || 0;
+        
+        const fb = calculateChannelTotal('facebook');
+        const tiktok = calculateChannelTotal('tiktok');
+        const zalo = calculateChannelTotal('zalo');
+        const google = calculateChannelTotal('google');
+        const posting = calculateChannelTotal('posting');
+        const other = calculateChannelTotal('other');
+        const beforeAcceptanceTotal = fb + tiktok + zalo + google + posting + other;
+        const afterTotal = (acceptanceStatus === 'Đã nghiệm thu' && acceptanceType === 'Chi phí thay đổi') ? realCostValue : beforeAcceptanceTotal;
+
+        const project = projects.find((p: any) => p.id === acceptanceProjects[0]);
+        
+        // Process breakdown for storage (convert strings to numbers)
+        const processedBreakdown: any = {};
+        channelKeys.forEach(key => {
+          processedBreakdown[key] = entries
+            .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''))
+            .map(e => ({
+              account: e.account,
+              amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
+              tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
+              isConfirmed: e.isConfirmed || false,
+              finalAmount: e.finalAmount !== undefined ? e.finalAmount : null
+            }));
+        });
+
+        const payload: any = {
+          month: acceptanceMonth,
+          teamId: acceptanceTeam,
+          teamName: team?.name || '',
+          teamCode: team?.teamCode || '',
+          projectId: acceptanceProjects[0],
+          projectName: project?.name || '',
+          projectCode: project?.projectCode || '',
+          facebookCost: fb,
+          tiktokCost: tiktok,
+          zaloCost: zalo,
+          googleCost: google,
+          postingCost: posting,
+          otherCost: other,
+          visaCost: visa,
+          digitalCost: digital,
+          totalCost: beforeAcceptanceTotal,
+          beforeAcceptanceCost: beforeAcceptanceTotal,
+          afterAcceptanceCost: afterTotal,
+          status: acceptanceStatus,
+          acceptanceType: acceptanceStatus === 'Đã nghiệm thu' ? acceptanceType : null,
+          breakdown: processedBreakdown,
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.email || '',
+          updatedByUid: user?.uid || ''
+        };
+
         if (isEditingFinalized) {
           payload.totalActualCost = afterTotal;
           await updateDoc(doc(db, 'finalAcceptances', editingAcceptance.id), payload);
@@ -14684,23 +14919,98 @@ const AcceptanceManager = React.memo(({
         setEditingAcceptance(null);
         setIsEditingFinalized(false);
       } else {
-        await addDoc(collection(db, 'acceptances'), {
-          ...payload,
-          createdAt: serverTimestamp(),
-          createdBy: user?.email || '',
-          createdByUid: user?.uid || ''
+        // Add mode (multiple projects)
+        console.log("Adding multi-project acceptance:", acceptanceProjects);
+        const batch = writeBatch(db);
+        
+        if (acceptanceProjects.length === 0) {
+          toast.error("Vui lòng chọn ít nhất một dự án");
+          setIsAddingAcceptance(false);
+          return;
+        }
+
+        acceptanceProjects.forEach(pid => {
+          const project = projects.find((p: any) => p.id === pid);
+          if (!project) console.warn(`Project with ID ${pid} not found in projects array`);
+          
+          // Filter entries for this project: 
+          // either specifically assigned to it, OR generic (no projectId set)
+          const projectEntries = entries.filter(e => !e.projectId || e.projectId === pid);
+          
+          const channelCosts: Record<string, number> = {};
+          const processedBreakdown: any = {};
+          let projectBeforeTotal = 0;
+
+          channelKeys.forEach(key => {
+            const items = projectEntries.filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''));
+            const cost = items.reduce((sum, item) => {
+              const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
+              const taxVal = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
+              return sum + val + taxVal;
+            }, 0);
+            
+            channelCosts[key] = cost;
+            projectBeforeTotal += cost;
+            
+            processedBreakdown[key] = items.map(item => ({
+              account: item.account,
+              amount: parseFloat(item.amount.replace(/\./g, '')) || 0,
+              tax: parseFloat((item.tax || '').replace(/\./g, '')) || 0,
+              isConfirmed: false,
+              finalAmount: null
+            }));
+          });
+
+          // Logic: if status is "Finalized" and "Cost changed", use the realCost input.
+          // Note: for multi-project creation, realCost is applied as the total for EACH project.
+          const afterTotal = (acceptanceStatus === 'Đã nghiệm thu' && acceptanceType === 'Chi phí thay đổi') ? realCostValue : projectBeforeTotal;
+
+          const docRef = doc(collection(db, 'acceptances'));
+          const payload: any = {
+            month: acceptanceMonth,
+            teamId: acceptanceTeam,
+            teamName: team?.name || '',
+            teamCode: team?.teamCode || '',
+            projectId: pid,
+            projectName: project?.name || '',
+            projectCode: project?.projectCode || '',
+            facebookCost: channelCosts['facebook'] || 0,
+            tiktokCost: channelCosts['tiktok'] || 0,
+            zaloCost: channelCosts['zalo'] || 0,
+            googleCost: channelCosts['google'] || 0,
+            postingCost: channelCosts['posting'] || 0,
+            otherCost: channelCosts['other'] || 0,
+            visaCost: parseFloat((visaAmounts[pid] || '').replace(/\./g, '')) || 0,
+            digitalCost: parseFloat((digitalAmounts[pid] || '').replace(/\./g, '')) || 0,
+            totalCost: projectBeforeTotal,
+            beforeAcceptanceCost: projectBeforeTotal,
+            afterAcceptanceCost: afterTotal,
+            status: acceptanceStatus,
+            acceptanceType: acceptanceStatus === 'Đã nghiệm thu' ? acceptanceType : null,
+            breakdown: processedBreakdown,
+            createdAt: serverTimestamp(),
+            createdBy: user?.email || '',
+            createdByUid: user?.uid || auth.currentUser?.uid || '',
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.email || '',
+            updatedByUid: user?.uid || auth.currentUser?.uid || ''
+          };
+          batch.set(docRef, payload);
         });
-        toast.success('Thêm bản ghi nghiệm thu thành công');
+        
+        await batch.commit();
+        toast.success(`Đã thêm ${acceptanceProjects.length} bản ghi nghiệm thu thành công`);
       }
 
       // Reset form
       setAcceptanceTeam('');
-      setAcceptanceProject('');
-      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
+      setAcceptanceProjects([]);
+      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }]);
       setAcceptanceRealCost('');
-      setVisaAmount('');
-      setDigitalAmount('');
+      setVisaAmounts({});
+      setDigitalAmounts({});
       setAcceptanceStatus('Trước nghiệm thu');
+      setAcceptanceType('Chi phí không đổi');
     } catch (error: any) {
       handleFirestoreError(error, OperationType.WRITE, isEditingFinalized ? 'finalAcceptances' : 'acceptances');
     } finally {
@@ -14780,6 +15090,7 @@ const AcceptanceManager = React.memo(({
       'Dự án': a.projectName,
       'Mã dự án': a.projectCode,
       'Team': a.teamName,
+      'Mã team': a.teamCode || '',
       'Facebook Ads': a.facebookCost || 0,
       'Tiktok Ads': a.tiktokCost || 0,
       'Zalo Ads': a.zaloCost || 0,
@@ -14928,11 +15239,12 @@ const AcceptanceManager = React.memo(({
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dự án (Project)</Label>
-                    <SearchableAcceptanceProjectSelect 
-                      value={acceptanceProject} 
-                      onValueChange={setAcceptanceProject} 
-                      projects={projects} 
+                    <SearchableAcceptanceProjectMultiSelect 
+                      values={acceptanceProjects} 
+                      onValuesChange={setAcceptanceProjects} 
+                      projects={filteredProjectsForAdd} 
                       projectMap={projectMap} 
+                      isEditing={!!editingAcceptance}
                     />
                   </div>
                 </div>
@@ -14954,6 +15266,27 @@ const AcceptanceManager = React.memo(({
                   <div className="space-y-3">
                     {entries.map((entry, idx) => (
                       <div key={entry.id} className="flex flex-col gap-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {!editingAcceptance && acceptanceProjects.length > 1 && (
+                          <div className="flex-1 space-y-1.5">
+                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Thuộc dự án</Label>
+                            <Select 
+                              value={entry.projectId} 
+                              onValueChange={(val) => updateEntry(entry.id, 'projectId', val)}
+                            >
+                              <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
+                                <SelectValue placeholder="Tất cả dự án được chọn">
+                                  {entry.projectId ? (projectMap[entry.projectId] || projects.find((p: any) => p.id === entry.projectId)?.name || entry.projectId) : "Tất cả dự án được chọn"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Tất cả dự án được chọn</SelectItem>
+                                {filteredProjectsForAdd.filter((p: any) => acceptanceProjects.includes(p.id)).map((p: any) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <div className="flex items-center gap-3">
                           <div className="w-[140px]">
                             <Select 
@@ -15026,24 +15359,44 @@ const AcceptanceManager = React.memo(({
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tự chạy qua thẻ VISA (Ngoài tổng chi)</Label>
-                        <Input 
-                          placeholder="Nhập số tiền..." 
-                          className="h-11 bg-white border-slate-200 rounded-xl text-sm font-mono"
-                          value={visaAmount}
-                          onChange={e => setVisaAmount(formatCurrencyInput(e.target.value))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chạy qua team Digital (Ngoài tổng chi)</Label>
-                        <Input 
-                          placeholder="Nhập số tiền..." 
-                          className="h-11 bg-white border-slate-200 rounded-xl text-sm font-mono"
-                          value={digitalAmount}
-                          onChange={e => setDigitalAmount(formatCurrencyInput(e.target.value))}
-                        />
+                    <div className="space-y-4 pt-4 border-t border-slate-100">
+                      <Label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1">Chi phí ngoài tổng chi (Visa & Digital) - Nhập theo dự án</Label>
+                      <div className="grid grid-cols-1 gap-4">
+                        {acceptanceProjects.map((pid: string) => (
+                          <div key={pid} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-1.5 h-4 bg-indigo-500 rounded-full" />
+                              <span className="text-[11px] font-black text-slate-900 uppercase">
+                                {projectMap[pid] || projects.find((p: any) => p.id === pid)?.name || pid}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <Label className="text-[9px] font-bold text-slate-500 ml-1">Tự chạy thẻ VISA</Label>
+                                <Input 
+                                  placeholder="Nhập số tiền..." 
+                                  className="h-10 bg-slate-50 border-none rounded-xl text-xs font-mono font-bold text-indigo-600"
+                                  value={visaAmounts[pid] || ''}
+                                  onChange={e => setVisaAmounts(prev => ({ ...prev, [pid]: formatCurrencyInput(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[9px] font-bold text-slate-500 ml-1">Team Digital chạy</Label>
+                                <Input 
+                                  placeholder="Nhập số tiền..." 
+                                  className="h-10 bg-slate-50 border-none rounded-xl text-xs font-mono font-bold text-indigo-600"
+                                  value={digitalAmounts[pid] || ''}
+                                  onChange={e => setDigitalAmounts(prev => ({ ...prev, [pid]: formatCurrencyInput(e.target.value) }))}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {acceptanceProjects.length === 0 && (
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-[10px] font-bold text-slate-400">
+                            Vui lòng chọn dự án để nhập chi phí Visa/Digital
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -15119,11 +15472,11 @@ const AcceptanceManager = React.memo(({
                         setIsEditingFinalized(false);
                         setAcceptanceMonth('');
                         setAcceptanceTeam('');
-                        setAcceptanceProject('');
+                        setAcceptanceProjects([]);
                         setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
                         setAcceptanceRealCost('');
-                        setVisaAmount('');
-                        setDigitalAmount('');
+                        setVisaAmounts({});
+                        setDigitalAmounts({});
                         setAcceptanceStatus('Trước nghiệm thu');
                         setAcceptanceType('Chi phí không đổi');
                       }}
@@ -15146,6 +15499,14 @@ const AcceptanceManager = React.memo(({
                   <CardDescription className="text-slate-500 font-medium tracking-tight">Chi tiết báo cáo và quyết toán chi phí hàng tháng</CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-10 px-4 rounded-xl font-black text-[10px] uppercase gap-2 border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
+                    onClick={() => setIsImportAcceptancesDialogOpen(true)}
+                  >
+                    <FileUp className="w-4 h-4 text-emerald-500" /> Nhập Excel
+                  </Button>
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -15195,6 +15556,14 @@ const AcceptanceManager = React.memo(({
                     onChange={setAcceptanceSearch}
                   />
                 </div>
+                <div className="w-[200px]">
+                  <SearchableProjectSelect 
+                    value={acceptanceProjectFilter} 
+                    onValueChange={setAcceptanceProjectFilter} 
+                    projects={projects}
+                    projectMap={projectMap}
+                  />
+                </div>
                 <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
                   <SelectTrigger className="h-10 w-[160px] bg-slate-50 border-none rounded-xl text-xs font-bold">
                     <SelectValue placeholder="Lọc theo tháng" />
@@ -15210,14 +15579,14 @@ const AcceptanceManager = React.memo(({
             </CardHeader>
             <CardContent className="p-0">
               {acceptanceListView === 'pending' ? (
-                <Table>
+                <Table className="table-fixed w-full">
                   <TableHeader className="bg-slate-50/80">
-                  <TableRow>
+                  <TableRow className="h-10">
                      {(isAdmin || isSuperAdmin) && (
-                       <TableHead className="w-[40px] px-4">
+                       <TableHead className="w-[30px] px-2 text-center">
                           <input 
                             type="checkbox" 
-                            className="rounded border-slate-300 h-4 w-4"
+                            className="rounded border-slate-300 h-3 w-3"
                             checked={filteredAcceptances.length > 0 && selectedAcceptanceIds.length === filteredAcceptances.length}
                             onChange={(e) => {
                               if (e.target.checked) {
@@ -15229,31 +15598,31 @@ const AcceptanceManager = React.memo(({
                           />
                        </TableHead>
                      )}
-                     <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
-                     <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Tiktok</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Visa</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Digital</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
-                     <TableHead className="text-right font-black text-[10px] bg-amber-50/50 text-amber-600 uppercase">Tạm tính</TableHead>
-                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Thực thu</TableHead>
-                     <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase pr-4">Thao tác</TableHead>
+                     <TableHead className="text-center w-[35px] px-0 font-black text-[9px] text-slate-400 uppercase tracking-tighter">STT</TableHead>
+                     <TableHead className="w-[220px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter">Team / Dự án</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">FB</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">TikTok</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Zalo</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Google</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Đăng tin</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Visa</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Digital</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Khác</TableHead>
+                     <TableHead className="w-[80px] px-1 text-right font-black text-[9px] bg-amber-50/50 text-amber-600 uppercase tracking-tighter">Tạm tính</TableHead>
+                     <TableHead className="w-[80px] px-1 text-right font-black text-[9px] bg-emerald-50/50 text-emerald-600 uppercase tracking-tighter">Thực thu</TableHead>
+                     <TableHead className="w-[65px] px-1 text-center font-black text-[9px] text-slate-400 uppercase tracking-tighter">T.Thái</TableHead>
+                     <TableHead className="w-[75px] px-2 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">T.Tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAcceptances.map((a: any, index: number) => (
                     <React.Fragment key={a.id}>
-                      <TableRow className={`hover:bg-slate-50/50 transition-colors group ${expandingAcceptance === a.id ? 'bg-indigo-50/30' : ''}`}>
+                      <TableRow className={`hover:bg-slate-50/50 transition-colors group ${expandingAcceptance === a.id ? 'bg-indigo-50/30' : ''} border-slate-100`}>
                         {(isAdmin || isSuperAdmin) && (
-                          <TableCell className="px-4">
+                          <TableCell className="px-2 text-center">
                             <input 
                               type="checkbox" 
-                              className="rounded border-slate-300 h-4 w-4"
+                              className="rounded border-slate-300 h-3 w-3"
                               checked={selectedAcceptanceIds.includes(a.id)}
                               onChange={(e) => {
                                 if (e.target.checked) {
@@ -15265,67 +15634,67 @@ const AcceptanceManager = React.memo(({
                             />
                           </TableCell>
                         )}
-                        <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
-                        <TableCell>
-                          <div className="space-y-0.5">
-                            <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamName}</Badge>
-                              <span className="text-[9px] font-bold text-slate-400">{a.month}</span>
+                        <TableCell className="text-center font-mono text-[9px] text-slate-400 px-0">{index + 1}</TableCell>
+                        <TableCell className="px-2 py-2">
+                          <div className="flex flex-col gap-0">
+                            <p className="font-bold text-slate-900 text-[10px] leading-tight" title={a.projectName}>{a.projectName}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[9px] font-black text-indigo-600 uppercase whitespace-nowrap">{a.teamName}</span>
+                              <span className="text-[9px] font-bold text-slate-400">/ {a.month}</span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0)}</TableCell>
-                        <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost)}</TableCell>
-                        <TableCell className="text-right bg-amber-50/30">
-                          <p className="font-mono text-xs font-black text-amber-700">{formatCurrency(a.totalCost)}</p>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right bg-amber-50/20">
+                          <p className="font-mono text-[10px] font-black text-amber-700">{formatCurrency(a.totalCost).replace(' đ','')}</p>
                         </TableCell>
-                        <TableCell className="text-right bg-emerald-50/30">
-                          <p className="font-mono text-xs font-black text-emerald-700">
-                             {a.status === 'Đã nghiệm thu' ? formatCurrency(a.afterAcceptanceCost) : '-'}
+                        <TableCell className="px-1 text-right bg-emerald-50/20">
+                          <p className="font-mono text-[10px] font-black text-emerald-700">
+                             {a.status === 'Đã nghiệm thu' ? formatCurrency(a.afterAcceptanceCost).replace(' đ','') : '-'}
                           </p>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none ${
+                        <TableCell className="px-1 text-center">
+                          <Badge className={`text-[8px] font-black uppercase px-1 py-0 rounded-md border-none leading-none h-4 inline-flex items-center ${
                             a.status === 'Đã nghiệm thu' 
                               ? 'bg-emerald-100 text-emerald-700' 
                               : 'bg-amber-100 text-amber-700'
                           }`}>
-                            {a.status}
+                            {a.status === 'Đã nghiệm thu' ? 'Đã NT' : 'Chưa NT'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+                        <TableCell className="px-2 text-right">
+                          <div className="flex justify-end gap-0.5">
                             <Button 
                               variant={a.status !== 'Đã nghiệm thu' ? "default" : "ghost"}
                               size="sm"
-                              className={`h-8 px-2 text-[10px] font-black uppercase rounded-lg transition-all ${
+                              className={`h-7 px-1.5 text-[9px] font-black uppercase rounded-md transition-all ${
                                 a.status !== 'Đã nghiệm thu' 
-                                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100' 
+                                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm' 
                                   : 'text-slate-400 hover:text-indigo-600'
-                              } ${expandingAcceptance === a.id ? 'ring-2 ring-indigo-200 ring-offset-1' : ''}`}
+                              }`}
                               onClick={() => setExpandingAcceptance(expandingAcceptance === a.id ? null : a.id)}
                             >
-                              {a.status !== 'Đã nghiệm thu' ? 'Nghiệm thu' : 'Chi tiết'}
+                              {a.status !== 'Đã nghiệm thu' ? 'NT' : 'CT'}
                             </Button>
-                            {(isAdmin || isMod || isSuperAdmin) && (
+                            {(isAdmin || isMod || isAccountant || isSuperAdmin) && (
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                className="h-7 w-7 text-slate-400 hover:text-indigo-600"
                                 onClick={() => {
                                   setEditingAcceptance(a);
                                   setAcceptanceMonth(a.month);
                                   setAcceptanceTeam(a.teamId);
-                                  setAcceptanceProject(a.projectId);
-                                  setVisaAmount(formatCurrencyInput(String(a.visaCost || 0)));
-                                  setDigitalAmount(formatCurrencyInput(String(a.digitalCost || 0)));
+                                  setAcceptanceProjects([a.projectId]);
+                                  setVisaAmounts({ [a.projectId]: formatCurrencyInput(String(a.visaCost || 0)) });
+                                  setDigitalAmounts({ [a.projectId]: formatCurrencyInput(String(a.digitalCost || 0)) });
                                   
                                   const flatEntries: any[] = [];
                                   if (a.breakdown) {
@@ -15338,6 +15707,7 @@ const AcceptanceManager = React.memo(({
                                             account: item.account || '',
                                             amount: formatCurrencyInput(String(item.amount || 0)),
                                             tax: formatCurrencyInput(String(item.tax || 0)),
+                                            projectId: a.projectId,
                                             isConfirmed: item.isConfirmed || false,
                                             finalAmount: item.finalAmount
                                           });
@@ -15374,20 +15744,20 @@ const AcceptanceManager = React.memo(({
                                   window.scrollTo({ top: 0, behavior: 'smooth' });
                                 }}
                               >
-                                <Edit2 className="h-3.5 w-3.5" />
+                                <Edit2 className="h-3 w-3" />
                               </Button>
                             )}
-                            {(isAdmin || isMod || isSuperAdmin) && (
+                            {(isAdmin || isMod || isAccountant || isSuperAdmin) && (
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-8 w-8 text-slate-400 hover:text-red-600 transition-colors"
+                                className="h-7 w-7 text-slate-400 hover:text-red-500"
                                 onClick={() => {
                                   setAcceptanceToDelete(a.id);
                                   setIsDeleteDialogOpen(true);
                                 }}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             )}
                           </div>
@@ -15421,6 +15791,11 @@ const AcceptanceManager = React.memo(({
                                                   <p className="text-xs font-black text-indigo-600">
                                                     {formatCurrency(item.finalAmount !== null && item.finalAmount !== undefined ? item.finalAmount : (item.amount + (item.tax || 0)))}
                                                   </p>
+                                                  {item.projectId && (
+                                                    <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate max-w-[120px]">
+                                                      Dự án: {projectMap[item.projectId] || projects.find((p: any) => p.id === item.projectId)?.name || item.projectId}
+                                                    </p>
+                                                  )}
                                                 </div>
                                                 <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100">
                                                   <Button 
@@ -15491,7 +15866,7 @@ const AcceptanceManager = React.memo(({
                                       </div>
                                    </div>
 
-                                   {(isAdmin || isMod || isSuperAdmin) && (
+                                   {(isAdmin || isMod || isAccountant || isSuperAdmin) && (
                                      <Button 
                                         className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 transition-all gap-2"
                                         disabled={isFinalizing === a.id}
@@ -15542,79 +15917,80 @@ const AcceptanceManager = React.memo(({
                   )}
                 </TableBody>
               </Table>
-            ) : (              <Table>
+            ) : (
+              <Table className="table-fixed w-full">
                 <TableHeader className="bg-slate-50/80">
-                  <TableRow>
-                     <TableHead className="text-center w-[40px] font-black text-[10px] text-slate-400 uppercase">STT</TableHead>
-                     <TableHead className="min-w-[150px] font-black text-[10px] text-slate-400 uppercase">Team / Dự án</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Facebook</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Tiktok</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Zalo</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Google</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Đăng tin</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Visa</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Digital</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase">Khác</TableHead>
-                     <TableHead className="text-right font-black text-[10px] bg-emerald-50/50 text-emerald-600 uppercase">Quyết toán</TableHead>
-                     <TableHead className="text-center font-black text-[10px] text-slate-400 uppercase">Trạng thái</TableHead>
-                     <TableHead className="text-right font-black text-[10px] text-slate-400 uppercase pr-4">Ngày chốt</TableHead>
+                  <TableRow className="h-10">
+                     <TableHead className="text-center w-[35px] px-0 font-black text-[9px] text-slate-400 uppercase tracking-tighter">STT</TableHead>
+                     <TableHead className="w-[220px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter">Team / Dự án</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">FB</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">TikTok</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Zalo</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Google</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Đăng tin</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Visa</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Digital</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Khác</TableHead>
+                     <TableHead className="w-[85px] px-1 text-right font-black text-[9px] bg-emerald-50/50 text-emerald-600 uppercase tracking-tighter">Quyết toán</TableHead>
+                     <TableHead className="w-[65px] px-1 text-center font-black text-[9px] text-slate-400 uppercase tracking-tighter">T.Thái</TableHead>
+                     <TableHead className="w-[85px] px-2 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Ngày chốt</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredFinalAcceptances.map((a: any, index: number) => (
-                    <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="text-center font-mono text-[10px] text-slate-400">{index + 1}</TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{a.projectName}</p>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-bold">{a.teamName}</Badge>
-                            <span className="text-[9px] font-bold text-slate-400">{a.month}</span>
+                    <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors border-slate-100">
+                      <TableCell className="text-center font-mono text-[9px] text-slate-400 px-0">{index + 1}</TableCell>
+                        <TableCell className="px-2 py-2">
+                          <div className="flex flex-col gap-0">
+                            <p className="font-bold text-slate-900 text-[10px] leading-tight" title={a.projectName}>{a.projectName}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[9px] font-black text-indigo-600 uppercase whitespace-nowrap">{a.teamName}</span>
+                              <span className="text-[9px] font-bold text-slate-400">/ {a.month}</span>
+                            </div>
                           </div>
-                        </div>
+                        </TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right bg-emerald-50/20">
+                        <p className="font-mono text-[10px] font-black text-emerald-700">{formatCurrency(a.totalActualCost).replace(' đ','')}</p>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.zaloCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.googleCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost || 0)}</TableCell>
-                      <TableCell className="text-right bg-emerald-50/30">
-                        <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(a.totalActualCost)}</p>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none bg-emerald-100 text-emerald-700">
+                      <TableCell className="px-1 text-center">
+                        <Badge className="text-[8px] font-black uppercase px-1 py-0 rounded-md border-none leading-none h-4 inline-flex items-center bg-emerald-100 text-emerald-700">
                           {a.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="px-2 text-right">
                         <div className="flex flex-col items-end">
-                          <span className="text-[10px] font-bold text-slate-500">
-                            {a.finalizedAt ? format(a.finalizedAt.toDate ? a.finalizedAt.toDate() : new Date(a.finalizedAt), 'dd/MM/yyyy HH:mm') : '-'}
+                          <span className="text-[9px] font-bold text-slate-500">
+                            {a.finalizedAt ? format(a.finalizedAt.toDate ? a.finalizedAt.toDate() : new Date(a.finalizedAt), 'dd/MM HH:mm') : '-'}
                           </span>
                           {a.finalizedBy && (
-                            <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[100px]">
+                            <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[80px]">
                               {a.finalizedBy.split('@')[0]}
                             </span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right pr-4">
+                      <TableCell className="px-2 text-right">
                         <div className="flex justify-end gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                            className="h-7 w-7 text-slate-400 hover:text-indigo-600"
                             onClick={() => {
                               setEditingAcceptance(a);
                               setIsEditingFinalized(true);
                               setAcceptanceMonth(a.month);
                               setAcceptanceTeam(a.teamId);
-                              setAcceptanceProject(a.projectId);
-                              setVisaAmount(formatCurrencyInput(String(a.visaCost || 0)));
-                              setDigitalAmount(formatCurrencyInput(String(a.digitalCost || 0)));
+                              setAcceptanceProjects([a.projectId]);
+                              setVisaAmounts({ [a.projectId]: formatCurrencyInput(String(a.visaCost || 0)) });
+                              setDigitalAmounts({ [a.projectId]: formatCurrencyInput(String(a.digitalCost || 0)) });
                               
                               const flatEntries: any[] = [];
                               if (a.breakdown) {
@@ -15626,6 +16002,8 @@ const AcceptanceManager = React.memo(({
                                         channel,
                                         account: item.account || '',
                                         amount: formatCurrencyInput(String(item.amount || 0)),
+                                        tax: formatCurrencyInput(String(item.tax || 0)),
+                                        projectId: a.projectId,
                                         isConfirmed: item.isConfirmed || false,
                                         finalAmount: item.finalAmount
                                       });
@@ -15649,12 +16027,13 @@ const AcceptanceManager = React.memo(({
                                       id: Math.random().toString(36).substring(7),
                                       channel: f.key,
                                       account: 'Hệ thống',
-                                      amount: formatCurrencyInput(String(f.val))
+                                      amount: formatCurrencyInput(String(f.val)),
+                                      tax: ''
                                     });
                                   }
                                 });
                               }
-                              setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '' }]);
+                              setEntries(flatEntries.length > 0 ? flatEntries : [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '' }]);
                               setAcceptanceStatus(a.status);
                               setAcceptanceType(a.acceptanceType || 'Chi phí không đổi');
                               setAcceptanceRealCost(formatCurrencyInput(String(a.totalActualCost || a.afterAcceptanceCost || 0)));
@@ -15838,6 +16217,250 @@ const AcceptanceManager = React.memo(({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Acceptance Import Dialog */}
+      <Dialog open={isImportAcceptancesDialogOpen} onOpenChange={setIsImportAcceptancesDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-[32px]">
+          <div className="p-8 bg-indigo-600 text-white relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
+                <FileUp className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black tracking-tight mb-1">Nhập Nghiệm thu từ Excel</DialogTitle>
+                <p className="text-white/80 text-xs font-black uppercase tracking-widest">Tải dữ liệu hàng loạt vào hệ thống</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-8 space-y-6">
+            <div className="space-y-4">
+              <div className={`p-8 border-2 border-dashed rounded-2xl text-center transition-all group ${isImportingAcceptances ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
+                <input 
+                  type="file" 
+                  id="acceptance-import"
+                  className="hidden" 
+                  accept=".xlsx,.xls,.csv" 
+                  onChange={handleImportAcceptancesCSV} 
+                  disabled={isImportingAcceptances}
+                />
+                <label 
+                  htmlFor="acceptance-import"
+                  className={`cursor-pointer flex flex-col items-center gap-4 ${isImportingAcceptances ? 'cursor-not-allowed' : ''}`}
+                >
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 ${isImportingAcceptances ? 'bg-slate-100' : 'bg-white shadow-xl group-hover:scale-110'}`}>
+                    {isImportingAcceptances ? (
+                      <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="w-8 h-8 text-indigo-600" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-base">{isImportingAcceptances ? 'Đang xử lý dữ liệu...' : 'Nhấn để chọn file Excel'}</p>
+                    <p className="text-xs text-slate-400 mt-1 font-medium italic">Hỗ trợ định dạng .xlsx, .xls hoặc .csv</p>
+                  </div>
+                </label>
+              </div>
+              
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
+                <Info className="w-5 h-5 text-amber-500 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-amber-900 uppercase">Lưu ý định dạng:</p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                    File cần có các cột: <strong>Dự án, Team, Tháng, Facebook Ads, Zalo Ads, Google Ads...</strong> (Có thể dùng tên Dự án, Mã dự án hoặc ID).
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="p-8 bg-slate-50/50 flex gap-3 border-t border-slate-100">
+            <Button variant="ghost" onClick={() => setIsImportAcceptancesDialogOpen(false)} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-11 px-6">Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+});
+
+/**
+ * DocProcessingManager Component
+ * For accounting department to reconcile documents.
+ */
+const DocProcessingManager = React.memo(({
+  projects,
+  projectMap,
+  teamMap,
+  groupedDocProcessing,
+  handleUpdateDocProcessing,
+  formatCurrency,
+  debouncedAcceptanceSearch,
+  setAcceptanceSearch,
+  acceptanceProjectFilter,
+  setAcceptanceProjectFilter,
+  isAdmin,
+  isAccountant
+}: any) => {
+  const docProcessingTotals = useMemo(() => {
+    return groupedDocProcessing.reduce((acc: any, curr: any) => ({
+      totalAmount: acc.totalAmount + curr.totalAmount,
+      visaCost: acc.visaCost + curr.visaCost,
+      digitalCost: acc.digitalCost + curr.digitalCost,
+      recordCount: acc.recordCount + curr.recordCount
+    }), { totalAmount: 0, visaCost: 0, digitalCost: 0, recordCount: 0 });
+  }, [groupedDocProcessing]);
+
+  return (
+    <div className="space-y-6">
+       <Card className="border-none shadow-sm overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 w-full" />
+          <CardHeader className="pb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <FileCheck className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Xử lý Hồ sơ Đối soát</CardTitle>
+                  <CardDescription className="text-slate-500 font-medium font-inter">Đối chiếu hồ sơ bản cứng và hồ sơ đã nghiệm thu</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <DebouncedInput 
+                    placeholder="Tìm Dự án, Team..." 
+                    className="pl-10 h-10 w-[250px] bg-slate-50 border-none rounded-xl text-xs font-bold"
+                    value={debouncedAcceptanceSearch}
+                    onChange={setAcceptanceSearch}
+                  />
+                </div>
+                <div className="w-[200px]">
+                  <SearchableProjectSelect
+                    value={acceptanceProjectFilter}
+                    onValueChange={setAcceptanceProjectFilter}
+                    projects={projects}
+                    projectMap={projectMap}
+                  />
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
+              <Table className="table-fixed w-full">
+                <TableHeader className="bg-slate-50/50">
+                  <TableRow className="hover:bg-transparent border-slate-100 h-10">
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-auto">Dự án</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter w-[120px]">Team</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[60px]">Bản ghi</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[90px]">Digital</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[90px]">Visa</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[110px]">Thành tiền</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[130px]">Đối soát</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pr-4 w-auto">Ghi chú & Lịch sử</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedDocProcessing.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-40 text-center">
+                        <div className="flex flex-col items-center justify-center text-slate-400">
+                          <FileBox className="w-10 h-10 mb-2 opacity-20" />
+                          <p className="text-xs font-bold font-inter">Hiện tại chưa có hồ sơ nào đã được nghiệm thu để đối soát</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    groupedDocProcessing.map((group: any) => (
+                      <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group h-12">
+                        <TableCell className="pl-4 py-2">
+                          <div className="font-black text-slate-900 text-[11px] leading-tight truncate" title={group.projectName}>{group.projectName}</div>
+                          <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">ID: {group.projectId.substring(0,8)}</div>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <div className="font-bold text-slate-700 text-[11px] truncate">{group.teamName}</div>
+                        </TableCell>
+                        <TableCell className="text-right py-2">
+                          <Badge variant="outline" className="bg-slate-50 border-slate-100 text-[9px] font-black px-1.5 h-4 font-inter">{group.recordCount}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-[10px] font-bold text-slate-600">
+                          {formatCurrency(group.digitalCost || 0).replace(' đ','')}
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-[10px] font-bold text-slate-600">
+                          {formatCurrency(group.visaCost || 0).replace(' đ','')}
+                        </TableCell>
+                        <TableCell className="text-right py-2">
+                          <div className="font-black text-slate-900 text-[11px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                             <Select 
+                              value={group.confirmation} 
+                              onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
+                              disabled={!(isAdmin || isAccountant)}
+                             >
+                                <SelectTrigger className={`h-8 w-[150px] text-[10px] font-black uppercase rounded-lg border-none shadow-sm transition-all focus:ring-2 focus:ring-indigo-100 ${
+                                  group.confirmation === 'Khớp hồ sơ' ? 'bg-emerald-50 text-emerald-600' :
+                                  group.confirmation === 'Không khớp hồ sơ' ? 'bg-rose-50 text-rose-600' :
+                                  'bg-slate-50 text-slate-400'
+                                }`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-none shadow-2xl">
+                                  <SelectItem value="Chưa đối soát" className="text-[10px] font-bold uppercase">Chưa đối soát</SelectItem>
+                                  <SelectItem value="Khớp hồ sơ" className="text-[10px] font-bold text-emerald-600 uppercase">Khớp hồ sơ</SelectItem>
+                                  <SelectItem value="Không khớp hồ sơ" className="text-[10px] font-bold text-rose-600 uppercase">Không khớp hồ sơ</SelectItem>
+                                </SelectContent>
+                             </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell className="pr-4 py-2">
+                           <div className="flex flex-col gap-0.5">
+                             <Input 
+                              className="h-7 bg-slate-50 border-none rounded-md text-[10px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
+                              placeholder="Ghi chú..."
+                              defaultValue={group.note}
+                              disabled={!(isAdmin || isAccountant)}
+                              onBlur={(e) => {
+                                if (e.target.value !== group.note) {
+                                  handleUpdateDocProcessing(group.projectId, group.teamId, group.confirmation, e.target.value);
+                                }
+                              }}
+                             />
+                             {group.updatedByEmail && (
+                               <div className="text-[8px] text-slate-300 font-bold uppercase italic font-inter flex items-center gap-1 leading-none line-clamp-1">
+                                 <UserCheck className="w-2 h-2" />
+                                 {group.updatedByEmail.split('@')[0]}
+                               </div>
+                             )}
+                           </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                  {groupedDocProcessing.length > 0 && (
+                    <TableRow className="bg-slate-50/80 font-black border-t-2 border-slate-200">
+                      <TableCell colSpan={2} className="pl-4 py-3 text-[10px] uppercase font-black text-slate-900">Tổng cộng</TableCell>
+                      <TableCell className="text-right py-3">
+                        <Badge className="bg-slate-900 text-white text-[9px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right py-3 font-mono text-[11px] text-slate-900">
+                        {formatCurrency(docProcessingTotals.digitalCost).replace(' đ','')}
+                      </TableCell>
+                      <TableCell className="text-right py-3 font-mono text-[11px] text-slate-900">
+                        {formatCurrency(docProcessingTotals.visaCost).replace(' đ','')}
+                      </TableCell>
+                      <TableCell className="text-right py-3 font-mono text-[11px] text-indigo-700">
+                        {formatCurrency(docProcessingTotals.totalAmount).replace(' đ','')}đ
+                      </TableCell>
+                      <TableCell colSpan={2}></TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+       </Card>
     </div>
   );
 });

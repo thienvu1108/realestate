@@ -18,24 +18,27 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() &&
-        (request.auth.token.email == "thienvu1108@gmail.com" ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'));
+      return isAuthenticated() && (
+        request.auth.token.email == "thienvu1108@gmail.com" ||
+        (hasUserData() && getUserData().role == 'super_admin')
+      );
     }
 
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == "thienvu1108@gmail.com" || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'))
+        (hasUserData() && getUserData().role in ['admin', 'super_admin'])
       );
     }
 
     function isMod() {
       return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'mod';
+    }
+
+    function isAccountant() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'accountant';
     }
 
     function isGDDA() {
@@ -48,7 +51,7 @@ service cloud.firestore {
     }
 
     function canViewProject(projectId) {
-      return isAdmin() || isMod() ||
+      return isAdmin() || isMod() || isAccountant() ||
              (isGDDA() && projectId in getUserData().assignedProjects) ||
              isUser();
     }
@@ -119,11 +122,11 @@ service cloud.firestore {
     // ===============================================================
     function isValidUser(data) {
       return data.email is string && isValidEmail(data.email) &&
-             (!('role' in data) || data.role in ['super_admin', 'admin', 'mod', 'gdda', 'user']);
+             (!('role' in data) || data.role in ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'user']);
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || isMod() || isOwner(userId);
+      allow read: if isAdmin() || isMod() || isAccountant() || isOwner(userId);
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(incoming());
       allow update: if isAuthenticated() && (
         (isOwner(userId) && 
@@ -146,7 +149,7 @@ service cloud.firestore {
     }
 
     match /budgets/{budgetId} {
-      allow read: if isAdmin() || isMod() || 
+      allow read: if isAdmin() || isMod() || isAccountant() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
                     (resource.data.userEmail == request.auth.token.email) ||
@@ -168,7 +171,7 @@ service cloud.firestore {
     }
 
     match /costs/{costId} {
-      allow read: if isAdmin() || isMod() || 
+      allow read: if isAdmin() || isMod() || isAccountant() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
                     (resource.data.createdBy == request.auth.uid) ||
                     (resource.data.userEmail == request.auth.token.email) ||
@@ -185,7 +188,7 @@ service cloud.firestore {
     // Support Requests
     // ===============================================================
     match /supportRequests/{requestId} {
-      allow read: if isAdmin() || isMod() || resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || isMod() || isAccountant() || resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && incoming().userId == request.auth.uid;
       allow update: if isAuthenticated() && (
         isAdmin() || 
@@ -201,7 +204,7 @@ service cloud.firestore {
     // Audit Logs
     // ===============================================================
     match /auditLogs/{logId} {
-      allow read: if isAdmin() || isMod();
+      allow read: if isAdmin() || isMod() || isAccountant();
       allow create: if isAuthenticated();
     }
 
@@ -230,8 +233,8 @@ service cloud.firestore {
     // ===============================================================
     match /efficiencyReports/{reportId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isMod();
-      allow update: if isAdmin() || isMod();
+      allow create: if isAdmin() || isMod() || isAccountant();
+      allow update: if isAdmin() || isMod() || isAccountant();
       allow delete: if isAdmin();
     }
 
@@ -248,27 +251,46 @@ service cloud.firestore {
     }
 
     match /acceptances/{acceptanceId} {
-      allow read: if isAdmin() || isMod() || 
+      allow read: if isAdmin() || isMod() || isAccountant() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if (isAdmin() || isMod()) && 
+      allow create: if (isAdmin() || isMod() || isAccountant()) && 
                     isValidAcceptance(incoming()) &&
                     incoming().createdByUid == request.auth.uid;
-      allow update: if (isAdmin() || isMod()) && 
+      allow update: if (isAdmin() || isMod() || isAccountant()) && 
                     isValidAcceptance(incoming()) && (
                       // Action: Update status or costs
                       incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
                     );
-      allow delete: if isAdmin() || isMod() || isSuperAdmin();
+      allow delete: if isAdmin() || isMod() || isAccountant() || isSuperAdmin();
     }
 
     // ===============================================================
     // Final Acceptances (Actual Costs)
     // ===============================================================
     match /finalAcceptances/{finalId} {
-      allow read: if isAdmin() || isMod() || 
+      allow read: if isAdmin() || isMod() || isAccountant() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if isAdmin() || isMod();
-      allow update: if isAdmin() || isMod();
+      allow create: if isAdmin() || isMod() || isAccountant();
+      allow update: if isAdmin() || isMod() || isAccountant();
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // ===============================================================
+    // Document Processing (Accounting Reconciliation)
+    // ===============================================================
+    function isValidDocProcessing(data) {
+      return data.projectId is string && data.projectId.size() <= 128 &&
+             data.teamId is string && data.teamId.size() <= 128 &&
+             data.confirmation in ['Chưa đối soát', 'Khớp hồ sơ', 'Không khớp hồ sơ'];
+    }
+
+    match /docProcessing/{docId} {
+      allow read: if isAdmin() || isAccountant() || 
+                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
+      allow create: if (isAdmin() || isAccountant()) && isValidDocProcessing(incoming());
+      allow update: if (isAdmin() || isAccountant()) && isValidDocProcessing(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['confirmation', 'note', 'updatedAt', 'updatedBy', 'updatedByEmail'])
+      );
       allow delete: if isAdmin() || isSuperAdmin();
     }
 

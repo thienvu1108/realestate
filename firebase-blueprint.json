@@ -221,6 +221,24 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "content", "userId"]
+    },
+    "DocProcessing": {
+      "title": "Document Processing",
+      "description": "Records for accounting department to reconcile documents",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "confirmation": { 
+          "type": "string",
+          "enum": ["Chưa đối soát", "Khớp hồ sơ", "Không khớp hồ sơ"]
+        },
+        "note": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" },
+        "updatedByEmail": { "type": "string" }
+      },
+      "required": ["projectId", "teamId", "confirmation"]
     }
   },
   "firestore": {
@@ -255,6 +273,10 @@
     "/supportRequests/{requestId}": {
       "schema": "SupportRequest",
       "description": "User support and help requests"
+    },
+    "/docProcessing/{docId}": {
+      "schema": "DocProcessing",
+      "description": "Document reconciliation status records"
     },
     "/auditLogs/{logId}": {
       "schema": "AuditLog",

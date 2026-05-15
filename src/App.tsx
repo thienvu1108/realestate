@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -109,7 +110,6 @@ import {
   FileCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -207,7 +207,7 @@ const SearchableSelectGeneric = memo(({
   );
 });
 
-const SearchableRegionSelect = memo(({ value, onValueChange, regions }: any) => {
+const SearchableRegionSelect = memo(({ value, onValueChange, regions = [] }: any) => {
   const items = useMemo(() => {
     const list = [{ value: 'all', label: 'Tất cả miền', searchString: 'tất cả miền all' }];
     regions.forEach((r: string) => {
@@ -229,7 +229,7 @@ const SearchableRegionSelect = memo(({ value, onValueChange, regions }: any) => 
   );
 });
 
-const SearchableTypeSelect = memo(({ value, onValueChange, types }: any) => {
+const SearchableTypeSelect = memo(({ value, onValueChange, types = [] }: any) => {
   const items = useMemo(() => {
     const list = [{ value: 'all', label: 'Tất cả loại hình', searchString: 'tất cả loại hình all' }];
     types.forEach((t: string) => {
@@ -251,14 +251,14 @@ const SearchableTypeSelect = memo(({ value, onValueChange, types }: any) => {
   );
 });
 
-const SearchableProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+const SearchableProjectSelect = memo(({ value, onValueChange, projects = [], projectMap = {} }: any) => {
   const items = useMemo(() => {
     const list = projects.map((p: any) => ({
       value: p.id,
       label: `${p.name} (${p.projectCode})`,
       searchString: `${p.name} ${p.projectCode || ''}`
     }));
-    return list;
+    return [{ value: 'all', label: 'Tất cả các dự án', searchString: 'tat ca các du an all' }, ...list];
   }, [projects]);
 
   return (
@@ -269,18 +269,19 @@ const SearchableProjectSelect = memo(({ value, onValueChange, projects, projectM
       placeholder="Tất cả dự án"
       searchPlaceholder="Tìm dự án..."
       triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
-      triggerDisplay={value === 'all' ? "Tất cả dự án" : (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})`}
+      triggerDisplay={value === 'all' ? "Tất cả các dự án" : (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})`}
     />
   );
 });
 
-const SearchableTeamSelect = memo(({ value, onValueChange, teams, uniqueTeams }: any) => {
+const SearchableTeamSelect = memo(({ value, onValueChange, teams = [], uniqueTeams = [] }: any) => {
   const items = useMemo(() => {
-    return uniqueTeams.map((t: string) => ({
+    const list = uniqueTeams.map((t: string) => ({
       value: t,
       label: `${t} (${teams.find((team: any) => team.name === t)?.teamCode || ''})`,
       searchString: t
     }));
+    return [{ value: 'all', label: 'Tất cả các đội', searchString: 'tat ca các doi team all' }, ...list];
   }, [uniqueTeams, teams]);
 
   return (
@@ -291,18 +292,19 @@ const SearchableTeamSelect = memo(({ value, onValueChange, teams, uniqueTeams }:
       placeholder="Tất cả đội"
       searchPlaceholder="Tìm team..."
       triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
-      triggerDisplay={value === 'all' ? "Tất cả đội" : `${value} (${teams.find((t: any) => t.name === value)?.teamCode || ''})`}
+      triggerDisplay={value === 'all' ? "Tất cả các đội" : `${value} (${teams.find((t: any) => t.name === value)?.teamCode || ''})`}
     />
   );
 });
 
-const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects = [], projectMap = {} }: any) => {
   const items = useMemo(() => {
-    return projects.map((p: any) => ({
+    const list = projects.map((p: any) => ({
       value: p.id,
       label: p.name,
       searchString: `${p.name} ${p.projectCode || ''}`
     }));
+    return [{ value: 'all', label: 'Tất cả các dự án', searchString: 'tat ca các du an all' }, ...list];
   }, [projects]);
 
   return (
@@ -313,7 +315,7 @@ const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects
       placeholder="Chọn dự án..."
       searchPlaceholder="Tìm dự án..."
       triggerClassName="bg-slate-50 border-none h-11 rounded-xl"
-      triggerDisplay={value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+      triggerDisplay={value === 'all' ? "Tất cả các dự án" : (value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án...")}
       renderItem={(item: any) => (
         <SelectItem key={item.value} value={item.value}>
           <div className="flex flex-col">
@@ -325,13 +327,14 @@ const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects
   );
 });
 
-const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams, teamMap }: any) => {
+const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams = [], teamMap = {} }: any) => {
   const items = useMemo(() => {
-    return teams.map((t: any) => ({
+    const list = teams.map((t: any) => ({
       value: t.id,
       label: `${t.name} (${t.teamCode || 'N/A'})`,
       searchString: `${t.name} ${t.teamCode || ''}`
     }));
+    return [{ value: 'all', label: 'Tất cả các đội', searchString: 'tat ca các doi team all' }, ...list];
   }, [teams]);
 
   return (
@@ -342,7 +345,7 @@ const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams, team
       placeholder="Chọn team..."
       searchPlaceholder="Tìm team..."
       triggerClassName="bg-slate-50 border-none h-11 rounded-xl"
-      triggerDisplay={value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn team..."}
+      triggerDisplay={value === 'all' ? "Tất cả các đội" : (value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn team...")}
       renderItem={(item: any) => (
         <SelectItem key={item.value} value={item.value}>
           <div className="flex flex-col">
@@ -354,13 +357,14 @@ const SearchableEfficiencyTeamSelect = memo(({ value, onValueChange, teams, team
   );
 });
 
-const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams, teamMap }: any) => {
+const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams = [], teamMap = {} }: any) => {
   const items = useMemo(() => {
-    return teams.map((t: any) => ({
+    const list = teams.map((t: any) => ({
       value: t.id,
       label: `${t.name} (${t.teamCode || 'N/A'})`,
       searchString: `${t.name} ${t.teamCode || ''}`
     }));
+    return [{ value: 'all', label: 'Tất cả các đội', searchString: 'tat ca các doi team all' }, ...list];
   }, [teams]);
 
   return (
@@ -371,12 +375,13 @@ const SearchableAcceptanceTeamSelect = memo(({ value, onValueChange, teams, team
       placeholder="Chọn đội..."
       searchPlaceholder="Tìm đội..."
       triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
-      triggerDisplay={value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn đội..."}
+      triggerDisplay={value === 'all' ? "Tất cả các đội" : (value ? `${teamMap[value] || value} (${teams.find((t: any) => t.id === value)?.teamCode || ''})` : "Chọn đội...")}
     />
   );
 });
 
-const SearchableAcceptanceProjectMultiSelect = memo(({ values, onValuesChange, projects, projectMap, isEditing }: any) => {
+
+const SearchableAcceptanceProjectMultiSelect = memo(({ values = [], onValuesChange, projects = [], projectMap = {}, isEditing }: any) => {
   const [search, setSearch] = useState('');
   
   const items = useMemo(() => {
@@ -483,13 +488,14 @@ const SearchableAcceptanceProjectMultiSelect = memo(({ values, onValuesChange, p
   );
 });
 
-const SearchableAcceptanceProjectSelect = memo(({ value, onValueChange, projects, projectMap }: any) => {
+const SearchableAcceptanceProjectSelect = memo(({ value, onValueChange, projects = [], projectMap = {} }: any) => {
   const items = useMemo(() => {
-    return projects.map((p: any) => ({
+    const list = projects.map((p: any) => ({
       value: p.id,
       label: p.name,
       searchString: `${p.name} ${p.projectCode || ''}`
     }));
+    return [{ value: 'all', label: 'Tất cả các dự án', searchString: 'tat ca các du an all' }, ...list];
   }, [projects]);
 
   return (
@@ -500,7 +506,7 @@ const SearchableAcceptanceProjectSelect = memo(({ value, onValueChange, projects
       placeholder="Chọn dự án..."
       searchPlaceholder="Tìm dự án..."
       triggerClassName="h-11 bg-slate-50 border-none rounded-xl font-bold"
-      triggerDisplay={value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án..."}
+      triggerDisplay={value === 'all' ? "Tất cả các dự án" : (value ? (projectMap[value] || projects.find((p: any) => p.id === value)?.name || value) + ` (${projects.find((p: any) => p.id === value)?.projectCode || ''})` : "Chọn dự án...")}
     />
   );
 });
@@ -644,12 +650,45 @@ export default function App() {
   const [budgetWarningThreshold, setBudgetWarningThreshold] = useState(80);
   const [budgetCriticalThreshold, setBudgetCriticalThreshold] = useState(100);
 
-  const isAdmin = useMemo(() => userRole === 'admin' || userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
-  const isSuperAdmin = useMemo(() => userRole === 'super_admin' || user?.email === 'thienvu1108@gmail.com', [userRole, user]);
-  const isMod = useMemo(() => userRole === 'mod', [userRole]);
-  const isAccountant = useMemo(() => userRole === 'accountant', [userRole]);
-  const isGDDA = useMemo(() => userProfile?.role === 'GDDA', [userProfile]);
+  const isAdmin = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return role === 'admin' || role === 'super_admin' || role === 'quản trị' || user?.email === 'thienvu1108@gmail.com';
+  }, [userRole, user]);
 
+  const isSuperAdmin = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return role === 'super_admin' || user?.email === 'thienvu1108@gmail.com';
+  }, [userRole, user]);
+
+  const isMod = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return role === 'mod' || role === 'moderator' || role === 'điều phối';
+  }, [userRole]);
+
+  const isAccountant = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return role === 'accountant' || role === 'kế toán' || role === 'accounting';
+  }, [userRole]);
+
+  const isGDDA = useMemo(() => {
+    const role = userProfile?.role?.toUpperCase() || '';
+    return role === 'GDDA';
+  }, [userProfile]);
+
+  const isUser = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return !role || role === 'user' || role === 'người dùng';
+  }, [userRole]);
+
+  const isInternalStaff = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim() || '';
+    const email = user?.email?.toLowerCase() || '';
+    const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'moderator', 'kế toán', 'điều phối', 'accounting'];
+    return internalRoles.includes(role) || 
+           email === 'thienvu1108@gmail.com' || 
+           email === 'tesscain2022@gmail.com' ||
+           isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA;
+  }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA]);
   const [activeTab, setActiveTab] = useState('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingName, setOnboardingName] = useState('');
@@ -764,6 +803,7 @@ export default function App() {
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
+  const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
 
   const groupedDocProcessing = useMemo(() => {
     const groups: Record<string, any> = {};
@@ -802,9 +842,10 @@ export default function App() {
       const matchesSearch = (g.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (g.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesProject = acceptanceProjectFilter === 'all' || g.projectId === acceptanceProjectFilter;
-      return matchesSearch && matchesProject;
+      const matchesTeam = acceptanceTeamFilter === 'all' || g.teamId === acceptanceTeamFilter;
+      return matchesSearch && matchesProject && matchesTeam;
     });
-  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter]);
+  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter]);
 
   const handleUpdateDocProcessing = async (projectId: string, teamId: string, confirmation: string, note: string) => {
     try {
@@ -1015,7 +1056,7 @@ export default function App() {
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
       const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
       
-      const hasAccess = isAdmin || isMod || isGDDA || (isOwner || isAssigned);
+      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || (isOwner || isAssigned);
       
       if (!hasAccess) return false;
 
@@ -1047,7 +1088,7 @@ export default function App() {
       const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
       const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
       
-      const hasAccess = isAdmin || isMod || isGDDA || (isOwner || isAssigned);
+      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || (isOwner || isAssigned);
       
       if (!hasAccess) return false;
 
@@ -1110,7 +1151,7 @@ export default function App() {
       // Access logic
       const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
       const isOwner = (aEmail && userEmail && aEmail === userEmail) || (a.createdByUid === user?.uid);
-      const hasAccess = isAdmin || isMod || isGDDA || isOwner;
+      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isOwner;
       if (!hasAccess) return;
 
       // Filter logic
@@ -1241,7 +1282,7 @@ export default function App() {
       // Access logic
       const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
       const isOwner = (aEmail && user?.email && aEmail === user.email.toLowerCase()) || (a.createdByUid === user?.uid);
-      const hasAccess = isAdmin || isMod || isGDDA || isOwner;
+      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isOwner;
       if (!hasAccess) return;
 
       // Filter logic
@@ -1288,7 +1329,7 @@ export default function App() {
        if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
        return b.total - a.total;
     });
-  }, [acceptances, projects, isAdmin, isMod, isGDDA, user, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, resolveProjectName, resolveTeamName]);
+  }, [acceptances, projects, isAdmin, isMod, isAccountant, isGDDA, user, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, resolveProjectName, resolveTeamName]);
 
   const chartData = useMemo(() => {
     return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
@@ -2261,8 +2302,6 @@ export default function App() {
   const [isImportErrorsDialogOpen, setIsImportErrorsDialogOpen] = useState(false);
 
 
-  const isUser = userRole === 'user';
-
   const filteredBudgetsForCostSelection = useMemo(() => {
     const userEmail = user?.email?.toLowerCase();
     
@@ -2272,7 +2311,7 @@ export default function App() {
         const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
         const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
         
-        const canSee = isAdmin || isMod || isGDDA || isOwner || isAssigned;
+        const canSee = isInternalStaff || isOwner || isAssigned;
         return canSee && b.month === costBudgetMonth;
       })
       .filter(b => 
@@ -2306,7 +2345,7 @@ export default function App() {
             return;
           }
           
-          let role: 'super_admin' | 'admin' | 'mod' | 'gdda' | 'user' = 'user';
+          let role: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'user' = 'user';
           if (firebaseUser.email === 'thienvu1108@gmail.com') {
             role = 'super_admin';
           }
@@ -2324,35 +2363,53 @@ export default function App() {
             await setDoc(userDocRef, initialProfile);
             setUserProfile(initialProfile);
             setShowOnboarding(true);
-          } else {
-            const data = userDoc.data();
-            role = data?.role || 'user';
-            setUserProfile(data || null);
-            
-            // If profile exists but missing fullName or teamName, show onboarding
-            if (!data?.fullName || !data?.teamName) {
-              setOnboardingName(data?.fullName || '');
-              setOnboardingTeam(data?.teamName || '');
-              setShowOnboarding(true);
-            } else {
-              // Auto-fill implementer name and team if profile is complete
-              setImplementerName(data.fullName);
-              setSelectedTeamName(data.teamName);
+          }
+
+          // Real-time profile listener
+          const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setUserProfile(data || null);
+              
+              const rawRole = String(data?.role || 'user').toLowerCase().trim();
+              let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'user' = 'user';
+              
+              if (firebaseUser.email === 'thienvu1108@gmail.com') synchronizedRole = 'super_admin';
+              else if (rawRole === 'super_admin') synchronizedRole = 'super_admin';
+              else if (rawRole === 'admin') synchronizedRole = 'admin';
+              else if (rawRole === 'mod' || rawRole === 'moderator' || rawRole === 'điều phối') synchronizedRole = 'mod';
+              else if (rawRole === 'accountant' || rawRole === 'kế toán') synchronizedRole = 'accountant';
+              else if (rawRole === 'gdda') synchronizedRole = 'gdda';
+              else synchronizedRole = 'user';
+              
+              setUserRole(synchronizedRole);
+
+              if (!data?.fullName || !data?.teamName) {
+                setOnboardingName(data?.fullName || '');
+                setOnboardingTeam(data?.teamName || '');
+                setShowOnboarding(true);
+              } else {
+                setImplementerName(data.fullName);
+                setSelectedTeamName(data.teamName);
+              }
             }
-          }
-          
-          // Force super_admin role for specific email
-          if (firebaseUser.email === 'thienvu1108@gmail.com') {
-            role = 'super_admin';
-          }
-          
-          setUserRole(role);
+          }, (error) => {
+             handleFirestoreError(error, OperationType.GET, 'users');
+          });
+
           setUser(firebaseUser);
-          if (role === 'super_admin' || role === 'admin') {
+          
+          // Initial tab redirection logic (based on initial fetch)
+          const initialData = userDoc.data();
+          const initialRawRole = (initialData?.role || 'user').toLowerCase();
+          if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda'].includes(initialRawRole)) {
             setActiveTab('admin');
           } else {
             setActiveTab('register');
           }
+
+          setLoading(false);
+          return () => unsubscribeProfile();
         } else {
           setUser(null);
           setUserRole(null);
@@ -2379,7 +2436,7 @@ export default function App() {
 
     // Listen to projects
     let qProjects;
-    if (isAdmin || isMod || isUser) {
+    if (isAdmin || isMod || isAccountant || isUser) {
       qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
@@ -2476,9 +2533,9 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
     }
 
-    // Listen to all users (for Admin)
+    // Listen to all users (for Admin & Accountant)
     let unsubUsers = () => {};
-    if (isAdmin) {
+    if (isAdmin || isAccountant) {
       const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubUsers = onSnapshot(qUsers, (snapshot) => {
         setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -2487,7 +2544,7 @@ export default function App() {
 
     // Listen to efficiency reports
     let unsubEfficiency = () => {};
-    if (isAdmin || isMod || isUser) {
+    if (isAdmin || isMod || isAccountant || isUser) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(1000));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -4812,7 +4869,7 @@ export default function App() {
   };
 
   const isWithinRegistrationWindow = () => {
-    if (isAdmin || isMod || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
+    if (isInternalStaff || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
     if (!systemSettings) return true;
     
     const now = new Date();
@@ -5178,7 +5235,7 @@ export default function App() {
       return;
     }
 
-    if (!isAdmin && !isWithinRegistrationWindow()) {
+    if (!isAdmin && !isAccountant && !isWithinRegistrationWindow()) {
       toast.error('Ngoài thời gian cho phép chỉnh sửa ngân sách.');
       return;
     }
@@ -6973,7 +7030,7 @@ export default function App() {
               </div>
               <div className="flex flex-wrap gap-1 mt-1">
                 {isSuperAdmin && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-purple-200 text-purple-700 bg-purple-50/50">SUPER ADMIN</Badge>}
-                {(userRole === 'admin') && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
+                {isAdmin && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-indigo-200 text-indigo-700 bg-indigo-50/50">ADMIN</Badge>}
                 {isMod && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-slate-200 text-slate-700 bg-slate-50/50">MODERATOR</Badge>}
                 {isAccountant && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-amber-200 text-amber-700 bg-amber-50/50">KẾ TOÁN</Badge>}
                 {isGDDA && <Badge variant="outline" className="text-[8px] sm:text-[9px] font-bold py-0 h-3.5 sm:h-4 border-emerald-200 text-emerald-700 bg-emerald-50/50">GDDA</Badge>}
@@ -7110,11 +7167,11 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto flex lg:flex mb-2 hidden lg:flex">
+          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto mb-2 hidden lg:flex">
             <TabsTrigger value="home" className="rounded-lg py-2 px-4 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-none font-bold">
               <LayoutDashboard className="w-4 h-4 mr-2" /> Trang chủ
             </TabsTrigger>
-            {(isAdmin || isMod || isGDDA) && (
+            {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
               <TabsTrigger value="admin" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
                 <ShieldCheck className="w-4 h-4 mr-2" /> Quản trị
               </TabsTrigger>
@@ -7424,7 +7481,7 @@ export default function App() {
           </TabsContent>
 
           {/* Admin Tab */}
-          {(isAdmin || isMod || isGDDA) && (
+          {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
             <TabsContent value="admin" className="space-y-8">
               <div className="flex flex-col lg:flex-row gap-8">
                 {/* Admin Sidebar-like Navigation */}
@@ -7451,7 +7508,7 @@ export default function App() {
                     </div>
 
                     {/* Category: Quản lý Dữ liệu gốc */}
-                    {(isAdmin || isMod || isGDDA) && (
+                    {isInternalStaff && (
                       <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
                         <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
                           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Dữ liệu nền tảng</h2>
@@ -7512,7 +7569,7 @@ export default function App() {
                       <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
                         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Vận hành & Tài chính</h2>
                       </div>
-                      {(isAdmin || isMod || isGDDA) && (
+                      {isInternalStaff && (
                         <>
                           <Button 
                             variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
@@ -7579,7 +7636,7 @@ export default function App() {
                     </div>
 
                     {/* Category: Hệ thống & Bảo mật */}
-                    {isAdmin && (
+                    {(isAdmin || isAccountant) && (
                       <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
                         <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
                           <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Hệ thống & Bảo mật</h2>
@@ -7641,7 +7698,29 @@ export default function App() {
                 <div className="flex-1 min-w-0">
                   <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
                     {/* Hidden TabsList to keep Tabs logic working */}
-                    <TabsList className="hidden" />
+                    <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto mb-2 flex lg:hidden">
+                    <TabsTrigger value="home" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold">
+                      <LayoutDashboard className="w-3.5 h-3.5 mb-1" />
+                    </TabsTrigger>
+                    {isInternalStaff && (
+                      <TabsTrigger value="admin" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold">
+                        <ShieldCheck className="w-3.5 h-3.5 mb-1" />
+                      </TabsTrigger>
+                    )}
+                    <TabsTrigger value="register" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
+                      Budget
+                    </TabsTrigger>
+                    <TabsTrigger value="actual" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
+                      Thực chi
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
+                      Nhật ký
+                    </TabsTrigger>
+                    <TabsTrigger value="support" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
+                      Hỗ trợ
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsList className="hidden" />
 
                     {/* Efficiency Management Tab */}
                     {adminSubTab === 'efficiency' && (
@@ -7766,7 +7845,7 @@ export default function App() {
                                 >
                                   <FileUp className="w-4 h-4 mr-2" /> Nhập từ Excel
                                 </Button>
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <>
                                     <Button 
                                       variant="outline" 
@@ -8027,7 +8106,7 @@ export default function App() {
                                 <CardTitle className="text-xl font-black text-slate-900">Danh mục Dự án</CardTitle>
                                 <CardDescription className="text-xs font-medium text-slate-500">Quản lý toàn bộ danh sách dự án bất động sản trên hệ thống</CardDescription>
                               </div>
-                              {isAdmin && (
+                              {(isAdmin || isAccountant) && (
                                 <div className="flex gap-2">
                                   <Button 
                                     variant="outline" 
@@ -8168,7 +8247,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {isAdmin && (
+                        {(isAdmin || isAccountant) && (
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100">
                               <Dialog open={isBulkUpdateRegionDialogOpen} onOpenChange={setIsBulkUpdateRegionDialogOpen}>
@@ -8298,7 +8377,7 @@ export default function App() {
                           <Table>
                             <TableHeader className="bg-slate-50/50">
                               <TableRow className="hover:bg-transparent border-b border-slate-100">
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <TableHead className="w-[50px] pl-6 py-4">
                                     <input 
                                       type="checkbox" 
@@ -8341,7 +8420,7 @@ export default function App() {
                             <TableBody>
                               {sortedProjects.map(p => (
                                 <TableRow key={p.id} className={`group transition-colors border-b border-slate-50 ${selectedProjectIds.includes(p.id) ? "bg-blue-50/20" : "hover:bg-slate-50/30"}`}>
-                                  {isAdmin && (
+                                  {(isAdmin || isAccountant) && (
                                     <TableCell className="pl-6 py-4">
                                       <input 
                                         type="checkbox" 
@@ -8421,7 +8500,7 @@ export default function App() {
                                     {safeFormat(p.createdAt?.toDate ? p.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                   </TableCell>
                                   <TableCell className="py-4 pr-6 text-right">
-                                    {isAdmin && (
+                                    {(isAdmin || isAccountant) && (
                                       <div className="flex justify-end gap-1">
                                         {editingProjectId === p.id ? (
                                           <>
@@ -8469,7 +8548,7 @@ export default function App() {
                               ))}
                               {sortedProjects.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={isAdmin ? 7 : 6} className="h-64 text-center">
+                                  <TableCell colSpan={(isAdmin || isAccountant) ? 7 : 6} className="h-64 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-4">
                                       <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
                                         <Search className="h-8 w-8 text-slate-300" />
@@ -8510,7 +8589,7 @@ export default function App() {
                             </div>
                           </div>
                           
-                          {isAdmin && (
+                          {(isAdmin || isAccountant) && (
                             <Dialog>
                               <DialogTrigger nativeButton={true} render={
                                 <Button className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100 px-6 transition-all transform active:scale-95 flex items-center gap-2">
@@ -8566,8 +8645,7 @@ export default function App() {
                             <CardDescription className="text-[11px] font-medium text-slate-400">Định nghĩa các khu vực hoạt động</CardDescription>
                           </div>
                         </div>
-
-                        {isAdmin && (
+                        {(isAdmin || isAccountant) && (
                           <div className="flex items-center gap-2">
                             <Button 
                               variant="outline" 
@@ -8609,7 +8687,7 @@ export default function App() {
                           <Table>
                             <TableHeader className="bg-slate-50/50">
                               <TableRow className="hover:bg-transparent border-b border-slate-100">
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <TableHead className="w-[50px] pl-6 py-4">
                                     <input 
                                       type="checkbox" 
@@ -8646,7 +8724,7 @@ export default function App() {
                                   const regionProjects = projects.filter(p => p.region === r.name);
                                   return (
                                     <TableRow key={r.id} className={`group transition-all border-b border-slate-50 ${selectedRegionIds.includes(r.id) ? "bg-emerald-50/20" : "hover:bg-slate-50/30"}`}>
-                                      {isAdmin && (
+                                      {(isAdmin || isAccountant) && (
                                         <TableCell className="pl-6 py-4">
                                           <input 
                                             type="checkbox" 
@@ -8678,7 +8756,7 @@ export default function App() {
                                         {safeFormat(r.createdAt?.toDate ? r.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                       </TableCell>
                                       <TableCell className="py-4 pr-6 text-right">
-                                        {isAdmin && (
+                                        {(isAdmin || isAccountant) && (
                                           <div className="flex justify-end gap-1">
                                             {editingRegionId === r.id ? (
                                               <>
@@ -8731,7 +8809,7 @@ export default function App() {
                                 })}
                               {regions.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={isAdmin ? 5 : 4} className="h-64 text-center">
+                                  <TableCell colSpan={(isAdmin || isAccountant) ? 5 : 4} className="h-64 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-4">
                                       <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
                                         <MapIcon className="h-8 w-8 text-slate-300" />
@@ -8771,7 +8849,7 @@ export default function App() {
                               />
                             </div>
                           </div>
-                          {isAdmin && (
+                          {(isAdmin || isAccountant) && (
                             <Dialog>
                               <DialogTrigger nativeButton={true} render={
                                 <Button className="bg-blue-600 hover:bg-blue-700">
@@ -8824,7 +8902,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        {isAdmin && (
+                        {(isAdmin || isAccountant) && (
                           <div className="flex flex-wrap items-center gap-2">
                             <Button 
                               variant="outline" 
@@ -8894,7 +8972,7 @@ export default function App() {
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <TableHead className="w-[40px]">
                                     <input 
                                       type="checkbox" 
@@ -8929,7 +9007,7 @@ export default function App() {
                                   const typeProjects = projects.filter(p => (p.type || '').trim() === (t.name || '').trim());
                                   return (
                                     <TableRow key={t.id} className={`group transition-all border-b border-slate-50 ${selectedTypeIds.includes(t.id) ? "bg-indigo-50/20" : "hover:bg-slate-50/30"}`}>
-                                      {isAdmin && (
+                                      {(isAdmin || isAccountant) && (
                                         <TableCell className="pl-6 py-4">
                                           <input 
                                             type="checkbox" 
@@ -8961,7 +9039,7 @@ export default function App() {
                                         {safeFormat(t.createdAt?.toDate ? t.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                       </TableCell>
                                       <TableCell className="py-4 pr-6 text-right">
-                                        {isAdmin && (
+                                        {(isAdmin || isAccountant) && (
                                           <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                             {editingTypeId === t.id ? (
                                               <>
@@ -9017,7 +9095,7 @@ export default function App() {
                                 })}
                               {types.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={isAdmin ? 5 : 4} className="h-48 text-center bg-slate-50/50">
+                                  <TableCell colSpan={(isAdmin || isAccountant) ? 5 : 4} className="h-48 text-center bg-slate-50/50">
                                     <div className="flex flex-col items-center justify-center space-y-4">
                                       <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
                                         <Layers className="h-8 w-8 text-slate-300" />
@@ -9031,7 +9109,7 @@ export default function App() {
                                 </TableRow>
                               )}
                               <TableRow className="bg-slate-50/30 hover:bg-slate-50/50 transition-colors">
-                                {isAdmin && <TableCell className="pl-6" />}
+                                { (isAdmin || isAccountant) && <TableCell className="pl-6" />}
                                 <TableCell className="py-4 pl-4 font-bold text-slate-500 italic">
                                   Chưa phân loại
                                 </TableCell>
@@ -9070,7 +9148,7 @@ export default function App() {
                               />
                             </div>
                           </div>
-                          {isAdmin && (
+                          {(isAdmin || isAccountant) && (
                             <div className="flex gap-2">
                               <Button 
                                 variant="outline" 
@@ -9122,7 +9200,7 @@ export default function App() {
                           <CardDescription>Quản lý các đội marketing ({sortedTeams.length} kết quả)</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          {isAdmin && (
+                          {(isAdmin || isAccountant) && (
                             <div className="flex gap-2 mr-4">
                               <Button 
                                 variant="outline" 
@@ -9161,7 +9239,7 @@ export default function App() {
                           <Table>
                             <TableHeader className="bg-slate-50">
                               <TableRow>
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <TableHead className="w-[40px]">
                                     <input 
                                       type="checkbox" 
@@ -9190,7 +9268,7 @@ export default function App() {
                             <TableBody>
                               {sortedTeams.map(t => (
                                 <TableRow key={t.id} className={selectedTeamIds.includes(t.id) ? "bg-blue-50/30" : ""}>
-                                  {isAdmin && (
+                                  {(isAdmin || isAccountant) && (
                                     <TableCell>
                                       <input 
                                         type="checkbox" 
@@ -9226,7 +9304,7 @@ export default function App() {
                                     {safeFormat(t.createdAt?.toDate ? t.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    {isAdmin && (
+                                    {(isAdmin || isAccountant) && (
                                       <div className="flex justify-end gap-1">
                                         {editingTeamId === t.id ? (
                                           <>
@@ -9386,7 +9464,7 @@ export default function App() {
                                       >
                                         <History className="w-3 h-3" />
                                       </Button>
-                                      {(isAdmin || isMod) && (
+                                      {(isAdmin || isMod || isAccountant) && (
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
@@ -9448,7 +9526,7 @@ export default function App() {
                           >
                             <Download className="w-3 h-3 mr-1" /> Xuất Excel
                           </Button>
-                          {(isAdmin || isMod) && (
+                          {(isAdmin || isMod || isAccountant) && (
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -9458,7 +9536,7 @@ export default function App() {
                               <FileUp className="w-3 h-3 mr-1" /> Nhập File
                             </Button>
                           )}
-                          {(isAdmin || isMod) && (
+                          {(isAdmin || isMod || isAccountant) && (
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -9469,7 +9547,7 @@ export default function App() {
                               <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedCostIds.length})
                             </Button>
                           )}
-                          {(isAdmin || isMod) && (
+                          {(isAdmin || isMod || isAccountant) && (
                             <Button 
                               variant="destructive" 
                               size="sm" 
@@ -9590,7 +9668,7 @@ export default function App() {
                                         >
                                           <History className="w-3.5 h-3.5" />
                                         </Button>
-                                        {(isAdmin || isMod) && (
+                                        {(isAdmin || isMod || isAccountant) && (
                                           <Button 
                                             variant="ghost" 
                                             size="icon" 
@@ -9657,7 +9735,7 @@ export default function App() {
                         />
                       </div>
 
-                      {isAdmin && (
+                      {(isAdmin || isAccountant) && (
                         <div className="space-y-2 min-w-0">
                           <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                             <Users className="w-3 h-3" /> Đội (Team)
@@ -9799,7 +9877,7 @@ export default function App() {
                     {/* Summary Cards - Viewable by all but tailored by role */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4 mb-8">
                       {/* 0. Tổng dự án (Admin only) */}
-                      {isAdmin && (
+                      {(isAdmin || isAccountant) && (
                         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Dự án báo cáo</p>
@@ -11018,7 +11096,7 @@ export default function App() {
                     <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-slate-500 uppercase">Chi tiết ngân sách đăng ký</Label>
-                      {isAdmin && (
+                      {(isAdmin || isMod || isAccountant) && (
                         <div className="flex gap-2">
                           <Button 
                             variant="outline" 
@@ -11060,7 +11138,7 @@ export default function App() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-[50px] text-center">STT</TableHead>
-                            {isAdmin && (
+                            {(isAdmin || isMod || isAccountant) && (
                               <TableHead className="w-[40px]">
                                 <input 
                                   type="checkbox" 
@@ -11115,14 +11193,14 @@ export default function App() {
                               Chênh lệch
                             </TableHead>
                             <TableHead>Người đăng ký</TableHead>
-                            {isAdmin && <TableHead className="text-right">Thao tác</TableHead>}
+                            {(isAdmin || isMod || isAccountant) && <TableHead className="text-right">Thao tác</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {budgetReportWithActuals.map((b, idx) => (
                             <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : b.actualCost > b.amount ? "bg-red-50/30" : ""}>
                               <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
-                              {isAdmin && (
+                              {(isAdmin || isMod || isAccountant) && (
                                 <TableCell>
                                   <input 
                                     type="checkbox" 
@@ -11149,7 +11227,7 @@ export default function App() {
                                 {(b.amount - b.actualCost).toLocaleString()} đ
                               </TableCell>
                               <TableCell className="text-[10px] text-slate-500">{b.userEmail}</TableCell>
-                              {isAdmin && (
+                              {(isAdmin || isMod || isAccountant) && (
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-1">
                                     <Button 
@@ -11177,14 +11255,14 @@ export default function App() {
                           ))}
                           {filteredBudgets.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={isAdmin ? 8 : 6} className="text-center py-8 text-slate-400">Không tìm thấy dữ liệu phù hợp</TableCell>
+                              <TableCell colSpan={isInternalStaff ? 8 : 6} className="text-center py-8 text-slate-400">Không tìm thấy dữ liệu phù hợp</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
                         {budgetReportWithActuals.length > 0 && (
                           <TableFooter className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                             <TableRow>
-                              <TableCell colSpan={isAdmin ? 5 : 4} className="text-right py-4 text-slate-500 uppercase text-[10px] tracking-widest font-black">
+                              <TableCell colSpan={isAdmin || isMod || isAccountant ? 5 : 4} className="text-right py-4 text-slate-500 uppercase text-[10px] tracking-widest font-black">
                                 TỔNG CỘNG:
                               </TableCell>
                               <TableCell className="text-right py-4 font-black font-mono text-[12px] text-indigo-700">
@@ -11199,7 +11277,7 @@ export default function App() {
                                   budgetReportWithActuals.reduce((acc, curr) => acc + (curr.actualCost || 0), 0)
                                 )}
                               </TableCell>
-                              <TableCell colSpan={isAdmin ? 2 : 1}></TableCell>
+                              <TableCell colSpan={(isAdmin || isAccountant) ? 2 : 1}></TableCell>
                             </TableRow>
                           </TableFooter>
                         )}
@@ -11211,7 +11289,7 @@ export default function App() {
             </TabsContent>
 
               {/* User Management Tab */}
-              {isAdmin && (
+              {(isAdmin || isAccountant) && (
                 <TabsContent value="users" className="space-y-6">
                   <Card className="border-none shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -11351,7 +11429,7 @@ export default function App() {
                 </TabsContent>
               )}
 
-              {(isAdmin || isMod) && (
+              {(isAdmin || isMod || isAccountant) && (
                 <>
                   {/* Tab Nghiệm thu */}
                   <TabsContent value="acceptance" className="space-y-6">
@@ -11362,6 +11440,7 @@ export default function App() {
                       isAccountant={isAccountant}
                       user={user}
                       teams={teams}
+                      uniqueTeams={uniqueTeams}
                       projects={projects}
                       acceptances={acceptances}
                       finalAcceptances={finalAcceptances}
@@ -11384,6 +11463,8 @@ export default function App() {
                       projects={projects}
                       projectMap={projectMap}
                       teamMap={teamMap}
+                      teams={teams}
+                      uniqueTeams={uniqueTeams}
                       groupedDocProcessing={groupedDocProcessing}
                       handleUpdateDocProcessing={handleUpdateDocProcessing}
                       formatCurrency={formatCurrency}
@@ -11391,7 +11472,10 @@ export default function App() {
                       setAcceptanceSearch={setAcceptanceSearch}
                       acceptanceProjectFilter={acceptanceProjectFilter}
                       setAcceptanceProjectFilter={setAcceptanceProjectFilter}
+                      acceptanceTeamFilter={acceptanceTeamFilter}
+                      setAcceptanceTeamFilter={setAcceptanceTeamFilter}
                       isAdmin={isAdmin}
+                      isMod={isMod}
                       isAccountant={isAccountant}
                     />
                   </TabsContent>
@@ -11563,7 +11647,7 @@ export default function App() {
                 </TabsContent>
               </>
             )}
-            {isAdmin && (
+            {(isAdmin || isAccountant) && (
                 <TabsContent value="backup" className="space-y-6">
                     <Card className="border-none shadow-sm">
                       <CardHeader>
@@ -12308,7 +12392,7 @@ export default function App() {
                     <CardDescription>Các khoản ngân sách vừa được thiết lập</CardDescription>
                   </div>
                   <div className="flex items-center gap-4">
-                    {isAdmin && (
+                    {(isAdmin || isAccountant) && (
                       <div className="flex items-center gap-2">
                         {selectedBudgetIds.length > 0 && (
                           <Button 
@@ -12342,7 +12426,7 @@ export default function App() {
                   <Table>
                     <TableHeader className="bg-slate-50/50">
                       <TableRow className="hover:bg-transparent border-b border-slate-100">
-                        {isAdmin && (
+                        {(isAdmin || isAccountant) && (
                           <TableHead className="w-[40px] py-4">
                             <input 
                               type="checkbox" 
@@ -12364,7 +12448,7 @@ export default function App() {
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người nhập</TableHead>
-                        {isAdmin && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
+                        {(isAdmin || isAccountant) && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -12376,26 +12460,26 @@ export default function App() {
                           const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
                           const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
                           
-                          return isAdmin || isMod || isOwner || isAssigned || isAssignedGDDA;
+                          return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
                         })
                         .slice(0, 10).map(b => (
                         <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
-                          {isAdmin && (
-                            <TableCell className="py-4">
-                              <input 
-                                type="checkbox" 
-                                className="rounded border-slate-300"
-                                checked={selectedBudgetIds.includes(b.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedBudgetIds(prev => [...prev, b.id]);
-                                  } else {
-                                    setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
-                                  }
-                                }}
-                              />
-                            </TableCell>
-                          )}
+                        {(isAdmin || isAccountant) && (
+                          <TableCell className="py-4">
+                            <input 
+                              type="checkbox" 
+                              className="rounded border-slate-300"
+                              checked={selectedBudgetIds.includes(b.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedBudgetIds(prev => [...prev, b.id]);
+                                } else {
+                                  setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                }
+                              }}
+                            />
+                          </TableCell>
+                        )}
                           <TableCell className="py-4">
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
@@ -12455,7 +12539,7 @@ export default function App() {
                                     <Edit2 className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
-                                {isAdmin && (
+                                {(isAdmin || isAccountant) && (
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
@@ -12837,7 +12921,7 @@ export default function App() {
                       <CardTitle>Lịch sử chi phí thực tế</CardTitle>
                       <CardDescription>Danh sách các khoản chi đã cập nhật trong kỳ</CardDescription>
                     </div>
-                    {isAdmin && (
+                    {(isAdmin || isAccountant) && (
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
@@ -12865,7 +12949,7 @@ export default function App() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[50px] text-center">STT</TableHead>
-                          {isAdmin && (
+                          {(isAdmin || isAccountant) && (
                             <TableHead className="w-[40px]">
                               <input 
                                 type="checkbox" 
@@ -12921,12 +13005,12 @@ export default function App() {
                       </TableHeader>
                       <TableBody>
                         {costs
-                          .filter(c => isAdmin || isMod || isGDDA || c.userEmail === user.email)
+                          .filter(c => isAdmin || isMod || isAccountant || isGDDA || c.userEmail === user.email)
                           .slice(0, 50)
                           .map((c, idx) => (
                           <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
                             <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
-                            {isAdmin && (
+                            {(isAdmin || isAccountant) && (
                               <TableCell>
                                 <input 
                                   type="checkbox" 
@@ -13011,7 +13095,7 @@ export default function App() {
                                       }}>
                                         <Edit2 className="h-3.5 w-3.5" />
                                       </Button>
-                                      {isAdmin && (
+                                      {(isAdmin || isAccountant) && (
                                         <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id, projectMap[c.projectId] || c.projectName)}>
                                           <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -13025,14 +13109,14 @@ export default function App() {
                         ))}
                         {costs.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 10 : 9} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
+                            <TableCell colSpan={(isAdmin || isAccountant) ? 10 : 9} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
                       {costs.length > 0 && (
                         <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-100">
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng thực chi:</TableCell>
+                            <TableCell colSpan={(isAdmin || isAccountant) ? 5 : 4} className="text-right text-slate-600 uppercase text-[10px]">Tổng cộng thực chi:</TableCell>
                             <TableCell className="text-right font-mono text-emerald-600 font-black">
                               {latestCostsList.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-[10px]">đ</span>
                             </TableCell>
@@ -13102,7 +13186,9 @@ export default function App() {
 
           <TabsContent value="support" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             <SupportManager 
-              isAdmin={isAdmin || isMod} 
+              isAdmin={isAdmin} 
+              isMod={isMod}
+              isAccountant={isAccountant}
               user={user} 
               userProfile={userProfile}
               supportRequests={supportRequests}
@@ -14386,7 +14472,7 @@ export default function App() {
             <span className="text-[10px] font-black uppercase tracking-tighter">Chi phí</span>
           </button>
 
-          {(isAdmin || isMod || isGDDA) && (
+          {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
             <button 
               onClick={() => setActiveTab('admin')}
               className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'admin' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
@@ -14613,15 +14699,34 @@ export default function App() {
  * Encapsulates the Acceptance tab logic and UI to improve performance and reduce input lag.
  */
 const AcceptanceManager = React.memo(({ 
-  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams, projects, acceptances, finalAcceptances, teamMap, projectMap, 
+  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
   isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,
-  handleImportAcceptancesCSV
+  handleImportAcceptancesCSV, uniqueTeams = []
 }: any) => {
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
+  const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' | null }>({ key: 'teamName', direction: 'asc' });
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIndicator = ({ field }: { field: string }) => {
+    if (sortConfig.key !== field) return <ArrowUpDown className="w-2.5 h-2.5 ml-1 opacity-20" />;
+    return sortConfig.direction === 'asc' ? 
+      <ChevronUpIcon className="w-2.5 h-2.5 ml-1 text-indigo-600" /> : 
+      <ChevronDownIcon className="w-2.5 h-2.5 ml-1 text-indigo-600" />;
+  };
+
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isAddingAcceptance, setIsAddingAcceptance] = useState(false);
   const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
@@ -14776,29 +14881,59 @@ const AcceptanceManager = React.memo(({
   };
 
   const filteredAcceptances = useMemo(() => {
-    return acceptances.filter((a: any) => {
+    const filtered = acceptances.filter((a: any) => {
       const matchesSearch = 
         (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
+      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter;
       const isPending = a.status !== 'Đã nghiệm thu';
-      return matchesSearch && matchesMonth && matchesProject && isPending;
+      return matchesSearch && matchesMonth && matchesProject && matchesTeam && isPending;
     });
-  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter]);
+
+    if (!sortConfig.key || !sortConfig.direction) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aVal = a[sortConfig.key] || '';
+      let bVal = b[sortConfig.key] || '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, sortConfig]);
 
   const filteredFinalAcceptances = useMemo(() => {
-    return (finalAcceptances || []).filter((a: any) => {
+    const filtered = (finalAcceptances || []).filter((a: any) => {
       const matchesSearch = 
         (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
-      return matchesSearch && matchesMonth && matchesProject;
+      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter;
+      return matchesSearch && matchesMonth && matchesProject && matchesTeam;
     });
-  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter]);
+
+    if (!sortConfig.key || !sortConfig.direction) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aVal = a[sortConfig.key] || '';
+      let bVal = b[sortConfig.key] || '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, sortConfig]);
 
 
   const pendingTotals = useMemo(() => {
@@ -15116,7 +15251,7 @@ const AcceptanceManager = React.memo(({
     if (!acc) return;
     
     setIsFinalizing(acc.id);
-    const toastId = toast.loading('Đàng xử lý chốt số liệu quyết toán...');
+    const toastId = toast.loading('Đang xử lý chốt số liệu quyết toán...');
     try {
       const breakdown = acc.breakdown || {};
       
@@ -15159,8 +15294,12 @@ const AcceptanceManager = React.memo(({
         updatedByUid: user?.uid || ''
       });
       
-      toast.success('Đã chốt số liệu và quyết toán thành công!', { id: toastId });
+      // Close dialog first to ensure UI feedback
+      setIsFinalizeDialogOpen(false);
+      setAcceptanceToFinalize(null);
       setExpandingAcceptance(null);
+      
+      toast.success('Đã chốt số liệu và quyết toán thành công!', { id: toastId });
     } catch (error: any) {
       console.error("Finalize error:", error);
       handleFirestoreError(error, OperationType.WRITE, 'finalAcceptances');
@@ -15515,7 +15654,7 @@ const AcceptanceManager = React.memo(({
                   >
                     <Download className="w-4 h-4" /> Xuất File Excel
                   </Button>
-                  {selectedAcceptanceIds.length > 0 && (isAdmin || isSuperAdmin) && (
+                  {selectedAcceptanceIds.length > 0 && (isAdmin || isSuperAdmin || isAccountant) && (
                     <Button 
                       variant="destructive" 
                       size="sm" 
@@ -15556,12 +15695,20 @@ const AcceptanceManager = React.memo(({
                     onChange={setAcceptanceSearch}
                   />
                 </div>
-                <div className="w-[200px]">
+                <div className="w-[180px]">
                   <SearchableProjectSelect 
                     value={acceptanceProjectFilter} 
                     onValueChange={setAcceptanceProjectFilter} 
                     projects={projects}
                     projectMap={projectMap}
+                  />
+                </div>
+                <div className="w-[180px]">
+                  <SearchableAcceptanceTeamSelect
+                    value={acceptanceTeamFilter}
+                    onValueChange={setAcceptanceTeamFilter}
+                    teams={teams}
+                    teamMap={teamMap}
                   />
                 </div>
                 <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
@@ -15582,7 +15729,7 @@ const AcceptanceManager = React.memo(({
                 <Table className="table-fixed w-full">
                   <TableHeader className="bg-slate-50/80">
                   <TableRow className="h-10">
-                     {(isAdmin || isSuperAdmin) && (
+                     {(isAdmin || isSuperAdmin || isAccountant) && (
                        <TableHead className="w-[30px] px-2 text-center">
                           <input 
                             type="checkbox" 
@@ -15599,7 +15746,18 @@ const AcceptanceManager = React.memo(({
                        </TableHead>
                      )}
                      <TableHead className="text-center w-[35px] px-0 font-black text-[9px] text-slate-400 uppercase tracking-tighter">STT</TableHead>
-                     <TableHead className="w-[220px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter">Team / Dự án</TableHead>
+                     <TableHead 
+                        className="w-[150px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter cursor-pointer hover:text-indigo-600 transition-colors"
+                        onClick={() => handleSort('projectName')}
+                      >
+                        <div className="flex items-center">Dự án <SortIndicator field="projectName" /></div>
+                      </TableHead>
+                      <TableHead 
+                        className="w-[130px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter cursor-pointer hover:text-indigo-600 transition-colors"
+                        onClick={() => handleSort('teamName')}
+                      >
+                        <div className="flex items-center">Team <SortIndicator field="teamName" /></div>
+                      </TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">FB</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">TikTok</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Zalo</TableHead>
@@ -15618,7 +15776,7 @@ const AcceptanceManager = React.memo(({
                   {filteredAcceptances.map((a: any, index: number) => (
                     <React.Fragment key={a.id}>
                       <TableRow className={`hover:bg-slate-50/50 transition-colors group ${expandingAcceptance === a.id ? 'bg-indigo-50/30' : ''} border-slate-100`}>
-                        {(isAdmin || isSuperAdmin) && (
+                        {(isAdmin || isSuperAdmin || isAccountant) && (
                           <TableCell className="px-2 text-center">
                             <input 
                               type="checkbox" 
@@ -15634,15 +15792,14 @@ const AcceptanceManager = React.memo(({
                             />
                           </TableCell>
                         )}
-                        <TableCell className="text-center font-mono text-[9px] text-slate-400 px-0">{index + 1}</TableCell>
+                        <TableCell className="text-center font-mono text-[9px] text-slate-400 px-0 py-2">{index + 1}</TableCell>
                         <TableCell className="px-2 py-2">
-                          <div className="flex flex-col gap-0">
-                            <p className="font-bold text-slate-900 text-[10px] leading-tight" title={a.projectName}>{a.projectName}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-[9px] font-black text-indigo-600 uppercase whitespace-nowrap">{a.teamName}</span>
-                              <span className="text-[9px] font-bold text-slate-400">/ {a.month}</span>
-                            </div>
-                          </div>
+                           <div className="font-bold text-slate-900 text-[10px] leading-tight line-clamp-1" title={a.projectName}>{a.projectName}</div>
+                           <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">ID: {a.projectCode || a.projectId.substring(0,6)}</div>
+                        </TableCell>
+                        <TableCell className="px-2 py-2">
+                           <span className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm line-clamp-1 w-fit">{a.teamName}</span>
+                           <div className="text-[8px] text-slate-400 font-bold mt-0.5 lowercase group-hover:text-slate-600">{a.month}</div>
                         </TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0).replace(' đ','')}</TableCell>
@@ -15765,7 +15922,7 @@ const AcceptanceManager = React.memo(({
                       </TableRow>
                       {expandingAcceptance === a.id && (
                         <TableRow className="bg-indigo-50/20 border-t-0 animate-in slide-in-from-top-1 duration-300">
-                          <TableCell colSpan={(isAdmin || isSuperAdmin) ? 12 : 11} className="p-0">
+                          <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 12 : 11} className="p-0">
                             <div className="p-6 border-x-2 border-indigo-200/50 m-2 bg-white rounded-2xl shadow-xl shadow-indigo-100/50">
                                <div className="grid grid-cols-2 gap-8">
                                  <div className="space-y-4">
@@ -15892,7 +16049,7 @@ const AcceptanceManager = React.memo(({
                   ))}
                   {filteredAcceptances.length > 0 && (
                     <TableRow className="bg-slate-50/50 border-t-2 border-slate-100">
-                      <TableCell colSpan={(isAdmin || isSuperAdmin) ? 3 : 2} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
+                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 3 : 2} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.fb)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.tiktok)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.zalo)}</TableCell>
@@ -15910,7 +16067,7 @@ const AcceptanceManager = React.memo(({
                   )}
                   {filteredAcceptances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={(isAdmin || isSuperAdmin) ? 12 : 11} className="h-40 text-center text-slate-300 italic">
+                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 12 : 11} className="h-40 text-center text-slate-300 italic">
                         Không tìm thấy dữ liệu nghiệm thu phù hợp
                       </TableCell>
                     </TableRow>
@@ -15922,7 +16079,18 @@ const AcceptanceManager = React.memo(({
                 <TableHeader className="bg-slate-50/80">
                   <TableRow className="h-10">
                      <TableHead className="text-center w-[35px] px-0 font-black text-[9px] text-slate-400 uppercase tracking-tighter">STT</TableHead>
-                     <TableHead className="w-[220px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter">Team / Dự án</TableHead>
+                     <TableHead 
+                        className="w-[150px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter cursor-pointer hover:text-indigo-600 transition-colors"
+                        onClick={() => handleSort('projectName')}
+                      >
+                        <div className="flex items-center">Dự án <SortIndicator field="projectName" /></div>
+                      </TableHead>
+                      <TableHead 
+                        className="w-[130px] px-2 font-black text-[9px] text-slate-400 uppercase tracking-tighter cursor-pointer hover:text-indigo-600 transition-colors"
+                        onClick={() => handleSort('teamName')}
+                      >
+                        <div className="flex items-center">Team <SortIndicator field="teamName" /></div>
+                      </TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">FB</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">TikTok</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Zalo</TableHead>
@@ -15941,13 +16109,12 @@ const AcceptanceManager = React.memo(({
                     <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors border-slate-100">
                       <TableCell className="text-center font-mono text-[9px] text-slate-400 px-0">{index + 1}</TableCell>
                         <TableCell className="px-2 py-2">
-                          <div className="flex flex-col gap-0">
-                            <p className="font-bold text-slate-900 text-[10px] leading-tight" title={a.projectName}>{a.projectName}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-[9px] font-black text-indigo-600 uppercase whitespace-nowrap">{a.teamName}</span>
-                              <span className="text-[9px] font-bold text-slate-400">/ {a.month}</span>
-                            </div>
-                          </div>
+                           <div className="font-bold text-slate-900 text-[10px] leading-tight line-clamp-1" title={a.projectName}>{a.projectName}</div>
+                           <div className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">ID: {a.projectCode || a.projectId.substring(0,6)}</div>
+                        </TableCell>
+                        <TableCell className="px-2 py-2">
+                           <span className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm line-clamp-1 w-fit">{a.teamName}</span>
+                           <div className="text-[8px] text-slate-400 font-bold mt-0.5 lowercase">{a.month}</div>
                         </TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.facebookCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.tiktokCost || 0).replace(' đ','')}</TableCell>
@@ -16042,7 +16209,7 @@ const AcceptanceManager = React.memo(({
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          {(isAdmin || isSuperAdmin) && (
+                          {(isAdmin || isSuperAdmin || isAccountant) && (
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -16078,7 +16245,7 @@ const AcceptanceManager = React.memo(({
                   )}
                   {filteredFinalAcceptances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} className="h-40 text-center text-slate-300 italic">
+                      <TableCell colSpan={13} className="h-40 text-center text-slate-300 italic font-inter">
                         Chưa có dữ liệu đã quyết toán
                       </TableCell>
                     </TableRow>
@@ -16091,190 +16258,115 @@ const AcceptanceManager = React.memo(({
       </div>
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="max-w-sm rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white p-8 space-y-6">
-            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-500" />
             </div>
-            <div className="space-y-2 text-center">
+            <div className="text-center space-y-2">
               <h3 className="text-xl font-black text-slate-900 leading-none">Xác nhận xóa?</h3>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
-                Hành động này không thể hoàn tác. Dữ liệu nghiệm thu sẽ bị xóa vĩnh viễn khỏi hệ thống.
-              </p>
+              <p className="text-sm font-bold text-slate-500 italic">Hành động này không thể hoàn tác.</p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
-                onClick={() => setIsDeleteDialogOpen(false)}
-              >
-                Hủy bỏ
-              </Button>
-              <Button 
-                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
-                onClick={() => acceptanceToDelete && handleDeleteAcceptance(acceptanceToDelete)}
-              >
-                Xác nhận xóa
-              </Button>
+              <Button variant="outline" className="flex-1 h-12 rounded-2xl font-black" onClick={() => setIsDeleteDialogOpen(false)}>HỦY BỎ</Button>
+              <Button className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black" onClick={() => acceptanceToDelete && handleDeleteAcceptance(acceptanceToDelete)}>XÓA</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="max-w-sm rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white p-8 space-y-6">
-            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-500" />
             </div>
-            <div className="space-y-2 text-center">
+            <div className="text-center space-y-2">
               <h3 className="text-xl font-black text-slate-900 leading-none">Xóa hàng loạt?</h3>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
-                Bạn đang chuẩn bị xóa <span className="text-rose-600 font-black">{selectedAcceptanceIds.length}</span> bản ghi đã chọn. Hành động này không thể hoàn tác.
-              </p>
+              <p className="text-sm font-bold text-slate-500 italic">Bạn đang chuẩn bị xóa {selectedAcceptanceIds.length} bản ghi đã chọn.</p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
-                onClick={() => setIsBulkDeleteDialogOpen(false)}
-              >
-                Hủy bỏ
-              </Button>
-              <Button 
-                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
-                onClick={handleBulkDeleteAcceptances}
-              >
-                Xác nhận xóa
-              </Button>
+              <Button variant="outline" className="flex-1 h-12 rounded-2xl font-black" onClick={() => setIsBulkDeleteDialogOpen(false)}>HỦY BỎ</Button>
+              <Button className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black" onClick={handleBulkDeleteAcceptances}>XÓA</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
       <Dialog open={isDeleteFinalDialogOpen} onOpenChange={setIsDeleteFinalDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="max-w-sm rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white p-8 space-y-6">
-            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-rose-50/30">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-500" />
             </div>
-            <div className="space-y-2 text-center">
-              <h3 className="text-xl font-black text-slate-900 leading-none">Xóa bản ghi đã chốt?</h3>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
-                Bản ghi này đã được quyết toán. Việc xóa sẽ làm mất dấu vết lịch sử tài chính. Bạn có chắc chắn?
-              </p>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-slate-900 leading-none">Xóa quyết toán?</h3>
+              <p className="text-sm font-bold text-slate-500 italic px-4">Bản ghi này đã được chốt. Việc xóa sẽ làm thay đổi báo cáo.</p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
-                onClick={() => setIsDeleteFinalDialogOpen(false)}
-              >
-                Hủy bỏ
-              </Button>
-              <Button 
-                className="flex-1 h-12 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black tracking-wide shadow-lg shadow-rose-200"
-                onClick={() => finalAcceptanceToDelete && handleDeleteFinalAcceptance(finalAcceptanceToDelete)}
-              >
-                Xác nhận xóa
-              </Button>
+              <Button variant="outline" className="flex-1 h-12 rounded-2xl font-black" onClick={() => setIsDeleteFinalDialogOpen(false)}>HỦY BỎ</Button>
+              <Button className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black" onClick={() => finalAcceptanceToDelete && handleDeleteFinalAcceptance(finalAcceptanceToDelete)}>XÓA VĨNH VIỄN</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
       <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="max-w-sm rounded-[32px] p-0 overflow-hidden border-none shadow-2xl">
           <div className="bg-white p-8 space-y-6">
-            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto ring-8 ring-emerald-50/30">
+            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto">
               <ShieldCheck className="w-8 h-8 text-emerald-500" />
             </div>
-            <div className="space-y-2 text-center">
+            <div className="text-center space-y-2">
               <h3 className="text-xl font-black text-slate-900 leading-none">Chốt số liệu?</h3>
-              <p className="text-sm font-bold text-slate-500 leading-relaxed px-4">
-                Hành động này sẽ <span className="text-emerald-600 font-black uppercase">CHỐT</span> số liệu quyết toán và không thể thay đổi sau đó. Bản ghi sẽ được chuyển sang báo cáo thực tế chính thức.
-              </p>
+              <p className="text-sm font-bold text-slate-500 italic px-4 leading-relaxed font-inter">Hành động này sẽ khóa dữ liệu quyết toán.</p>
             </div>
             <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 h-12 rounded-2xl font-black" onClick={() => {
+                setIsFinalizeDialogOpen(false);
+                setAcceptanceToFinalize(null);
+              }} disabled={!!isFinalizing}>HỦY BỎ</Button>
               <Button 
-                variant="outline" 
-                className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-black tracking-wide"
-                onClick={() => setIsFinalizeDialogOpen(false)}
+                className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center justify-center gap-2" 
+                onClick={() => acceptanceToFinalize && handleFinalizeAcceptance(acceptanceToFinalize)}
+                disabled={!!isFinalizing}
               >
-                Hủy bỏ
-              </Button>
-              <Button 
-                className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black tracking-wide shadow-lg shadow-emerald-200"
-                onClick={() => {
-                  if (acceptanceToFinalize) {
-                    handleFinalizeAcceptance(acceptanceToFinalize);
-                    setIsFinalizeDialogOpen(false);
-                    setAcceptanceToFinalize(null);
-                  }
-                }}
-              >
-                Xác nhận chốt
+                {isFinalizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : null}
+                CHỐT DỮ LIỆU
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Acceptance Import Dialog */}
       <Dialog open={isImportAcceptancesDialogOpen} onOpenChange={setIsImportAcceptancesDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-[32px]">
-          <div className="p-8 bg-indigo-600 text-white relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
-                <FileUp className="w-8 h-8 text-white" />
+        <DialogContent className="sm:max-w-[450px] rounded-[40px] p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-indigo-600 p-8 text-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-2xl">
+                <FileSpreadsheet className="w-8 h-8" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-black tracking-tight mb-1">Nhập Nghiệm thu từ Excel</DialogTitle>
-                <p className="text-white/80 text-xs font-black uppercase tracking-widest">Tải dữ liệu hàng loạt vào hệ thống</p>
+                <DialogTitle className="text-xl font-black">Nhập dữ liệu Excel</DialogTitle>
+                <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest mt-1">Import nghiệm thu</p>
               </div>
             </div>
           </div>
           <div className="p-8 space-y-6">
-            <div className="space-y-4">
-              <div className={`p-8 border-2 border-dashed rounded-2xl text-center transition-all group ${isImportingAcceptances ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
-                <input 
-                  type="file" 
-                  id="acceptance-import"
-                  className="hidden" 
-                  accept=".xlsx,.xls,.csv" 
-                  onChange={handleImportAcceptancesCSV} 
-                  disabled={isImportingAcceptances}
-                />
-                <label 
-                  htmlFor="acceptance-import"
-                  className={`cursor-pointer flex flex-col items-center gap-4 ${isImportingAcceptances ? 'cursor-not-allowed' : ''}`}
-                >
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 ${isImportingAcceptances ? 'bg-slate-100' : 'bg-white shadow-xl group-hover:scale-110'}`}>
-                    {isImportingAcceptances ? (
-                      <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-                    ) : (
-                      <FileSpreadsheet className="w-8 h-8 text-indigo-600" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900 text-base">{isImportingAcceptances ? 'Đang xử lý dữ liệu...' : 'Nhấn để chọn file Excel'}</p>
-                    <p className="text-xs text-slate-400 mt-1 font-medium italic">Hỗ trợ định dạng .xlsx, .xls hoặc .csv</p>
-                  </div>
-                </label>
-              </div>
-              
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
-                <Info className="w-5 h-5 text-amber-500 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-amber-900 uppercase">Lưu ý định dạng:</p>
-                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
-                    File cần có các cột: <strong>Dự án, Team, Tháng, Facebook Ads, Zalo Ads, Google Ads...</strong> (Có thể dùng tên Dự án, Mã dự án hoặc ID).
-                  </p>
+            <div className="p-10 border-2 border-dashed border-indigo-100 rounded-[32px] bg-slate-50/50 text-center hover:bg-slate-50 transition-all group relative">
+              <input type="file" id="file-upload-final-restored" className="hidden" onChange={handleImportAcceptancesCSV} />
+              <label htmlFor="file-upload-final-restored" className="cursor-pointer space-y-4 block">
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-lg group-hover:scale-110 transition-transform">
+                  <Upload className="w-8 h-8 text-indigo-600" />
                 </div>
-              </div>
+                <div>
+                  <p className="font-black text-slate-900">Chọn file từ máy tính</p>
+                </div>
+              </label>
             </div>
           </div>
-          <DialogFooter className="p-8 bg-slate-50/50 flex gap-3 border-t border-slate-100">
-            <Button variant="ghost" onClick={() => setIsImportAcceptancesDialogOpen(false)} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-11 px-6">Đóng</Button>
+          <DialogFooter className="p-8 bg-slate-50/50 flex justify-end">
+            <Button variant="ghost" onClick={() => setIsImportAcceptancesDialogOpen(false)} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-11 px-8">Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -16287,34 +16379,103 @@ const AcceptanceManager = React.memo(({
  * For accounting department to reconcile documents.
  */
 const DocProcessingManager = React.memo(({
-  projects,
-  projectMap,
-  teamMap,
-  groupedDocProcessing,
+  projects = [],
+  projectMap = {},
+  teamMap = {},
+  teams = [],
+  uniqueTeams = [],
+  groupedDocProcessing = [],
   handleUpdateDocProcessing,
   formatCurrency,
   debouncedAcceptanceSearch,
   setAcceptanceSearch,
   acceptanceProjectFilter,
   setAcceptanceProjectFilter,
+  acceptanceTeamFilter,
+  setAcceptanceTeamFilter,
+  isMod,
   isAdmin,
   isAccountant
 }: any) => {
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' | null }>({ 
+    key: 'teamName', 
+    direction: 'asc' 
+  });
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' | null = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = null;
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig.direction || !sortConfig.key) return groupedDocProcessing;
+    
+    return [...groupedDocProcessing].sort((a, b) => {
+      let aVal = a[sortConfig.key!];
+      let bVal = b[sortConfig.key!];
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [groupedDocProcessing, sortConfig]);
+
+  const handleExportExcel = () => {
+    if (sortedData.length === 0) {
+      toast.error('Không có dữ liệu để xuất');
+      return;
+    }
+
+    const exportData = sortedData.map((item: any, index: number) => ({
+      'STT': index + 1,
+      'Dự án': item.projectName,
+      'Team': item.teamName,
+      'Số bản ghi': item.recordCount,
+      'Digital': item.digitalCost,
+      'Visa': item.visaCost,
+      'Thành tiền': item.totalAmount,
+      'Trạng thái đối soát': item.confirmation,
+      'Ghi chú': item.note || '',
+      'Người cập nhật': item.updatedByEmail || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Doi_Soat_Ho_So");
+    XLSX.writeFile(wb, `DoiSoatHoSo_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Đã xuất file Excel');
+  };
+
   const docProcessingTotals = useMemo(() => {
-    return groupedDocProcessing.reduce((acc: any, curr: any) => ({
+    return sortedData.reduce((acc: any, curr: any) => ({
       totalAmount: acc.totalAmount + curr.totalAmount,
       visaCost: acc.visaCost + curr.visaCost,
       digitalCost: acc.digitalCost + curr.digitalCost,
       recordCount: acc.recordCount + curr.recordCount
     }), { totalAmount: 0, visaCost: 0, digitalCost: 0, recordCount: 0 });
-  }, [groupedDocProcessing]);
+  }, [sortedData]);
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortConfig.key !== field) return <ArrowUpDown className="ml-1 w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />;
+    if (sortConfig.direction === 'asc') return <ChevronUpIcon className="ml-1 w-3 h-3 text-indigo-600" />;
+    if (sortConfig.direction === 'desc') return <ChevronDownIcon className="ml-1 w-3 h-3 text-indigo-600" />;
+    return <ArrowUpDown className="ml-1 w-3 h-3 opacity-30" />;
+  };
 
   return (
     <div className="space-y-6">
        <Card className="border-none shadow-sm overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 w-full" />
           <CardHeader className="pb-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-50 rounded-lg">
                   <FileCheck className="w-5 h-5 text-indigo-600" />
@@ -16324,46 +16485,84 @@ const DocProcessingManager = React.memo(({
                   <CardDescription className="text-slate-500 font-medium font-inter">Đối chiếu hồ sơ bản cứng và hồ sơ đã nghiệm thu</CardDescription>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <DebouncedInput 
                     placeholder="Tìm Dự án, Team..." 
-                    className="pl-10 h-10 w-[250px] bg-slate-50 border-none rounded-xl text-xs font-bold"
+                    className="pl-10 h-10 w-[200px] sm:w-[250px] bg-slate-50 border-none rounded-xl text-xs font-bold"
                     value={debouncedAcceptanceSearch}
                     onChange={setAcceptanceSearch}
                   />
                 </div>
-                <div className="w-[200px]">
-                  <SearchableProjectSelect
+                <div className="w-[180px]">
+                   <SearchableProjectSelect
                     value={acceptanceProjectFilter}
                     onValueChange={setAcceptanceProjectFilter}
                     projects={projects}
                     projectMap={projectMap}
                   />
                 </div>
+                <div className="w-[180px]">
+                  <SearchableTeamSelect
+                    value={acceptanceTeamFilter}
+                    onValueChange={setAcceptanceTeamFilter}
+                    teams={teams}
+                    uniqueTeams={uniqueTeams}
+                  />
+                </div>
+                <Button 
+                  onClick={handleExportExcel}
+                  variant="outline"
+                  className="h-10 rounded-xl border-slate-200 text-slate-600 font-bold text-xs gap-2 hover:bg-slate-50"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                  Xuất Excel
+                </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
-              <Table className="table-fixed w-full">
+            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white overflow-x-auto">
+              <Table className="w-full table-fixed min-w-[700px] lg:min-w-0">
                 <TableHeader className="bg-slate-50/50">
                   <TableRow className="hover:bg-transparent border-slate-100 h-10">
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-auto">Dự án</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter w-[120px]">Team</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[60px]">Bản ghi</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[90px]">Digital</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[90px]">Visa</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[110px]">Thành tiền</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[130px]">Đối soát</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-[35px]">STT</TableHead>
+                    <TableHead 
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[140px]"
+                      onClick={() => handleSort('projectName')}
+                    >
+                      <div className="flex items-center">
+                        Dự án <SortIcon field="projectName" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[150px]"
+                      onClick={() => handleSort('teamName')}
+                    >
+                      <div className="flex items-center">
+                        Team <SortIcon field="teamName" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[45px]">Ghi</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[75px]">Digital</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[75px]">Visa</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Tổng</TableHead>
+                    <TableHead 
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[110px] cursor-pointer hover:text-indigo-600 group transition-colors"
+                      onClick={() => handleSort('confirmation')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Đối soát <SortIcon field="confirmation" />
+                      </div>
+                    </TableHead>
                     <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pr-4 w-auto">Ghi chú & Lịch sử</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupedDocProcessing.length === 0 ? (
+                  {sortedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-40 text-center">
+                      <TableCell colSpan={9} className="h-40 text-center">
                         <div className="flex flex-col items-center justify-center text-slate-400">
                           <FileBox className="w-10 h-10 mb-2 opacity-20" />
                           <p className="text-xs font-bold font-inter">Hiện tại chưa có hồ sơ nào đã được nghiệm thu để đối soát</p>
@@ -16371,56 +16570,55 @@ const DocProcessingManager = React.memo(({
                       </TableCell>
                     </TableRow>
                   ) : (
-                    groupedDocProcessing.map((group: any) => (
-                      <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group h-12">
-                        <TableCell className="pl-4 py-2">
-                          <div className="font-black text-slate-900 text-[11px] leading-tight truncate" title={group.projectName}>{group.projectName}</div>
-                          <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">ID: {group.projectId.substring(0,8)}</div>
+                    sortedData.map((group: any, index: number) => (
+                      <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group min-h-[48px]">
+                        <TableCell className="pl-4 py-2 text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
+                        <TableCell className="py-2">
+                          <div className="font-black text-slate-900 text-[10.5px] leading-tight" title={group.projectName}>{group.projectName}</div>
+                          <div className="text-[8px] text-slate-300 font-bold uppercase tracking-tight mt-0.5">ID: {group.projectId.substring(0,6)}</div>
                         </TableCell>
                         <TableCell className="py-2">
-                          <div className="font-bold text-slate-700 text-[11px] truncate">{group.teamName}</div>
+                           <div className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm w-fit break-words max-w-full leading-tight">{group.teamName}</div>
                         </TableCell>
                         <TableCell className="text-right py-2">
                           <Badge variant="outline" className="bg-slate-50 border-slate-100 text-[9px] font-black px-1.5 h-4 font-inter">{group.recordCount}</Badge>
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-[10px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 font-mono text-[9px] font-bold text-slate-600">
                           {formatCurrency(group.digitalCost || 0).replace(' đ','')}
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-[10px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 font-mono text-[9px] font-bold text-slate-600">
                           {formatCurrency(group.visaCost || 0).replace(' đ','')}
                         </TableCell>
                         <TableCell className="text-right py-2">
-                          <div className="font-black text-slate-900 text-[11px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
+                          <div className="font-black text-slate-900 text-[10px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
-                             <Select 
-                              value={group.confirmation} 
-                              onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
-                              disabled={!(isAdmin || isAccountant)}
-                             >
-                                <SelectTrigger className={`h-8 w-[150px] text-[10px] font-black uppercase rounded-lg border-none shadow-sm transition-all focus:ring-2 focus:ring-indigo-100 ${
-                                  group.confirmation === 'Khớp hồ sơ' ? 'bg-emerald-50 text-emerald-600' :
-                                  group.confirmation === 'Không khớp hồ sơ' ? 'bg-rose-50 text-rose-600' :
-                                  'bg-slate-50 text-slate-400'
-                                }`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl border-none shadow-2xl">
-                                  <SelectItem value="Chưa đối soát" className="text-[10px] font-bold uppercase">Chưa đối soát</SelectItem>
-                                  <SelectItem value="Khớp hồ sơ" className="text-[10px] font-bold text-emerald-600 uppercase">Khớp hồ sơ</SelectItem>
-                                  <SelectItem value="Không khớp hồ sơ" className="text-[10px] font-bold text-rose-600 uppercase">Không khớp hồ sơ</SelectItem>
-                                </SelectContent>
-                             </Select>
-                          </div>
+                           <Select 
+                             value={group.confirmation} 
+                             onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
+                             disabled={!(isAdmin || isMod || isAccountant)}
+                           >
+                              <SelectTrigger className={`h-7 w-full text-[9px] font-black uppercase rounded-md border-none shadow-sm transition-all focus:ring-2 focus:ring-indigo-100 ${
+                                group.confirmation === 'Khớp hồ sơ' ? 'bg-emerald-50 text-emerald-600' :
+                                group.confirmation === 'Không khớp hồ sơ' ? 'bg-rose-50 text-rose-600' :
+                                'bg-slate-50 text-slate-400'
+                              }`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-none shadow-2xl">
+                                <SelectItem value="Chưa đối soát" className="text-[9px] font-bold uppercase">Chưa đối soát</SelectItem>
+                                <SelectItem value="Khớp hồ sơ" className="text-[9px] font-bold text-emerald-600 uppercase">Khớp hồ sơ</SelectItem>
+                                <SelectItem value="Không khớp hồ sơ" className="text-[9px] font-bold text-rose-600 uppercase">Không khớp hồ sơ</SelectItem>
+                              </SelectContent>
+                           </Select>
                         </TableCell>
                         <TableCell className="pr-4 py-2">
                            <div className="flex flex-col gap-0.5">
                              <Input 
-                              className="h-7 bg-slate-50 border-none rounded-md text-[10px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
+                              className="h-7 bg-slate-50 border-none rounded-md text-[9px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
                               placeholder="Ghi chú..."
                               defaultValue={group.note}
-                              disabled={!(isAdmin || isAccountant)}
+                              disabled={!(isAdmin || isMod || isAccountant)}
                               onBlur={(e) => {
                                 if (e.target.value !== group.note) {
                                   handleUpdateDocProcessing(group.projectId, group.teamId, group.confirmation, e.target.value);
@@ -16428,8 +16626,8 @@ const DocProcessingManager = React.memo(({
                               }}
                              />
                              {group.updatedByEmail && (
-                               <div className="text-[8px] text-slate-300 font-bold uppercase italic font-inter flex items-center gap-1 leading-none line-clamp-1">
-                                 <UserCheck className="w-2 h-2" />
+                               <div className="text-[7px] text-slate-300 font-bold uppercase italic font-inter flex items-center gap-1 leading-none line-clamp-1">
+                                 <UserCheck className="w-1.5 h-1.5" />
                                  {group.updatedByEmail.split('@')[0]}
                                </div>
                              )}
@@ -16438,19 +16636,19 @@ const DocProcessingManager = React.memo(({
                       </TableRow>
                     ))
                   )}
-                  {groupedDocProcessing.length > 0 && (
+                  {sortedData.length > 0 && (
                     <TableRow className="bg-slate-50/80 font-black border-t-2 border-slate-200">
-                      <TableCell colSpan={2} className="pl-4 py-3 text-[10px] uppercase font-black text-slate-900">Tổng cộng</TableCell>
+                      <TableCell colSpan={2} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-4">Tổng cộng</TableCell>
                       <TableCell className="text-right py-3">
                         <Badge className="bg-slate-900 text-white text-[9px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[11px] text-slate-900">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900">
                         {formatCurrency(docProcessingTotals.digitalCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[11px] text-slate-900">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900">
                         {formatCurrency(docProcessingTotals.visaCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[11px] text-indigo-700">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-indigo-700">
                         {formatCurrency(docProcessingTotals.totalAmount).replace(' đ','')}đ
                       </TableCell>
                       <TableCell colSpan={2}></TableCell>
@@ -16470,7 +16668,7 @@ const DocProcessingManager = React.memo(({
  * Allows users to submit issues and admins to reply.
  */
 const SupportManager = React.memo(({ 
-  isAdmin, user, userProfile, supportRequests, handleFirestoreError 
+  isAdmin, isMod, isAccountant, user, userProfile, supportRequests, handleFirestoreError 
 }: any) => {
   const [isAddingRequest, setIsAddingRequest] = useState(false);
   const [requestTitle, setRequestTitle] = useState('');
@@ -16574,7 +16772,7 @@ const SupportManager = React.memo(({
             className="h-12 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 group w-full md:w-auto"
           >
             <Plus className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-            TẠO HỖ TRỢ {isAdmin && '(ADMIN)'}
+            TẠO HỖ TRỢ {(isAdmin || isAccountant) && '(ADMIN)'}
           </Button>
         </div>
       </div>
@@ -16656,7 +16854,7 @@ const SupportManager = React.memo(({
                   )}
                 </CardContent>
                 
-                {isAdmin && (
+                {(isAdmin || isAccountant) && (
                   <div className="p-4 bg-slate-50/50 border-t border-slate-100">
                     <Button 
                       onClick={() => {

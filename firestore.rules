@@ -38,7 +38,7 @@ service cloud.firestore {
 
     function isAccountant() {
       return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'accountant';
+             getUserData().role == 'accountant';
     }
 
     function isGDDA() {
@@ -93,12 +93,12 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if canViewProject(projectId);
-      allow create: if isAdmin() && isValidProject(incoming());
-      allow update: if isAdmin() && isValidProject(incoming()) && (
+      allow create: if (isAdmin() || isAccountant()) && isValidProject(incoming());
+      allow update: if (isAdmin() || isAccountant()) && isValidProject(incoming()) && (
         // Identity protection: immutable fields if needed, but here mostly just admin update
         incoming().diff(existing()).affectedKeys().hasAny(['name', 'projectCode', 'description', 'region', 'regionId', 'type', 'typeId', 'updatedAt'])
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -110,11 +110,11 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidTeam(incoming());
-      allow update: if isAdmin() && isValidTeam(incoming()) && (
+      allow create: if (isAdmin() || isAccountant()) && isValidTeam(incoming());
+      allow update: if (isAdmin() || isAccountant()) && isValidTeam(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasAny(['name', 'teamCode', 'updatedAt'])
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -134,9 +134,9 @@ service cloud.firestore {
          !('assignedProjects' in incoming().diff(existing()).affectedKeys()) &&
          incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'teamName', 'displayName', 'updatedAt'])
         ) || 
-        isAdmin()
+        isAdmin() || isAccountant()
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -155,11 +155,11 @@ service cloud.firestore {
                     (resource.data.userEmail == request.auth.token.email) ||
                     (resource.data.assignedUserEmail == request.auth.token.email);
       allow create: if isAuthenticated() && isValidBudget(incoming()) && incoming().createdBy == request.auth.uid;
-      allow update: if (isAdmin() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
+      allow update: if (isAdmin() || isAccountant() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
                     isValidBudget(incoming()) && (
                       incoming().diff(existing()).affectedKeys().hasAny(['amount', 'verifiedAmount', 'notes', 'updatedAt', 'assignedUserEmail', 'implementerName'])
                     );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -177,11 +177,11 @@ service cloud.firestore {
                     (resource.data.userEmail == request.auth.token.email) ||
                     (resource.data.assignedUserEmail == request.auth.token.email);
       allow create: if isAuthenticated() && isValidCost(incoming()) && incoming().createdBy == request.auth.uid;
-      allow update: if (isAdmin() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
+      allow update: if (isAdmin() || isAccountant() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
                     isValidCost(incoming()) && (
                       incoming().diff(existing()).affectedKeys().hasAny(['amount', 'notes', 'updatedAt', 'weekNumber', 'fbAds', 'posting', 'zaloAds', 'googleAds', 'otherCost', 'totalAmount'])
                     );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -191,13 +191,13 @@ service cloud.firestore {
       allow read: if isAdmin() || isMod() || isAccountant() || resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && incoming().userId == request.auth.uid;
       allow update: if isAuthenticated() && (
-        isAdmin() || 
+        isAdmin() || isAccountant() || 
         (resource.data.userId == request.auth.uid && 
          !('adminReply' in incoming().diff(existing()).affectedKeys()) &&
          !('repliedBy' in incoming().diff(existing()).affectedKeys()) &&
          !('repliedAt' in incoming().diff(existing()).affectedKeys()))
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -213,9 +213,9 @@ service cloud.firestore {
     // ===============================================================
     match /regions/{regionId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() || isAccountant();
+      allow update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -223,9 +223,9 @@ service cloud.firestore {
     // ===============================================================
     match /types/{typeId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() || isAccountant();
+      allow update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -235,7 +235,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAdmin() || isMod() || isAccountant();
       allow update: if isAdmin() || isMod() || isAccountant();
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
@@ -272,7 +272,7 @@ service cloud.firestore {
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
       allow create: if isAdmin() || isMod() || isAccountant();
       allow update: if isAdmin() || isMod() || isAccountant();
-      allow delete: if isAdmin() || isSuperAdmin();
+      allow delete: if isAdmin() || isAccountant() || isSuperAdmin();
     }
 
     // ===============================================================
@@ -285,13 +285,13 @@ service cloud.firestore {
     }
 
     match /docProcessing/{docId} {
-      allow read: if isAdmin() || isAccountant() || 
+      allow read: if isAdmin() || isMod() || isAccountant() || 
                     (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if (isAdmin() || isAccountant()) && isValidDocProcessing(incoming());
-      allow update: if (isAdmin() || isAccountant()) && isValidDocProcessing(incoming()) && (
+      allow create: if (isAdmin() || isMod() || isAccountant()) && isValidDocProcessing(incoming());
+      allow update: if (isAdmin() || isMod() || isAccountant()) && isValidDocProcessing(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasAny(['confirmation', 'note', 'updatedAt', 'updatedBy', 'updatedByEmail'])
       );
-      allow delete: if isAdmin() || isSuperAdmin();
+      allow delete: if isAdmin() || isMod() || isAccountant() || isSuperAdmin();
     }
 
     // ===============================================================
@@ -299,7 +299,7 @@ service cloud.firestore {
     // ===============================================================
     match /settings/{settingId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isAccountant();
     }
 
     match /settings {

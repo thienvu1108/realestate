@@ -808,6 +808,12 @@ export default function App() {
   const groupedDocProcessing = useMemo(() => {
     const groups: Record<string, any> = {};
     
+    // Index status for O(1) lookup
+    const statusMap = new Map();
+    (docProcessingStatus || []).forEach(s => {
+      statusMap.set(`${s.projectId}_${s.teamId}`, s);
+    });
+
     (finalAcceptances || []).forEach(a => {
       const key = `${a.projectId}_${a.teamId}`;
       if (!groups[key]) {
@@ -828,8 +834,14 @@ export default function App() {
       groups[key].recordCount += 1;
     });
 
+    const searchLower = debouncedAcceptanceSearch.toLowerCase();
+    const projectNameFromMap = projectMap[acceptanceProjectFilter]?.toLowerCase();
+    const teamNameFromMap = teamMap[acceptanceTeamFilter]?.toLowerCase();
+    const projectFilterLower = acceptanceProjectFilter.toLowerCase();
+    const teamFilterLower = acceptanceTeamFilter.toLowerCase();
+
     return Object.values(groups).map(group => {
-      const status = docProcessingStatus.find(s => s.projectId === group.projectId && s.teamId === group.teamId);
+      const status = statusMap.get(`${group.projectId}_${group.teamId}`);
       return {
         ...group,
         id: status?.id || null,
@@ -839,22 +851,22 @@ export default function App() {
         updatedByEmail: status?.updatedByEmail
       };
     }).filter(g => {
-      const matchSearch = 
-        (g.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (g.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
+      const matchSearch = !searchLower ||
+        (g.projectName || '').toLowerCase().includes(searchLower) ||
+        (g.teamName || '').toLowerCase().includes(searchLower);
       
-      const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const gProjectLower = (g.projectName || '').toLowerCase().trim();
       const matchProject = acceptanceProjectFilter === 'all' || 
-                          (g.projectId && String(g.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
-                          (projectNameFromMap && g.projectName && String(g.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
-                          (g.projectName && String(g.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+                          (g.projectId && String(g.projectId).trim() === acceptanceProjectFilter.trim()) || 
+                          (projectNameFromMap && gProjectLower === projectNameFromMap) ||
+                          (gProjectLower === projectFilterLower);
       
-      const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const gTeamLower = (g.teamName || '').toLowerCase().trim();
       const matchTeam = acceptanceTeamFilter === 'all' || 
-                       (g.teamName && String(g.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
-                       (g.teamId && String(g.teamId).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
-                       (teamNameFromMap && g.teamName && String(g.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
-                       (teamNameFromMap && g.teamId && String(g.teamId).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim());
+                       (gTeamLower === teamFilterLower) ||
+                       (g.teamId && String(g.teamId).toLowerCase().trim() === teamFilterLower) ||
+                       (teamNameFromMap && gTeamLower === teamNameFromMap) ||
+                       (teamNameFromMap && g.teamId && String(g.teamId).toLowerCase().trim() === teamNameFromMap);
       
       return matchSearch && matchProject && matchTeam;
     });
@@ -1405,66 +1417,6 @@ export default function App() {
     return overLimitIds;
   }, [budgets, latestCostsList, getMarketingMonth, dataDrivenProjectMap, resolveProjectName]);
 
-  const channelReportData = useMemo(() => {
-    const keyData: { [key: string]: any } = {};
-    
-    acceptances.forEach(a => {
-      const aProjectName = resolveProjectName(a.projectId, a.projectName);
-      const aTeamName = resolveTeamName(a.teamId, a.teamName);
-      const normalizedAMonth = normalizeMonth(a.month);
-
-      // Access logic
-      const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
-      const isOwner = (aEmail && user?.email && aEmail === user.email.toLowerCase()) || (a.createdByUid === user?.uid);
-      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isOwner;
-      if (!hasAccess) return;
-
-      // Filter logic
-      const matchProject = reportProject === 'all' || a.projectId === reportProject || aProjectName === projectMap[reportProject];
-      const matchTeam = reportTeam === 'all' || a.teamId === reportTeam || aTeamName === reportTeam || aTeamName === teamMap[reportTeam];
-      const matchMonth = normalizedReportMonths.length === 0 || (normalizedAMonth && normalizedReportMonths.includes(normalizedAMonth));
-      
-      const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
-      const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
-      const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
-
-      if (matchProject && matchTeam && matchMonth && matchRegion && matchType) {
-        const key = `${aProjectName}_${aTeamName}`;
-        
-        if (!keyData[key]) {
-          keyData[key] = {
-            projectId: a.projectId,
-            projectName: aProjectName,
-            teamName: aTeamName,
-            fbAds: 0,
-            googleAds: 0,
-            zaloAds: 0,
-            posting: 0,
-            visaCost: 0,
-            digitalCost: 0,
-            otherCost: 0,
-            total: 0
-          };
-        }
-        
-        const p = keyData[key];
-        p.fbAds += (a.facebookCost || 0) + (a.tiktokCost || 0);
-        p.googleAds += a.googleCost || 0;
-        p.zaloAds += a.zaloCost || 0;
-        p.posting += a.postingCost || 0;
-        p.visaCost += a.visaCost || 0;
-        p.digitalCost += a.digitalCost || 0;
-        p.otherCost += a.otherCost || 0;
-        p.total += (a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : (a.totalCost || 0));
-      }
-    });
-
-    return Object.values(keyData).sort((a: any, b: any) => {
-       if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName);
-       return b.total - a.total;
-    });
-  }, [acceptances, projects, isAdmin, isMod, isAccountant, isGDDA, user, reportProject, reportTeam, normalizedReportMonths, reportRegion, reportType, projectMap, teamMap, resolveProjectName, resolveTeamName]);
-
   const chartData = useMemo(() => {
     return uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(team => {
       const teamBudgets = budgets.filter(b => {
@@ -1699,6 +1651,120 @@ export default function App() {
   const noSalesData = useMemo(() => 
     efficiencyChartData.filter(d => d.revenue === 0), [efficiencyChartData]
   );
+
+  const reportSummaryStats = useMemo(() => {
+    const budget = efficiencyChartData.reduce((acc, d) => acc + d.budget, 0);
+    const cost = efficiencyChartData.reduce((acc, d) => acc + d.cost, 0);
+    const sales = efficiencyChartData.reduce((acc, d) => acc + d.sales, 0);
+    const revenue = efficiencyChartData.reduce((acc, d) => acc + d.revenue, 0);
+    
+    // Calculate accurate project count based on filters
+    const filteredProjects = projects.filter(p => {
+      const matchProject = reportProject === 'all' || p.id === reportProject;
+      const matchRegion = reportRegion === 'all' || p.region === reportRegion;
+      const matchType = reportType === 'all' || p.type === reportType;
+      return matchProject && matchRegion && matchType;
+    });
+
+    return {
+      projectCount: filteredProjects.length,
+      budget,
+      cost,
+      sales,
+      revenue
+    };
+  }, [efficiencyChartData, projects, reportProject, reportRegion, reportType]);
+
+  const dashboardStats = useMemo(() => {
+    if (activeTab === 'reports') {
+      return {
+        projectCount: reportSummaryStats.projectCount,
+        budget: reportSummaryStats.budget,
+        cost: reportSummaryStats.cost,
+        sales: reportSummaryStats.sales,
+        revenue: reportSummaryStats.revenue,
+        isContextual: true,
+        monthLabel: reportMonths.length > 1 ? `(${reportMonths.length} tháng)` : reportMonths.length === 1 ? `(Tháng ${reportMonths[0].split('-')[1]})` : '(Chọn tháng)'
+      };
+    }
+
+    if (activeTab === 'doc-processing') {
+      const budget = groupedDocProcessing.reduce((acc: number, d: any) => acc + (d.budget || 0), 0);
+      const cost = groupedDocProcessing.reduce((acc: number, d: any) => acc + (d.totalAmount || 0), 0);
+      const projectIds = new Set(groupedDocProcessing.map((d: any) => d.projectId));
+      
+      return {
+        projectCount: projectIds.size,
+        budget: budget || 0,
+        cost: cost || 0,
+        sales: 0,
+        revenue: 0,
+        isContextual: true,
+        monthLabel: '(Trong Đối soát)'
+      };
+    }
+
+    // Default "This Month" Stats
+    const currentMonth = getMarketingMonth(new Date());
+    
+    // Ngân sách tháng này
+    const budgetTotal = budgets
+      .filter(b => {
+        const matchMonth = b.month === currentMonth;
+        if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
+          const userEmail = user?.email?.toLowerCase();
+          const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+          return matchMonth && (budgetEmail === userEmail || b.createdBy === user?.uid);
+        }
+        return matchMonth;
+      })
+      .reduce((acc, curr) => acc + curr.amount, 0);
+
+    // Thực tế đã chi (Tháng này)
+    const costTotal = latestCostsList
+      .filter(c => {
+        const matchMonth = c.month === currentMonth;
+        if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
+          const userEmail = user?.email?.toLowerCase();
+          const costEmail = c.userEmail?.toLowerCase();
+          return matchMonth && (costEmail === userEmail || c.createdBy === user?.uid);
+        }
+        return matchMonth;
+      })
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+    // Căn bán (Tháng này)
+    const salesTotal = efficiencyReports
+      .filter(r => {
+        const matchMonth = r.month === currentMonth;
+        if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
+          return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
+        }
+        return matchMonth;
+      })
+      .reduce((acc, curr) => acc + (curr.salesCount || 0), 0);
+
+    // Doanh số (Tháng này)
+    const revenueTotal = efficiencyReports
+      .filter(r => {
+        const matchMonth = r.month === currentMonth;
+        if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
+          return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
+        }
+        return matchMonth;
+      })
+      .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+    return {
+      projectCount: projects.length,
+      budget: budgetTotal,
+      cost: costTotal,
+      sales: salesTotal,
+      revenue: revenueTotal,
+      isContextual: false,
+      monthLabel: `(Tháng Hà Nội ${currentMonth.split('-')[1]})`
+    };
+  }, [activeTab, reportSummaryStats, projects, budgets, latestCostsList, efficiencyReports, isAdmin, isMod, isAccountant, isGDDA, user, reportMonths, getMarketingMonth]);
 
   const efficiencyPieData = useMemo(() => {
     const costWithSales = salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0);
@@ -7199,6 +7265,7 @@ export default function App() {
         </div>
 
         {/* Stats Overview */}
+        {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
           <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
             <div className="h-1.5 w-full bg-indigo-500" />
@@ -7206,7 +7273,7 @@ export default function App() {
               <CardDescription className="flex items-center gap-2 font-bold text-indigo-600/70 uppercase tracking-wider text-[10px]">
                 <Building2 className="w-4 h-4" /> Tổng dự án
               </CardDescription>
-              <CardTitle className="text-3xl font-black text-slate-900">{projects.length}</CardTitle>
+              <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
             </CardHeader>
           </Card>
           
@@ -7214,21 +7281,10 @@ export default function App() {
             <div className="h-1.5 w-full bg-emerald-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-emerald-600/70 uppercase tracking-wider text-[10px]">
-                <Wallet className="w-4 h-4" /> Ngân sách tháng này
+                <Wallet className="w-4 h-4" /> Ngân sách {dashboardStats.monthLabel}
               </CardDescription>
               <CardTitle className="text-3xl font-black text-slate-900">
-                {budgets
-                  .filter(b => {
-                    const matchMonth = b.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
-                      const userEmail = user?.email?.toLowerCase();
-                      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                      return matchMonth && (budgetEmail === userEmail || b.createdBy === user?.uid);
-                    }
-                    return matchMonth;
-                  })
-                  .reduce((acc, curr) => acc + curr.amount, 0)
-                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
+                {dashboardStats.budget.toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
@@ -7237,22 +7293,10 @@ export default function App() {
             <div className="h-1.5 w-full bg-orange-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-orange-600/70 uppercase tracking-wider text-[10px]">
-                <TrendingUp className="w-4 h-4" /> Thực tế đã chi (Kỳ này)
+                <TrendingUp className="w-4 h-4" /> Chi phí {dashboardStats.monthLabel}
               </CardDescription>
               <CardTitle className="text-3xl font-black text-slate-900">
-                {latestCostsList
-                  .filter(c => {
-                    const matchMonth = c.month === getMarketingMonth(new Date());
-                    
-                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
-                      const userEmail = user?.email?.toLowerCase();
-                      const costEmail = c.userEmail?.toLowerCase() || (c.userEmail && c.userEmail.toLowerCase());
-                      return matchMonth && (costEmail === userEmail || c.createdBy === user?.uid);
-                    }
-                    return matchMonth;
-                  })
-                  .reduce((acc, curr) => acc + (curr.amount || 0), 0)
-                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
+                {dashboardStats.cost.toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
@@ -7261,19 +7305,10 @@ export default function App() {
             <div className="h-1.5 w-full bg-blue-500" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-blue-600/70 uppercase tracking-wider text-[10px]">
-                <Building2 className="w-4 h-4" /> Căn bán (Tháng này)
+                <Building2 className="w-4 h-4" /> Căn bán {dashboardStats.monthLabel}
               </CardDescription>
               <CardTitle className="text-3xl font-black text-slate-900">
-                {efficiencyReports
-                  .filter(r => {
-                    const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
-                      return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
-                    }
-                    return matchMonth;
-                  })
-                  .reduce((acc, curr) => acc + (curr.salesCount || 0), 0)
-                  .toLocaleString()} <span className="text-lg font-medium text-slate-400">Căn</span>
+                {dashboardStats.sales.toLocaleString()} <span className="text-lg font-medium text-slate-400">Căn</span>
               </CardTitle>
             </CardHeader>
           </Card>
@@ -7282,19 +7317,10 @@ export default function App() {
             <div className="h-1.5 w-full bg-white opacity-20" />
             <CardHeader className="pb-4">
               <CardDescription className="flex items-center gap-2 font-bold text-indigo-100 uppercase tracking-wider text-[10px]">
-                <TrendingUp className="w-4 h-4" /> Tổng Doanh số (Tháng này)
+                <TrendingUp className="w-4 h-4" /> Tổng Doanh số {dashboardStats.monthLabel}
               </CardDescription>
               <CardTitle className="text-3xl font-black text-white">
-                {efficiencyReports
-                  .filter(r => {
-                    const matchMonth = r.month === getMarketingMonth(new Date());
-                    if (!isAdmin && !isMod && !isAccountant && !isGDDA) {
-                      return matchMonth && r.createdByEmail?.toLowerCase() === user?.email?.toLowerCase();
-                    }
-                    return matchMonth;
-                  })
-                  .reduce((acc, curr) => acc + (curr.revenue || 0), 0)
-                  .toLocaleString()} <span className="text-lg font-medium text-indigo-300">đ</span>
+                {dashboardStats.revenue.toLocaleString()} <span className="text-lg font-medium text-indigo-300">đ</span>
               </CardTitle>
             </CardHeader>
           </Card>
@@ -9973,155 +9999,22 @@ export default function App() {
 
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <Filter className="w-3 h-3" /> Kỳ báo cáo
-                        </Label>
-                        <Select value={reportWeek} onValueChange={setReportWeek}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Tất cả kỳ" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Tất cả kỳ</SelectItem>
-                            <SelectItem value="1">Kỳ 1 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '1')})</SelectItem>
-                            <SelectItem value="2">Kỳ 2 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '2')})</SelectItem>
-                            <SelectItem value="3">Kỳ 3 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '3')})</SelectItem>
-                            <SelectItem value="4">Kỳ 4 ({getPeriodRange(reportMonths[0] || getMarketingMonth(new Date()), '4')})</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                           <ArrowUpDown className="w-3 h-3" /> Sắp xếp theo
                         </Label>
                         <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual' | 'revenue') => setReportSortBy(v)}>
                           <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
-                            <SelectValue placeholder="Chọn kiểu sắp xếp" />
+                            <SelectValue placeholder="Sắp xếp theo" />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="budget">Ngân sách (Cao → Thấp)</SelectItem>
-                            <SelectItem value="actual">Chi phí thực tế (Cao → Thấp)</SelectItem>
-                            <SelectItem value="revenue">Doanh số (Cao → Thấp)</SelectItem>
+                          <SelectContent className="rounded-xl border-none shadow-xl">
+                            <SelectItem value="budget" className="rounded-lg">Ngân sách</SelectItem>
+                            <SelectItem value="actual" className="rounded-lg">Chi phí thực tế</SelectItem>
+                            <SelectItem value="revenue" className="rounded-lg">Doanh số</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
 
                     </div>
-
-                    {/* Summary Cards - Viewable by all but tailored by role */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4 mb-8">
-                      {/* 0. Tổng dự án (Admin only) */}
-                      {(isAdmin || isAccountant) && (
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Dự án báo cáo</p>
-                            <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
-                              <Building2 className="w-3 h-3 text-blue-500" />
-                            </span>
-                          </div>
-                          <p className="text-lg font-black text-slate-900 leading-none">
-                            {efficiencyChartData.length} <span className="text-[9px] font-bold text-slate-400">Mục</span>
-                          </p>
-                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 w-full" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 1. Tổng ngân sách */}
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-blue-200 group">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Ngân sách (Kỳ báo cáo)</p>
-                            <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
-                              <Wallet className="w-3 h-3 text-blue-500" />
-                            </span>
-                          </div>
-                          <p className="text-lg font-black text-slate-900 leading-normal">
-                            {efficiencyChartData.reduce((acc, d) => acc + d.budget, 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
-                          </p>
-                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 w-full" />
-                          </div>
-                        </div>
-
-                        {/* 2. Tổng chi phí thực tế */}
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-emerald-200 group">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Thực chi (Kỳ báo cáo)</p>
-                            <span className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
-                              <Wallet className="w-3 h-3 text-emerald-500" />
-                            </span>
-                          </div>
-                          <p className="text-lg font-black text-emerald-600 leading-normal">
-                            {efficiencyChartData.reduce((acc, d) => acc + d.cost, 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">đ</span>
-                          </p>
-                          <div className="mt-2 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 w-3/4 opacity-50" />
-                          </div>
-                        </div>
-
-                        {/* 3. Căn bán (Units) */}
-                        <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-indigo-200 group">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Căn bán (Units)</p>
-                            <span className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center">
-                              <Building2 className="w-3 h-3 text-indigo-500" />
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1">
-                            <p className="text-lg font-black text-slate-900 leading-none">
-                              {efficiencyChartData.reduce((acc, d) => acc + d.sales, 0).toLocaleString()}
-                            </p>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">Căn</span>
-                          </div>
-                          <p className="text-[8px] font-bold text-slate-400 mt-2 italic">Dữ liệu theo bộ lọc</p>
-                        </div>
-
-                        {/* 4. Tổng doanh số (Sales) */}
-                        <div className="p-5 rounded-2xl bg-indigo-600 border border-indigo-700 shadow-lg shadow-indigo-100 flex flex-col gap-1 transition-all hover:translate-y-[-2px]">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-indigo-100 font-black uppercase tracking-widest">Doanh số (Sales)</p>
-                            <TrendingUp className="w-3 h-3 text-indigo-200" />
-                          </div>
-                          <p className="text-lg font-black text-white leading-normal">
-                            {efficiencyChartData.reduce((acc, d) => acc + d.revenue, 0).toLocaleString()} <span className="text-[9px] font-bold text-indigo-200">đ</span>
-                          </p>
-                          <div className="mt-2 text-[9px] font-bold text-indigo-200/80">
-                            Hiệu quả doanh thu thực tế
-                          </div>
-                        </div>
-
-
-                        {/* 6. Tỉ lệ Thực chi / Ngân sách */}
-                        {(() => {
-                           const budget = efficiencyChartData.reduce((acc, d) => acc + d.budget, 0);
-                           const cost = efficiencyChartData.reduce((acc, d) => acc + d.cost, 0);
-                           const usagePercent = budget > 0 ? (cost / budget) * 100 : 0;
-                           const variance = usagePercent - 100;
-                           
-                           return (
-                             <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col gap-1 transition-all hover:border-purple-200">
-                               <div className="flex items-center justify-between mb-1">
-                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">CP / Ngân sách</p>
-                                 <RefreshCw className={`w-3 h-3 ${usagePercent > 100 ? 'text-rose-500' : 'text-purple-500'}`} />
-                               </div>
-                               <div className="flex items-baseline gap-2">
-                                 <p className={`text-lg font-black leading-none ${usagePercent > 100 ? 'text-rose-600' : usagePercent > 90 ? 'text-amber-600' : 'text-slate-900'}`}>{usagePercent.toFixed(1)}%</p>
-                                 <span className={`text-[8px] font-bold px-1 rounded-sm ${variance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-green-50 text-green-600'}`}>
-                                   {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
-                                 </span>
-                               </div>
-                               <div className="mt-2 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                 <div 
-                                   className={`h-full transition-all duration-500 ${usagePercent > 100 ? 'bg-rose-500' : usagePercent > 90 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                   style={{ width: `${Math.min(usagePercent, 100)}%` }}
-                                 />
-                               </div>
-                             </div>
-                           );
-                        })()}
-
-                      </div>
 
                     {/* Chart Section */}
                     <div className="space-y-4">
@@ -10160,7 +10053,7 @@ export default function App() {
                                   <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                     <GitMerge className="w-3 h-3 text-indigo-500" /> Biểu đồ so sánh hiệu quả giữa các tháng
                                   </Label>
-                                  <p className="text-[10px] text-slate-500 font-medium">So sánh <span className="font-bold text-indigo-600">{reportSortBy === 'budget' ? 'Ngân sách' : reportSortBy === 'actual' ? 'Chi phí thực' : 'Doanh số'}</span> của {reportMonths.length} tháng đã chọn</p>
+                                  <p className="text-[10px] text-slate-500 font-medium">So sánh <span className="font-bold text-indigo-600">{reportSortBy === 'budget' ? 'Ngân sách' : reportSortBy === 'actual' ? 'Chi phí' : 'Doanh số'}</span> của {reportMonths.length} tháng đã chọn</p>
                                 </div>
                                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
                                    <div className="flex gap-1 group">
@@ -10251,7 +10144,7 @@ export default function App() {
                                           onClick={() => setReportSortBy('actual')}
                                           className={`h-7 text-[9px] font-black uppercase tracking-tight px-3 rounded-xl ${reportSortBy === 'actual' ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'text-slate-400'}`}
                                        >
-                                          Chi phí thực
+                                          Chi phí
                                        </Button>
                                        <Button 
                                           variant={reportSortBy === 'revenue' ? 'secondary' : 'ghost'} 
@@ -10575,6 +10468,14 @@ export default function App() {
                                   className={`h-7 text-[10px] px-4 rounded-md transition-all ${efficiencyGroupType === 'project' ? 'bg-white shadow-sm text-blue-600 font-bold' : 'text-slate-500'}`}
                                 >
                                   Theo Dự án
+                                </Button>
+                                <Button 
+                                  variant={efficiencyGroupType === 'region' ? 'secondary' : 'ghost'} 
+                                  size="sm" 
+                                  onClick={() => setEfficiencyGroupType('region')}
+                                  className={`h-7 text-[10px] px-4 rounded-md transition-all ${efficiencyGroupType === 'region' ? 'bg-white shadow-sm text-blue-600 font-bold' : 'text-slate-500'}`}
+                                >
+                                  Theo Khu vực
                                 </Button>
                               </div>
                             </div>
@@ -11514,8 +11415,11 @@ export default function App() {
                       teams={teams}
                       uniqueTeams={uniqueTeams}
                       groupedDocProcessing={groupedDocProcessing}
+                      finalAcceptances={finalAcceptances}
                       handleUpdateDocProcessing={handleUpdateDocProcessing}
+                      handleFirestoreError={handleFirestoreError}
                       formatCurrency={formatCurrency}
+                      acceptanceSearch={acceptanceSearch}
                       debouncedAcceptanceSearch={debouncedAcceptanceSearch}
                       setAcceptanceSearch={setAcceptanceSearch}
                       acceptanceProjectFilter={acceptanceProjectFilter}
@@ -16449,8 +16353,11 @@ const DocProcessingManager = React.memo(({
   teams = [],
   uniqueTeams = [],
   groupedDocProcessing = [],
+  finalAcceptances = [],
   handleUpdateDocProcessing,
+  handleFirestoreError,
   formatCurrency,
+  acceptanceSearch,
   debouncedAcceptanceSearch,
   setAcceptanceSearch,
   acceptanceProjectFilter,
@@ -16466,6 +16373,10 @@ const DocProcessingManager = React.memo(({
     direction: 'asc' 
   });
 
+  const [viewingGroup, setViewingGroup] = useState<any>(null);
+  const [editingAcceptance, setEditingAcceptance] = useState<any>(null);
+  const [tempChanges, setTempChanges] = useState<any>({});
+
   const handleSort = (key: string) => {
     let direction: 'asc' | 'desc' | null = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -16477,26 +16388,7 @@ const DocProcessingManager = React.memo(({
   };
 
   const sortedData = useMemo(() => {
-    let filtered = groupedDocProcessing.filter((item: any) => {
-      const matchSearch = 
-        (item.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (item.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
-      
-      const projectNameFromMap = projectMap[acceptanceProjectFilter];
-      const matchProject = acceptanceProjectFilter === 'all' || 
-                          (item.projectId && String(item.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
-                          (projectNameFromMap && item.projectName && String(item.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
-                          (item.projectName && String(item.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
-      
-      const teamNameFromMap = teamMap[acceptanceTeamFilter];
-      const matchTeam = acceptanceTeamFilter === 'all' || 
-                       (item.teamName && String(item.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
-                       (item.teamId && String(item.teamId).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
-                       (teamNameFromMap && item.teamName && String(item.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
-                       (teamNameFromMap && item.teamId && String(item.teamId).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim());
-      
-      return matchSearch && matchProject && matchTeam;
-    });
+    let filtered = groupedDocProcessing;
 
     if (!sortConfig.direction || !sortConfig.key) return filtered;
     
@@ -16576,7 +16468,7 @@ const DocProcessingManager = React.memo(({
                   <DebouncedInput 
                     placeholder="Tìm Dự án, Team..." 
                     className="pl-10 h-10 w-[200px] sm:w-[250px] bg-slate-50 border-none rounded-xl text-xs font-bold"
-                    value={debouncedAcceptanceSearch}
+                    value={acceptanceSearch}
                     onChange={setAcceptanceSearch}
                   />
                 </div>
@@ -16629,10 +16521,11 @@ const DocProcessingManager = React.memo(({
                         Team <SortIcon field="teamName" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[45px]">Ghi</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[75px]">Digital</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[75px]">Visa</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Tổng</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[55px]">Ghi</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Digital</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Visa</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[100px]">Tổng</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[85px]">Chi tiết</TableHead>
                     <TableHead 
                       className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[110px] cursor-pointer hover:text-indigo-600 group transition-colors"
                       onClick={() => handleSort('confirmation')}
@@ -16676,6 +16569,16 @@ const DocProcessingManager = React.memo(({
                         </TableCell>
                         <TableCell className="text-right py-2">
                           <div className="font-black text-slate-900 text-[10px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                           <Button 
+                             variant="outline" 
+                             size="sm" 
+                             className="h-7 px-2 text-[9px] font-black uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-md"
+                             onClick={() => setViewingGroup(group)}
+                           >
+                             <Eye className="w-3 h-3 mr-1" /> Xem chi tiết
+                           </Button>
                         </TableCell>
                         <TableCell className="text-center">
                            <Select 
@@ -16723,20 +16626,20 @@ const DocProcessingManager = React.memo(({
                   )}
                   {sortedData.length > 0 && (
                     <TableRow className="bg-slate-50/80 font-black border-t-2 border-slate-200">
-                      <TableCell colSpan={3} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-4">Tổng cộng</TableCell>
+                      <TableCell colSpan={3} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-2">Tổng cộng</TableCell>
                       <TableCell className="text-right py-3">
                         <Badge className="bg-slate-900 text-white text-[9px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.digitalCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.visaCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-indigo-700">
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-indigo-700 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.totalAmount).replace(' đ','')}đ
                       </TableCell>
-                      <TableCell colSpan={2}></TableCell>
+                      <TableCell colSpan={3}></TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -16744,9 +16647,398 @@ const DocProcessingManager = React.memo(({
             </div>
           </CardContent>
        </Card>
+
+       {viewingGroup && (
+          <DocDetailDialog 
+             group={viewingGroup} 
+             onClose={() => setViewingGroup(null)}
+             finalAcceptances={finalAcceptances}
+             handleFirestoreError={handleFirestoreError}
+             formatCurrency={formatCurrency}
+             isAdmin={isAdmin}
+             isMod={isMod}
+             isAccountant={isAccountant}
+          />
+       )}
     </div>
   );
 });
+
+/**
+ * DocDetailDialog Component
+ * Shows details of final acceptances for a specific project/team group.
+ */
+const DocDetailDialog = ({ 
+  group, 
+  onClose, 
+  finalAcceptances, 
+  handleFirestoreError,
+  formatCurrency,
+  isAdmin, 
+  isMod, 
+  isAccountant 
+}: any) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<any>({});
+
+  const groupAcceptances = useMemo(() => {
+    return finalAcceptances.filter((a: any) => a.projectId === group.projectId && a.teamId === group.teamId);
+  }, [finalAcceptances, group]);
+
+  const handleStartEdit = (acc: any) => {
+    setEditingId(acc.id);
+    setEditValues({
+      facebookCost: acc.facebookCost || 0,
+      googleCost: acc.googleCost || 0,
+      zaloCost: acc.zaloCost || 0,
+      tiktokCost: acc.tiktokCost || 0,
+      postingCost: acc.postingCost || 0,
+      digitalCost: acc.digitalCost || 0,
+      visaCost: acc.visaCost || 0,
+      otherCost: acc.otherCost || 0,
+      totalActualCost: acc.totalActualCost || 0,
+      salesCount: acc.salesCount || 0,
+      revenue: acc.revenue || 0,
+      note: acc.note || '',
+      managerNote: acc.managerNote || ''
+    });
+  };
+
+  useEffect(() => {
+    if (editingId) {
+      const sum = (editValues.facebookCost || 0) +
+                  (editValues.googleCost || 0) +
+                  (editValues.zaloCost || 0) +
+                  (editValues.tiktokCost || 0) +
+                  (editValues.postingCost || 0) +
+                  (editValues.digitalCost || 0) +
+                  (editValues.visaCost || 0) +
+                  (editValues.otherCost || 0);
+      if (sum !== editValues.totalActualCost) {
+        setEditValues(prev => ({ ...prev, totalActualCost: sum }));
+      }
+    }
+  }, [
+    editValues.facebookCost,
+    editValues.googleCost,
+    editValues.zaloCost,
+    editValues.tiktokCost,
+    editValues.postingCost,
+    editValues.digitalCost,
+    editValues.visaCost,
+    editValues.otherCost,
+    editingId
+  ]);
+
+  const handleSaveEdit = async (acc: any) => {
+    const confirm = window.confirm('Bạn có chắc chắn muốn cập nhật bản ghi này? Thay đổi sẽ đồng bộ với dữ liệu hồ sơ.');
+    if (!confirm) return;
+
+    try {
+      const updatePayload = {
+        facebookCost: editValues.facebookCost,
+        googleCost: editValues.googleCost,
+        zaloCost: editValues.zaloCost,
+        tiktokCost: editValues.tiktokCost,
+        postingCost: editValues.postingCost,
+        digitalCost: editValues.digitalCost,
+        visaCost: editValues.visaCost,
+        otherCost: editValues.otherCost,
+        totalActualCost: editValues.totalActualCost,
+        salesCount: editValues.salesCount,
+        revenue: editValues.revenue,
+        note: editValues.note,
+        managerNote: editValues.managerNote,
+        updatedAt: serverTimestamp()
+      };
+
+      // Update finalAcceptance
+      await updateDoc(doc(db, 'finalAcceptances', acc.id), updatePayload);
+
+      // Synchronize with original acceptance record if it exists
+      if (acc.originalAcceptanceId) {
+        try {
+          const syncPayload = {
+            ...updatePayload,
+            afterAcceptanceCost: editValues.totalActualCost, // For original doc compatibility
+          };
+          await updateDoc(doc(db, 'acceptances', acc.originalAcceptanceId), syncPayload);
+        } catch (syncErr) {
+          console.error("Sync to original acceptance failed:", syncErr);
+        }
+      }
+
+      setEditingId(null);
+      toast.success('Cập nhật hồ sơ thành công');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'finalAcceptances');
+    }
+  };
+
+  return (
+    <Dialog open={!!group} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-[95vw] lg:max-w-7xl rounded-[32px] border-none shadow-2xl p-0 overflow-hidden bg-slate-50/30 backdrop-blur-xl">
+        <div className="h-1.5 bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500 w-full" />
+        <CardHeader className="p-6 pb-2">
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center rotate-3 border border-indigo-50">
+                    <FileText className="w-6 h-6 text-indigo-600" />
+                 </div>
+                 <div>
+                    <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">Chi tiết hồ sơ nghiệm thu</DialogTitle>
+                    <DialogDescription className="text-slate-500 font-medium text-xs">
+                       {group?.projectName} — {group?.teamName} ({groupAcceptances.length} bản ghi)
+                    </DialogDescription>
+                 </div>
+              </div>
+              <Button variant="ghost" onClick={onClose} className="rounded-xl h-10 w-10 p-0 text-slate-400 hover:text-rose-500 hover:bg-rose-50">
+                 <X className="w-5 h-5" />
+              </Button>
+           </div>
+        </CardHeader>
+
+        <div className="p-6 pt-0">
+           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
+              <Table>
+                 <TableHeader className="bg-slate-50/50">
+                    <TableRow className="border-slate-100">
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 px-4 w-[110px]">Kỳ báo cáo</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 w-[140px]">Người thực hiện</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">FB</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">GG</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Zalo</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Tik</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Post</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Digi</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Visa</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Other</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[110px]">Tổng chi</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-center w-[60px]">Căn</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[110px]">Doanh số</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 min-w-[150px]">Ghi chú</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-center w-[100px]">Thao tác</TableHead>
+                    </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                    {groupAcceptances.map((acc: any) => (
+                       <TableRow key={acc.id} className="border-slate-50 hover:bg-slate-50/30 transition-colors">
+                          <TableCell className="px-4 py-3">
+                             <div className="font-black text-slate-900 text-[10px]">Tháng {acc.month?.split('-')[1]} - {acc.month?.split('-')[0]}</div>
+                             <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Kỳ: {acc.week || 'N/A'}</div>
+                          </TableCell>
+                          <TableCell>
+                             <div className="font-bold text-slate-700 text-[10px] truncate max-w-[130px]">{acc.userName || acc.userEmail?.split('@')[0]}</div>
+                             <div className="text-[9px] text-slate-300 font-medium lowercase tracking-tight truncate max-w-[130px]">{acc.userEmail}</div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.facebookCost}
+                                     onChange={(e) => setEditValues({ ...editValues, facebookCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.googleCost}
+                                     onChange={(e) => setEditValues({ ...editValues, googleCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.zaloCost}
+                                     onChange={(e) => setEditValues({ ...editValues, zaloCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.tiktokCost}
+                                     onChange={(e) => setEditValues({ ...editValues, tiktokCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.postingCost}
+                                     onChange={(e) => setEditValues({ ...editValues, postingCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.digitalCost}
+                                     onChange={(e) => setEditValues({ ...editValues, digitalCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.visaCost}
+                                     onChange={(e) => setEditValues({ ...editValues, visaCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.otherCost}
+                                     onChange={(e) => setEditValues({ ...editValues, otherCost: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             <div className="space-y-1">
+                                {editingId === acc.id && (
+                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.totalActualCost || 0).replace(' đ','')}</div>
+                                )}
+                                <div className="font-black text-indigo-600 text-[10px]">
+                                   {formatCurrency(editingId === acc.id ? editValues.totalActualCost : (acc.totalActualCost || 0)).replace(' đ','')}
+                                </div>
+                             </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Cũ: {acc.salesCount || 0}</div>
+                                   <Input 
+                                     className="h-8 text-center text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.salesCount}
+                                     onChange={(e) => setEditValues({ ...editValues, salesCount: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-black text-blue-600 text-[10px]">{acc.salesCount || 0}</div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                             {editingId === acc.id ? (
+                                <div className="space-y-1">
+                                   <div className="text-[8px] text-slate-400 font-medium">Cũ: {formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
+                                   <Input 
+                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     value={editValues.revenue}
+                                     onChange={(e) => setEditValues({ ...editValues, revenue: parseInt(e.target.value) || 0 })}
+                                   />
+                                </div>
+                             ) : (
+                                <div className="font-black text-emerald-600 text-[10px]">{formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
+                             )}
+                          </TableCell>
+                          <TableCell>
+                             {editingId === acc.id ? (
+                                <textarea 
+                                  className="w-full min-h-[60px] text-[10px] font-medium border border-indigo-200 bg-indigo-50 focus:ring-2 focus:ring-indigo-100 p-2 rounded-lg outline-none" 
+                                  value={editValues.note}
+                                  onChange={(e) => setEditValues({ ...editValues, note: e.target.value })}
+                                />
+                             ) : (
+                                <div className="text-[10px] text-slate-500 italic line-clamp-2 max-w-[200px]" title={acc.note}>
+                                   {acc.note || 'Không có ghi chú'}
+                                </div>
+                             )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                             {editingId === acc.id ? (
+                                <div className="flex justify-center gap-2">
+                                   <Button 
+                                      size="sm" 
+                                      className="h-8 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 font-bold text-[10px]"
+                                      onClick={() => handleSaveEdit(acc)}
+                                   >
+                                      Xác nhận
+                                   </Button>
+                                   <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-8 text-slate-400 hover:bg-slate-100 rounded-lg"
+                                      onClick={() => setEditingId(null)}
+                                   >
+                                      Hủy
+                                   </Button>
+                                </div>
+                             ) : (
+                                <Button 
+                                   variant="ghost" 
+                                   size="sm" 
+                                   className="h-8 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg gap-1.5 font-bold text-[10px]"
+                                   onClick={() => handleStartEdit(acc)}
+                                   disabled={!(isAdmin || isMod || isAccountant)}
+                                >
+                                   <Edit2 className="w-3.5 h-3.5" /> Sửa
+                                </Button>
+                             )}
+                          </TableCell>
+                       </TableRow>
+                    ))}
+                 </TableBody>
+              </Table>
+           </div>
+        </div>
+
+        <DialogFooter className="p-6 bg-slate-50/50 flex justify-end">
+           <Button variant="ghost" onClick={onClose} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-10 px-8">Đóng chi tiết</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 /**
  * SupportManager Component

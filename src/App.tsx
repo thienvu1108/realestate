@@ -802,6 +802,7 @@ export default function App() {
 
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
+  const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState(getMarketingMonth(new Date()));
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
   const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
 
@@ -815,6 +816,11 @@ export default function App() {
     });
 
     (finalAcceptances || []).forEach(a => {
+      // Filter by month if not 'all'
+      if (acceptanceMonthFilter !== 'all' && a.month !== acceptanceMonthFilter) {
+        return;
+      }
+
       const key = `${a.projectId}_${a.teamId}`;
       if (!groups[key]) {
         groups[key] = {
@@ -825,12 +831,24 @@ export default function App() {
           totalAmount: 0,
           visaCost: 0,
           digitalCost: 0,
+          facebookCost: 0,
+          googleCost: 0,
+          zaloCost: 0,
+          tiktokCost: 0,
+          postingCost: 0,
+          otherCost: 0,
           recordCount: 0
         };
       }
       groups[key].totalAmount += (a.totalActualCost || a.afterAcceptanceCost || 0);
       groups[key].visaCost += (a.visaCost || 0);
       groups[key].digitalCost += (a.digitalCost || 0);
+      groups[key].facebookCost += (a.facebookCost || 0);
+      groups[key].googleCost += (a.googleCost || 0);
+      groups[key].zaloCost += (a.zaloCost || 0);
+      groups[key].tiktokCost += (a.tiktokCost || 0);
+      groups[key].postingCost += (a.postingCost || 0);
+      groups[key].otherCost += (a.otherCost || 0);
       groups[key].recordCount += 1;
     });
 
@@ -870,7 +888,7 @@ export default function App() {
       
       return matchSearch && matchProject && matchTeam;
     });
-  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter]);
+  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceMonthFilter]);
 
   const handleUpdateDocProcessing = async (projectId: string, teamId: string, confirmation: string, note: string) => {
     try {
@@ -7340,7 +7358,7 @@ export default function App() {
               <Wallet className="w-4 h-4 mr-2" /> Đăng ký ngân sách
             </TabsTrigger>
             <TabsTrigger value="actual" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
-              <TrendingUp className="w-4 h-4 mr-2" /> Chi phí thực tế
+              <TrendingUp className="w-4 h-4 mr-2" /> Cập nhật Chi phí
             </TabsTrigger>
             <TabsTrigger value="history" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
               <History className="w-4 h-4 mr-2" /> Lịch sử
@@ -7753,7 +7771,7 @@ export default function App() {
                             onClick={() => setAdminSubTab('costs')}
                           >
                             <TrendingUp className={`mr-3 h-4 w-4 ${adminSubTab === 'costs' ? 'text-white' : 'text-rose-500'}`} />
-                            <span className="text-sm">Thực chi Marketing</span>
+                            <span className="text-sm">Quản lý Cập nhật Chi phí</span>
                           </Button>
                           <Button 
                             variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
@@ -10007,7 +10025,7 @@ export default function App() {
                           </SelectTrigger>
                           <SelectContent className="rounded-xl border-none shadow-xl">
                             <SelectItem value="budget" className="rounded-lg">Ngân sách</SelectItem>
-                            <SelectItem value="actual" className="rounded-lg">Chi phí thực tế</SelectItem>
+                            <SelectItem value="actual" className="rounded-lg">Cập nhật Chi phí</SelectItem>
                             <SelectItem value="revenue" className="rounded-lg">Doanh số</SelectItem>
                           </SelectContent>
                         </Select>
@@ -11422,6 +11440,8 @@ export default function App() {
                       acceptanceSearch={acceptanceSearch}
                       debouncedAcceptanceSearch={debouncedAcceptanceSearch}
                       setAcceptanceSearch={setAcceptanceSearch}
+                      acceptanceMonthFilter={acceptanceMonthFilter}
+                      setAcceptanceMonthFilter={setAcceptanceMonthFilter}
                       acceptanceProjectFilter={acceptanceProjectFilter}
                       setAcceptanceProjectFilter={setAcceptanceProjectFilter}
                       acceptanceTeamFilter={acceptanceTeamFilter}
@@ -11429,6 +11449,7 @@ export default function App() {
                       isAdmin={isAdmin}
                       isMod={isMod}
                       isAccountant={isAccountant}
+                      getMarketingMonth={getMarketingMonth}
                     />
                   </TabsContent>
 
@@ -11803,7 +11824,7 @@ export default function App() {
                       <ul className="list-disc list-inside ml-2">
                         <li>{selectedCheckpoint?.data?.counts?.projects || 0} Dự án</li>
                         <li>{selectedCheckpoint?.data?.counts?.budgets || 0} Ngân sách</li>
-                        <li>{selectedCheckpoint?.data?.counts?.costs || 0} Chi phí thực tế</li>
+                        <li>{selectedCheckpoint?.data?.counts?.costs || 0} Cập nhật Chi phí</li>
                       </ul>
                     </div>
 
@@ -15539,7 +15560,7 @@ const AcceptanceManager = React.memo(({
 
                         {acceptanceType === 'Chi phí thay đổi' && (
                           <div className="space-y-2">
-                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chi phí thực tế sau NT</Label>
+                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cập nhật Chi phí sau NT</Label>
                             <Input 
                               className="h-11 bg-indigo-50 border-indigo-200 rounded-xl font-black text-indigo-700 text-lg" 
                               placeholder="Nhập chi phí thực tế..." 
@@ -16360,13 +16381,16 @@ const DocProcessingManager = React.memo(({
   acceptanceSearch,
   debouncedAcceptanceSearch,
   setAcceptanceSearch,
+  acceptanceMonthFilter,
+  setAcceptanceMonthFilter,
   acceptanceProjectFilter,
   setAcceptanceProjectFilter,
   acceptanceTeamFilter,
   setAcceptanceTeamFilter,
   isMod,
   isAdmin,
-  isAccountant
+  isAccountant,
+  getMarketingMonth
 }: any) => {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' | null }>({ 
     key: 'teamName', 
@@ -16411,18 +16435,31 @@ const DocProcessingManager = React.memo(({
       return;
     }
 
-    const exportData = sortedData.map((item: any, index: number) => ({
-      'STT': index + 1,
-      'Dự án': item.projectName,
-      'Team': item.teamName,
-      'Số bản ghi': item.recordCount,
-      'Digital': item.digitalCost,
-      'Visa': item.visaCost,
-      'Thành tiền': item.totalAmount,
-      'Trạng thái đối soát': item.confirmation,
-      'Ghi chú': item.note || '',
-      'Người cập nhật': item.updatedByEmail || ''
-    }));
+    const exportData = sortedData.map((item: any, index: number) => {
+      // Extract Team Code: "MH06.18 Nguyễn Thị Thủy" -> "MH06.18"
+      const teamParts = (item.teamName || '').split(' ');
+      const teamCode = teamParts[0] || '';
+      
+      return {
+        'STT': index + 1,
+        'Dự án': item.projectName,
+        'Mã Team': teamCode,
+        'Team': item.teamName,
+        'Số bản ghi': item.recordCount,
+        'Facebook': item.facebookCost || 0,
+        'Google': item.googleCost || 0,
+        'Zalo': item.zaloCost || 0,
+        'Tiktok': item.tiktokCost || 0,
+        'Posting': item.postingCost || 0,
+        'Other': item.otherCost || 0,
+        'Digital': item.digitalCost || 0,
+        'Visa': item.visaCost || 0,
+        'Thành tiền': item.totalAmount,
+        'Trạng thái đối soát': item.confirmation,
+        'Ghi chú': item.note || '',
+        'Người cập nhật': item.updatedByEmail || ''
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -16471,6 +16508,27 @@ const DocProcessingManager = React.memo(({
                     value={acceptanceSearch}
                     onChange={setAcceptanceSearch}
                   />
+                </div>
+                <div className="w-[140px]">
+                  <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50 border-none text-xs font-bold">
+                       <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                        <SelectValue placeholder="Tháng" />
+                       </div>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl">
+                      <SelectItem value="all" className="text-xs font-bold uppercase">Tất cả tháng</SelectItem>
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const m = (i + 1).toString().padStart(2, '0');
+                        const year = new Date().getFullYear();
+                        const val = `${year}-${m}`;
+                        return (
+                          <SelectItem key={val} value={val} className="text-xs font-bold italic">Tháng {m}/{year}</SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="w-[180px]">
                    <SearchableProjectSelect

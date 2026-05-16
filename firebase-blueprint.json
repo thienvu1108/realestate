@@ -178,6 +178,7 @@
         "afterAcceptanceCost": { "type": "number" },
         "visaCost": { "type": "number" },
         "digitalCost": { "type": "number" },
+        "crmCost": { "type": "number" },
         "status": { 
           "type": "string", 
           "enum": ["Trước nghiệm thu", "Đã nghiệm thu"] 

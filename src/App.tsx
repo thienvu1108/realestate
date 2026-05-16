@@ -831,6 +831,7 @@ export default function App() {
           totalAmount: 0,
           visaCost: 0,
           digitalCost: 0,
+          crmCost: 0,
           facebookCost: 0,
           googleCost: 0,
           zaloCost: 0,
@@ -843,6 +844,7 @@ export default function App() {
       groups[key].totalAmount += (a.totalActualCost || a.afterAcceptanceCost || 0);
       groups[key].visaCost += (a.visaCost || 0);
       groups[key].digitalCost += (a.digitalCost || 0);
+      groups[key].crmCost += (a.crmCost || 0);
       groups[key].facebookCost += (a.facebookCost || 0);
       groups[key].googleCost += (a.googleCost || 0);
       groups[key].zaloCost += (a.zaloCost || 0);
@@ -7270,7 +7272,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 pt-6 pb-24 lg:py-10 space-y-6 lg:space-y-10">
+      <main className="max-w-[1600px] mx-auto px-4 pt-6 pb-24 lg:py-8 space-y-6 lg:space-y-10">
         {/* Top Developer Support Info */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-[2rem] border border-blue-100/50 shadow-inner">
           <DeveloperFooter isHeader={true} />
@@ -7660,244 +7662,155 @@ export default function App() {
 
           {/* Admin Tab */}
           {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
-            <TabsContent value="admin" className="space-y-8">
-              <div className="flex flex-col lg:flex-row gap-8">
-                {/* Admin Sidebar-like Navigation */}
-                <aside className="lg:w-72 space-y-6 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 scroll-hide scrollbar-hide">
-                  <div className="flex lg:flex-col gap-6 min-w-max lg:min-w-0">
-                    
-                    {/* Category: Phân tích & Báo cáo */}
-                    <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
-                      <div className="px-4 py-2 lg:block hidden">
-                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Phân tích & Thống kê</h2>
-                      </div>
+            <TabsContent value="admin" className="space-y-6">
+              {/* Horizontal Admin Navigation (Replaced Sidebar) */}
+              <div className="bg-white border border-slate-200 p-2 rounded-2xl shadow-sm overflow-x-auto scrollbar-hide sticky top-[72px] z-20 backdrop-blur-sm bg-white/95">
+                <div className="flex items-center gap-2 min-w-max">
+                  {/* Phân tích Group */}
+                  <Button 
+                    variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
+                    size="sm"
+                    className={`rounded-xl h-9 px-4 transition-all duration-300 ${
+                      adminSubTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'
+                    }`}
+                    onClick={() => setAdminSubTab('reports')}
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" /> Báo cáo
+                  </Button>
+
+                  <div className="h-6 w-px bg-slate-200 mx-1" />
+
+                  {/* Dữ liệu nền tảng Group */}
+                  {isInternalStaff && (
+                    <>
                       <Button 
-                        variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
-                        className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                          adminSubTab === 'reports' 
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                            : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                        }`}
-                        onClick={() => setAdminSubTab('reports')}
+                        variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'projects' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('projects')}
                       >
-                        <BarChart3 className={`mr-3 h-4 w-4 ${adminSubTab === 'reports' ? 'text-white' : 'text-blue-500'}`} />
-                        <span className="text-sm">Báo cáo chuyên sâu</span>
+                        <Building2 className="mr-2 h-4 w-4" /> Dự án
                       </Button>
-                    </div>
+                      <Button 
+                        variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'regions' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('regions')}
+                      >
+                        <MapIcon className="mr-2 h-4 w-4" /> Vùng miền
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'types' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('types')}
+                      >
+                        <Layers className="mr-2 h-4 w-4" /> Loại hình
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'teams' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('teams')}
+                      >
+                        <Users className="mr-2 h-4 w-4" /> Teams
+                      </Button>
+                    </>
+                  )}
 
-                    {/* Category: Quản lý Dữ liệu gốc */}
-                    {isInternalStaff && (
-                      <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
-                        <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
-                          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Dữ liệu nền tảng</h2>
-                        </div>
-                        <Button 
-                          variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'projects' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('projects')}
-                        >
-                          <Building2 className={`mr-3 h-4 w-4 ${adminSubTab === 'projects' ? 'text-white' : 'text-indigo-500'}`} />
-                          <span className="text-sm">Danh mục Dự án</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'regions' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('regions')}
-                        >
-                          <MapIcon className={`mr-3 h-4 w-4 ${adminSubTab === 'regions' ? 'text-white' : 'text-emerald-500'}`} />
-                          <span className="text-sm">Vùng miền</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'types' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('types')}
-                        >
-                          <Layers className={`mr-3 h-4 w-4 ${adminSubTab === 'types' ? 'text-white' : 'text-amber-500'}`} />
-                          <span className="text-sm">Loại hình</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'teams' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('teams')}
-                        >
-                          <Users className={`mr-3 h-4 w-4 ${adminSubTab === 'teams' ? 'text-white' : 'text-purple-500'}`} />
-                          <span className="text-sm">Đội nhóm (Teams)</span>
-                        </Button>
-                      </div>
-                    )}
+                  <div className="h-6 w-px bg-slate-200 mx-1" />
 
-                    {/* Category: Vận hành & Chi phí */}
-                    <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
-                      <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
-                        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Vận hành & Tài chính</h2>
-                      </div>
-                      {isInternalStaff && (
-                        <>
-                          <Button 
-                            variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                              adminSubTab === 'budgets' 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                            }`}
-                            onClick={() => setAdminSubTab('budgets')}
-                          >
-                            <Wallet className={`mr-3 h-4 w-4 ${adminSubTab === 'budgets' ? 'text-white' : 'text-cyan-500'}`} />
-                            <span className="text-sm">Quản lý Ngân sách</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                              adminSubTab === 'costs' 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                            }`}
-                            onClick={() => setAdminSubTab('costs')}
-                          >
-                            <TrendingUp className={`mr-3 h-4 w-4 ${adminSubTab === 'costs' ? 'text-white' : 'text-rose-500'}`} />
-                            <span className="text-sm">Quản lý Cập nhật Chi phí</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                              adminSubTab === 'efficiency' 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                            }`}
-                            onClick={() => setAdminSubTab('efficiency')}
-                          >
-                            <Target className={`mr-3 h-4 w-4 ${adminSubTab === 'efficiency' ? 'text-white' : 'text-orange-500'}`} />
-                            <span className="text-sm">Hiệu quả Kinh doanh</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                              adminSubTab === 'acceptance' 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                            }`}
-                            onClick={() => setAdminSubTab('acceptance')}
-                          >
-                            <ShieldCheck className={`mr-3 h-4 w-4 ${adminSubTab === 'acceptance' ? 'text-white' : 'text-teal-500'}`} />
-                            <span className="text-sm">Nghiệm thu hồ sơ</span>
-                          </Button>
-                          <Button 
-                            variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
-                            className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                              adminSubTab === 'doc-processing' 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                                : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                            }`}
-                            onClick={() => setAdminSubTab('doc-processing')}
-                          >
-                            <FileCheck className={`mr-3 h-4 w-4 ${adminSubTab === 'doc-processing' ? 'text-white' : 'text-indigo-500'}`} />
-                            <span className="text-sm">Xử lý Hồ sơ</span>
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                  {/* Vận hành Group */}
+                  {isInternalStaff && (
+                    <>
+                      <Button 
+                        variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'budgets' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('budgets')}
+                      >
+                        <Wallet className="mr-2 h-4 w-4" /> Ngân sách
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'costs' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('costs')}
+                      >
+                        <TrendingUp className="mr-2 h-4 w-4" /> Chi phí
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'efficiency' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('efficiency')}
+                      >
+                        <Target className="mr-2 h-4 w-4" /> Hiệu quả
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'acceptance' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('acceptance')}
+                      >
+                        <ShieldCheck className="mr-2 h-4 w-4" /> Nghiệm thu
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'doc-processing' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('doc-processing')}
+                      >
+                        <FileCheck className="mr-2 h-4 w-4" /> Đối soát
+                      </Button>
+                    </>
+                  )}
 
-                    {/* Category: Hệ thống & Bảo mật */}
-                    {(isAdmin || isAccountant) && (
-                      <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
-                        <div className="px-4 py-2 lg:block hidden border-t border-slate-100 pt-6 mt-2">
-                          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400/80 mb-2">Hệ thống & Bảo mật</h2>
-                        </div>
-                        <Button 
-                          variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'users' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('users')}
-                        >
-                          <UserCircle className={`mr-3 h-4 w-4 ${adminSubTab === 'users' ? 'text-white' : 'text-slate-500'}`} />
-                          <span className="text-sm">Người dùng & Quyền</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'audit' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('audit')}
-                        >
-                          <History className={`mr-3 h-4 w-4 ${adminSubTab === 'audit' ? 'text-white' : 'text-slate-500'}`} />
-                          <span className="text-sm">Nhật ký hoạt động</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'backup' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('backup')}
-                        >
-                          <Database className={`mr-3 h-4 w-4 ${adminSubTab === 'backup' ? 'text-white' : 'text-slate-500'}`} />
-                          <span className="text-sm">Sao lưu & Sheets</span>
-                        </Button>
-                        <Button 
-                          variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
-                          className={`justify-start rounded-2xl px-4 h-11 transition-all duration-300 border border-transparent ${
-                            adminSubTab === 'settings' 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 border-blue-500 font-bold scale-[1.02]' 
-                              : 'text-slate-600 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                          }`}
-                          onClick={() => setAdminSubTab('settings')}
-                        >
-                          <Settings className={`mr-3 h-4 w-4 ${adminSubTab === 'settings' ? 'text-white' : 'text-slate-500'}`} />
-                          <span className="text-sm">Cài đặt hệ thống</span>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </aside>
+                  <div className="h-6 w-px bg-slate-200 mx-1" />
 
-                {/* Admin Content Area */}
-                <div className="flex-1 min-w-0">
-                  <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
-                    {/* Hidden TabsList to keep Tabs logic working */}
-                    <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto mb-2 flex lg:hidden">
-                    <TabsTrigger value="home" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold">
-                      <LayoutDashboard className="w-3.5 h-3.5 mb-1" />
-                    </TabsTrigger>
-                    {isInternalStaff && (
-                      <TabsTrigger value="admin" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold">
-                        <ShieldCheck className="w-3.5 h-3.5 mb-1" />
-                      </TabsTrigger>
-                    )}
-                    <TabsTrigger value="register" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
-                      Budget
-                    </TabsTrigger>
-                    <TabsTrigger value="actual" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
-                      Thực chi
-                    </TabsTrigger>
-                    <TabsTrigger value="history" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
-                      Nhật ký
-                    </TabsTrigger>
-                    <TabsTrigger value="support" className="flex-1 rounded-lg py-2 px-1 text-[10px] uppercase font-bold text-center">
-                      Hỗ trợ
-                    </TabsTrigger>
-                  </TabsList>
+                  {/* Hệ thống Group */}
+                  {(isAdmin || isAccountant) && (
+                    <>
+                      <Button 
+                        variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'users' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('users')}
+                      >
+                        <UserCircle className="mr-2 h-4 w-4" /> Users
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'audit' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('audit')}
+                      >
+                        <History className="mr-2 h-4 w-4" /> Nhật ký
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'backup' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('backup')}
+                      >
+                        <Database className="mr-2 h-4 w-4" /> Sao lưu
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'settings' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('settings')}
+                      >
+                        <Settings className="mr-2 h-4 w-4" /> Cài đặt
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Admin Content Area (Full Width) */}
+              <div className="min-w-0">
+                <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
                   <TabsList className="hidden" />
 
                     {/* Efficiency Management Tab */}
@@ -12041,7 +11954,6 @@ export default function App() {
                 </Dialog>
                   </Tabs>
                 </div>
-              </div>
             </TabsContent>
           )}
 
@@ -14713,8 +14625,8 @@ const AcceptanceManager = React.memo(({
   const [acceptanceProjects, setAcceptanceProjects] = useState<string[]>([]);
   
   // Dynamic line items (flat list)
-  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; tax?: string; projectId?: string; isConfirmed?: boolean; finalAmount?: number | null }[]>([
-    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }
+  const [entries, setEntries] = useState<{ id: string; channel: string; account: string; amount: string; tax?: string; projectId?: string; isConfirmed?: boolean; finalAmount?: number | null, isVisa?: boolean; isDigital?: boolean; isCrm?: boolean }[]>([
+    { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '', isVisa: false, isDigital: false, isCrm: false }
   ]);
 
   const [acceptanceStatus, setAcceptanceStatus] = useState('Trước nghiệm thu');
@@ -14722,6 +14634,7 @@ const AcceptanceManager = React.memo(({
   const [acceptanceRealCost, setAcceptanceRealCost] = useState('');
   const [visaAmounts, setVisaAmounts] = useState<Record<string, string>>({});
   const [digitalAmounts, setDigitalAmounts] = useState<Record<string, string>>({});
+  const [crmAmounts, setCrmAmounts] = useState<Record<string, string>>({});
   const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [acceptanceToDelete, setAcceptanceToDelete] = useState<string | null>(null);
@@ -14739,19 +14652,19 @@ const AcceptanceManager = React.memo(({
   }, [projects]);
 
   const addEntry = () => {
-    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }]);
+    setEntries(prev => [...prev, { id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '', isVisa: false, isDigital: false, isCrm: false }]);
   };
 
   const removeEntry = (id: string) => {
     setEntries(prev => {
       if (prev.length <= 1) {
-        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }];
+        return [{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '', isVisa: false, isDigital: false, isCrm: false }];
       }
       return prev.filter(e => e.id !== id);
     });
   };
 
-  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount' | 'tax' | 'projectId', value: string) => {
+  const updateEntry = (id: string, field: 'channel' | 'account' | 'amount' | 'tax' | 'projectId' | 'isVisa' | 'isDigital' | 'isCrm', value: any) => {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
   };
 
@@ -14774,6 +14687,40 @@ const AcceptanceManager = React.memo(({
       return e;
     }));
   }, [acceptanceProjects]);
+
+  // NEW: Auto-sync VISA, DIGITAL, CRM amounts based on entry selections
+  useEffect(() => {
+    if (editingAcceptance) return; // Don't auto-calculate when editing an existing record to avoid losing data
+
+    const newVisaTotals: Record<string, number> = {};
+    const newDigitalTotals: Record<string, number> = {};
+    const newCrmTotals: Record<string, number> = {};
+
+    entries.forEach(e => {
+      const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
+      const tVal = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+      const total = amt + tVal;
+      
+      const pids = e.projectId ? [e.projectId] : (acceptanceProjects.length > 0 ? acceptanceProjects : []);
+      pids.forEach(pid => {
+        if (e.isVisa) newVisaTotals[pid] = (newVisaTotals[pid] || 0) + total;
+        if (e.isDigital) newDigitalTotals[pid] = (newDigitalTotals[pid] || 0) + total;
+        if (e.isCrm) newCrmTotals[pid] = (newCrmTotals[pid] || 0) + total;
+      });
+    });
+
+    const vAmounts: Record<string, string> = {};
+    const dAmounts: Record<string, string> = {};
+    const cAmounts: Record<string, string> = {};
+
+    Object.keys(newVisaTotals).forEach(pid => vAmounts[pid] = formatCurrencyInput(String(newVisaTotals[pid])));
+    Object.keys(newDigitalTotals).forEach(pid => dAmounts[pid] = formatCurrencyInput(String(newDigitalTotals[pid])));
+    Object.keys(newCrmTotals).forEach(pid => cAmounts[pid] = formatCurrencyInput(String(newCrmTotals[pid])));
+
+    setVisaAmounts(vAmounts);
+    setDigitalAmounts(dAmounts);
+    setCrmAmounts(cAmounts);
+  }, [entries, acceptanceProjects, editingAcceptance]);
 
   const [expandingAcceptance, setExpandingAcceptance] = useState<string | null>(null);
 
@@ -14936,8 +14883,9 @@ const AcceptanceManager = React.memo(({
       posting: acc.posting + (a.postingCost || 0),
       other: acc.other + (a.otherCost || 0),
       visa: acc.visa + (a.visaCost || 0),
-      digital: acc.digital + (a.digitalCost || 0)
-    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0 });
+      digital: acc.digital + (a.digitalCost || 0),
+      crm: acc.crm + (a.crmCost || 0)
+    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0, crm: 0 });
   }, [filteredAcceptances]);
 
   const finalizedTotals = useMemo(() => {
@@ -14951,8 +14899,9 @@ const AcceptanceManager = React.memo(({
       posting: acc.posting + (a.postingCost || 0),
       other: acc.other + (a.otherCost || 0),
       visa: acc.visa + (a.visaCost || 0),
-      digital: acc.digital + (a.digitalCost || 0)
-    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0 });
+      digital: acc.digital + (a.digitalCost || 0),
+      crm: acc.crm + (a.crmCost || 0)
+    }), { total: 0, after: 0, fb: 0, tiktok: 0, zalo: 0, google: 0, posting: 0, other: 0, visa: 0, digital: 0, crm: 0 });
   }, [filteredFinalAcceptances]);
 
   const handleAddAcceptance = async (e: React.FormEvent) => {
@@ -14973,6 +14922,7 @@ const AcceptanceManager = React.memo(({
         const projectId = acceptanceProjects[0];
         const visa = parseFloat((visaAmounts[projectId] || '').replace(/\./g, '')) || 0;
         const digital = parseFloat((digitalAmounts[projectId] || '').replace(/\./g, '')) || 0;
+        const crm = parseFloat((crmAmounts[projectId] || '').replace(/\./g, '')) || 0;
         
         const fb = calculateChannelTotal('facebook');
         const tiktok = calculateChannelTotal('tiktok');
@@ -14995,7 +14945,10 @@ const AcceptanceManager = React.memo(({
               amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
               tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
               isConfirmed: e.isConfirmed || false,
-              finalAmount: e.finalAmount !== undefined ? e.finalAmount : null
+              finalAmount: e.finalAmount !== undefined ? e.finalAmount : null,
+              isVisa: e.isVisa || false,
+              isDigital: e.isDigital || false,
+              isCrm: e.isCrm || false
             }));
         });
 
@@ -15015,6 +14968,7 @@ const AcceptanceManager = React.memo(({
           otherCost: other,
           visaCost: visa,
           digitalCost: digital,
+          crmCost: crm,
           totalCost: beforeAcceptanceTotal,
           beforeAcceptanceCost: beforeAcceptanceTotal,
           afterAcceptanceCost: afterTotal,
@@ -15081,7 +15035,10 @@ const AcceptanceManager = React.memo(({
               amount: parseFloat(item.amount.replace(/\./g, '')) || 0,
               tax: parseFloat((item.tax || '').replace(/\./g, '')) || 0,
               isConfirmed: false,
-              finalAmount: null
+              finalAmount: null,
+              isVisa: item.isVisa || false,
+              isDigital: item.isDigital || false,
+              isCrm: item.isCrm || false
             }));
           });
 
@@ -15106,6 +15063,7 @@ const AcceptanceManager = React.memo(({
             otherCost: channelCosts['other'] || 0,
             visaCost: parseFloat((visaAmounts[pid] || '').replace(/\./g, '')) || 0,
             digitalCost: parseFloat((digitalAmounts[pid] || '').replace(/\./g, '')) || 0,
+            crmCost: parseFloat((crmAmounts[pid] || '').replace(/\./g, '')) || 0,
             totalCost: projectBeforeTotal,
             beforeAcceptanceCost: projectBeforeTotal,
             afterAcceptanceCost: afterTotal,
@@ -15129,10 +15087,11 @@ const AcceptanceManager = React.memo(({
       // Reset form
       setAcceptanceTeam('');
       setAcceptanceProjects([]);
-      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '' }]);
+      setEntries([{ id: Math.random().toString(36).substring(7), channel: 'facebook', account: '', amount: '', tax: '', projectId: '', isVisa: false, isDigital: false, isCrm: false }]);
       setAcceptanceRealCost('');
       setVisaAmounts({});
       setDigitalAmounts({});
+      setCrmAmounts({});
       setAcceptanceStatus('Trước nghiệm thu');
       setAcceptanceType('Chi phí không đổi');
     } catch (error: any) {
@@ -15223,6 +15182,7 @@ const AcceptanceManager = React.memo(({
       'Khác': a.otherCost || 0,
       'VISA': a.visaCost || 0,
       'Digital': a.digitalCost || 0,
+      'CRM': a.crmCost || 0,
       'Tổng tạm tính': a.totalCost || 0,
       'Quyết toán': a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || a.totalActualCost || 0) : '-',
       'Trạng thái': a.status,
@@ -15261,6 +15221,7 @@ const AcceptanceManager = React.memo(({
         otherCost: acc.otherCost || 0,
         visaCost: acc.visaCost || 0,
         digitalCost: acc.digitalCost || 0,
+        crmCost: acc.crmCost || 0,
         breakdown: breakdown,
         totalActualCost: acc.afterAcceptanceCost || 0,
         beforeAcceptanceCost: acc.beforeAcceptanceCost || 0,
@@ -15394,27 +15355,61 @@ const AcceptanceManager = React.memo(({
                   <div className="space-y-3">
                     {entries.map((entry, idx) => (
                       <div key={entry.id} className="flex flex-col gap-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
-                        {!editingAcceptance && acceptanceProjects.length > 1 && (
-                          <div className="flex-1 space-y-1.5">
-                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Thuộc dự án</Label>
-                            <Select 
-                              value={entry.projectId || ''} 
-                              onValueChange={(val) => updateEntry(entry.id, 'projectId', val)}
-                            >
-                              <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
-                                <SelectValue placeholder="Tất cả dự án được chọn">
-                                  {entry.projectId ? (projectMap[entry.projectId] || projects.find((p: any) => p.id === entry.projectId)?.name || entry.projectId) : "Tất cả dự án được chọn"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">Tất cả dự án được chọn</SelectItem>
-                                {filteredProjectsForAdd.filter((p: any) => acceptanceProjects.includes(p.id)).map((p: any) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <div className="flex items-center justify-between">
+                          {!editingAcceptance && acceptanceProjects.length > 1 && (
+                            <div className="flex-1 space-y-1.5 min-w-[200px]">
+                              <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Thuộc dự án</Label>
+                              <Select 
+                                value={entry.projectId || ''} 
+                                onValueChange={(val) => updateEntry(entry.id, 'projectId', val)}
+                              >
+                                <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
+                                  <SelectValue placeholder="Tất cả dự án được chọn">
+                                    {entry.projectId ? (projectMap[entry.projectId] || projects.find((p: any) => p.id === entry.projectId)?.name || entry.projectId) : "Tất cả dự án được chọn"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">Tất cả dự án được chọn</SelectItem>
+                                  {filteredProjectsForAdd.filter((p: any) => acceptanceProjects.includes(p.id)).map((p: any) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name} ({p.projectCode})</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-4 px-2">
+                            <div className="flex items-center gap-1.5">
+                              <input 
+                                type="checkbox" 
+                                id={`visa-${entry.id}`}
+                                checked={entry.isVisa || false}
+                                onChange={e => updateEntry(entry.id, 'isVisa', e.target.checked)}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <Label htmlFor={`visa-${entry.id}`} className="text-[10px] font-black text-slate-500 uppercase cursor-pointer">VISA</Label>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input 
+                                type="checkbox" 
+                                id={`digital-${entry.id}`}
+                                checked={entry.isDigital || false}
+                                onChange={e => updateEntry(entry.id, 'isDigital', e.target.checked)}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <Label htmlFor={`digital-${entry.id}`} className="text-[10px] font-black text-slate-500 uppercase cursor-pointer">DIGITAL</Label>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input 
+                                type="checkbox" 
+                                id={`crm-${entry.id}`}
+                                checked={entry.isCrm || false}
+                                onChange={e => updateEntry(entry.id, 'isCrm', e.target.checked)}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <Label htmlFor={`crm-${entry.id}`} className="text-[10px] font-black text-slate-500 uppercase cursor-pointer">CRM</Label>
+                            </div>
                           </div>
-                        )}
+                        </div>
                         <div className="flex items-center gap-3">
                           <div className="w-[140px]">
                             <Select 
@@ -15488,7 +15483,7 @@ const AcceptanceManager = React.memo(({
                     </div>
 
                     <div className="space-y-4 pt-4 border-t border-slate-100">
-                      <Label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1">Chi phí ngoài tổng chi (Visa & Digital) - Nhập theo dự án</Label>
+                      <Label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1">Chi phí ngoài tổng chi (Visa, Digital & CRM) - Nhập theo dự án</Label>
                       <div className="grid grid-cols-1 gap-4">
                         {acceptanceProjects.map((pid: string) => (
                           <div key={pid} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-3">
@@ -15498,7 +15493,7 @@ const AcceptanceManager = React.memo(({
                                 {projectMap[pid] || projects.find((p: any) => p.id === pid)?.name || pid}
                               </span>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                 <Label className="text-[9px] font-bold text-slate-500 ml-1">Tự chạy thẻ VISA</Label>
                                 <Input 
@@ -15515,6 +15510,15 @@ const AcceptanceManager = React.memo(({
                                   className="h-10 bg-slate-50 border-none rounded-xl text-xs font-mono font-bold text-indigo-600"
                                   value={digitalAmounts[pid] || ''}
                                   onChange={e => setDigitalAmounts(prev => ({ ...prev, [pid]: formatCurrencyInput(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[9px] font-bold text-slate-500 ml-1">Chạy qua CRM</Label>
+                                <Input 
+                                  placeholder="Nhập số tiền..." 
+                                  className="h-10 bg-slate-50 border-none rounded-xl text-xs font-mono font-bold text-indigo-600"
+                                  value={crmAmounts[pid] || ''}
+                                  onChange={e => setCrmAmounts(prev => ({ ...prev, [pid]: formatCurrencyInput(e.target.value) }))}
                                 />
                               </div>
                             </div>
@@ -15797,6 +15801,7 @@ const AcceptanceManager = React.memo(({
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
+                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.crmCost || 0).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right bg-amber-50/20">
                           <p className="font-mono text-[10px] font-black text-amber-700">{formatCurrency(a.totalCost).replace(' đ','')}</p>
@@ -15841,6 +15846,7 @@ const AcceptanceManager = React.memo(({
                                   setAcceptanceProjects([a.projectId]);
                                   setVisaAmounts({ [a.projectId]: formatCurrencyInput(String(a.visaCost || 0)) });
                                   setDigitalAmounts({ [a.projectId]: formatCurrencyInput(String(a.digitalCost || 0)) });
+                                  setCrmAmounts({ [a.projectId]: formatCurrencyInput(String(a.crmCost || 0)) });
                                   
                                   const flatEntries: any[] = [];
                                   if (a.breakdown) {
@@ -15855,7 +15861,10 @@ const AcceptanceManager = React.memo(({
                                             tax: formatCurrencyInput(String(item.tax || 0)),
                                             projectId: a.projectId,
                                             isConfirmed: item.isConfirmed || false,
-                                            finalAmount: item.finalAmount
+                                            finalAmount: item.finalAmount,
+                                            isVisa: item.isVisa || false,
+                                            isDigital: item.isDigital || false,
+                                            isCrm: item.isCrm || false
                                           });
                                         });
                                       }
@@ -15926,7 +15935,14 @@ const AcceptanceManager = React.memo(({
                                             <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${item.isConfirmed ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'} hover:border-indigo-200 transition-colors`}>
                                               <div className="flex items-center gap-3">
                                                 <Badge variant="outline" className="text-[9px] font-black uppercase bg-white">{channel}</Badge>
-                                                <span className="text-xs font-bold text-slate-700">{item.account}</span>
+                                                <div className="flex flex-col">
+                                                  <span className="text-xs font-bold text-slate-700">{item.account}</span>
+                                                  <div className="flex gap-1 mt-0.5">
+                                                    {item.isVisa && <Badge className="text-[7px] h-3 px-1 bg-indigo-100 text-indigo-700 border-none font-black uppercase">VISA</Badge>}
+                                                    {item.isDigital && <Badge className="text-[7px] h-3 px-1 bg-purple-100 text-purple-700 border-none font-black uppercase">DIGITAL</Badge>}
+                                                    {item.isCrm && <Badge className="text-[7px] h-3 px-1 bg-amber-100 text-amber-700 border-none font-black uppercase">CRM</Badge>}
+                                                  </div>
+                                                </div>
                                               </div>
                                               <div className="flex items-center gap-4">
                                                 <div className="text-right">
@@ -16046,6 +16062,7 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.posting)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.visa)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.digital)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.crm)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.other)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-slate-400">{formatCurrency(pendingTotals.total)}</TableCell>
                       <TableCell className="text-right bg-emerald-50/30">
@@ -16112,6 +16129,7 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.postingCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
+                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.crmCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right bg-emerald-50/20">
                         <p className="font-mono text-[10px] font-black text-emerald-700">{formatCurrency(a.totalActualCost).replace(' đ','')}</p>
@@ -16225,6 +16243,7 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.posting)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.visa)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.digital)}</TableCell>
+                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.crm)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.other)}</TableCell>
                       <TableCell className="text-right bg-emerald-100/30">
                         <p className="font-mono text-xs font-black text-emerald-800">{formatCurrency(finalizedTotals.after)}</p>
@@ -16452,6 +16471,7 @@ const DocProcessingManager = React.memo(({
         'Tiktok': item.tiktokCost || 0,
         'Posting': item.postingCost || 0,
         'Other': item.otherCost || 0,
+        'CRM': item.crmCost || 0,
         'Digital': item.digitalCost || 0,
         'Visa': item.visaCost || 0,
         'Thành tiền': item.totalAmount,
@@ -16473,8 +16493,9 @@ const DocProcessingManager = React.memo(({
       totalAmount: acc.totalAmount + curr.totalAmount,
       visaCost: acc.visaCost + curr.visaCost,
       digitalCost: acc.digitalCost + curr.digitalCost,
+      crmCost: acc.crmCost + (curr.crmCost || 0),
       recordCount: acc.recordCount + curr.recordCount
-    }), { totalAmount: 0, visaCost: 0, digitalCost: 0, recordCount: 0 });
+    }), { totalAmount: 0, visaCost: 0, digitalCost: 0, crmCost: 0, recordCount: 0 });
   }, [sortedData]);
 
   const SortIcon = ({ field }: { field: string }) => {
@@ -16558,13 +16579,13 @@ const DocProcessingManager = React.memo(({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white overflow-x-auto">
-              <Table className="w-full table-fixed min-w-[700px] lg:min-w-0">
+            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white overflow-x-hidden hover:overflow-x-auto transition-all">
+              <Table className="w-full table-auto text-[10px]">
                 <TableHeader className="bg-slate-50/50">
                   <TableRow className="hover:bg-transparent border-slate-100 h-10">
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-[35px]">STT</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-[30px] px-1">STT</TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[140px]"
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
                       onClick={() => handleSort('projectName')}
                     >
                       <div className="flex items-center">
@@ -16572,27 +16593,28 @@ const DocProcessingManager = React.memo(({
                       </div>
                     </TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-auto min-w-[150px]"
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
                       onClick={() => handleSort('teamName')}
                     >
                       <div className="flex items-center">
                         Team <SortIcon field="teamName" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[55px]">Ghi</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Digital</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[85px]">Visa</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[100px]">Tổng</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[85px]">Chi tiết</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[35px] px-1">Ghi</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Digital</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Visa</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">CRM</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[80px] px-1">Tổng</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[75px] px-1">Chi tiết</TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[110px] cursor-pointer hover:text-indigo-600 group transition-colors"
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[100px] cursor-pointer hover:text-indigo-600 group transition-colors px-1"
                       onClick={() => handleSort('confirmation')}
                     >
                       <div className="flex items-center justify-center">
                         Đối soát <SortIcon field="confirmation" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pr-4 w-auto">Ghi chú & Lịch sử</TableHead>
+                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pr-4 min-w-[120px] px-1">Ghi chú & Lịch sử</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -16608,43 +16630,46 @@ const DocProcessingManager = React.memo(({
                   ) : (
                     sortedData.map((group: any, index: number) => (
                       <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group min-h-[48px]">
-                        <TableCell className="pl-4 py-2 text-[10px] font-bold text-slate-400">{index + 1}</TableCell>
-                        <TableCell className="py-2">
-                          <div className="font-black text-slate-900 text-[10.5px] leading-tight" title={group.projectName}>{group.projectName}</div>
+                        <TableCell className="pl-4 py-2 text-[10px] font-bold text-slate-400 px-1">{index + 1}</TableCell>
+                        <TableCell className="py-2 px-1">
+                          <div className="font-black text-slate-900 text-[10px] leading-tight line-clamp-2 break-words" title={group.projectName}>{group.projectName}</div>
                           <div className="text-[8px] text-slate-300 font-bold uppercase tracking-tight mt-0.5">ID: {group.projectId.substring(0,6)}</div>
                         </TableCell>
-                        <TableCell className="py-2">
-                           <div className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm w-fit break-words max-w-full leading-tight">{group.teamName}</div>
+                        <TableCell className="py-2 px-1">
+                           <div className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm w-fit break-words line-clamp-2 leading-tight">{group.teamName}</div>
                         </TableCell>
-                        <TableCell className="text-right py-2">
+                        <TableCell className="text-right py-2 px-1">
                           <Badge variant="outline" className="bg-slate-50 border-slate-100 text-[9px] font-black px-1.5 h-4 font-inter">{group.recordCount}</Badge>
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-[9px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
                           {formatCurrency(group.digitalCost || 0).replace(' đ','')}
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-[9px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
                           {formatCurrency(group.visaCost || 0).replace(' đ','')}
                         </TableCell>
-                        <TableCell className="text-right py-2">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
+                          {formatCurrency(group.crmCost || 0).replace(' đ','')}
+                        </TableCell>
+                        <TableCell className="text-right py-2 px-1">
                           <div className="font-black text-slate-900 text-[10px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-1">
                            <Button 
                              variant="outline" 
                              size="sm" 
-                             className="h-7 px-2 text-[9px] font-black uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-md"
+                             className="h-7 px-1.5 text-[9px] font-black uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-md"
                              onClick={() => setViewingGroup(group)}
                            >
-                             <Eye className="w-3 h-3 mr-1" /> Xem chi tiết
+                             <Eye className="w-3 h-3 mr-0.5" /> Chi tiết
                            </Button>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-1">
                            <Select 
                              value={group.confirmation || 'Chưa đối soát'} 
                              onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
                              disabled={!(isAdmin || isMod || isAccountant)}
                            >
-                              <SelectTrigger className={`h-7 w-full text-[9px] font-black uppercase rounded-md border-none shadow-sm transition-all focus:ring-2 focus:ring-indigo-100 ${
+                              <SelectTrigger className={`h-7 w-full text-[8.5px] font-black uppercase rounded-md border-none shadow-sm transition-all px-1.5 ${
                                 group.confirmation === 'Khớp hồ sơ' ? 'bg-emerald-50 text-emerald-600' :
                                 group.confirmation === 'Không khớp hồ sơ' ? 'bg-rose-50 text-rose-600' :
                                 'bg-slate-50 text-slate-400'
@@ -16693,6 +16718,9 @@ const DocProcessingManager = React.memo(({
                       </TableCell>
                       <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.visaCost).replace(' đ','')}
+                      </TableCell>
+                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
+                        {formatCurrency(docProcessingTotals.crmCost).replace(' đ','')}
                       </TableCell>
                       <TableCell className="text-right py-3 font-mono text-[10px] text-indigo-700 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.totalAmount).replace(' đ','')}đ
@@ -16753,6 +16781,7 @@ const DocDetailDialog = ({
       postingCost: acc.postingCost || 0,
       digitalCost: acc.digitalCost || 0,
       visaCost: acc.visaCost || 0,
+      crmCost: acc.crmCost || 0,
       otherCost: acc.otherCost || 0,
       totalActualCost: acc.totalActualCost || 0,
       salesCount: acc.salesCount || 0,
@@ -16771,6 +16800,7 @@ const DocDetailDialog = ({
                   (editValues.postingCost || 0) +
                   (editValues.digitalCost || 0) +
                   (editValues.visaCost || 0) +
+                  (editValues.crmCost || 0) +
                   (editValues.otherCost || 0);
       if (sum !== editValues.totalActualCost) {
         setEditValues(prev => ({ ...prev, totalActualCost: sum }));
@@ -16784,6 +16814,7 @@ const DocDetailDialog = ({
     editValues.postingCost,
     editValues.digitalCost,
     editValues.visaCost,
+    editValues.crmCost,
     editValues.otherCost,
     editingId
   ]);
@@ -16801,6 +16832,7 @@ const DocDetailDialog = ({
         postingCost: editValues.postingCost,
         digitalCost: editValues.digitalCost,
         visaCost: editValues.visaCost,
+        crmCost: editValues.crmCost,
         otherCost: editValues.otherCost,
         totalActualCost: editValues.totalActualCost,
         salesCount: editValues.salesCount,
@@ -16870,6 +16902,7 @@ const DocDetailDialog = ({
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Post</TableHead>
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Digi</TableHead>
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Visa</TableHead>
+                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">CRM</TableHead>
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Other</TableHead>
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[110px]">Tổng chi</TableHead>
                        <TableHead className="text-[9px] font-black uppercase text-slate-400 text-center w-[60px]">Căn</TableHead>

@@ -259,7 +259,7 @@ service cloud.firestore {
       allow update: if (isAdmin() || isMod() || isAccountant()) && 
                     isValidAcceptance(incoming()) && (
                       // Action: Update status or costs
-                      incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
+                      incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'crmCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
                     );
       allow delete: if isAdmin() || isMod() || isAccountant() || isSuperAdmin();
     }

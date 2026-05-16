@@ -131,10 +131,10 @@ const DebouncedInput = memo(({
   onChange: (value: string) => void; 
   debounce?: number; 
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'>) => {
-  const [value, setValue] = useState(initialValue);
+  const [value, setValue] = useState(initialValue ?? '');
 
   useEffect(() => {
-    setValue(initialValue);
+    setValue(initialValue ?? '');
   }, [initialValue]);
 
   useEffect(() => {
@@ -148,7 +148,7 @@ const DebouncedInput = memo(({
   return (
     <Input 
       {...props} 
-      value={value} 
+      value={value ?? ''} 
       onChange={e => setValue(e.target.value)} 
     />
   );
@@ -175,7 +175,7 @@ const SearchableSelectGeneric = memo(({
   }, [items, search]);
 
   return (
-    <Select value={value} onValueChange={onValueChange}>
+    <Select value={value ?? ''} onValueChange={onValueChange}>
       <SelectTrigger className={`w-full overflow-hidden flex items-center justify-between ${triggerClassName}`}>
         <SelectValue placeholder={placeholder}>
           <span className="truncate block text-left flex-1">{triggerDisplay || placeholder}</span>
@@ -839,11 +839,24 @@ export default function App() {
         updatedByEmail: status?.updatedByEmail
       };
     }).filter(g => {
-      const matchesSearch = (g.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+      const matchSearch = 
+        (g.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (g.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
-      const matchesProject = acceptanceProjectFilter === 'all' || g.projectId === acceptanceProjectFilter;
-      const matchesTeam = acceptanceTeamFilter === 'all' || g.teamId === acceptanceTeamFilter;
-      return matchesSearch && matchesProject && matchesTeam;
+      
+      const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const matchProject = acceptanceProjectFilter === 'all' || 
+                          (g.projectId && String(g.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
+                          (projectNameFromMap && g.projectName && String(g.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
+                          (g.projectName && String(g.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+      
+      const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const matchTeam = acceptanceTeamFilter === 'all' || 
+                       (g.teamName && String(g.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
+                       (g.teamId && String(g.teamId).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
+                       (teamNameFromMap && g.teamName && String(g.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
+                       (teamNameFromMap && g.teamId && String(g.teamId).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim());
+      
+      return matchSearch && matchProject && matchTeam;
     });
   }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter]);
 
@@ -871,108 +884,6 @@ export default function App() {
       handleFirestoreError(error, OperationType.UPDATE, 'docProcessing');
     }
   };
-
-  const comparisonChartData = useMemo(() => {
-    return reportMonths.map(month => {
-      const displayMonth = month.split('-')[1] + '/' + month.split('-')[0];
-      const data: any = { name: displayMonth };
-      
-      const monthlyBudget = budgets.filter(b => b.month === month).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      
-      // Use acceptance cost as the official actual cost
-      const monthlyActual = acceptances
-        .filter(a => normalizeMonth(a.month) === month)
-        .reduce((acc, curr) => {
-          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
-          return acc + val;
-        }, 0);
-
-      const monthlyRevenue = efficiencyReports.filter(r => r.month === month).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-
-      data['Ngân sách'] = monthlyBudget;
-      data['Chi phí thực'] = monthlyActual;
-      data['Doanh số'] = monthlyRevenue;
-      
-      return data;
-    });
-  }, [reportMonths, budgets, acceptances, efficiencyReports]);
-
-  const projectChartData = useMemo(() => {
-    return projects.map(p => {
-      const projBudgets = budgets.filter(b => b.projectId === p.id && reportMonths.includes(b.month));
-      
-      const projActual = acceptances
-        .filter(a => a.projectId === p.id && reportMonths.includes(normalizeMonth(a.month)))
-        .reduce((acc, curr) => {
-          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
-          return acc + val;
-        }, 0);
-      
-      const bTotal = projBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const cTotal = projActual;
-      
-      return {
-        name: p.name,
-        budget: bTotal,
-        actual: cTotal,
-        revenue: efficiencyReports.filter(r => r.projectId === p.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0).sort((a,b) => b.actual - a.actual);
-  }, [projects, budgets, acceptances, efficiencyReports, reportMonths]);
-
-  const regionChartData = useMemo(() => {
-    return regions.map(reg => {
-      const regBudgets = budgets.filter(b => b.regionId === reg.id && reportMonths.includes(b.month));
-      
-      const regActual = acceptances
-        .filter(a => {
-          const projectNum = projects.find(p => p.id === a.projectId);
-          return projectNum?.regionId === reg.id && reportMonths.includes(normalizeMonth(a.month));
-        })
-        .reduce((acc, curr) => {
-          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
-          return acc + val;
-        }, 0);
-      
-      const bTotal = regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-      const cTotal = regActual;
-
-      return {
-        name: reg.name,
-        budget: bTotal,
-        actual: cTotal,
-        revenue: efficiencyReports.filter(r => r.regionId === reg.id && reportMonths.includes(r.month)).reduce((acc, curr) => acc + (curr.revenue || 0), 0)
-      };
-    }).filter(d => d.budget > 0 || d.actual > 0);
-  }, [regions, projects, budgets, acceptances, efficiencyReports, reportMonths]);
-
-  const [isBackingUp, setIsBackingUp] = useState(false);
-  const [isRestoringData, setIsRestoringData] = useState(false);
-  const [isRestoreBudgetsDialogOpen, setIsRestoreBudgetsDialogOpen] = useState(false);
-  const [isRestoreCheckpointDialogOpen, setIsRestoreCheckpointDialogOpen] = useState(false);
-
-  const handleUpdateCost = async (id: string, data: any) => {
-    try {
-      const docRef = doc(db, 'costs', id);
-      await updateDoc(docRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-        editHistory: arrayUnion({
-          action: 'UPDATE_COST',
-          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
-          editorEmail: user?.email,
-          timestamp: new Date().toISOString(),
-          changes: data
-        })
-      });
-      await logAction('UPDATE_COST', 'costs', id, data);
-      toast.success('Đã cập nhật chi phí');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `costs/${id}`);
-    }
-  };
-  // Reporting Helpers
-  const normalizedReportMonths = useMemo(() => reportMonths.map(m => normalizeMonth(m)), [reportMonths]);
 
   const dataDrivenTeamMap = useMemo(() => {
     const map: Record<string, string> = { ...teamMap };
@@ -1045,6 +956,8 @@ export default function App() {
     return id || 'N/A';
   }, [projectMap, dataDrivenProjectMap]);
 
+  const normalizedReportMonths = useMemo(() => reportMonths.map(m => normalizeMonth(m)), [reportMonths]);
+
   const filteredBudgets = useMemo(() => {
     return budgets.filter(b => {
       const bProjectName = resolveProjectName(b.projectId, b.projectName);
@@ -1052,7 +965,7 @@ export default function App() {
       const project = projects.find(p => p.id === b.projectId || p.name === bProjectName);
       
       const userEmail = user?.email?.toLowerCase();
-      const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+      const budgetEmail = (b.userEmail || b.createdByEmail)?.toLowerCase();
       const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
       const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
       
@@ -1061,7 +974,7 @@ export default function App() {
       if (!hasAccess) return false;
 
       const matchProject = reportProject === 'all' || b.projectId === reportProject || bProjectName === projectMap[reportProject];
-      const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
+      const matchTeam = reportTeam === 'all' || b.teamId === reportTeam || bTeamName === reportTeam || bTeamName === teamMap[reportTeam];
       const matchMonth = normalizedReportMonths.length === 0 || normalizedReportMonths.includes(normalizeMonth(b.month));
       const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
       const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
@@ -1084,7 +997,7 @@ export default function App() {
       const project = projects.find(p => p.id === c.projectId || p.name === cProjectName);
       
       const userEmail = user?.email?.toLowerCase();
-      const costEmail = c.userEmail?.toLowerCase() || c.createdByEmail?.toLowerCase();
+      const costEmail = (c.userEmail || c.createdByEmail)?.toLowerCase();
       const isOwner = (costEmail && userEmail && costEmail === userEmail) || (c.createdBy === user?.uid);
       const isAssigned = c.assignedUserEmail?.toLowerCase() === userEmail;
       
@@ -1093,7 +1006,7 @@ export default function App() {
       if (!hasAccess) return false;
 
       const matchProject = reportProject === 'all' || c.projectId === reportProject || cProjectName === projectMap[reportProject];
-      const matchTeam = reportTeam === 'all' || cTeamName === reportTeam;
+      const matchTeam = reportTeam === 'all' || c.teamId === reportTeam || cTeamName === reportTeam || cTeamName === teamMap[reportTeam];
       const mMonth = c.month || (c.createdAt?.toDate ? getMarketingMonth(c.createdAt.toDate()) : null);
       const normalizedMMonth = normalizeMonth(mMonth);
       const matchMonth = normalizedReportMonths.length === 0 || (normalizedMMonth && normalizedReportMonths.includes(normalizedMMonth));
@@ -1156,7 +1069,7 @@ export default function App() {
 
       // Filter logic
       const matchProject = reportProject === 'all' || a.projectId === reportProject || aProjectName === projectMap[reportProject];
-      const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+      const matchTeam = reportTeam === 'all' || a.teamId === reportTeam || aTeamName === reportTeam || aTeamName === teamMap[reportTeam];
       const matchMonth = normalizedReportMonths.length === 0 || (normalizedAMonth && normalizedReportMonths.includes(normalizedAMonth));
       const matchRegion = reportRegion === 'all' || (project?.region || 'Khác') === reportRegion;
       const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
@@ -1219,9 +1132,230 @@ export default function App() {
       const name = teamMap[c.teamId] || c.teamName;
       if (name) set.add(name);
     });
-    return Array.from(set).filter(n => n && n !== 'N/A' && n !== 'undefined').sort() as string[];
-  }, [teams, budgets, costs, teamMap]);
+    acceptances.forEach(a => {
+      const name = teamMap[a.teamId] || a.teamName;
+      if (name) set.add(name);
+    });
+    efficiencyReports.forEach(r => {
+      const name = teamMap[r.teamId] || r.teamName;
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [teams, budgets, costs, acceptances, efficiencyReports, teamMap]);
 
+  const comparisonChartData = useMemo(() => {
+    // This chart compares items (based on efficiencyGroupType) across multiple months
+    // reportSortBy determines which metric to compare
+    
+    // 1. Determine base items
+    let items: any[] = [];
+    if (efficiencyGroupType === 'team') {
+      items = uniqueTeams.filter(t => reportTeam === 'all' || t === reportTeam).map(name => ({ id: name, name }));
+    } else if (efficiencyGroupType === 'project') {
+      items = projects.filter(p => reportProject === 'all' || p.id === reportProject).map(p => ({ id: p.id, name: p.name }));
+    } else if (efficiencyGroupType === 'region') {
+      items = regions.filter(r => reportRegion === 'all' || r.name === reportRegion).map(r => ({ id: r.name, name: r.name }));
+    }
+
+    // 2. Map items to monthly data
+    return items.map(item => {
+      const data: any = { name: item.name };
+      
+      reportMonths.forEach(month => {
+        let value = 0;
+        
+        if (reportSortBy === 'budget') {
+          value = budgets.filter(b => {
+            const project = projects.find(p => p.id === b.projectId);
+            const bTeamName = resolveTeamName(b.teamId, b.teamName);
+            const bProjectName = resolveProjectName(b.projectId, b.projectName);
+            
+            const matchMonth = b.month === month;
+            const matchProject = reportProject === 'all' || b.projectId === reportProject;
+            const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
+            const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+            const matchType = reportType === 'all' || (project?.type === reportType);
+            
+            if (!(matchMonth && matchProject && matchTeam && matchRegion && matchType)) return false;
+            
+            if (efficiencyGroupType === 'team') return bTeamName === item.id;
+            if (efficiencyGroupType === 'project') return b.projectId === item.id || bProjectName === item.name;
+            if (efficiencyGroupType === 'region') return project?.region === item.id;
+            return false;
+          }).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+        } else if (reportSortBy === 'actual') {
+          value = acceptances.filter(a => {
+            const project = projects.find(p => p.id === a.projectId);
+            const aTeamName = resolveTeamName(a.teamId, a.teamName);
+            const aProjectName = resolveProjectName(a.projectId, a.projectName);
+            
+            const matchMonth = normalizeMonth(a.month) === month;
+            const matchProject = reportProject === 'all' || a.projectId === reportProject;
+            const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+            const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+            const matchType = reportType === 'all' || (project?.type === reportType);
+            
+            if (!(matchMonth && matchProject && matchTeam && matchRegion && matchType)) return false;
+            
+            if (efficiencyGroupType === 'team') return aTeamName === item.id;
+            if (efficiencyGroupType === 'project') return a.projectId === item.id || aProjectName === item.name;
+            if (efficiencyGroupType === 'region') return project?.region === item.id;
+            return false;
+          }).reduce((acc, curr) => {
+            const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+            return acc + val;
+          }, 0);
+        } else if (reportSortBy === 'revenue') {
+          value = efficiencyReports.filter(r => {
+            const project = projects.find(p => p.id === r.projectId);
+            const rTeamName = resolveTeamName(r.teamId, r.teamName);
+            const rProjectName = resolveProjectName(r.projectId, r.projectName);
+            
+            const matchMonth = r.month === month;
+            const matchProject = reportProject === 'all' || r.projectId === reportProject;
+            const matchTeam = reportTeam === 'all' || rTeamName === reportTeam;
+            const matchRegion = reportRegion === 'all' || (project?.region === reportRegion);
+            
+            if (!(matchMonth && matchProject && matchTeam && matchRegion)) return false;
+            
+            if (efficiencyGroupType === 'team') return rTeamName === item.id;
+            if (efficiencyGroupType === 'project') return r.projectId === item.id || rProjectName === item.name;
+            if (efficiencyGroupType === 'region') return project?.region === item.id;
+            return false;
+          }).reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+        }
+        
+        data[month] = value;
+      });
+      
+      return data;
+    }).filter(d => {
+      // Keep only items that have at least one month with data > 0
+      return reportMonths.some(m => d[m] > 0);
+    });
+  }, [reportMonths, budgets, acceptances, efficiencyReports, efficiencyGroupType, reportSortBy, teams, projects, regions, projectMap, teamMap, uniqueTeams, resolveTeamName, resolveProjectName, reportProject, reportTeam, reportRegion, reportType]);
+
+  const projectChartData = useMemo(() => {
+    return projects.filter(p => reportProject === 'all' || p.id === reportProject).map(p => {
+      const projBudgets = budgets.filter(b => {
+        const matchProject = b.projectId === p.id;
+        const bTeamName = resolveTeamName(b.teamId, b.teamName);
+        const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
+        const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
+        return matchProject && matchTeam && matchMonth;
+      });
+      
+      const projActual = acceptances
+        .filter(a => {
+          const matchProject = a.projectId === p.id;
+          const matchMonth = reportMonths.length === 0 || reportMonths.includes(normalizeMonth(a.month));
+          const aTeamName = resolveTeamName(a.teamId, a.teamName);
+          const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+          return matchProject && matchMonth && matchTeam;
+        })
+        .reduce((acc, curr) => {
+          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+          return acc + val;
+        }, 0);
+      
+      const bTotal = projBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      
+      const pRevenue = efficiencyReports
+        .filter(r => {
+          const matchProject = r.projectId === p.id;
+          const rTeamName = resolveTeamName(r.teamId, r.teamName);
+          const matchTeam = reportTeam === 'all' || rTeamName === reportTeam;
+          const matchMonth = reportMonths.length === 0 || reportMonths.includes(r.month);
+          return matchProject && matchTeam && matchMonth;
+        })
+        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+      
+      return {
+        name: p.name,
+        budget: bTotal,
+        actual: projActual,
+        revenue: pRevenue
+      };
+    }).filter(d => d.budget > 0 || d.actual > 0).sort((a,b) => b.actual - a.actual);
+  }, [projects, budgets, acceptances, efficiencyReports, reportMonths, reportProject, reportTeam, resolveTeamName]);
+
+  const regionChartData = useMemo(() => {
+    return regions.filter(reg => reportRegion === 'all' || reg.name === reportRegion).map(reg => {
+      const regBudgets = budgets.filter(b => {
+        const project = projects.find(p => p.id === b.projectId);
+        const bTeamName = resolveTeamName(b.teamId, b.teamName);
+        const matchMonth = reportMonths.length === 0 || reportMonths.includes(b.month);
+        const matchProject = reportProject === 'all' || b.projectId === reportProject;
+        const matchTeam = reportTeam === 'all' || bTeamName === reportTeam;
+        const matchType = reportType === 'all' || (project?.type === reportType);
+        
+        return (project?.region === reg.name) && matchMonth && matchProject && matchTeam && matchType;
+      });
+      
+      const regActual = acceptances
+        .filter(a => {
+          const project = projects.find(p => p.id === a.projectId);
+          const aTeamName = resolveTeamName(a.teamId, a.teamName);
+          const matchMonth = reportMonths.length === 0 || reportMonths.includes(normalizeMonth(a.month));
+          const matchProject = reportProject === 'all' || a.projectId === reportProject;
+          const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+          const matchType = reportType === 'all' || (project?.type === reportType);
+          
+          return (project?.region === reg.name) && matchMonth && matchProject && matchTeam && matchType;
+        })
+        .reduce((acc, curr) => {
+          const val = curr.status === 'Đã nghiệm thu' ? (curr.afterAcceptanceCost || 0) : (curr.totalCost || 0);
+          return acc + val;
+        }, 0);
+      
+      const bTotal = regBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      
+      const regRevenue = efficiencyReports
+        .filter(r => {
+          const project = projects.find(p => p.id === r.projectId);
+          const rTeamName = resolveTeamName(r.teamId, r.teamName);
+          const matchMonth = reportMonths.length === 0 || reportMonths.includes(r.month);
+          const matchProject = reportProject === 'all' || r.projectId === reportProject;
+          const matchTeam = reportTeam === 'all' || rTeamName === reportTeam;
+          
+          return (project?.region === reg.name) && matchMonth && matchProject && matchTeam;
+        })
+        .reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+
+      return {
+        name: reg.name,
+        budget: bTotal,
+        actual: regActual,
+        revenue: regRevenue
+      };
+    }).filter(d => d.budget > 0 || d.actual > 0);
+  }, [regions, projects, budgets, acceptances, efficiencyReports, reportMonths, resolveTeamName, reportRegion, reportProject, reportTeam, reportType, resolveProjectName]);
+
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoringData, setIsRestoringData] = useState(false);
+  const [isRestoreBudgetsDialogOpen, setIsRestoreBudgetsDialogOpen] = useState(false);
+  const [isRestoreCheckpointDialogOpen, setIsRestoreCheckpointDialogOpen] = useState(false);
+
+  const handleUpdateCost = async (id: string, data: any) => {
+    try {
+      const docRef = doc(db, 'costs', id);
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'UPDATE_COST',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: data
+        })
+      });
+      await logAction('UPDATE_COST', 'costs', id, data);
+      toast.success('Đã cập nhật chi phí');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `costs/${id}`);
+    }
+  };
   const uniqueRegions = useMemo(() => {
     return regions.map(r => r.name).sort();
   }, [regions]);
@@ -1287,7 +1421,7 @@ export default function App() {
 
       // Filter logic
       const matchProject = reportProject === 'all' || a.projectId === reportProject || aProjectName === projectMap[reportProject];
-      const matchTeam = reportTeam === 'all' || aTeamName === reportTeam;
+      const matchTeam = reportTeam === 'all' || a.teamId === reportTeam || aTeamName === reportTeam || aTeamName === teamMap[reportTeam];
       const matchMonth = normalizedReportMonths.length === 0 || (normalizedAMonth && normalizedReportMonths.includes(normalizedAMonth));
       
       const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
@@ -9995,32 +10129,12 @@ export default function App() {
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                           <div className="space-y-1">
                             <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Biểu đồ so sánh Chi phí vs Doanh số</Label>
-                            <p className="text-[10px] text-slate-400">So sánh dữ liệu theo {chartTimeType === 'month' ? 'Tháng' : 'Kỳ'}</p>
                           </div>
                           <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                              <Button 
-                                variant={chartTimeType === 'month' ? 'secondary' : 'ghost'} 
-                                size="sm" 
-                                onClick={() => setChartTimeType('month')}
-                                className={`h-7 text-[10px] px-4 rounded-lg transition-all ${chartTimeType === 'month' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
-                              >
-                                Theo Tháng
-                              </Button>
-                              <Button 
-                                variant={chartTimeType === 'week' ? 'secondary' : 'ghost'} 
-                                size="sm" 
-                                onClick={() => setChartTimeType('week')}
-                                className={`h-7 text-[10px] px-4 rounded-lg transition-all ${chartTimeType === 'week' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
-                              >
-                                Theo Kỳ
-                              </Button>
-                            </div>
                             <TabsList className="bg-slate-100 p-1 h-9 rounded-xl border border-slate-200">
                               <TabsTrigger value="team" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Team</TabsTrigger>
                               <TabsTrigger value="project" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Dự án</TabsTrigger>
                               <TabsTrigger value="region" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Theo Khu vực</TabsTrigger>
-                              <TabsTrigger value="channels" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Chi tiết Kênh</TabsTrigger>
                               <TabsTrigger value="efficiency" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600">Hiệu quả</TabsTrigger>
                               <TabsTrigger value="comparison" className="text-[10px] px-4 h-7 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-bold border border-indigo-100">So sánh tháng</TabsTrigger>
                             </TabsList>
@@ -10438,73 +10552,7 @@ export default function App() {
                           </div>
                         </TabsContent>
 
-                        <TabsContent value="channels" className="mt-0 space-y-6">
-                          <Card className="border-none shadow-sm overflow-hidden">
-                            <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50">
-                              <div>
-                                <CardTitle className="text-lg font-bold">Báo cáo chi tiết theo Kênh</CardTitle>
-                                <CardDescription>Chi tiết chi phí từng kênh cho mỗi dự án và đội triển khai</CardDescription>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                              <div className="overflow-x-auto scroll-hide">
-                                <Table>
-                                  <TableHeader className="bg-slate-100/80">
-                                    <TableRow>
-                                      <TableHead className="w-[50px] text-center font-bold text-slate-700">STT</TableHead>
-                                      <TableHead className="font-bold text-slate-700 whitespace-nowrap">Team</TableHead>
-                                      <TableHead className="font-bold text-slate-700 whitespace-nowrap">Dự án</TableHead>
-                                      <TableHead className="text-right font-bold text-indigo-600 whitespace-nowrap">Facebook Ads</TableHead>
-                                      <TableHead className="text-right font-bold text-blue-600 whitespace-nowrap">Google Ads</TableHead>
-                                      <TableHead className="text-right font-bold text-emerald-600 whitespace-nowrap">Zalo Ads</TableHead>
-                                      <TableHead className="text-right font-bold text-amber-600 whitespace-nowrap">Đăng tin</TableHead>
-                                      <TableHead className="text-right font-bold text-blue-700 whitespace-nowrap">Visa Công ty</TableHead>
-                                      <TableHead className="text-right font-bold text-purple-700 whitespace-nowrap">Digital Agency</TableHead>
-                                      <TableHead className="text-right font-bold text-slate-700 whitespace-nowrap">Tổng cộng</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {channelReportData.map((row, idx) => (
-                                      <TableRow key={`${row.projectId}-${row.teamName}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                                        <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
-                                        <TableCell className="font-medium text-slate-600 whitespace-nowrap text-xs">{teamMap[row.teamId] || row.teamName}</TableCell>
-                                        <TableCell className="font-medium text-slate-900 whitespace-nowrap uppercase tracking-tight text-xs">{row.projectName}</TableCell>
-                                        <TableCell className="text-right font-mono text-xs">{row.fbAds.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs">{row.googleAds.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs">{row.zaloAds.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs">{row.posting.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs font-bold text-blue-600 bg-blue-50/20">{row.visaCost.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-xs font-bold text-purple-600 bg-purple-50/20">{row.digitalCost.toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono font-bold text-slate-900 text-xs">{row.total.toLocaleString()} đ</TableCell>
-                                      </TableRow>
-                                    ))}
-                                    {channelReportData.length === 0 && (
-                                      <TableRow>
-                                        <TableCell colSpan={10} className="h-32 text-center text-slate-400 italic">
-                                          Không có dữ liệu chi phí cho kỳ này
-                                        </TableCell>
-                                      </TableRow>
-                                    )}
-                                  </TableBody>
-                                  {channelReportData.length > 0 && (
-                                    <TableFooter className="bg-slate-50 font-bold">
-                                      <TableRow>
-                                        <TableCell colSpan={3} className="uppercase text-[10px] text-slate-600 pl-8">Tổng cộng các kênh:</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.fbAds, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.googleAds, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.zaloAds, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px]">{channelReportData.reduce((acc, curr) => acc + curr.posting, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px] text-blue-700">{channelReportData.reduce((acc, curr) => acc + curr.visaCost, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-[10px] text-purple-700">{channelReportData.reduce((acc, curr) => acc + curr.digitalCost, 0).toLocaleString()} đ</TableCell>
-                                        <TableCell className="text-right font-mono text-md text-slate-900 font-black">{channelReportData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString()} đ</TableCell>
-                                      </TableRow>
-                                    </TableFooter>
-                                  )}
-                                </Table>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
+
 
                         <TabsContent value="efficiency" className="mt-0 space-y-8">
                           {/* Efficiency Controls */}
@@ -14887,8 +14935,16 @@ const AcceptanceManager = React.memo(({
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
-      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
-      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter;
+      const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const matchesProject = acceptanceProjectFilter === 'all' || 
+                            (a.projectId && String(a.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
+                            (projectNameFromMap && a.projectName && String(a.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
+                            (a.projectName && String(a.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+      const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const matchesTeam = acceptanceTeamFilter === 'all' || 
+                         (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
+                         (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
+                         (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
       const isPending = a.status !== 'Đã nghiệm thu';
       return matchesSearch && matchesMonth && matchesProject && matchesTeam && isPending;
     });
@@ -14915,8 +14971,16 @@ const AcceptanceManager = React.memo(({
         (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
         (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
-      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter;
-      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter;
+      const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const matchesProject = acceptanceProjectFilter === 'all' || 
+                            (a.projectId && String(a.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
+                            (projectNameFromMap && a.projectName && String(a.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
+                            (a.projectName && String(a.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+      const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const matchesTeam = acceptanceTeamFilter === 'all' || 
+                         (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
+                         (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
+                         (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
       return matchesSearch && matchesMonth && matchesProject && matchesTeam;
     });
 
@@ -15409,7 +15473,7 @@ const AcceptanceManager = React.memo(({
                           <div className="flex-1 space-y-1.5">
                             <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Thuộc dự án</Label>
                             <Select 
-                              value={entry.projectId} 
+                              value={entry.projectId || ''} 
                               onValueChange={(val) => updateEntry(entry.id, 'projectId', val)}
                             >
                               <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
@@ -15429,7 +15493,7 @@ const AcceptanceManager = React.memo(({
                         <div className="flex items-center gap-3">
                           <div className="w-[140px]">
                             <Select 
-                              value={entry.channel} 
+                              value={entry.channel || ''} 
                               onValueChange={(val) => updateEntry(entry.id, 'channel', val)}
                             >
                               <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-[10px] font-black uppercase">
@@ -15449,7 +15513,7 @@ const AcceptanceManager = React.memo(({
                             <Input 
                               placeholder="Tên tài khoản / Ghi chú..." 
                               className="h-9 bg-white border-slate-200 rounded-xl text-xs font-bold focus:border-indigo-300"
-                              value={entry.account}
+                              value={entry.account || ''}
                               onChange={e => updateEntry(entry.id, 'account', e.target.value)}
                             />
                           </div>
@@ -15457,7 +15521,7 @@ const AcceptanceManager = React.memo(({
                             <Input 
                               placeholder="Số tiền..." 
                               className="h-9 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-black text-indigo-700"
-                              value={entry.amount}
+                              value={entry.amount || ''}
                               onChange={e => updateEntry(entry.id, 'amount', formatCurrencyInput(e.target.value))}
                             />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">đ</span>
@@ -16413,9 +16477,30 @@ const DocProcessingManager = React.memo(({
   };
 
   const sortedData = useMemo(() => {
-    if (!sortConfig.direction || !sortConfig.key) return groupedDocProcessing;
+    let filtered = groupedDocProcessing.filter((item: any) => {
+      const matchSearch = 
+        (item.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
+        (item.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
+      
+      const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const matchProject = acceptanceProjectFilter === 'all' || 
+                          (item.projectId && String(item.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
+                          (projectNameFromMap && item.projectName && String(item.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
+                          (item.projectName && String(item.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+      
+      const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const matchTeam = acceptanceTeamFilter === 'all' || 
+                       (item.teamName && String(item.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
+                       (item.teamId && String(item.teamId).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()) ||
+                       (teamNameFromMap && item.teamName && String(item.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
+                       (teamNameFromMap && item.teamId && String(item.teamId).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim());
+      
+      return matchSearch && matchProject && matchTeam;
+    });
+
+    if (!sortConfig.direction || !sortConfig.key) return filtered;
     
-    return [...groupedDocProcessing].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       let aVal = a[sortConfig.key!];
       let bVal = b[sortConfig.key!];
       
@@ -16426,7 +16511,7 @@ const DocProcessingManager = React.memo(({
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [groupedDocProcessing, sortConfig]);
+  }, [groupedDocProcessing, sortConfig, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter, projectMap, teamMap]);
 
   const handleExportExcel = () => {
     if (sortedData.length === 0) {
@@ -16504,11 +16589,11 @@ const DocProcessingManager = React.memo(({
                   />
                 </div>
                 <div className="w-[180px]">
-                  <SearchableTeamSelect
+                  <SearchableAcceptanceTeamSelect
                     value={acceptanceTeamFilter}
                     onValueChange={setAcceptanceTeamFilter}
                     teams={teams}
-                    uniqueTeams={uniqueTeams}
+                    teamMap={teamMap}
                   />
                 </div>
                 <Button 
@@ -16537,7 +16622,7 @@ const DocProcessingManager = React.memo(({
                       </div>
                     </TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[150px]"
+                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-auto min-w-[150px]"
                       onClick={() => handleSort('teamName')}
                     >
                       <div className="flex items-center">
@@ -16594,7 +16679,7 @@ const DocProcessingManager = React.memo(({
                         </TableCell>
                         <TableCell className="text-center">
                            <Select 
-                             value={group.confirmation} 
+                             value={group.confirmation || 'Chưa đối soát'} 
                              onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
                              disabled={!(isAdmin || isMod || isAccountant)}
                            >
@@ -16614,14 +16699,14 @@ const DocProcessingManager = React.memo(({
                         </TableCell>
                         <TableCell className="pr-4 py-2">
                            <div className="flex flex-col gap-0.5">
-                             <Input 
+                             <DebouncedInput 
                               className="h-7 bg-slate-50 border-none rounded-md text-[9px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
                               placeholder="Ghi chú..."
-                              defaultValue={group.note}
+                              value={group.note || ''}
                               disabled={!(isAdmin || isMod || isAccountant)}
-                              onBlur={(e) => {
-                                if (e.target.value !== group.note) {
-                                  handleUpdateDocProcessing(group.projectId, group.teamId, group.confirmation, e.target.value);
+                              onChange={(val) => {
+                                if (val !== group.note) {
+                                  handleUpdateDocProcessing(group.projectId, group.teamId, group.confirmation, val);
                                 }
                               }}
                              />
@@ -16638,7 +16723,7 @@ const DocProcessingManager = React.memo(({
                   )}
                   {sortedData.length > 0 && (
                     <TableRow className="bg-slate-50/80 font-black border-t-2 border-slate-200">
-                      <TableCell colSpan={2} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-4">Tổng cộng</TableCell>
+                      <TableCell colSpan={3} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-4">Tổng cộng</TableCell>
                       <TableCell className="text-right py-3">
                         <Badge className="bg-slate-900 text-white text-[9px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
                       </TableCell>

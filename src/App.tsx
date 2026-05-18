@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   DropdownMenu,
@@ -77,8 +77,8 @@ import {
   Upload, CheckCircle2, XCircle, AlertCircle, RefreshCw, 
   ChevronRight, Calendar, User as UserIcon, LayoutDashboard, 
   ArrowUpRight, ArrowDownRight, PieChart, TrendingUp, History, 
-  FileText, Check, MoreHorizontal, FileDown, Eye, Send, MessageSquare, Info, ShieldCheck, UserCheck, ChevronDown as ChevronDownIcon,
-  ChevronUp as ChevronUpIcon,
+  FileText, Check, MoreHorizontal, FileDown, Eye, Send, MessageSquare, Info, ShieldCheck, UserCheck, ChevronDown, ChevronDown as ChevronDownIcon,
+  ChevronUp, ChevronUp as ChevronUpIcon,
   ExternalLink,
   Save,
   Undo,
@@ -1678,12 +1678,31 @@ export default function App() {
     const sales = efficiencyChartData.reduce((acc, d) => acc + d.sales, 0);
     const revenue = efficiencyChartData.reduce((acc, d) => acc + d.revenue, 0);
     
-    // Calculate accurate project count based on filters
+    // Calculate accurate project count based on filters including team
+    const projectsWithData = new Set();
+    
+    // If we have a specific team filter, we need to know which projects they are in
+    // Or we can just use the project IDs present in efficiencyChartData if we are grouping by project
+    // But efficiencyChartData is grouped by efficiencyGroupType.
+    
+    // Let's use a more direct approach: find projects that match project/region/type filters 
+    // AND have at least one record matching the team filter (if team is not 'all')
     const filteredProjects = projects.filter(p => {
       const matchProject = reportProject === 'all' || p.id === reportProject;
       const matchRegion = reportRegion === 'all' || p.region === reportRegion;
       const matchType = reportType === 'all' || p.type === reportType;
-      return matchProject && matchRegion && matchType;
+      
+      if (!matchProject || !matchRegion || !matchType) return false;
+      
+      if (reportTeam !== 'all') {
+        // Check if this project has any engagement with the selected team
+        const hasTeamData = budgets.some(b => b.projectId === p.id && resolveTeamName(b.teamId, b.teamName) === reportTeam) ||
+                           acceptances.some(a => a.projectId === p.id && resolveTeamName(a.teamId, a.teamName) === reportTeam) ||
+                           efficiencyReports.some(r => r.projectId === p.id && resolveTeamName(r.teamId, r.teamName) === reportTeam);
+        return hasTeamData;
+      }
+      
+      return true;
     });
 
     return {
@@ -1693,10 +1712,38 @@ export default function App() {
       sales,
       revenue
     };
-  }, [efficiencyChartData, projects, reportProject, reportRegion, reportType]);
+  }, [efficiencyChartData, projects, reportProject, reportRegion, reportType, reportTeam, budgets, acceptances, efficiencyReports, resolveTeamName]);
+
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < 50) {
+        setIsHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY) {
+        setIsHeaderVisible(false);
+      } else {
+        setIsHeaderVisible(true);
+      }
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
 
   const dashboardStats = useMemo(() => {
-    if (activeTab === 'reports') {
+    if (activeTab === 'reports' || (activeTab === 'admin' && adminSubTab === 'reports')) {
+      let monthText = 'TẤT CẢ';
+      if (reportMonths.length === 1) {
+        monthText = `HÀ NỘI ${reportMonths[0].split('-')[1]}`;
+      } else if (reportMonths.length > 1) {
+        monthText = `${reportMonths.length} THÁNG`;
+      }
+
       return {
         projectCount: reportSummaryStats.projectCount,
         budget: reportSummaryStats.budget,
@@ -1704,7 +1751,7 @@ export default function App() {
         sales: reportSummaryStats.sales,
         revenue: reportSummaryStats.revenue,
         isContextual: true,
-        monthLabel: reportMonths.length > 1 ? `(${reportMonths.length} tháng)` : reportMonths.length === 1 ? `(Tháng ${reportMonths[0].split('-')[1]})` : '(Chọn tháng)'
+        monthLabel: `(THÁNG ${monthText})`
       };
     }
 
@@ -1782,9 +1829,9 @@ export default function App() {
       sales: salesTotal,
       revenue: revenueTotal,
       isContextual: false,
-      monthLabel: `(Tháng Hà Nội ${currentMonth.split('-')[1]})`
+      monthLabel: `(THÁNG HÀ NỘI ${currentMonth.split('-')[1]})`
     };
-  }, [activeTab, reportSummaryStats, projects, budgets, latestCostsList, efficiencyReports, isAdmin, isMod, isAccountant, isGDDA, user, reportMonths, getMarketingMonth]);
+  }, [activeTab, adminSubTab, reportSummaryStats, projects, budgets, latestCostsList, efficiencyReports, isAdmin, isMod, isAccountant, isGDDA, user, reportMonths, getMarketingMonth]);
 
   const efficiencyPieData = useMemo(() => {
     const costWithSales = salesGeneratingData.reduce((acc, curr) => acc + curr.cost, 0);
@@ -2856,6 +2903,17 @@ export default function App() {
       unsubSettings();
     };
   }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects)]);
+
+  const initialDocProcessingMonthSet = useRef(false);
+  useEffect(() => {
+    if (finalAcceptances && finalAcceptances.length > 0 && !initialDocProcessingMonthSet.current) {
+      const latestRecord = finalAcceptances[0];
+      if (latestRecord && latestRecord.month) {
+        setAcceptanceMonthFilter(latestRecord.month);
+        initialDocProcessingMonthSet.current = true;
+      }
+    }
+  }, [finalAcceptances]);
 
   const handleImportEfficiency = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -7279,101 +7337,250 @@ export default function App() {
         </div>
 
         {/* Mobile Welcome */}
-        <div className="lg:hidden mb-2">
-           <h2 className="text-xl font-black text-slate-900">Xin chào, {user.displayName?.split(' ').pop()} 👋</h2>
-           <p className="text-xs text-slate-500 font-medium">{user.email}</p>
-        </div>
-
-        {/* Stats Overview */}
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
-          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-            <div className="h-1.5 w-full bg-indigo-500" />
-            <CardHeader className="pb-4">
-              <CardDescription className="flex items-center gap-2 font-bold text-indigo-600/70 uppercase tracking-wider text-[10px]">
-                <Building2 className="w-4 h-4" /> Tổng dự án
-              </CardDescription>
-              <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
-            </CardHeader>
-          </Card>
-          
-          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-            <div className="h-1.5 w-full bg-emerald-500" />
-            <CardHeader className="pb-4">
-              <CardDescription className="flex items-center gap-2 font-bold text-emerald-600/70 uppercase tracking-wider text-[10px]">
-                <Wallet className="w-4 h-4" /> Ngân sách {dashboardStats.monthLabel}
-              </CardDescription>
-              <CardTitle className="text-3xl font-black text-slate-900">
-                {dashboardStats.budget.toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-            <div className="h-1.5 w-full bg-orange-500" />
-            <CardHeader className="pb-4">
-              <CardDescription className="flex items-center gap-2 font-bold text-orange-600/70 uppercase tracking-wider text-[10px]">
-                <TrendingUp className="w-4 h-4" /> Chi phí {dashboardStats.monthLabel}
-              </CardDescription>
-              <CardTitle className="text-3xl font-black text-slate-900">
-                {dashboardStats.cost.toLocaleString()} <span className="text-lg font-medium text-slate-400">đ</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-            <div className="h-1.5 w-full bg-blue-500" />
-            <CardHeader className="pb-4">
-              <CardDescription className="flex items-center gap-2 font-bold text-blue-600/70 uppercase tracking-wider text-[10px]">
-                <Building2 className="w-4 h-4" /> Căn bán {dashboardStats.monthLabel}
-              </CardDescription>
-              <CardTitle className="text-3xl font-black text-slate-900">
-                {dashboardStats.sales.toLocaleString()} <span className="text-lg font-medium text-slate-400">Căn</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-none shadow-xl shadow-slate-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-300 shadow-indigo-200/50">
-            <div className="h-1.5 w-full bg-white opacity-20" />
-            <CardHeader className="pb-4">
-              <CardDescription className="flex items-center gap-2 font-bold text-indigo-100 uppercase tracking-wider text-[10px]">
-                <TrendingUp className="w-4 h-4" /> Tổng Doanh số {dashboardStats.monthLabel}
-              </CardDescription>
-              <CardTitle className="text-3xl font-black text-white">
-                {dashboardStats.revenue.toLocaleString()} <span className="text-lg font-medium text-indigo-300">đ</span>
-              </CardTitle>
-            </CardHeader>
-          </Card>
+        <div className="flex items-center justify-between mb-4 mt-2">
+           <div className="lg:hidden">
+              <h2 className="text-xl font-black text-slate-900">Xin chào, {user.displayName?.split(' ').pop()} 👋</h2>
+              <p className="text-xs text-slate-500 font-medium">{user.email}</p>
+           </div>
+           <div className="hidden lg:block">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Trung tâm <span className="text-indigo-600">Điều hành</span></h2>
+              <p className="text-xs text-slate-500 font-medium italic">Tối ưu hóa chiến dịch Marketing của bạn</p>
+           </div>
+           <Button 
+             variant="outline" 
+             size="sm" 
+             onClick={() => setIsMenuCollapsed(!isMenuCollapsed)}
+             className="rounded-xl border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-all font-bold group shadow-sm bg-white"
+           >
+             {isMenuCollapsed ? (
+               <><ChevronDown className="w-4 h-4 mr-1 text-indigo-500" /> Hiện Menu</>
+             ) : (
+               <><ChevronUp className="w-4 h-4 mr-1 text-rose-400 group-hover:text-rose-500" /> Thu gọn</>
+             )}
+           </Button>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-white border border-slate-200 p-1 rounded-xl h-auto mb-2 hidden lg:flex">
-            <TabsTrigger value="home" className="rounded-lg py-2 px-4 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-none font-bold">
-              <LayoutDashboard className="w-4 h-4 mr-2" /> Trang chủ
-            </TabsTrigger>
-            {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
-              <TabsTrigger value="admin" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
-                <ShieldCheck className="w-4 h-4 mr-2" /> Quản trị
-              </TabsTrigger>
+          <motion.div
+            initial={false}
+            animate={{ 
+              height: isMenuCollapsed ? 0 : 'auto',
+              opacity: isMenuCollapsed ? 0 : 1,
+              translateY: isHeaderVisible ? 0 : -100
+            }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className={cn(
+              "sticky z-40 transition-all duration-300",
+              isMenuCollapsed ? "overflow-hidden opacity-0 pointer-events-none" : "top-[72px] mb-2"
             )}
-            <TabsTrigger value="register" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
-              <Wallet className="w-4 h-4 mr-2" /> Đăng ký ngân sách
-            </TabsTrigger>
-            <TabsTrigger value="actual" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
-              <TrendingUp className="w-4 h-4 mr-2" /> Cập nhật Chi phí
-            </TabsTrigger>
-            <TabsTrigger value="history" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none">
-              <History className="w-4 h-4 mr-2" /> Lịch sử
-            </TabsTrigger>
-            <TabsTrigger value="support" className="rounded-lg py-2 px-4 data-[state=active]:bg-slate-100 data-[state=active]:shadow-none relative">
-              <MessageCircle className="w-4 h-4 mr-2" /> Hỗ trợ
-              {pendingSupportCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
-                  {pendingSupportCount}
-                </span>
+          >
+            <TabsList className="bg-white/90 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl h-auto flex lg:flex shadow-xl shadow-slate-200/50">
+              <TabsTrigger value="home" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all">
+                <LayoutDashboard className="w-4 h-4 mr-2" /> Trang chủ
+              </TabsTrigger>
+              {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
+                <TabsTrigger value="admin" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all">
+                  <ShieldCheck className="w-4 h-4 mr-2" /> Quản trị
+                </TabsTrigger>
               )}
-            </TabsTrigger>
-          </TabsList>
+              <TabsTrigger value="register" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all">
+                <Wallet className="w-4 h-4 mr-2" /> Đăng ký
+              </TabsTrigger>
+              <TabsTrigger value="actual" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all">
+                <TrendingUp className="w-4 h-4 mr-2" /> Chi phí
+              </TabsTrigger>
+              <TabsTrigger value="history" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-slate-700 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all">
+                <History className="w-4 h-4 mr-2" /> Lịch sử
+              </TabsTrigger>
+              <TabsTrigger value="support" className="flex-1 lg:flex-none rounded-xl py-2.5 px-6 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg font-black transition-all relative">
+                <MessageCircle className="w-4 h-4 mr-2" /> Hỗ trợ
+                {pendingSupportCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white animate-pulse">
+                    {pendingSupportCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </motion.div>
+
+          {/* Sub-menu for Admin if active */}
+          {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && activeTab === 'admin' && (
+            <motion.div 
+              initial={false}
+              animate={{ 
+                height: isMenuCollapsed ? 0 : 'auto',
+                opacity: isMenuCollapsed ? 0 : 1,
+                translateY: isHeaderVisible ? 0 : -100
+              }}
+              className={cn(
+                "sticky z-30 transition-all duration-300",
+                isMenuCollapsed ? "overflow-hidden opacity-0 pointer-events-none" : "top-[140px]"
+              )}
+            >
+              <div className="bg-white/80 backdrop-blur-md border border-slate-200 p-2 rounded-2xl shadow-lg border-t-0 rounded-t-none shadow-slate-200/40 overflow-x-auto scrollbar-hide">
+                <div className="flex items-center gap-2 min-w-max">
+                  <Button 
+                    variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
+                    size="sm"
+                    className={`rounded-xl h-10 px-6 font-black transition-all duration-300 ${
+                      adminSubTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                    onClick={() => setAdminSubTab('reports')}
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" /> Báo cáo
+                  </Button>
+
+                  <div className="h-6 w-px bg-slate-200 mx-1" />
+
+                  {isInternalStaff && (
+                    <>
+                      <Button 
+                        variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'projects' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('projects')}
+                      >
+                        <Building2 className="mr-2 h-4 w-4" /> Dự án
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'teams' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('teams')}
+                      >
+                        <Users className="mr-2 h-4 w-4" /> Teams
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'budgets' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('budgets')}
+                      >
+                        <Wallet className="mr-2 h-4 w-4" /> Ngân sách
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'efficiency' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('efficiency')}
+                      >
+                        <Target className="mr-2 h-4 w-4" /> Hiệu quả
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'acceptance' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('acceptance')}
+                      >
+                        <ShieldCheck className="mr-2 h-4 w-4" /> Nghiệm thu
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'doc-processing' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('doc-processing')}
+                      >
+                        <FileCheck className="mr-2 h-4 w-4" /> Đối soát
+                      </Button>
+                    </>
+                  )}
+
+                  <div className="h-6 w-px bg-slate-200 mx-1" />
+
+                  {(isAdmin || isAccountant) && (
+                    <>
+                      <Button 
+                        variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'users' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('users')}
+                      >
+                        <UserCircle className="mr-2 h-4 w-4" /> Users
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'settings' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('settings')}
+                      >
+                        <Settings className="mr-2 h-4 w-4" /> Cài đặt
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Stats Overview moved below menus */}
+          <motion.div 
+            animate={{ 
+              y: isHeaderVisible ? 0 : -60,
+              marginTop: isMenuCollapsed ? '0px' : '24px'
+            }}
+            className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 animate-in fade-in slide-in-from-top-4 duration-500"
+          >
+            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+              <div className="h-1.5 w-full bg-indigo-500" />
+              <CardHeader className="pb-3 pt-4">
+                <CardDescription className="flex items-center gap-2 font-black text-indigo-600/70 uppercase tracking-[0.1em] text-[10px]">
+                  <Building2 className="w-4 h-4" /> TỔNG DỰ ÁN
+                </CardDescription>
+                <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
+              </CardHeader>
+            </Card>
+            
+            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+              <div className="h-1.5 w-full bg-emerald-500" />
+              <CardHeader className="pb-3 pt-4">
+                <CardDescription className="flex items-center gap-2 font-black text-emerald-600/70 uppercase tracking-[0.1em] text-[10px]">
+                  <Wallet className="w-4 h-4" /> NGÂN SÁCH {dashboardStats.monthLabel}
+                </CardDescription>
+                <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 flex flex-col items-start leading-[1.1] pt-1">
+                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.budget)}
+                  <span className="text-slate-300 text-lg font-medium">đ</span>
+                </CardTitle>
+              </CardHeader>
+            </Card>
+   
+            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+              <div className="h-1.5 w-full bg-orange-500" />
+              <CardHeader className="pb-3 pt-4">
+                <CardDescription className="flex items-center gap-2 font-black text-orange-600/70 uppercase tracking-[0.1em] text-[10px]">
+                  <TrendingUp className="w-4 h-4" /> CHI PHÍ {dashboardStats.monthLabel}
+                </CardDescription>
+                <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.cost)} <span className="text-lg font-bold text-slate-300 ml-1">đ</span>
+                </CardTitle>
+              </CardHeader>
+            </Card>
+   
+            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+              <div className="h-1.5 w-full bg-blue-500" />
+              <CardHeader className="pb-3 pt-4">
+                <CardDescription className="flex items-center gap-2 font-black text-blue-600/70 uppercase tracking-[0.1em] text-[10px]">
+                  <Building2 className="w-4 h-4" /> CĂN BÁN {dashboardStats.monthLabel}
+                </CardDescription>
+                <CardTitle className="text-3xl font-black text-slate-900">
+                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.sales)} <span className="text-lg font-bold text-slate-400 ml-1">Căn</span>
+                </CardTitle>
+              </CardHeader>
+            </Card>
+   
+            <Card className="border-none shadow-xl shadow-indigo-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-400 relative">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700" />
+              <div className="h-1.5 w-full bg-white opacity-20" />
+              <CardHeader className="pb-3 pt-4">
+                <CardDescription className="flex items-center gap-2 font-black text-indigo-100 uppercase tracking-[0.1em] text-[10px]">
+                  <TrendingUp className="w-4 h-4" /> TỔNG DOANH SỐ {dashboardStats.monthLabel}
+                </CardDescription>
+                <CardTitle className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.revenue)} <span className="text-lg font-bold text-indigo-300 ml-1">đ</span>
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </motion.div>
+
 
           {/* Home / Dashboard Tab */}
           <TabsContent value="home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -7663,151 +7870,6 @@ export default function App() {
           {/* Admin Tab */}
           {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
             <TabsContent value="admin" className="space-y-6">
-              {/* Horizontal Admin Navigation (Replaced Sidebar) */}
-              <div className="bg-white border border-slate-200 p-2 rounded-2xl shadow-sm overflow-x-auto scrollbar-hide sticky top-[72px] z-20 backdrop-blur-sm bg-white/95">
-                <div className="flex items-center gap-2 min-w-max">
-                  {/* Phân tích Group */}
-                  <Button 
-                    variant={adminSubTab === 'reports' ? 'secondary' : 'ghost'} 
-                    size="sm"
-                    className={`rounded-xl h-9 px-4 transition-all duration-300 ${
-                      adminSubTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'
-                    }`}
-                    onClick={() => setAdminSubTab('reports')}
-                  >
-                    <BarChart3 className="mr-2 h-4 w-4" /> Báo cáo
-                  </Button>
-
-                  <div className="h-6 w-px bg-slate-200 mx-1" />
-
-                  {/* Dữ liệu nền tảng Group */}
-                  {isInternalStaff && (
-                    <>
-                      <Button 
-                        variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'projects' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('projects')}
-                      >
-                        <Building2 className="mr-2 h-4 w-4" /> Dự án
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'regions' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'regions' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('regions')}
-                      >
-                        <MapIcon className="mr-2 h-4 w-4" /> Vùng miền
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'types' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'types' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('types')}
-                      >
-                        <Layers className="mr-2 h-4 w-4" /> Loại hình
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'teams' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('teams')}
-                      >
-                        <Users className="mr-2 h-4 w-4" /> Teams
-                      </Button>
-                    </>
-                  )}
-
-                  <div className="h-6 w-px bg-slate-200 mx-1" />
-
-                  {/* Vận hành Group */}
-                  {isInternalStaff && (
-                    <>
-                      <Button 
-                        variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'budgets' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('budgets')}
-                      >
-                        <Wallet className="mr-2 h-4 w-4" /> Ngân sách
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'costs' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('costs')}
-                      >
-                        <TrendingUp className="mr-2 h-4 w-4" /> Chi phí
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'efficiency' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('efficiency')}
-                      >
-                        <Target className="mr-2 h-4 w-4" /> Hiệu quả
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'acceptance' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('acceptance')}
-                      >
-                        <ShieldCheck className="mr-2 h-4 w-4" /> Nghiệm thu
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'doc-processing' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('doc-processing')}
-                      >
-                        <FileCheck className="mr-2 h-4 w-4" /> Đối soát
-                      </Button>
-                    </>
-                  )}
-
-                  <div className="h-6 w-px bg-slate-200 mx-1" />
-
-                  {/* Hệ thống Group */}
-                  {(isAdmin || isAccountant) && (
-                    <>
-                      <Button 
-                        variant={adminSubTab === 'users' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'users' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('users')}
-                      >
-                        <UserCircle className="mr-2 h-4 w-4" /> Users
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'audit' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'audit' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('audit')}
-                      >
-                        <History className="mr-2 h-4 w-4" /> Nhật ký
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'backup' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'backup' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('backup')}
-                      >
-                        <Database className="mr-2 h-4 w-4" /> Sao lưu
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'settings' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-9 px-4 ${adminSubTab === 'settings' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('settings')}
-                      >
-                        <Settings className="mr-2 h-4 w-4" /> Cài đặt
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-
               {/* Admin Content Area (Full Width) */}
               <div className="min-w-0">
                 <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
@@ -9488,13 +9550,68 @@ export default function App() {
                           </Button>
                           </div>
                       </CardHeader>
-                      <CardContent className="space-y-6">
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 mt-2">
+                          <div className="flex-1 min-w-[200px] relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <DebouncedInput 
+                              placeholder="Tìm theo dự án, team, người triển khai..." 
+                              className="pl-10 bg-white border-none shadow-sm h-10 text-xs font-bold"
+                              value={adminBudgetSearch}
+                              onChange={setAdminBudgetSearch}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <Select 
+                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[0] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [, m] = current.split('-');
+                                setAdminBudgetMonthFilter(`${val}-${m}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[90px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Năm" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select 
+                              value={adminBudgetMonthFilter ? adminBudgetMonthFilter.split('-')[1] : ''} 
+                              onValueChange={(val) => {
+                                const current = adminBudgetMonthFilter || format(new Date(), 'yyyy-MM');
+                                const [y] = current.split('-');
+                                setAdminBudgetMonthFilter(`${y}-${val}`);
+                              }}
+                            >
+                              <SelectTrigger className="w-[110px] bg-white border-none shadow-sm h-10 text-[10px] font-bold">
+                                <SelectValue placeholder="Tháng" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
+                                  <SelectItem key={m} value={m}>Tháng {m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-10 px-3 text-slate-400 hover:text-rose-500"
+                              onClick={() => setAdminBudgetMonthFilter('')}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
 
-                        <div className="rounded-xl border border-slate-100 overflow-hidden">
+                        <div className="rounded-xl border border-slate-100 overflow-hidden shadow-sm">
                           <Table className="table-fixed w-full">
-                            <TableHeader className="bg-slate-50">
-                              <TableRow className="h-9 text-[9px] font-black uppercase text-slate-400 bg-slate-50/50">
-                                <TableHead className="w-[30px] px-1 text-center">
+                            <TableHeader className="bg-slate-50/80 backdrop-blur-sm sticky top-0 z-10">
+                              <TableRow className="h-10 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
+                                <TableHead className="w-[35px] px-1 text-center">
                                   <input 
                                     type="checkbox" 
                                     className="rounded border-slate-300 h-3 w-3"
@@ -9508,18 +9625,19 @@ export default function App() {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead className="w-auto px-2 tracking-tighter">Dự án</TableHead>
-                                <TableHead className="w-[100px] px-1 tracking-tighter">Team</TableHead>
-                                <TableHead className="w-[100px] px-1 tracking-tighter">N.Triển khai</TableHead>
-                                <TableHead className="w-[40px] px-1 text-center tracking-tighter">Kỳ</TableHead>
+                                <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
+                                <TableHead className="w-[110px] px-1 tracking-tighter">Team</TableHead>
+                                <TableHead className="w-[110px] px-1 tracking-tighter">N.Triển khai</TableHead>
+                                <TableHead className="w-[130px] px-1 text-center tracking-tighter">Hạn kỳ (Kỳ)</TableHead>
                                 <TableHead className="w-[90px] px-1 text-right tracking-tighter">Ngân sách</TableHead>
                                 <TableHead className="w-[90px] px-1 text-right tracking-tighter">Thực NT</TableHead>
-                                <TableHead className="w-[60px] px-2 text-right tracking-tighter">T.Tác</TableHead>
+                                <TableHead className="w-[90px] px-1 text-center tracking-tighter">Ngày ĐK</TableHead>
+                                <TableHead className="w-[70px] px-2 text-right tracking-tighter">T.Tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {adminFilteredBudgets.map(b => (
-                                <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} h-11 transition-colors border-slate-100 group`}>
+                                <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
                                   <TableCell className="px-1 text-center">
                                     <input 
                                       type="checkbox" 
@@ -9535,34 +9653,44 @@ export default function App() {
                                     />
                                   </TableCell>
                                   <TableCell className="px-2 py-1">
-                                    <div className="flex flex-col gap-0 max-w-[200px] overflow-hidden">
+                                    <div className="flex flex-col gap-0.5 max-w-[200px] overflow-hidden">
                                       <span className="text-[10px] font-bold text-slate-800 leading-tight truncate" title={projectMap[b.projectId] || b.projectName}>{projectMap[b.projectId] || b.projectName}</span>
-                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">ID: {b.projectId.substring(0,8)}</span>
+                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">ID: {b.projectId.substring(0,8)}</span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase">{teamMap[b.teamId] || b.teamName}</TableCell>
-                                  <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[100px]">{b.implementerName}</TableCell>
-                                  <TableCell className="px-1 text-[9px] text-center font-black text-slate-400">W{b.weekNumber}</TableCell>
-                                  <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px]">{b.amount.toLocaleString()}đ</TableCell>
-                                  <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px]">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[110px] uppercase">{teamMap[b.teamId] || b.teamName}</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
+                                  <TableCell className="px-1 py-1">
+                                    <div className="flex flex-col items-center justify-center gap-0.5">
+                                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                        {getMarketingMonthDisplayRange(b.month)}
+                                      </span>
+                                      <Badge variant="outline" className="h-4 text-[8px] font-black px-1 border-slate-200 bg-white text-slate-600 rounded-md">W{b.weekNumber}</Badge>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px] tabular-nums">{b.amount.toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px] tabular-nums">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-center font-mono text-[9px] text-slate-400 tabular-nums">
+                                    {b.createdAt?.toDate ? format(b.createdAt.toDate(), 'dd/MM/yyyy') : '-'}
+                                  </TableCell>
                                   <TableCell className="px-2 text-right">
-                                    <div className="flex justify-end gap-0">
+                                    <div className="flex justify-end gap-0.5">
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-6 w-6 text-slate-300 hover:text-indigo-600"
+                                        className="h-7 w-7 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50"
                                         onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
                                       >
-                                        <History className="w-3 h-3" />
+                                        <History className="w-3.5 h-3.5" />
                                       </Button>
                                       {(isAdmin || isMod || isAccountant) && (
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
-                                          className="h-6 w-6 text-slate-300 hover:text-rose-600"
+                                          className="h-7 w-7 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
                                           onClick={() => handleDeleteBudget(b.id, b.projectName)}
                                         >
-                                          <Trash2 className="w-3 h-3" />
+                                          <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       )}
                                     </div>
@@ -9571,7 +9699,7 @@ export default function App() {
                               ))}
                               {adminFilteredBudgets.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={8} className="h-24 text-center text-slate-500">
+                                  <TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs italic font-medium">
                                     Không tìm thấy dữ liệu ngân sách nào phù hợp
                                   </TableCell>
                                 </TableRow>
@@ -9579,17 +9707,17 @@ export default function App() {
                             </TableBody>
                             {adminFilteredBudgets.length > 0 && (
                               <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
-                                <TableRow className="h-10 font-bold">
-                                  <TableCell></TableCell>
-                                  <TableCell colSpan={4} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
-                                  <TableCell className="px-2 text-right font-mono text-slate-900 text-[11px]">
-                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}đ
-                                  </TableCell>
-                                  <TableCell className="px-2 text-right font-mono text-emerald-700 text-[11px]">
-                                    {adminFilteredBudgets.reduce((acc, curr) => acc + (acceptanceMap[curr.id] || 0), 0).toLocaleString()}đ
-                                  </TableCell>
-                                  <TableCell></TableCell>
-                                </TableRow>
+                                  <TableRow className="h-10 font-bold">
+                                    <TableCell></TableCell>
+                                    <TableCell colSpan={4} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
+                                    <TableCell className="px-1 text-right font-mono text-slate-900 text-[10px]">
+                                      {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}đ
+                                    </TableCell>
+                                    <TableCell className="px-1 text-right font-mono text-emerald-700 text-[10px]">
+                                      {adminFilteredBudgets.reduce((acc, curr) => acc + (acceptanceMap[curr.id] || 0), 0).toLocaleString()}đ
+                                    </TableCell>
+                                    <TableCell colSpan={2}></TableCell>
+                                  </TableRow>
                               </TableFooter>
                             )}
                           </Table>
@@ -9700,14 +9828,14 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-100 overflow-x-auto scroll-hide">
-                          <Table>
-                            <TableHeader className="bg-slate-50">
-                              <TableRow>
-                                <TableHead className="w-[40px]">
+                        <div className="rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+                          <Table className="table-fixed w-full">
+                            <TableHeader className="bg-slate-50/80 backdrop-blur-sm sticky top-0 z-10">
+                              <TableRow className="h-10 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
+                                <TableHead className="w-[35px] px-1 text-center">
                                   <input 
                                     type="checkbox" 
-                                    className="rounded border-slate-300"
+                                    className="rounded border-slate-300 h-3 w-3"
                                     checked={selectedCostIds.length === costs.length && costs.length > 0}
                                     onChange={(e) => {
                                       if (e.target.checked) {
@@ -9718,68 +9846,84 @@ export default function App() {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead>Dự án</TableHead>
-                                <TableHead>Team</TableHead>
-                                <TableHead>Người triển khai</TableHead>
-                                <TableHead>Kỳ</TableHead>
-                                <TableHead className="text-right">Chi phí</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
+                                <TableHead className="w-[110px] px-1 tracking-tighter">Team</TableHead>
+                                <TableHead className="w-[110px] px-1 tracking-tighter">Người triển khai</TableHead>
+                                <TableHead className="w-[130px] px-1 text-center tracking-tighter">Kỳ chi phí</TableHead>
+                                <TableHead className="w-[90px] px-1 text-right tracking-tighter">Chi phí</TableHead>
+                                <TableHead className="w-[90px] px-1 text-center tracking-tighter">Ngày ĐK</TableHead>
+                                <TableHead className="w-[70px] px-2 text-right tracking-tighter">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {adminFilteredCosts.map(c => (
-                                <TableRow key={c.id} className={selectedCostIds.includes(c.id) ? "bg-blue-50/30" : ""}>
-                                    <TableCell>
-                                      <input 
-                                        type="checkbox" 
-                                        className="rounded border-slate-300"
-                                        checked={selectedCostIds.includes(c.id)}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            setSelectedCostIds(prev => [...prev, c.id]);
-                                          } else {
-                                            setSelectedCostIds(prev => prev.filter(id => id !== c.id));
-                                          }
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="font-medium">{projectMap[c.projectId] || c.projectName}</TableCell>
-                                    <TableCell>{teamMap[c.teamId] || c.teamName}</TableCell>
-                                    <TableCell>{c.implementerName}</TableCell>
-                                    <TableCell className="text-xs">Kỳ {c.weekNumber}</TableCell>
-                                    <TableCell className="text-right font-mono font-bold text-blue-600">{c.amount.toLocaleString()} đ</TableCell>
-                                    <TableCell className="text-right">
-                                      <div className="flex justify-end gap-1">
+                                <TableRow key={c.id} className={`${selectedCostIds.includes(c.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
+                                  <TableCell className="px-1 text-center">
+                                    <input 
+                                      type="checkbox" 
+                                      className="rounded border-slate-300 h-3 w-3"
+                                      checked={selectedCostIds.includes(c.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedCostIds(prev => [...prev, c.id]);
+                                        } else {
+                                          setSelectedCostIds(prev => prev.filter(id => id !== c.id));
+                                        }
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="px-2 py-1">
+                                    <div className="flex flex-col gap-0.5 max-w-[200px] overflow-hidden">
+                                      <span className="text-[10px] font-bold text-slate-800 leading-tight truncate" title={projectMap[c.projectId] || c.projectName}>{projectMap[c.projectId] || c.projectName}</span>
+                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">ID: {c.projectId.substring(0,8)}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[110px] uppercase">{teamMap[c.teamId] || c.teamName}</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{c.implementerName}</TableCell>
+                                  <TableCell className="px-1 py-1">
+                                    <div className="flex flex-col items-center justify-center gap-0.5">
+                                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                        {getMarketingMonthDisplayRange(c.month)}
+                                      </span>
+                                      <Badge variant="outline" className="h-4 text-[8px] font-black px-1 border-slate-200 bg-white text-slate-600 rounded-md">W{c.weekNumber}</Badge>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="px-1 text-right font-mono font-black text-rose-600 text-[10px] tabular-nums">{c.amount.toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-center font-mono text-[9px] text-slate-400 tabular-nums">
+                                    {c.createdAt?.toDate ? format(c.createdAt.toDate(), 'dd/MM/yyyy') : '-'}
+                                  </TableCell>
+                                  <TableCell className="px-2 text-right">
+                                    <div className="flex justify-end gap-0.5">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50"
+                                        onClick={() => handleOpenHistory(c, `${c.projectName} - ${c.teamName}`)}
+                                        title="Lịch sử thay đổi"
+                                      >
+                                        <History className="w-3.5 h-3.5" />
+                                      </Button>
+                                      {(isAdmin || isMod || isAccountant) && (
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                                          onClick={() => handleOpenHistory(c, `${c.projectName} - ${c.teamName}`)}
-                                          title="Lịch sử thay đổi"
+                                          className="h-7 w-7 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
+                                          onClick={() => handleDeleteCost(c.id, c.projectName)}
                                         >
-                                          <History className="w-3.5 h-3.5" />
+                                          <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
-                                        {(isAdmin || isMod || isAccountant) && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                            onClick={() => handleDeleteCost(c.id, c.projectName)}
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
                               {adminFilteredCosts.length === 0 && (
-                                  <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
-                                      Không tìm thấy bản ghi thực chi nào phù hợp
-                                    </TableCell>
-                                  </TableRow>
-                                )}
+                                <TableRow>
+                                  <TableCell colSpan={8} className="h-32 text-center text-slate-400 text-xs italic font-medium">
+                                    Không tìm thấy dữ liệu chi phí nào phù hợp
+                                  </TableCell>
+                                </TableRow>
+                              )}
                             </TableBody>
                             {adminFilteredCosts.length > 0 && (
                               <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
@@ -9811,12 +9955,12 @@ export default function App() {
                       </CardTitle>
                       <CardDescription>Theo dõi hiệu quả sử dụng ngân sách & Hiệu quả kinh doanh thực tế</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-8">
-                      {/* Filters Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 p-6 rounded-3xl bg-slate-50/50 border border-slate-200/60 shadow-inner mb-8 overflow-hidden">
-                      <div className="space-y-2 min-w-0">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <Building2 className="w-3 h-3" /> Dự án
+                    <CardContent className="space-y-6">
+                      {/* Optimized Filters Grid for Better Visibility of Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm mb-6">
+                      <div className="space-y-1.5 min-w-0">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Building2 className="w-3 h-3 text-indigo-400" /> Dự án
                         </Label>
                         <SearchableProjectSelect 
                           value={reportProject} 
@@ -9827,9 +9971,9 @@ export default function App() {
                       </div>
 
                       {(isAdmin || isAccountant) && (
-                        <div className="space-y-2 min-w-0">
-                          <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                            <Users className="w-3 h-3" /> Đội (Team)
+                        <div className="space-y-1.5 min-w-0">
+                          <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                            <Users className="w-3 h-3 text-purple-400" /> Đội (Team)
                           </Label>
                           <SearchableTeamSelect 
                             value={reportTeam} 
@@ -9840,9 +9984,9 @@ export default function App() {
                         </div>
                       )}
 
-                      <div className="space-y-2 min-w-0">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <MapIcon className="w-3 h-3" /> Miền / Vùng
+                      <div className="space-y-1.5 min-w-0">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <MapIcon className="w-3 h-3 text-emerald-400" /> Miền / Vùng
                         </Label>
                         <SearchableRegionSelect
                           value={reportRegion}
@@ -9851,9 +9995,9 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="space-y-2 min-w-0">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <Layers className="w-3 h-3" /> Loại hình
+                      <div className="space-y-1.5 min-w-0">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Layers className="w-3 h-3 text-amber-400" /> Loại hình
                         </Label>
                         <SearchableTypeSelect
                           value={reportType}
@@ -9862,58 +10006,47 @@ export default function App() {
                         />
                       </div>
 
-
-
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <History className="w-3 h-3" /> Năm
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <History className="w-3 h-3 text-blue-400" /> Năm
                         </Label>
                         <Select value={reportYear} onValueChange={setReportYear}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
+                          <SelectTrigger className="bg-slate-50 border-none shadow-none h-9 text-xs font-bold">
                             <SelectValue placeholder="Chọn năm" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - 2 + i).toString()).map(y => (
-                              <SelectItem key={y} value={y}>Năm {y}</SelectItem>
+                            {[2024, 2025, 2026, 2027, 2028].map(y => (
+                              <SelectItem key={y} value={y.toString()}>Năm {y}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <Calendar className="w-3 h-3" /> {reportMonths.length > 1 ? `Đang chọn ${reportMonths.length} tháng` : reportMonths.length === 1 ? getMarketingMonthDisplayRange(reportMonths[0]) : 'Chọn tháng'}
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <Calendar className="w-3 h-3 text-rose-400" /> Tháng {reportMonths.length > 0 && `(${reportMonths.length})`}
                         </Label>
                         <DropdownMenu>
-                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "w-full bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10 justify-between font-medium")}>
+                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "w-full bg-slate-50 border-none shadow-none h-9 justify-between font-bold text-xs")}>
                             <span className="truncate">
                               {reportMonths.length === 0 ? "Chọn Tháng" : 
                                reportMonths.length === 1 ? `Tháng ${reportMonths[0].split('-')[1]}` :
-                               `Đã chọn ${reportMonths.length} tháng`}
+                               `Đã chọn ${reportMonths.length}`}
                             </span>
-                            <Plus className="w-4 h-4 ml-2 opacity-50" />
+                            <Plus className="w-3 h-3 ml-2 opacity-50" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="w-56 bg-white rounded-2xl shadow-2xl border-slate-100 p-2 overflow-y-auto max-h-[300px]">
                             <DropdownMenuGroup>
-                              <DropdownMenuLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5">Chọn nhiều tháng để so sánh</DropdownMenuLabel>
-                              <DropdownMenuSeparator className="bg-slate-50" />
                               {Array.from({ length: 12 }, (_, i) => {
                                 const m = (i + 1).toString().padStart(2, '0');
                                 const year = reportYear || new Date().getFullYear().toString();
                                 const monthValue = `${year}-${m}`;
                                 const isChecked = reportMonths.includes(monthValue);
-                                
                                 return (
                                   <DropdownMenuCheckboxItem
                                     key={m}
                                     checked={isChecked}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setReportMonths([...reportMonths, monthValue]);
-                                      } else {
-                                        setReportMonths(reportMonths.filter(v => v !== monthValue));
-                                      }
-                                    }}
+                                    onCheckedChange={(checked) => checked ? setReportMonths([...reportMonths, monthValue]) : setReportMonths(reportMonths.filter(v => v !== monthValue))}
                                     className="rounded-xl focus:bg-blue-50 focus:text-blue-600 transition-colors cursor-pointer py-2 px-3"
                                   >
                                     <div className="flex flex-col">
@@ -9928,23 +10061,21 @@ export default function App() {
                         </DropdownMenu>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
-                          <ArrowUpDown className="w-3 h-3" /> Sắp xếp theo
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                          <ArrowUpDown className="w-3 h-3 text-indigo-400" /> Sắp xếp
                         </Label>
                         <Select value={reportSortBy} onValueChange={(v: 'budget' | 'actual' | 'revenue') => setReportSortBy(v)}>
-                          <SelectTrigger className="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10">
+                          <SelectTrigger className="bg-slate-50 border-none shadow-none h-9 text-xs font-bold">
                             <SelectValue placeholder="Sắp xếp theo" />
                           </SelectTrigger>
                           <SelectContent className="rounded-xl border-none shadow-xl">
-                            <SelectItem value="budget" className="rounded-lg">Ngân sách</SelectItem>
-                            <SelectItem value="actual" className="rounded-lg">Cập nhật Chi phí</SelectItem>
-                            <SelectItem value="revenue" className="rounded-lg">Doanh số</SelectItem>
+                            <SelectItem value="budget">Ngân sách</SelectItem>
+                            <SelectItem value="actual">Chi phí</SelectItem>
+                            <SelectItem value="revenue">Doanh số</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-
-
                     </div>
 
                     {/* Chart Section */}
@@ -14705,7 +14836,7 @@ const AcceptanceManager = React.memo(({
       pids.forEach(pid => {
         if (e.isVisa) newVisaTotals[pid] = (newVisaTotals[pid] || 0) + total;
         if (e.isDigital) newDigitalTotals[pid] = (newDigitalTotals[pid] || 0) + total;
-        if (e.isCrm) newCrmTotals[pid] = (newCrmTotals[pid] || 0) + total;
+        if (e.isCrm || e.channel === 'other') newCrmTotals[pid] = (newCrmTotals[pid] || 0) + total;
       });
     });
 
@@ -15179,10 +15310,9 @@ const AcceptanceManager = React.memo(({
       'Zalo Ads': a.zaloCost || 0,
       'Google Ads': a.googleCost || 0,
       'Đăng tin': a.postingCost || 0,
-      'Khác': a.otherCost || 0,
+      'CRM': a.crmCost || 0,
       'VISA': a.visaCost || 0,
       'Digital': a.digitalCost || 0,
-      'CRM': a.crmCost || 0,
       'Tổng tạm tính': a.totalCost || 0,
       'Quyết toán': a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || a.totalActualCost || 0) : '-',
       'Trạng thái': a.status,
@@ -15425,7 +15555,7 @@ const AcceptanceManager = React.memo(({
                                 <SelectItem value="google">Google Ads</SelectItem>
                                 <SelectItem value="zalo">Zalo Ads</SelectItem>
                                 <SelectItem value="posting">Đăng tin</SelectItem>
-                                <SelectItem value="other">Khác</SelectItem>
+                                <SelectItem value="other">CRM</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -15758,7 +15888,7 @@ const AcceptanceManager = React.memo(({
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Đăng tin</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Visa</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Digital</TableHead>
-                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Khác</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">CRM</TableHead>
                      <TableHead className="w-[80px] px-1 text-right font-black text-[9px] bg-amber-50/50 text-amber-600 uppercase tracking-tighter">Tạm tính</TableHead>
                      <TableHead className="w-[80px] px-1 text-right font-black text-[9px] bg-emerald-50/50 text-emerald-600 uppercase tracking-tighter">Thực thu</TableHead>
                      <TableHead className="w-[65px] px-1 text-center font-black text-[9px] text-slate-400 uppercase tracking-tighter">T.Thái</TableHead>
@@ -15802,7 +15932,6 @@ const AcceptanceManager = React.memo(({
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.crmCost || 0).replace(' đ','')}</TableCell>
-                        <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost).replace(' đ','')}</TableCell>
                         <TableCell className="px-1 text-right bg-amber-50/20">
                           <p className="font-mono text-[10px] font-black text-amber-700">{formatCurrency(a.totalCost).replace(' đ','')}</p>
                         </TableCell>
@@ -16054,7 +16183,7 @@ const AcceptanceManager = React.memo(({
                   ))}
                   {filteredAcceptances.length > 0 && (
                     <TableRow className="bg-slate-50/50 border-t-2 border-slate-100">
-                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 3 : 2} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
+                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 4 : 3} className="text-right font-black text-[10px] text-slate-400 uppercase tracking-wider">TỔNG CỘNG</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.fb)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.tiktok)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.zalo)}</TableCell>
@@ -16063,7 +16192,6 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.visa)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.digital)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.crm)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-black text-indigo-600">{formatCurrency(pendingTotals.other)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-slate-400">{formatCurrency(pendingTotals.total)}</TableCell>
                       <TableCell className="text-right bg-emerald-50/30">
                         <p className="font-mono text-xs font-black text-emerald-700">{formatCurrency(pendingTotals.after)}</p>
@@ -16073,7 +16201,7 @@ const AcceptanceManager = React.memo(({
                   )}
                   {filteredAcceptances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 12 : 11} className="h-40 text-center text-slate-300 italic">
+                      <TableCell colSpan={(isAdmin || isSuperAdmin || isAccountant) ? 16 : 15} className="h-40 text-center text-slate-300 italic">
                         Không tìm thấy dữ liệu nghiệm thu phù hợp
                       </TableCell>
                     </TableRow>
@@ -16104,10 +16232,11 @@ const AcceptanceManager = React.memo(({
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Đăng tin</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Visa</TableHead>
                      <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Digital</TableHead>
-                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Khác</TableHead>
+                     <TableHead className="w-[65px] px-1 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">CRM</TableHead>
                      <TableHead className="w-[85px] px-1 text-right font-black text-[9px] bg-emerald-50/50 text-emerald-600 uppercase tracking-tighter">Quyết toán</TableHead>
                      <TableHead className="w-[65px] px-1 text-center font-black text-[9px] text-slate-400 uppercase tracking-tighter">T.Thái</TableHead>
                      <TableHead className="w-[85px] px-2 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter">Ngày chốt</TableHead>
+                     <TableHead className="w-[75px] px-2 text-right font-black text-[9px] text-slate-400 uppercase tracking-tighter"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -16130,7 +16259,6 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.visaCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.digitalCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.crmCost || 0).replace(' đ','')}</TableCell>
-                      <TableCell className="px-1 text-right font-mono text-[10px] font-bold text-slate-600">{formatCurrency(a.otherCost || 0).replace(' đ','')}</TableCell>
                       <TableCell className="px-1 text-right bg-emerald-50/20">
                         <p className="font-mono text-[10px] font-black text-emerald-700">{formatCurrency(a.totalActualCost).replace(' đ','')}</p>
                       </TableCell>
@@ -16235,7 +16363,7 @@ const AcceptanceManager = React.memo(({
                   ))}
                   {filteredFinalAcceptances.length > 0 && (
                     <TableRow className="bg-emerald-50/20 border-t-2 border-emerald-100">
-                      <TableCell colSpan={2} className="text-right font-black text-[10px] text-emerald-600 uppercase tracking-wider">TỔNG CỘNG</TableCell>
+                      <TableCell colSpan={3} className="text-right font-black text-[10px] text-emerald-600 uppercase tracking-wider">TỔNG CỘNG</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.fb)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.tiktok)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.zalo)}</TableCell>
@@ -16244,7 +16372,6 @@ const AcceptanceManager = React.memo(({
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.visa)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.digital)}</TableCell>
                       <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.crm)}</TableCell>
-                      <TableCell className="text-right font-mono text-[10px] font-black text-emerald-700">{formatCurrency(finalizedTotals.other)}</TableCell>
                       <TableCell className="text-right bg-emerald-100/30">
                         <p className="font-mono text-xs font-black text-emerald-800">{formatCurrency(finalizedTotals.after)}</p>
                       </TableCell>
@@ -16253,7 +16380,7 @@ const AcceptanceManager = React.memo(({
                   )}
                   {filteredFinalAcceptances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={13} className="h-40 text-center text-slate-300 italic font-inter">
+                      <TableCell colSpan={15} className="h-40 text-center text-slate-300 italic font-inter">
                         Chưa có dữ liệu đã quyết toán
                       </TableCell>
                     </TableRow>
@@ -16583,9 +16710,9 @@ const DocProcessingManager = React.memo(({
               <Table className="w-full table-auto text-[10px]">
                 <TableHeader className="bg-slate-50/50">
                   <TableRow className="hover:bg-transparent border-slate-100 h-10">
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-[30px] px-1">STT</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter pl-4 w-[30px] px-1">STT</TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
+                      className="text-[11px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
                       onClick={() => handleSort('projectName')}
                     >
                       <div className="flex items-center">
@@ -16593,28 +16720,28 @@ const DocProcessingManager = React.memo(({
                       </div>
                     </TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
+                      className="text-[11px] font-black uppercase text-slate-400 tracking-tighter cursor-pointer hover:text-indigo-600 group transition-colors w-[100px] px-1"
                       onClick={() => handleSort('teamName')}
                     >
                       <div className="flex items-center">
                         Team <SortIcon field="teamName" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[35px] px-1">Ghi</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Digital</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Visa</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">CRM</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-right w-[80px] px-1">Tổng</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[75px] px-1">Chi tiết</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-right w-[35px] px-1">Ghi</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Digital</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">Visa</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-right w-[65px] px-1">CRM</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-right w-[80px] px-1">Tổng</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-center w-[75px] px-1">Chi tiết</TableHead>
                     <TableHead 
-                      className="text-[9px] font-black uppercase text-slate-400 tracking-tighter text-center w-[100px] cursor-pointer hover:text-indigo-600 group transition-colors px-1"
+                      className="text-[11px] font-black uppercase text-slate-400 tracking-tighter text-center w-[100px] cursor-pointer hover:text-indigo-600 group transition-colors px-1"
                       onClick={() => handleSort('confirmation')}
                     >
                       <div className="flex items-center justify-center">
                         Đối soát <SortIcon field="confirmation" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-slate-400 tracking-tighter pr-4 min-w-[120px] px-1">Ghi chú & Lịch sử</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase text-slate-400 tracking-tighter pr-4 min-w-[120px] px-1">Ghi chú & Lịch sử</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -16630,37 +16757,37 @@ const DocProcessingManager = React.memo(({
                   ) : (
                     sortedData.map((group: any, index: number) => (
                       <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group min-h-[48px]">
-                        <TableCell className="pl-4 py-2 text-[10px] font-bold text-slate-400 px-1">{index + 1}</TableCell>
+                        <TableCell className="pl-4 py-2 text-[11px] font-bold text-slate-400 px-1">{index + 1}</TableCell>
                         <TableCell className="py-2 px-1">
-                          <div className="font-black text-slate-900 text-[10px] leading-tight line-clamp-2 break-words" title={group.projectName}>{group.projectName}</div>
-                          <div className="text-[8px] text-slate-300 font-bold uppercase tracking-tight mt-0.5">ID: {group.projectId.substring(0,6)}</div>
+                          <div className="font-black text-slate-900 text-[12.5px] leading-tight line-clamp-2 break-words" title={group.projectName}>{group.projectName}</div>
+                          <div className="text-[9.5px] text-slate-300 font-bold uppercase tracking-tight mt-0.5">ID: {group.projectId.substring(0,6)}</div>
                         </TableCell>
                         <TableCell className="py-2 px-1">
-                           <div className="text-[9px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm w-fit break-words line-clamp-2 leading-tight">{group.teamName}</div>
+                           <div className="text-[11.5px] text-indigo-600 font-black uppercase bg-indigo-50 px-1.5 py-0.5 rounded-sm w-fit break-words line-clamp-2 leading-tight">{group.teamName}</div>
                         </TableCell>
                         <TableCell className="text-right py-2 px-1">
-                          <Badge variant="outline" className="bg-slate-50 border-slate-100 text-[9px] font-black px-1.5 h-4 font-inter">{group.recordCount}</Badge>
+                          <Badge variant="outline" className="bg-slate-50 border-slate-100 text-[11px] font-black px-1.5 h-4 font-inter">{group.recordCount}</Badge>
                         </TableCell>
-                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[14px] font-bold text-slate-600">
                           {formatCurrency(group.digitalCost || 0).replace(' đ','')}
                         </TableCell>
-                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[14px] font-bold text-slate-600">
                           {formatCurrency(group.visaCost || 0).replace(' đ','')}
                         </TableCell>
-                        <TableCell className="text-right py-2 px-1 font-mono text-[9px] font-bold text-slate-600">
+                        <TableCell className="text-right py-2 px-1 font-mono text-[14px] font-bold text-slate-600">
                           {formatCurrency(group.crmCost || 0).replace(' đ','')}
                         </TableCell>
                         <TableCell className="text-right py-2 px-1">
-                          <div className="font-black text-slate-900 text-[10px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
+                          <div className="font-black text-slate-900 text-[15px]">{formatCurrency(group.totalAmount).replace(' đ','')}đ</div>
                         </TableCell>
                         <TableCell className="text-center px-1">
                            <Button 
                              variant="outline" 
                              size="sm" 
-                             className="h-7 px-1.5 text-[9px] font-black uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-md"
+                             className="h-7 px-1.5 text-[11px] font-black uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-md"
                              onClick={() => setViewingGroup(group)}
                            >
-                             <Eye className="w-3 h-3 mr-0.5" /> Chi tiết
+                             <Eye className="w-3.5 h-3.5 mr-0.5" /> Chi tiết
                            </Button>
                         </TableCell>
                         <TableCell className="text-center px-1">
@@ -16669,7 +16796,7 @@ const DocProcessingManager = React.memo(({
                              onValueChange={(val) => handleUpdateDocProcessing(group.projectId, group.teamId, val, group.note)}
                              disabled={!(isAdmin || isMod || isAccountant)}
                            >
-                              <SelectTrigger className={`h-7 w-full text-[8.5px] font-black uppercase rounded-md border-none shadow-sm transition-all px-1.5 ${
+                              <SelectTrigger className={`h-7 w-full text-[10.5px] font-black uppercase rounded-md border-none shadow-sm transition-all px-1.5 ${
                                 group.confirmation === 'Khớp hồ sơ' ? 'bg-emerald-50 text-emerald-600' :
                                 group.confirmation === 'Không khớp hồ sơ' ? 'bg-rose-50 text-rose-600' :
                                 'bg-slate-50 text-slate-400'
@@ -16677,16 +16804,16 @@ const DocProcessingManager = React.memo(({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-none shadow-2xl">
-                                <SelectItem value="Chưa đối soát" className="text-[9px] font-bold uppercase">Chưa đối soát</SelectItem>
-                                <SelectItem value="Khớp hồ sơ" className="text-[9px] font-bold text-emerald-600 uppercase">Khớp hồ sơ</SelectItem>
-                                <SelectItem value="Không khớp hồ sơ" className="text-[9px] font-bold text-rose-600 uppercase">Không khớp hồ sơ</SelectItem>
+                                <SelectItem value="Chưa đối soát" className="text-[11px] font-bold uppercase">Chưa đối soát</SelectItem>
+                                <SelectItem value="Khớp hồ sơ" className="text-[11px] font-bold text-emerald-600 uppercase">Khớp hồ sơ</SelectItem>
+                                <SelectItem value="Không khớp hồ sơ" className="text-[11px] font-bold text-rose-600 uppercase">Không khớp hồ sơ</SelectItem>
                               </SelectContent>
                            </Select>
                         </TableCell>
                         <TableCell className="pr-4 py-2">
                            <div className="flex flex-col gap-0.5">
                              <DebouncedInput 
-                              className="h-7 bg-slate-50 border-none rounded-md text-[9px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
+                              className="h-7 bg-slate-50 border-none rounded-md text-[11px] font-bold font-inter focus:ring-2 focus:ring-indigo-100 px-2 w-full"
                               placeholder="Ghi chú..."
                               value={group.note || ''}
                               disabled={!(isAdmin || isMod || isAccountant)}
@@ -16697,7 +16824,7 @@ const DocProcessingManager = React.memo(({
                               }}
                              />
                              {group.updatedByEmail && (
-                               <div className="text-[7px] text-slate-300 font-bold uppercase italic font-inter flex items-center gap-1 leading-none line-clamp-1">
+                               <div className="text-[9px] text-slate-300 font-bold uppercase italic font-inter flex items-center gap-1 leading-none line-clamp-1">
                                  <UserCheck className="w-1.5 h-1.5" />
                                  {group.updatedByEmail.split('@')[0]}
                                </div>
@@ -16709,20 +16836,20 @@ const DocProcessingManager = React.memo(({
                   )}
                   {sortedData.length > 0 && (
                     <TableRow className="bg-slate-50/80 font-black border-t-2 border-slate-200">
-                      <TableCell colSpan={3} className="pl-4 py-3 text-[9px] uppercase font-black text-slate-900 text-right pr-2">Tổng cộng</TableCell>
+                      <TableCell colSpan={3} className="pl-4 py-3 text-[11px] uppercase font-black text-slate-900 text-right pr-2">Tổng cộng</TableCell>
                       <TableCell className="text-right py-3">
-                        <Badge className="bg-slate-900 text-white text-[9px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
+                        <Badge className="bg-slate-900 text-white text-[11px] font-black px-1.5 h-4 rounded-md">{docProcessingTotals.recordCount}</Badge>
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
+                      <TableCell className="text-right py-3 font-mono text-[14.5px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.digitalCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
+                      <TableCell className="text-right py-3 font-mono text-[14.5px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.visaCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-slate-900 whitespace-nowrap">
+                      <TableCell className="text-right py-3 font-mono text-[14.5px] text-slate-900 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.crmCost).replace(' đ','')}
                       </TableCell>
-                      <TableCell className="text-right py-3 font-mono text-[10px] text-indigo-700 whitespace-nowrap">
+                      <TableCell className="text-right py-3 font-mono text-[14.5px] text-indigo-700 whitespace-nowrap">
                         {formatCurrency(docProcessingTotals.totalAmount).replace(' đ','')}đ
                       </TableCell>
                       <TableCell colSpan={3}></TableCell>
@@ -16893,153 +17020,153 @@ const DocDetailDialog = ({
               <Table>
                  <TableHeader className="bg-slate-50/50">
                     <TableRow className="border-slate-100">
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 px-4 w-[110px]">Kỳ báo cáo</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 w-[140px]">Người thực hiện</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">FB</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">GG</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Zalo</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Tik</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Post</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Digi</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Visa</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">CRM</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[80px]">Other</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[110px]">Tổng chi</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-center w-[60px]">Căn</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-right w-[110px]">Doanh số</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 min-w-[150px]">Ghi chú</TableHead>
-                       <TableHead className="text-[9px] font-black uppercase text-slate-400 text-center w-[100px]">Thao tác</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 px-4 w-[110px]">Kỳ báo cáo</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 w-[140px]">Người thực hiện</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">FB</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">GG</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Zalo</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Tik</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Post</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Digi</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Visa</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">CRM</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[80px]">Other</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[110px]">Tổng chi</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-center w-[60px]">Căn</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-right w-[110px]">Doanh số</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 min-w-[150px]">Ghi chú</TableHead>
+                       <TableHead className="text-[11px] font-black uppercase text-slate-400 text-center w-[100px]">Thao tác</TableHead>
                     </TableRow>
                  </TableHeader>
                  <TableBody>
                     {groupAcceptances.map((acc: any) => (
                        <TableRow key={acc.id} className="border-slate-50 hover:bg-slate-50/30 transition-colors">
                           <TableCell className="px-4 py-3">
-                             <div className="font-black text-slate-900 text-[10px]">Tháng {acc.month?.split('-')[1]} - {acc.month?.split('-')[0]}</div>
-                             <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Kỳ: {acc.week || 'N/A'}</div>
+                             <div className="font-black text-slate-900 text-[12px]">Tháng {acc.month?.split('-')[1]} - {acc.month?.split('-')[0]}</div>
+                             <div className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">Kỳ: {acc.week || 'N/A'}</div>
                           </TableCell>
                           <TableCell>
-                             <div className="font-bold text-slate-700 text-[10px] truncate max-w-[130px]">{acc.userName || acc.userEmail?.split('@')[0]}</div>
-                             <div className="text-[9px] text-slate-300 font-medium lowercase tracking-tight truncate max-w-[130px]">{acc.userEmail}</div>
+                             <div className="font-bold text-slate-700 text-[12px] truncate max-w-[130px]">{acc.userName || acc.userEmail?.split('@')[0]}</div>
+                             <div className="text-[11px] text-slate-300 font-medium lowercase tracking-tight truncate max-w-[130px]">{acc.userEmail}</div>
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.facebookCost}
                                      onChange={(e) => setEditValues({ ...editValues, facebookCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.facebookCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.googleCost}
                                      onChange={(e) => setEditValues({ ...editValues, googleCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.googleCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.zaloCost}
                                      onChange={(e) => setEditValues({ ...editValues, zaloCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.zaloCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.tiktokCost}
                                      onChange={(e) => setEditValues({ ...editValues, tiktokCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.tiktokCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.postingCost}
                                      onChange={(e) => setEditValues({ ...editValues, postingCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.postingCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.digitalCost}
                                      onChange={(e) => setEditValues({ ...editValues, digitalCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.digitalCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.visaCost}
                                      onChange={(e) => setEditValues({ ...editValues, visaCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.visaCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12.5px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.otherCost}
                                      onChange={(e) => setEditValues({ ...editValues, otherCost: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-mono text-[9px] text-slate-600">{formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
+                                <div className="font-mono text-[11.5px] text-slate-600">{formatCurrency(acc.otherCost || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              <div className="space-y-1">
                                 {editingId === acc.id && (
-                                   <div className="text-[8px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.totalActualCost || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Bản cũ: {formatCurrency(acc.totalActualCost || 0).replace(' đ','')}</div>
                                 )}
-                                <div className="font-black text-indigo-600 text-[10px]">
+                                <div className="font-black text-indigo-600 text-[12.5px]">
                                    {formatCurrency(editingId === acc.id ? editValues.totalActualCost : (acc.totalActualCost || 0)).replace(' đ','')}
                                 </div>
                              </div>
@@ -17047,29 +17174,29 @@ const DocDetailDialog = ({
                           <TableCell className="text-center">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Cũ: {acc.salesCount || 0}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Cũ: {acc.salesCount || 0}</div>
                                    <Input 
-                                     className="h-8 text-center text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-center text-[12px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.salesCount}
                                      onChange={(e) => setEditValues({ ...editValues, salesCount: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-black text-blue-600 text-[10px]">{acc.salesCount || 0}</div>
+                                <div className="font-black text-blue-600 text-[12.5px]">{acc.salesCount || 0}</div>
                              )}
                           </TableCell>
                           <TableCell className="text-right">
                              {editingId === acc.id ? (
                                 <div className="space-y-1">
-                                   <div className="text-[8px] text-slate-400 font-medium">Cũ: {formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
+                                   <div className="text-[10px] text-slate-400 font-medium">Cũ: {formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
                                    <Input 
-                                     className="h-8 text-right text-[10px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
+                                     className="h-8 text-right text-[12px] font-black border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-100 px-1" 
                                      value={editValues.revenue}
                                      onChange={(e) => setEditValues({ ...editValues, revenue: parseInt(e.target.value) || 0 })}
                                    />
                                 </div>
                              ) : (
-                                <div className="font-black text-emerald-600 text-[10px]">{formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
+                                <div className="font-black text-emerald-600 text-[12.5px]">{formatCurrency(acc.revenue || 0).replace(' đ','')}</div>
                              )}
                           </TableCell>
                           <TableCell>
@@ -17080,7 +17207,7 @@ const DocDetailDialog = ({
                                   onChange={(e) => setEditValues({ ...editValues, note: e.target.value })}
                                 />
                              ) : (
-                                <div className="text-[10px] text-slate-500 italic line-clamp-2 max-w-[200px]" title={acc.note}>
+                                <div className="text-[12px] text-slate-500 italic line-clamp-2 max-w-[200px]" title={acc.note}>
                                    {acc.note || 'Không có ghi chú'}
                                 </div>
                              )}
@@ -17108,7 +17235,7 @@ const DocDetailDialog = ({
                                 <Button 
                                    variant="ghost" 
                                    size="sm" 
-                                   className="h-8 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg gap-1.5 font-bold text-[10px]"
+                                   className="h-8 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg gap-1.5 font-bold text-[12px]"
                                    onClick={() => handleStartEdit(acc)}
                                    disabled={!(isAdmin || isMod || isAccountant)}
                                 >
@@ -17124,7 +17251,7 @@ const DocDetailDialog = ({
         </div>
 
         <DialogFooter className="p-6 bg-slate-50/50 flex justify-end">
-           <Button variant="ghost" onClick={onClose} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-10 px-8">Đóng chi tiết</Button>
+           <Button variant="ghost" onClick={onClose} className="rounded-xl font-black uppercase text-[12px] tracking-widest text-slate-500 h-10 px-8">Đóng chi tiết</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

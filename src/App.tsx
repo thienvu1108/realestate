@@ -805,6 +805,7 @@ export default function App() {
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState(getMarketingMonth(new Date()));
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
   const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
+  const [acceptanceCategoryFilter, setAcceptanceCategoryFilter] = useState('all');
 
   const groupedDocProcessing = useMemo(() => {
     const groups: Record<string, any> = {};
@@ -888,9 +889,14 @@ export default function App() {
                        (teamNameFromMap && gTeamLower === teamNameFromMap) ||
                        (teamNameFromMap && g.teamId && String(g.teamId).toLowerCase().trim() === teamNameFromMap);
       
-      return matchSearch && matchProject && matchTeam;
+      const matchCategory = acceptanceCategoryFilter === 'all' || 
+                           (acceptanceCategoryFilter === 'digital' && g.digitalCost > 0) ||
+                           (acceptanceCategoryFilter === 'visa' && g.visaCost > 0) ||
+                           (acceptanceCategoryFilter === 'crm' && g.crmCost > 0);
+      
+      return matchSearch && matchProject && matchTeam && matchCategory;
     });
-  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceMonthFilter]);
+  }, [finalAcceptances, docProcessingStatus, projectMap, teamMap, debouncedAcceptanceSearch, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceMonthFilter, acceptanceCategoryFilter]);
 
   const handleUpdateDocProcessing = async (projectId: string, teamId: string, confirmation: string, note: string) => {
     try {
@@ -11490,6 +11496,8 @@ export default function App() {
                       setAcceptanceProjectFilter={setAcceptanceProjectFilter}
                       acceptanceTeamFilter={acceptanceTeamFilter}
                       setAcceptanceTeamFilter={setAcceptanceTeamFilter}
+                      acceptanceCategoryFilter={acceptanceCategoryFilter}
+                      setAcceptanceCategoryFilter={setAcceptanceCategoryFilter}
                       isAdmin={isAdmin}
                       isMod={isMod}
                       isAccountant={isAccountant}
@@ -14725,6 +14733,7 @@ const AcceptanceManager = React.memo(({
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
   const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
+  const [acceptanceCategoryFilter, setAcceptanceCategoryFilter] = useState('all');
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' | null }>({ key: 'teamName', direction: 'asc' });
 
@@ -14948,8 +14957,14 @@ const AcceptanceManager = React.memo(({
                          (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
                          (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
                          (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
+      
+      const matchesCategory = acceptanceCategoryFilter === 'all' || 
+                             (acceptanceCategoryFilter === 'digital' && (a.digitalCost > 0)) ||
+                             (acceptanceCategoryFilter === 'visa' && (a.visaCost > 0)) ||
+                             (acceptanceCategoryFilter === 'crm' && (a.crmCost > 0));
+                             
       const isPending = a.status !== 'Đã nghiệm thu';
-      return matchesSearch && matchesMonth && matchesProject && matchesTeam && isPending;
+      return matchesSearch && matchesMonth && matchesProject && matchesTeam && matchesCategory && isPending;
     });
 
     if (!sortConfig.key || !sortConfig.direction) return filtered;
@@ -14965,7 +14980,7 @@ const AcceptanceManager = React.memo(({
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, sortConfig]);
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, sortConfig]);
 
   const filteredFinalAcceptances = useMemo(() => {
     const filtered = (finalAcceptances || []).filter((a: any) => {
@@ -14984,7 +14999,13 @@ const AcceptanceManager = React.memo(({
                          (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
                          (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
                          (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
-      return matchesSearch && matchesMonth && matchesProject && matchesTeam;
+      
+      const matchesCategory = acceptanceCategoryFilter === 'all' || 
+                             (acceptanceCategoryFilter === 'digital' && (a.digitalCost > 0)) ||
+                             (acceptanceCategoryFilter === 'visa' && (a.visaCost > 0)) ||
+                             (acceptanceCategoryFilter === 'crm' && (a.crmCost > 0));
+
+      return matchesSearch && matchesMonth && matchesProject && matchesTeam && matchesCategory;
     });
 
     if (!sortConfig.key || !sortConfig.direction) return filtered;
@@ -15000,7 +15021,7 @@ const AcceptanceManager = React.memo(({
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, sortConfig]);
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, sortConfig]);
 
 
   const pendingTotals = useMemo(() => {
@@ -15834,6 +15855,17 @@ const AcceptanceManager = React.memo(({
                     teamMap={teamMap}
                   />
                 </div>
+                <Select value={acceptanceCategoryFilter} onValueChange={setAcceptanceCategoryFilter}>
+                  <SelectTrigger className="h-10 w-[140px] bg-slate-50 border-none rounded-xl text-xs font-bold">
+                    <SelectValue placeholder="Loại CP" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-none shadow-2xl">
+                    <SelectItem value="all" className="text-xs font-bold uppercase">Tất cả loại</SelectItem>
+                    <SelectItem value="visa" className="text-xs font-bold">Category: VISA</SelectItem>
+                    <SelectItem value="digital" className="text-xs font-bold">Category: DIGITAL</SelectItem>
+                    <SelectItem value="crm" className="text-xs font-bold">Category: CRM</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
                   <SelectTrigger className="h-10 w-[160px] bg-slate-50 border-none rounded-xl text-xs font-bold">
                     <SelectValue placeholder="Lọc theo tháng" />
@@ -16533,6 +16565,8 @@ const DocProcessingManager = React.memo(({
   setAcceptanceProjectFilter,
   acceptanceTeamFilter,
   setAcceptanceTeamFilter,
+  acceptanceCategoryFilter,
+  setAcceptanceCategoryFilter,
   isMod,
   isAdmin,
   isAccountant,
@@ -16693,6 +16727,22 @@ const DocProcessingManager = React.memo(({
                     teams={teams}
                     teamMap={teamMap}
                   />
+                </div>
+                <div className="w-[140px]">
+                  <Select value={acceptanceCategoryFilter} onValueChange={setAcceptanceCategoryFilter}>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50 border-none text-xs font-bold">
+                       <div className="flex items-center gap-2">
+                        <Filter className="w-3.5 h-3.5 text-indigo-500" />
+                        <SelectValue placeholder="Loại CP" />
+                       </div>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-none shadow-2xl">
+                      <SelectItem value="all" className="text-xs font-bold uppercase">Tất cả loại</SelectItem>
+                      <SelectItem value="visa" className="text-xs font-bold">Category: VISA</SelectItem>
+                      <SelectItem value="digital" className="text-xs font-bold">Category: DIGITAL</SelectItem>
+                      <SelectItem value="crm" className="text-xs font-bold">Category: CRM</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button 
                   onClick={handleExportExcel}

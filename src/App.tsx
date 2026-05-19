@@ -802,7 +802,7 @@ export default function App() {
 
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const debouncedAcceptanceSearch = useDebounce(acceptanceSearch, 300);
-  const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
   const [acceptanceProjectFilter, setAcceptanceProjectFilter] = useState('all');
   const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
   const [acceptanceCategoryFilter, setAcceptanceCategoryFilter] = useState('all');
@@ -813,7 +813,9 @@ export default function App() {
     // Index status for O(1) lookup
     const statusMap = new Map();
     (docProcessingStatus || []).forEach(s => {
-      statusMap.set(`${s.projectId}_${s.teamId}`, s);
+      if (s.projectId || s.teamId) {
+        statusMap.set(`${s.projectId}_${s.teamId}`, s);
+      }
     });
 
     (finalAcceptances || []).forEach(a => {
@@ -822,13 +824,21 @@ export default function App() {
         return;
       }
 
-      const key = `${a.projectId}_${a.teamId}`;
+      // Use unique key combining IDs and names to prevent accidental merging of different entities with missing IDs
+      const safePID = a.projectId || 'ID_MISSING';
+      const safePName = (a.projectName || projectMap[a.projectId] || 'N/A').trim();
+      const safeTID = a.teamId || 'ID_MISSING';
+      const safeTName = (a.teamName || teamMap[a.teamId] || 'N/A').trim();
+      
+      const key = `${safePID}_${safePName}_${safeTID}_${safeTName}`;
+      
       if (!groups[key]) {
         groups[key] = {
-          projectId: a.projectId,
-          projectName: projectMap[a.projectId] || a.projectName || 'N/A',
-          teamId: a.teamId,
-          teamName: teamMap[a.teamId] || a.teamName || 'N/A',
+          groupKey: key,
+          projectId: a.projectId || '',
+          projectName: safePName,
+          teamId: a.teamId || '',
+          teamName: safeTName,
           totalAmount: 0,
           visaCost: 0,
           digitalCost: 0,
@@ -855,14 +865,22 @@ export default function App() {
       groups[key].recordCount += 1;
     });
 
-    const searchLower = debouncedAcceptanceSearch.toLowerCase();
-    const projectNameFromMap = projectMap[acceptanceProjectFilter]?.toLowerCase();
-    const teamNameFromMap = teamMap[acceptanceTeamFilter]?.toLowerCase();
-    const projectFilterLower = acceptanceProjectFilter.toLowerCase();
-    const teamFilterLower = acceptanceTeamFilter.toLowerCase();
+    const searchLower = (debouncedAcceptanceSearch || '').toLowerCase();
+    const projectNameFromMap = (projectMap[acceptanceProjectFilter] || '').toLowerCase();
+    const teamNameFromMap = (teamMap[acceptanceTeamFilter] || '').toLowerCase();
+    const projectFilterLower = (acceptanceProjectFilter || '').toLowerCase();
+    const teamFilterLower = (acceptanceTeamFilter || '').toLowerCase();
 
     return Object.values(groups).map(group => {
-      const status = statusMap.get(`${group.projectId}_${group.teamId}`);
+      // Improved lookup: Try ID match, then fallback to Name match
+      let status = statusMap.get(`${group.projectId}_${group.teamId}`);
+      if (!status) {
+         status = docProcessingStatus.find(s => 
+           (s.projectId === group.projectId && s.teamId === group.teamId) ||
+           (s.projectName === group.projectName && s.teamName === group.teamName)
+         );
+      }
+      
       return {
         ...group,
         id: status?.id || null,
@@ -878,21 +896,20 @@ export default function App() {
       
       const gProjectLower = (g.projectName || '').toLowerCase().trim();
       const matchProject = acceptanceProjectFilter === 'all' || 
-                          (g.projectId && String(g.projectId).trim() === acceptanceProjectFilter.trim()) || 
-                          (projectNameFromMap && gProjectLower === projectNameFromMap) ||
-                          (gProjectLower === projectFilterLower);
+                           (g.projectId && String(g.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
+                           (projectNameFromMap && gProjectLower.includes(projectNameFromMap)) ||
+                           (gProjectLower.includes(projectFilterLower));
       
       const gTeamLower = (g.teamName || '').toLowerCase().trim();
       const matchTeam = acceptanceTeamFilter === 'all' || 
-                       (gTeamLower === teamFilterLower) ||
-                       (g.teamId && String(g.teamId).toLowerCase().trim() === teamFilterLower) ||
-                       (teamNameFromMap && gTeamLower === teamNameFromMap) ||
-                       (teamNameFromMap && g.teamId && String(g.teamId).toLowerCase().trim() === teamNameFromMap);
+                       (gTeamLower.includes(teamFilterLower)) ||
+                       (g.teamId && String(g.teamId).toLowerCase().trim() === String(acceptanceTeamFilter).trim().toLowerCase()) ||
+                       (teamNameFromMap && gTeamLower.includes(teamNameFromMap));
       
       const matchCategory = acceptanceCategoryFilter === 'all' || 
                            (acceptanceCategoryFilter === 'digital' && g.digitalCost > 0) ||
                            (acceptanceCategoryFilter === 'visa' && g.visaCost > 0) ||
-                           (acceptanceCategoryFilter === 'crm' && g.crmCost > 0);
+                           (acceptanceCategoryFilter === 'crm' && (g.crmCost || 0) > 0);
       
       return matchSearch && matchProject && matchTeam && matchCategory;
     });
@@ -14813,8 +14830,9 @@ const AcceptanceManager = React.memo(({
       .filter(e => e.channel === channelKey)
       .reduce((sum, item) => {
         const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
-        const taxVal = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
-        return sum + val + taxVal;
+        const taxPercent = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
+        const taxAmount = Math.round(val * taxPercent / 100);
+        return sum + val + taxAmount;
       }, 0);
   };
 
@@ -14838,8 +14856,9 @@ const AcceptanceManager = React.memo(({
 
     entries.forEach(e => {
       const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
-      const tVal = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
-      const total = amt + tVal;
+      const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+      const taxAmount = Math.round(amt * taxPercent / 100);
+      const total = amt + taxAmount;
       
       const pids = e.projectId ? [e.projectId] : (acceptanceProjects.length > 0 ? acceptanceProjects : []);
       pids.forEach(pid => {
@@ -14942,21 +14961,24 @@ const AcceptanceManager = React.memo(({
 
   const filteredAcceptances = useMemo(() => {
     const filtered = acceptances.filter((a: any) => {
+      const searchStr = (debouncedAcceptanceSearch || '').toLowerCase();
       const matchesSearch = 
-        (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
+        (a.projectName || '').toLowerCase().includes(searchStr) ||
+        (a.teamName || '').toLowerCase().includes(searchStr) ||
+        (a.teamCode || '').toLowerCase().includes(searchStr);
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const projectFilterStr = (acceptanceProjectFilter || '').toLowerCase();
       const matchesProject = acceptanceProjectFilter === 'all' || 
                             (a.projectId && String(a.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
                             (projectNameFromMap && a.projectName && String(a.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
-                            (a.projectName && String(a.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+                            (a.projectName && String(a.projectName).toLowerCase().trim() === projectFilterStr.trim());
       const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const teamFilterStr = (acceptanceTeamFilter || '').toLowerCase();
       const matchesTeam = acceptanceTeamFilter === 'all' || 
                          (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
                          (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
-                         (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
+                         (a.teamName && String(a.teamName).toLowerCase().trim() === teamFilterStr.trim()); // Fallback for various data formats
       
       const matchesCategory = acceptanceCategoryFilter === 'all' || 
                              (acceptanceCategoryFilter === 'digital' && (a.digitalCost > 0)) ||
@@ -14984,21 +15006,24 @@ const AcceptanceManager = React.memo(({
 
   const filteredFinalAcceptances = useMemo(() => {
     const filtered = (finalAcceptances || []).filter((a: any) => {
+      const searchStr = (debouncedAcceptanceSearch || '').toLowerCase();
       const matchesSearch = 
-        (a.projectName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (a.teamName || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase()) ||
-        (a.teamCode || '').toLowerCase().includes(debouncedAcceptanceSearch.toLowerCase());
+        (a.projectName || '').toLowerCase().includes(searchStr) ||
+        (a.teamName || '').toLowerCase().includes(searchStr) ||
+        (a.teamCode || '').toLowerCase().includes(searchStr);
       const matchesMonth = acceptanceMonthFilter === 'all' || a.month === acceptanceMonthFilter;
       const projectNameFromMap = projectMap[acceptanceProjectFilter];
+      const projectFilterStr = (acceptanceProjectFilter || '').toLowerCase();
       const matchesProject = acceptanceProjectFilter === 'all' || 
                             (a.projectId && String(a.projectId).trim() === String(acceptanceProjectFilter).trim()) || 
                             (projectNameFromMap && a.projectName && String(a.projectName).toLowerCase().trim() === String(projectNameFromMap).toLowerCase().trim()) ||
-                            (a.projectName && String(a.projectName).toLowerCase().trim() === String(acceptanceProjectFilter).toLowerCase().trim());
+                            (a.projectName && String(a.projectName).toLowerCase().trim() === projectFilterStr.trim());
       const teamNameFromMap = teamMap[acceptanceTeamFilter];
+      const teamFilterStr = (acceptanceTeamFilter || '').toLowerCase();
       const matchesTeam = acceptanceTeamFilter === 'all' || 
                          (a.teamId && String(a.teamId).trim() === String(acceptanceTeamFilter).trim()) || 
                          (teamNameFromMap && a.teamName && String(a.teamName).toLowerCase().trim() === String(teamNameFromMap).toLowerCase().trim()) ||
-                         (a.teamName && String(a.teamName).toLowerCase().trim() === String(acceptanceTeamFilter).toLowerCase().trim()); // Fallback for various data formats
+                         (a.teamName && String(a.teamName).toLowerCase().trim() === teamFilterStr.trim()); // Fallback for various data formats
       
       const matchesCategory = acceptanceCategoryFilter === 'all' || 
                              (acceptanceCategoryFilter === 'digital' && (a.digitalCost > 0)) ||
@@ -15092,16 +15117,22 @@ const AcceptanceManager = React.memo(({
         channelKeys.forEach(key => {
           processedBreakdown[key] = entries
             .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''))
-            .map(e => ({
-              account: e.account,
-              amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
-              tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
-              isConfirmed: e.isConfirmed || false,
-              finalAmount: e.finalAmount !== undefined ? e.finalAmount : null,
-              isVisa: e.isVisa || false,
-              isDigital: e.isDigital || false,
-              isCrm: e.isCrm || false
-            }));
+            .map(e => {
+              const amount = parseFloat(e.amount.replace(/\./g, '')) || 0;
+              const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+              const taxAmount = Math.round(amount * taxPercent / 100);
+              return {
+                account: e.account,
+                amount: amount,
+                tax: taxAmount,
+                taxPercent: taxPercent, // Optional: store the percentage
+                isConfirmed: e.isConfirmed || false,
+                finalAmount: e.finalAmount !== undefined ? e.finalAmount : null,
+                isVisa: e.isVisa || false,
+                isDigital: e.isDigital || false,
+                isCrm: e.isCrm || false
+              };
+            });
         });
 
         const payload: any = {
@@ -15182,16 +15213,22 @@ const AcceptanceManager = React.memo(({
             channelCosts[key] = cost;
             projectBeforeTotal += cost;
             
-            processedBreakdown[key] = items.map(item => ({
-              account: item.account,
-              amount: parseFloat(item.amount.replace(/\./g, '')) || 0,
-              tax: parseFloat((item.tax || '').replace(/\./g, '')) || 0,
-              isConfirmed: false,
-              finalAmount: null,
-              isVisa: item.isVisa || false,
-              isDigital: item.isDigital || false,
-              isCrm: item.isCrm || false
-            }));
+            processedBreakdown[key] = items.map(item => {
+              const amount = parseFloat(item.amount.replace(/\./g, '')) || 0;
+              const taxPercent = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
+              const taxAmount = Math.round(amount * taxPercent / 100);
+              return {
+                account: item.account,
+                amount: amount,
+                tax: taxAmount,
+                taxPercent: taxPercent,
+                isConfirmed: false,
+                finalAmount: null,
+                isVisa: item.isVisa || false,
+                isDigital: item.isDigital || false,
+                isCrm: item.isCrm || false
+              };
+            });
           });
 
           // Logic: if status is "Finalized" and "Cost changed", use the realCost input.
@@ -15599,12 +15636,12 @@ const AcceptanceManager = React.memo(({
                           </div>
                           <div className="w-[100px] relative">
                             <Input 
-                              placeholder="Thuế..." 
+                              placeholder="%..." 
                               className="h-9 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-bold text-amber-600"
                               value={entry.tax || ''}
-                              onChange={e => updateEntry(entry.id, 'tax', formatCurrencyInput(e.target.value))}
+                              onChange={e => updateEntry(entry.id, 'tax', e.target.value.replace(/[^0-9]/g, ''))}
                             />
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold">Thuế</span>
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold">% Thuế</span>
                           </div>
                           {entries.length > 1 && (
                             <Button 
@@ -15627,8 +15664,9 @@ const AcceptanceManager = React.memo(({
                       <span className="text-lg font-black text-indigo-700 font-mono italic">
                         {formatCurrency(entries.reduce((sum, e) => {
                           const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
-                          const t = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
-                          return sum + amt + t;
+                          const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+                          const taxAmount = Math.round(amt * taxPercent / 100);
+                          return sum + amt + taxAmount;
                         }, 0))}
                       </span>
                     </div>
@@ -16701,9 +16739,11 @@ const DocProcessingManager = React.memo(({
                     </SelectTrigger>
                     <SelectContent className="rounded-xl border-none shadow-2xl">
                       <SelectItem value="all" className="text-xs font-bold uppercase">Tất cả tháng</SelectItem>
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const m = (i + 1).toString().padStart(2, '0');
-                        const year = new Date().getFullYear();
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const date = new Date();
+                        date.setMonth(date.getMonth() - i);
+                        const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                        const year = date.getFullYear();
                         const val = `${year}-${m}`;
                         return (
                           <SelectItem key={val} value={val} className="text-xs font-bold italic">Tháng {m}/{year}</SelectItem>
@@ -16797,7 +16837,7 @@ const DocProcessingManager = React.memo(({
                 <TableBody>
                   {sortedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-40 text-center">
+                      <TableCell colSpan={11} className="h-40 text-center">
                         <div className="flex flex-col items-center justify-center text-slate-400">
                           <FileBox className="w-10 h-10 mb-2 opacity-20" />
                           <p className="text-xs font-bold font-inter">Hiện tại chưa có hồ sơ nào đã được nghiệm thu để đối soát</p>
@@ -16806,7 +16846,7 @@ const DocProcessingManager = React.memo(({
                     </TableRow>
                   ) : (
                     sortedData.map((group: any, index: number) => (
-                      <TableRow key={`${group.projectId}_${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group min-h-[48px]">
+                      <TableRow key={group.groupKey || `row-${index}-${group.projectId}-${group.teamId}`} className="hover:bg-slate-50/50 transition-colors border-slate-100 group min-h-[48px]">
                         <TableCell className="pl-4 py-2 text-[11px] font-bold text-slate-400 px-1">{index + 1}</TableCell>
                         <TableCell className="py-2 px-1">
                           <div className="font-black text-slate-900 text-[12.5px] leading-tight line-clamp-2 break-words" title={group.projectName}>{group.projectName}</div>

@@ -37,7 +37,8 @@ import {
   writeBatch,
   increment,
   arrayUnion,
-  limit
+  limit,
+  getDocs
 } from 'firebase/firestore';
 import { auth, db, testConnection } from './firebase';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -5792,6 +5793,151 @@ export default function App() {
     }
   };
 
+  const handleMigrateCostsToAcceptance = async () => {
+    if (!isAdmin && !isSuperAdmin) {
+      toast.error("Chỉ Admin mới có quyền thực hiện việc này");
+      return;
+    }
+
+    const sourceMonth = '2026-04';
+    const targetMonth = '2026-03';
+
+    setIsRestoringData(true);
+    const toastId = toast.loading(`Đang quét dữ liệu chi phí tháng ${sourceMonth}...`);
+
+    try {
+      // Fetch directly from Firestore to bypass local state limits
+      const costsRef = collection(db, 'costs');
+      // We'll query by month field if it exists, or fetch more to filter manually
+      const q = query(costsRef, where('month', '==', sourceMonth));
+      const querySnapshot = await getDocs(q);
+      
+      let targetCosts: any[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Fallback: If no records found by 'month' field, try fetching recent records and filter by getMarketingMonth
+      if (targetCosts.length === 0) {
+        toast.loading('Đang thử tìm kiếm nâng cao...', { id: toastId });
+        const qRecent = query(costsRef, orderBy('createdAt', 'desc'), limit(1000));
+        const recentSnapshot = await getDocs(qRecent);
+        targetCosts = recentSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((c: any) => {
+            const cDate = c.createdAt?.toDate ? c.createdAt.toDate() : (c.createdAt ? new Date(c.createdAt) : null);
+            return cDate && getMarketingMonth(cDate) === sourceMonth;
+          });
+      }
+
+      if (targetCosts.length === 0) {
+        toast.error(`Không tìm thấy bản ghi chi phí nào trong tháng ${sourceMonth}.`, { id: toastId });
+        setIsRestoringData(false);
+        return;
+      }
+
+      toast.loading(`Đang di chuyển ${targetCosts.length} bản ghi...`, { id: toastId });
+      const batch = writeBatch(db);
+      
+      // Group costs by Team + Project
+      const groups: Record<string, any> = {};
+      targetCosts.forEach((c: any) => {
+        const teamId = c.teamId || c.teamName || 'N/A';
+        const projectId = c.projectId || c.projectName || 'N/A';
+        const key = `${teamId}_${projectId}`;
+        
+        if (!groups[key]) {
+          groups[key] = {
+            teamId: c.teamId || '',
+            teamName: c.teamName || 'N/A',
+            projectId: c.projectId || '',
+            projectName: c.projectName || 'N/A',
+            fbAds: 0,
+            zaloAds: 0,
+            googleAds: 0,
+            posting: 0,
+            otherCost: 0,
+            tiktokAds: 0,
+            totalAmount: 0,
+            costRecords: []
+          };
+        }
+        
+        groups[key].fbAds += (c.channels?.fbAds || 0);
+        groups[key].zaloAds += (c.channels?.zaloAds || 0);
+        groups[key].googleAds += (c.channels?.googleAds || 0);
+        groups[key].posting += (c.channels?.posting || 0);
+        groups[key].otherCost += (c.channels?.otherCost || 0);
+        groups[key].totalAmount += (c.amount || 0);
+        groups[key].costRecords.push(c.id);
+      });
+
+      let count = 0;
+      for (const key in groups) {
+        const group = groups[key];
+        const accRef = doc(collection(db, 'acceptances'));
+        const finalRef = doc(collection(db, 'finalAcceptances'));
+        
+        const project = projects.find(p => p.id === group.projectId || p.name === group.projectName);
+        const team = teams.find(t => t.id === group.teamId || t.name === group.teamName);
+
+        const breakdown: any = {
+           facebook: group.fbAds > 0 ? [{ account: 'Migrated from T4/2026', amount: group.fbAds, tax: 0, isConfirmed: true, finalAmount: group.fbAds }] : [],
+           google: group.googleAds > 0 ? [{ account: 'Migrated from T4/2026', amount: group.googleAds, tax: 0, isConfirmed: true, finalAmount: group.googleAds }] : [],
+           zalo: group.zaloAds > 0 ? [{ account: 'Migrated from T4/2026', amount: group.zaloAds, tax: 0, isConfirmed: true, finalAmount: group.zaloAds }] : [],
+           posting: group.posting > 0 ? [{ account: 'Migrated from T4/2026', amount: group.posting, tax: 0, isConfirmed: true, finalAmount: group.posting }] : [],
+           other: group.otherCost > 0 ? [{ account: 'Migrated from T4/2026', amount: group.otherCost, tax: 0, isConfirmed: true, finalAmount: group.otherCost }] : [],
+           tiktok: []
+        };
+
+        const payload = {
+          month: targetMonth,
+          teamId: group.teamId,
+          teamName: group.teamName,
+          teamCode: team?.teamCode || '',
+          projectId: group.projectId,
+          projectName: group.projectName,
+          projectCode: project?.projectCode || '',
+          facebookCost: group.fbAds,
+          tiktokCost: 0,
+          zaloCost: group.zaloAds,
+          googleCost: group.googleAds,
+          postingCost: group.posting,
+          otherCost: group.otherCost,
+          visaCost: 0,
+          digitalCost: group.fbAds + group.zaloAds + group.googleAds,
+          crmCost: 0,
+          totalCost: group.totalAmount,
+          beforeAcceptanceCost: group.totalAmount,
+          afterAcceptanceCost: group.totalAmount,
+          status: 'Đã nghiệm thu',
+          acceptanceType: 'Chi phí không đổi',
+          breakdown: breakdown,
+          createdAt: serverTimestamp(),
+          createdBy: user?.email || 'System Migration',
+          createdByUid: user?.uid || '',
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.email || 'System Migration',
+          updatedByUid: user?.uid || '',
+          finalizedAt: serverTimestamp(),
+          finalizedBy: user?.email || 'System Migration',
+          finalizedByUid: user?.uid || '',
+          isMigrated: true
+        };
+
+        batch.set(accRef, payload);
+        batch.set(finalRef, { ...payload, originalAcceptanceId: accRef.id, totalActualCost: group.totalAmount });
+        count++;
+      }
+
+      await batch.commit();
+      toast.success(`Đã di chuyển thành công ${count} dự án/team sang Nghiệm thu tháng ${targetMonth}`, { id: toastId });
+      await logAction('MIGRATE_COSTS_TO_ACCEPTANCE', 'acceptances', 'bulk', { count, sourceMonth, targetMonth });
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi di chuyển dữ liệu. Chi tiết trong console.", { id: toastId });
+    } finally {
+      setIsRestoringData(false);
+    }
+  };
+
   const [isRestoreAllDialogOpen, setIsRestoreAllDialogOpen] = useState(false);
   const [logLimit, setLogLimit] = useState(50);
   const [logSearch, setLogSearch] = useState('');
@@ -7475,11 +7621,19 @@ export default function App() {
                       </Button>
                       <Button 
                         variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
-                        size="sm"
+                        size="sm" 
                         className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'budgets' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600'}`}
                         onClick={() => setAdminSubTab('budgets')}
                       >
                         <Wallet className="mr-2 h-4 w-4" /> Ngân sách
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'costs' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'costs' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('costs')}
+                      >
+                        <TrendingUp className="mr-2 h-4 w-4" /> Chi phí
                       </Button>
                       <Button 
                         variant={adminSubTab === 'efficiency' ? 'secondary' : 'ghost'} 
@@ -11862,6 +12016,27 @@ export default function App() {
                               </div>
                             </div>
                           </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100">
+                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1 mb-3">Công cụ Dữ liệu</h4>
+                           <div className="space-y-2">
+                             <Button 
+                               variant="outline" 
+                               className="w-full h-12 rounded-xl text-xs font-bold flex items-center justify-between group transition-all hover:bg-indigo-50 border-indigo-100"
+                               onClick={handleMigrateCostsToAcceptance}
+                               disabled={isRestoringData}
+                             >
+                               <div className="flex items-center gap-2">
+                                 <GitMerge className="w-4 h-4 text-indigo-600" />
+                                 <div className="text-left">
+                                   <p className="text-indigo-900">Di chuyển Chi phí T4 sang Nghiệm thu T3</p>
+                                   <p className="text-[9px] text-slate-400">Tự động gộp & chốt số cho 2026-03</p>
+                                 </div>
+                               </div>
+                               <ArrowRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />
+                             </Button>
+                           </div>
                         </div>
                       </CardContent>
                     </Card>

@@ -14830,9 +14830,8 @@ const AcceptanceManager = React.memo(({
       .filter(e => e.channel === channelKey)
       .reduce((sum, item) => {
         const val = parseFloat(item.amount.replace(/\./g, '')) || 0;
-        const taxPercent = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
-        const taxAmount = Math.round(val * taxPercent / 100);
-        return sum + val + taxAmount;
+        const taxVal = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
+        return sum + val + taxVal;
       }, 0);
   };
 
@@ -14856,9 +14855,8 @@ const AcceptanceManager = React.memo(({
 
     entries.forEach(e => {
       const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
-      const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
-      const taxAmount = Math.round(amt * taxPercent / 100);
-      const total = amt + taxAmount;
+      const tVal = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+      const total = amt + tVal;
       
       const pids = e.projectId ? [e.projectId] : (acceptanceProjects.length > 0 ? acceptanceProjects : []);
       pids.forEach(pid => {
@@ -15117,22 +15115,16 @@ const AcceptanceManager = React.memo(({
         channelKeys.forEach(key => {
           processedBreakdown[key] = entries
             .filter(e => e.channel === key && (e.account.trim() !== '' || e.amount.trim() !== '' || (e.tax || '').trim() !== ''))
-            .map(e => {
-              const amount = parseFloat(e.amount.replace(/\./g, '')) || 0;
-              const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
-              const taxAmount = Math.round(amount * taxPercent / 100);
-              return {
-                account: e.account,
-                amount: amount,
-                tax: taxAmount,
-                taxPercent: taxPercent, // Optional: store the percentage
-                isConfirmed: e.isConfirmed || false,
-                finalAmount: e.finalAmount !== undefined ? e.finalAmount : null,
-                isVisa: e.isVisa || false,
-                isDigital: e.isDigital || false,
-                isCrm: e.isCrm || false
-              };
-            });
+            .map(e => ({
+              account: e.account,
+              amount: parseFloat(e.amount.replace(/\./g, '')) || 0,
+              tax: parseFloat((e.tax || '').replace(/\./g, '')) || 0,
+              isConfirmed: e.isConfirmed || false,
+              finalAmount: e.finalAmount !== undefined ? e.finalAmount : null,
+              isVisa: e.isVisa || false,
+              isDigital: e.isDigital || false,
+              isCrm: e.isCrm || false
+            }));
         });
 
         const payload: any = {
@@ -15213,22 +15205,16 @@ const AcceptanceManager = React.memo(({
             channelCosts[key] = cost;
             projectBeforeTotal += cost;
             
-            processedBreakdown[key] = items.map(item => {
-              const amount = parseFloat(item.amount.replace(/\./g, '')) || 0;
-              const taxPercent = parseFloat((item.tax || '').replace(/\./g, '')) || 0;
-              const taxAmount = Math.round(amount * taxPercent / 100);
-              return {
-                account: item.account,
-                amount: amount,
-                tax: taxAmount,
-                taxPercent: taxPercent,
-                isConfirmed: false,
-                finalAmount: null,
-                isVisa: item.isVisa || false,
-                isDigital: item.isDigital || false,
-                isCrm: item.isCrm || false
-              };
-            });
+            processedBreakdown[key] = items.map(item => ({
+              account: item.account,
+              amount: parseFloat(item.amount.replace(/\./g, '')) || 0,
+              tax: parseFloat((item.tax || '').replace(/\./g, '')) || 0,
+              isConfirmed: false,
+              finalAmount: null,
+              isVisa: item.isVisa || false,
+              isDigital: item.isDigital || false,
+              isCrm: item.isCrm || false
+            }));
           });
 
           // Logic: if status is "Finalized" and "Cost changed", use the realCost input.
@@ -15636,12 +15622,12 @@ const AcceptanceManager = React.memo(({
                           </div>
                           <div className="w-[100px] relative">
                             <Input 
-                              placeholder="%..." 
+                              placeholder="Thuế..." 
                               className="h-9 bg-white border-slate-200 rounded-xl text-xs font-mono text-right pr-4 font-bold text-amber-600"
                               value={entry.tax || ''}
-                              onChange={e => updateEntry(entry.id, 'tax', e.target.value.replace(/[^0-9]/g, ''))}
+                              onChange={e => updateEntry(entry.id, 'tax', formatCurrencyInput(e.target.value))}
                             />
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold">% Thuế</span>
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-bold">Thuế</span>
                           </div>
                           {entries.length > 1 && (
                             <Button 
@@ -15664,9 +15650,8 @@ const AcceptanceManager = React.memo(({
                       <span className="text-lg font-black text-indigo-700 font-mono italic">
                         {formatCurrency(entries.reduce((sum, e) => {
                           const amt = parseFloat(e.amount.replace(/\./g, '')) || 0;
-                          const taxPercent = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
-                          const taxAmount = Math.round(amt * taxPercent / 100);
-                          return sum + amt + taxAmount;
+                          const t = parseFloat((e.tax || '').replace(/\./g, '')) || 0;
+                          return sum + amt + t;
                         }, 0))}
                       </span>
                     </div>

@@ -50,9 +50,11 @@ const Button = React.forwardRef<
     ref
   ) => {
     if (asChild && React.isValidElement(children)) {
+      const isButton = children.type === "button";
       return (
         <ButtonPrimitive
           data-slot="button"
+          nativeButton={isButton}
           className={cn(buttonVariants({ variant: variant as any, size: size as any, className }))}
           render={React.cloneElement(children as React.ReactElement, { ref } as any)}
           {...props}

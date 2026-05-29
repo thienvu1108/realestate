@@ -8,11 +8,12 @@
         "email": { "type": "string" },
         "role": { 
           "type": "string", 
-          "enum": ["super_admin", "admin", "mod", "user"] 
+          "enum": ["super_admin", "admin", "mod", "user", "gd_khoi", "gdkd"] 
         },
         "displayName": { "type": "string" },
         "fullName": { "type": "string" },
         "teamName": { "type": "string" },
+        "assignedBlock": { "type": "string", "description": "Block ID assigned to GĐ Khối (e.g. EG01)" },
         "assignedProjects": { 
           "type": "array", 
           "items": { "type": "string" },
@@ -21,6 +22,19 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "Block": {
+      "title": "Block",
+      "description": "A business block/group containing multiple teams",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Block name (e.g., Khối EG01)" },
+        "blockCode": { "type": "string", "description": "Block code unique ID (e.g., EG01)" },
+        "teamPrefix": { "type": "string", "description": "The first two characters shared by sub-teams (e.g., MH)" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "blockCode", "teamPrefix"]
     },
     "Project": {
       "title": "Project",
@@ -254,6 +268,10 @@
     "/teams/{teamId}": {
       "schema": "Team",
       "description": "Teams collection"
+    },
+    "/blocks/{blockId}": {
+      "schema": "Block",
+      "description": "Blocks (Khối) collection"
     },
     "/efficiencyReports/{reportId}": {
       "schema": "EfficiencyReport",

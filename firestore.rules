@@ -3,139 +3,180 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ===============================================================
-    // Helper Functions
+    // Global Safety Net
     // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
+    match /{document=**} {
+      allow read, write: if false;
     }
-    
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+
+    // ===============================================================
+    // Primitive Definition Helpers
+    // ===============================================================
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (
+        request.auth.token.get('email_verified', false) == true || 
+        request.auth.token.get('email', '').lower() == "thienvu1108@gmail.com"
+      );
     }
 
     function hasUserData() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isSuperAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == "thienvu1108@gmail.com" ||
-        (hasUserData() && getUserData().role == 'super_admin')
-      );
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == "thienvu1108@gmail.com" || 
-        (hasUserData() && getUserData().role in ['admin', 'super_admin'])
+      return isSignedIn() && (
+        request.auth.token.get('email', '').lower() == "thienvu1108@gmail.com" ||
+        (hasUserData() && getUserData().get('role', 'user') in ['admin', 'super_admin', 'Admin', 'Super Admin'])
+      );
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.get('email', '').lower() == "thienvu1108@gmail.com" ||
+        (hasUserData() && getUserData().get('role', 'user') in ['super_admin', 'Super Admin'])
       );
     }
 
     function isMod() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'mod';
+      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['mod', 'moderator', 'Mod', 'Moderator', 'điều phối', 'ĐIỀU PHỐI'];
     }
 
     function isAccountant() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             getUserData().role == 'accountant';
+      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['accountant', 'Accountant', 'Kế toán', 'KẾ TOÁN'];
     }
 
     function isGDDA() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'gdda';
+      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['gdda', 'GDDA'];
     }
 
-    function isUser() {
-      return isAuthenticated() && (!hasUserData() || getUserData().role == 'user');
+    function isGDKhoi() {
+      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['gd_khoi', 'gdkhoi', 'GĐ Khối', 'Giám đốc Khối', 'Giám đốc liên khối', 'giám đốc liên khối'];
     }
 
-    function canViewProject(projectId) {
-      return isAdmin() || isMod() || isAccountant() ||
-             (isGDDA() && projectId in getUserData().assignedProjects) ||
-             isUser();
+    function isGDKD() {
+      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['gdkd', 'GĐKD', 'Giám đốc Kinh doanh', 'giám đốc kinh doanh'];
+    }
+
+    function getGDKhoiPrefix() {
+      return get(/databases/$(database)/documents/blocks/$(getUserData().get('assignedBlock', ''))).data.get('teamPrefix', '_NONE_');
+    }
+
+    function isMatchBlockPrefix(teamId) {
+      return teamId != '' && 
+             exists(/databases/$(database)/documents/teams/$(teamId)) && 
+             get(/databases/$(database)/documents/teams/$(teamId)).data.get('teamCode', '_NONE_').matches('^' + getGDKhoiPrefix() + '.*');
+    }
+
+    function isInternalStaff() {
+      return isAdmin() || isMod() || isAccountant() || isGDDA() || isGDKhoi() || isGDKD();
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+      return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Return the incoming document fields map
     function incoming() {
       return request.resource.data;
     }
 
+    // Return the existing document fields map
     function existing() {
       return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Return true if the given string is a valid email
+    function isValidEmail(email) {
+      return email is string && email.size() <= 200 && email.matches('^[^@]+@[^@]+\\.[^@]+$');
     }
 
     // ===============================================================
     // Internal / Connection Test
     // ===============================================================
     match /_internal_/connection_test {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
     }
 
     match /test/connection {
-      allow read: if isAuthenticated();
-    }
-
-    // ===============================================================
-    // Projects
-    // ===============================================================
-    function isValidProject(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             (!('projectCode' in data) || (data.projectCode is string && data.projectCode.size() <= 50));
-    }
-
-    match /projects/{projectId} {
-      allow read: if canViewProject(projectId);
-      allow create: if (isAdmin() || isAccountant()) && isValidProject(incoming());
-      allow update: if (isAdmin() || isAccountant()) && isValidProject(incoming()) && (
-        // Identity protection: immutable fields if needed, but here mostly just admin update
-        incoming().diff(existing()).affectedKeys().hasAny(['name', 'projectCode', 'description', 'region', 'regionId', 'type', 'typeId', 'updatedAt'])
-      );
-      allow delete: if isAdmin() || isAccountant();
-    }
-
-    // ===============================================================
-    // Teams
-    // ===============================================================
-    function isValidTeam(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200;
-    }
-
-    match /teams/{teamId} {
-      allow read: if isAuthenticated();
-      allow create: if (isAdmin() || isAccountant()) && isValidTeam(incoming());
-      allow update: if (isAdmin() || isAccountant()) && isValidTeam(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasAny(['name', 'teamCode', 'updatedAt'])
-      );
-      allow delete: if isAdmin() || isAccountant();
+      allow read: if isSignedIn();
     }
 
     // ===============================================================
     // Users
     // ===============================================================
     function isValidUser(data) {
-      return data.email is string && isValidEmail(data.email) &&
-             (!('role' in data) || data.role in ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'user']);
+      return isValidEmail(data.email) &&
+             (!('role' in data) || data.role is string);
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || isOwner(userId);
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(incoming());
-      allow update: if isAuthenticated() && (
+      allow get: if isOwner(userId) || isInternalStaff() || isGDKD() || isGDKhoi();
+      allow list: if isAdmin() || isAccountant() || isGDKD() || isGDKhoi();
+      allow create: if (isOwner(userId) && isValidUser(incoming())) || 
+                       (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
+      allow update: if (
         (isOwner(userId) && 
          incoming().role == existing().role && 
          !('assignedProjects' in incoming().diff(existing()).affectedKeys()) &&
-         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'teamName', 'displayName', 'updatedAt'])
+         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'teamName', 'displayName', 'onboardingTeam', 'updatedAt'])
         ) || 
-        isAdmin() || isAccountant()
+        isAdmin() || isAccountant() ||
+        (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_') && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'))
       );
+      allow delete: if isAdmin() || isAccountant() || 
+                       (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
+    }
+
+    // ===============================================================
+    // Projects
+    // ===============================================================
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isAdmin() || isAccountant();
+      allow update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin() || isAccountant();
+    }
+
+    // ===============================================================
+    // Teams
+    // ===============================================================
+    match /teams/{teamId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isAccountant() || isGDKhoi();
+      allow update: if isAdmin() || isAccountant() || isGDKhoi();
+      allow delete: if isAdmin() || isAccountant() || isGDKhoi();
+    }
+
+    // ===============================================================
+    // Blocks
+    // ===============================================================
+    function isValidBlock(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.blockCode is string && data.blockCode.size() > 0 &&
+             data.teamPrefix is string && data.teamPrefix.size() > 0;
+    }
+
+    match /blocks/{blockId} {
+      allow read: if isSignedIn();
+      allow create: if (isAdmin() || isAccountant() || isGDKhoi()) && isValidBlock(incoming());
+      allow update: if (isAdmin() || isAccountant() || isGDKhoi()) && isValidBlock(incoming());
       allow delete: if isAdmin() || isAccountant();
     }
 
@@ -143,45 +184,54 @@ service cloud.firestore {
     // Budgets
     // ===============================================================
     function isValidBudget(data) {
-      return data.projectId is string && data.projectId.size() <= 128 &&
-             data.month is string && data.month.size() == 7 &&
-             data.amount is number && data.amount >= 0;
+      return data.projectId is string && data.month is string && data.amount is number;
     }
 
     match /budgets/{budgetId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || 
-                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
-                    (resource.data.createdBy == request.auth.uid) ||
-                    (resource.data.userEmail == request.auth.token.email) ||
-                    (resource.data.assignedUserEmail == request.auth.token.email);
-      allow create: if isAuthenticated() && isValidBudget(incoming()) && incoming().createdBy == request.auth.uid;
-      allow update: if (isAdmin() || isAccountant() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
-                    isValidBudget(incoming()) && (
-                      incoming().diff(existing()).affectedKeys().hasAny(['amount', 'verifiedAmount', 'notes', 'updatedAt', 'assignedUserEmail', 'implementerName'])
-                    );
-      allow delete: if isAdmin() || isAccountant();
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() && isValidBudget(incoming()) && (
+        incoming().createdBy == request.auth.uid ||
+        (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+        (isGDKhoi() && isMatchBlockPrefix(incoming().get('teamId', '')))
+      );
+      
+      allow update: if (
+        isAdmin() || isAccountant() || 
+        resource.data.createdBy == request.auth.uid || 
+        (resource.data.assignedUserEmail.lower() == request.auth.token.email.lower()) ||
+        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+        (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
+      ) && isValidBudget(incoming());
+      
+      allow delete: if isAdmin() || isAccountant() || 
+                       (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')));
     }
 
     // ===============================================================
     // Costs
     // ===============================================================
-    function isValidCost(data) {
-      return data.projectId is string && data.projectId.size() <= 128 &&
-             data.amount is number && data.amount >= 0;
-    }
-
     match /costs/{costId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || 
-                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects) ||
-                    (resource.data.createdBy == request.auth.uid) ||
-                    (resource.data.userEmail == request.auth.token.email) ||
-                    (resource.data.assignedUserEmail == request.auth.token.email);
-      allow create: if isAuthenticated() && isValidCost(incoming()) && incoming().createdBy == request.auth.uid;
-      allow update: if (isAdmin() || isAccountant() || resource.data.createdBy == request.auth.uid || (resource.data.assignedUserEmail == request.auth.token.email)) &&
-                    isValidCost(incoming()) && (
-                      incoming().diff(existing()).affectedKeys().hasAny(['amount', 'notes', 'updatedAt', 'weekNumber', 'fbAds', 'posting', 'zaloAds', 'googleAds', 'otherCost', 'totalAmount'])
-                    );
-      allow delete: if isAdmin() || isAccountant();
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() && (
+        incoming().createdBy == request.auth.uid ||
+        (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+        (isGDKhoi() && isMatchBlockPrefix(incoming().get('teamId', '')))
+      );
+      
+      allow update: if (
+        isAdmin() || isAccountant() || 
+        resource.data.createdBy == request.auth.uid || 
+        (resource.data.assignedUserEmail.lower() == request.auth.token.email.lower()) ||
+        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+        (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
+      );
+      
+      allow delete: if isAdmin() || isAccountant() || 
+                       (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')));
     }
 
     // ===============================================================
@@ -189,14 +239,8 @@ service cloud.firestore {
     // ===============================================================
     match /supportRequests/{requestId} {
       allow read: if isAdmin() || isMod() || isAccountant() || resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && incoming().userId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        isAdmin() || isAccountant() || 
-        (resource.data.userId == request.auth.uid && 
-         !('adminReply' in incoming().diff(existing()).affectedKeys()) &&
-         !('repliedBy' in incoming().diff(existing()).affectedKeys()) &&
-         !('repliedAt' in incoming().diff(existing()).affectedKeys()))
-      );
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update: if isAdmin() || isMod() || isAccountant() || resource.data.userId == request.auth.uid;
       allow delete: if isAdmin() || isAccountant();
     }
 
@@ -204,111 +248,63 @@ service cloud.firestore {
     // Audit Logs
     // ===============================================================
     match /auditLogs/{logId} {
-      allow read: if isAdmin() || isMod() || isAccountant();
-      allow create: if isAuthenticated();
+      allow get: if isInternalStaff();
+      allow list: if isInternalStaff();
+      allow create: if isSignedIn();
     }
 
     // ===============================================================
-    // Regions
+    // Regions & Types
     // ===============================================================
     match /regions/{regionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin() || isAccountant();
-      allow update: if isAdmin() || isAccountant();
-      allow delete: if isAdmin() || isAccountant();
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isAccountant();
     }
 
-    // ===============================================================
-    // Types
-    // ===============================================================
     match /types/{typeId} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin() || isAccountant();
-      allow update: if isAdmin() || isAccountant();
-      allow delete: if isAdmin() || isAccountant();
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
     // Efficiency Reports
     // ===============================================================
     match /efficiencyReports/{reportId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
+      allow write: if isInternalStaff();
+    }
+
+    // ===============================================================
+    // Acceptances & Final Acceptances
+    // ===============================================================
+    match /acceptances/{acceptanceId} {
+      allow read: if isInternalStaff();
+      allow create: if isInternalStaff();
+      allow update: if isInternalStaff();
+      allow delete: if isAdmin() || isAccountant();
+    }
+
+    match /finalAcceptances/{finalId} {
+      allow read: if isInternalStaff();
       allow create: if isAdmin() || isMod() || isAccountant();
       allow update: if isAdmin() || isMod() || isAccountant();
       allow delete: if isAdmin() || isAccountant();
     }
 
     // ===============================================================
-    // Acceptances
+    // Document Processing
     // ===============================================================
-    function isValidAcceptance(data) {
-      return data.month is string && data.month.size() == 7 &&
-             data.teamId is string && data.teamId.size() <= 128 &&
-             data.projectId is string && data.projectId.size() <= 128 &&
-             data.projectName is string && data.projectName.size() <= 200 &&
-             data.totalCost is number && (data.totalCost >= 0) &&
-             data.status in ['Trước nghiệm thu', 'Đã nghiệm thu'];
-    }
-
-    match /acceptances/{acceptanceId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || 
-                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if (isAdmin() || isMod() || isAccountant()) && 
-                    isValidAcceptance(incoming()) &&
-                    incoming().createdByUid == request.auth.uid;
-      allow update: if (isAdmin() || isMod() || isAccountant()) && 
-                    isValidAcceptance(incoming()) && (
-                      // Action: Update status or costs
-                      incoming().diff(existing()).affectedKeys().hasAny(['status', 'acceptanceType', 'afterAcceptanceCost', 'updatedAt', 'updatedBy', 'updatedByUid', 'facebookCost', 'googleCost', 'zaloCost', 'postingCost', 'otherCost', 'visaCost', 'digitalCost', 'crmCost', 'totalCost', 'beforeAcceptanceCost', 'breakdown'])
-                    );
-      allow delete: if isAdmin() || isMod() || isAccountant() || isSuperAdmin();
-    }
-
-    // ===============================================================
-    // Final Acceptances (Actual Costs)
-    // ===============================================================
-    match /finalAcceptances/{finalId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || 
-                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if isAdmin() || isMod() || isAccountant();
-      allow update: if isAdmin() || isMod() || isAccountant();
-      allow delete: if isAdmin() || isAccountant() || isSuperAdmin();
-    }
-
-    // ===============================================================
-    // Document Processing (Accounting Reconciliation)
-    // ===============================================================
-    function isValidDocProcessing(data) {
-      return data.projectId is string && data.projectId.size() <= 128 &&
-             data.teamId is string && data.teamId.size() <= 128 &&
-             data.confirmation in ['Chưa đối soát', 'Khớp hồ sơ', 'Không khớp hồ sơ'];
-    }
-
     match /docProcessing/{docId} {
-      allow read: if isAdmin() || isMod() || isAccountant() || 
-                    (isGDDA() && resource.data.projectId in getUserData().assignedProjects);
-      allow create: if (isAdmin() || isMod() || isAccountant()) && isValidDocProcessing(incoming());
-      allow update: if (isAdmin() || isMod() || isAccountant()) && isValidDocProcessing(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasAny(['confirmation', 'note', 'updatedAt', 'updatedBy', 'updatedByEmail'])
-      );
-      allow delete: if isAdmin() || isMod() || isAccountant() || isSuperAdmin();
+      allow read: if isInternalStaff();
+      allow write: if isInternalStaff();
     }
 
     // ===============================================================
     // Settings
     // ===============================================================
     match /settings/{settingId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if isAdmin() || isAccountant();
-    }
-
-    match /settings {
-      allow read: if request.auth != null;
-    }
-
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

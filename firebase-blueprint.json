@@ -254,6 +254,21 @@
         "updatedByEmail": { "type": "string" }
       },
       "required": ["projectId", "teamId", "confirmation"]
+    },
+    "RolePermission": {
+      "title": "Role Permission",
+      "description": "Custom action permissions allowed for each system role",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
+        "permissions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["role", "permissions"]
     }
   },
   "firestore": {
@@ -312,6 +327,10 @@
     "/settings/{settingId}": {
       "schema": "Setting",
       "description": "Global system settings"
+    },
+    "/rolePermissions/{roleId}": {
+      "schema": "RolePermission",
+      "description": "Role-based feature permissions mapping"
     }
   }
 }

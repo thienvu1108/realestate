@@ -81,6 +81,7 @@ import {
   FileText, Check, MoreHorizontal, FileDown, Eye, Send, MessageSquare, Info, ShieldCheck, UserCheck, ChevronDown, ChevronDown as ChevronDownIcon,
   ChevronUp, ChevronUp as ChevronUpIcon,
   ExternalLink,
+  LockKeyhole,
   Save,
   Undo,
   X,
@@ -647,10 +648,281 @@ const extractProjectCode = (name: string) => {
   return match ? match[0].toUpperCase() : '';
 };
 
+export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
+  super_admin: [
+    'home.view', 'home.export',
+    'admin.projects.view', 'admin.projects.edit', 'admin.projects.import',
+    'admin.teams.view', 'admin.teams.edit',
+    'admin.budgets.view', 'admin.budgets.edit',
+    'admin.costs.view', 'admin.costs.edit',
+    'admin.efficiency.edit',
+    'admin.users.view', 'admin.users.edit',
+    'admin.backup.view', 'admin.permissions.edit',
+    'block.view', 'block.approve',
+    'team_mgmt.view', 'team_mgmt.approve',
+    'register.view', 'register.create', 'register.edit', 'register.import',
+    'actual.view', 'actual.create', 'actual.edit', 'actual.import',
+    'history.view', 'history.export',
+    'report_nt.view', 'report_nt.sync',
+    'support.create', 'support.resolve',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve'
+  ],
+  admin: [
+    'home.view', 'home.export',
+    'admin.projects.view', 'admin.projects.edit', 'admin.projects.import',
+    'admin.teams.view', 'admin.teams.edit',
+    'admin.budgets.view', 'admin.budgets.edit',
+    'admin.costs.view', 'admin.costs.edit',
+    'admin.efficiency.edit',
+    'admin.users.view', 'admin.users.edit',
+    'admin.backup.view', 'admin.permissions.edit',
+    'block.view', 'block.approve',
+    'team_mgmt.view', 'team_mgmt.approve',
+    'register.view', 'register.create', 'register.edit', 'register.import',
+    'actual.view', 'actual.create', 'actual.edit', 'actual.import',
+    'history.view', 'history.export',
+    'report_nt.view', 'report_nt.sync',
+    'support.create', 'support.resolve',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve'
+  ],
+  mod: [
+    'home.view',
+    'admin.projects.view', 'admin.teams.view',
+    'admin.budgets.view', 'admin.costs.view',
+    'register.view', 'register.create', 'register.edit',
+    'actual.view', 'actual.create', 'actual.edit',
+    'history.view',
+    'report_nt.view',
+    'support.create', 'support.resolve',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve'
+  ],
+  accountant: [
+    'home.view', 'home.export',
+    'admin.projects.view', 'admin.projects.edit',
+    'admin.teams.view',
+    'admin.budgets.view', 'admin.budgets.edit',
+    'admin.costs.view', 'admin.costs.edit',
+    'block.view',
+    'team_mgmt.view',
+    'register.view',
+    'actual.view',
+    'history.view', 'history.export',
+    'report_nt.view',
+    'support.create',
+    'process_mkt.create',
+    'process_doiung.create'
+  ],
+  gdda: [
+    'home.view',
+    'admin.projects.view',
+    'register.view', 'register.create', 'register.edit',
+    'actual.view', 'actual.create', 'actual.edit',
+    'history.view',
+    'report_nt.view',
+    'support.create'
+  ],
+  gd_khoi: [
+    'home.view',
+    'block.view', 'block.approve',
+    'register.view',
+    'actual.view',
+    'history.view',
+    'report_nt.view',
+    'support.create'
+  ],
+  gdkd: [
+    'home.view',
+    'team_mgmt.view', 'team_mgmt.approve',
+    'register.view',
+    'actual.view',
+    'history.view',
+    'report_nt.view',
+    'support.create'
+  ],
+  user: [
+    'home.view',
+    'register.view', 'register.create', 'register.edit',
+    'actual.view', 'actual.create', 'actual.edit',
+    'history.view',
+    'report_nt.view',
+    'support.create'
+  ]
+};
+
+export const ROLE_NAMES: Record<string, string> = {
+  super_admin: "Super Admin (Quản trị cao cấp)",
+  admin: "Admin (Quản trị viên)",
+  mod: "Mod (Điều phối viên)",
+  accountant: "Accountant (Kế toán)",
+  gdda: "GDDA (Giám đốc Dự án)",
+  gd_khoi: "GĐ Khối (Giám đốc Khối)",
+  gdkd: "GĐKD (Giám đốc Kinh doanh)",
+  user: "User (Người dùng thường)"
+};
+
+export const PERMISSION_GROUPS = [
+  {
+    category: 'Trang chủ (Dashboard & Báo cáo tổng thể)',
+    items: [
+      { key: 'home.view', label: 'Xem Trang chủ', desc: 'Có quyền truy cập tab Trang chủ, xem biểu đồ, doanh số, chi phí tổng quan.' },
+      { key: 'home.export', label: 'Tải báo cáo tổng hợp', desc: 'Tải báo cáo Excel tích lũy và hiệu quả tổng hợp.' }
+    ]
+  },
+  {
+    category: 'Quản trị hệ thống (Admin Panel)',
+    items: [
+      { key: 'admin.projects.view', label: 'Xem danh sách Dự án', desc: 'Xem danh sách các dự án trong hệ thống.' },
+      { key: 'admin.projects.edit', label: 'Quản lý Dự án (Thêm/Sửa/Xóa/Gán)', desc: 'Thêm dự án mới, sửa thông tin, xóa dự án, gán loại hình/vùng miền.' },
+      { key: 'admin.projects.import', label: 'Nhập dữ liệu dự án', desc: 'Nhập danh mục dự án hàng loạt từ file Excel.' },
+      { key: 'admin.teams.view', label: 'Xem danh sách Team/Đội', desc: 'Xem danh sách các phòng ban/tổ đội.' },
+      { key: 'admin.teams.edit', label: 'Quản lý Team/Đội (Thêm/Sửa/Xóa)', desc: 'Thêm team, cập nhật mã team, phân bổ tổ đội.' },
+      { key: 'admin.budgets.view', label: 'Xem duyệt đăng ký ngân sách', desc: 'Xem danh sách toàn bộ các đăng ký ngân sách của hệ thống.' },
+      { key: 'admin.budgets.edit', label: 'Phần bổ & Duyệt Ngân sách', desc: 'Duyệt/Xác định ngân sách, chỉnh sửa, gán người xử lý.' },
+      { key: 'admin.costs.view', label: 'Xem duyệt chi phí thực tế', desc: 'Xem danh sách toàn bộ chi phí thực chi thực tế.' },
+      { key: 'admin.costs.edit', label: 'Duyệt & Quản lý Chi phí thực tế', desc: 'Chỉnh sửa, xóa, duyệt số liệu chi phí thực tế cấp hệ thống.' },
+      { key: 'admin.efficiency.edit', label: 'Cập nhật hiệu quả kinh doanh', desc: 'Nhập/Sửa số căn bán mới, doanh số bán lẻ để tính ROI.' },
+      { key: 'admin.users.view', label: 'Xem danh sách Người dùng', desc: 'Xem danh sách các tài khoản đăng ký trong app.' },
+      { key: 'admin.users.edit', label: 'Phân quyền tài khoản & Gán dự án', desc: 'Chỉnh sửa vai trò, gán danh sách dự án cho Mod.' },
+      { key: 'admin.backup.view', label: 'Quản trị Sao lưu & Phục hồi', desc: 'Xem nhật ký thay đổi và quét/phục hồi dữ liệu cũ bị xóa.' },
+      { key: 'admin.permissions.edit', label: 'Quản lý phân quyền vai trò', desc: 'Được phép tùy chỉnh danh mục quyền này.' }
+    ]
+  },
+  {
+    category: 'Quản lý Khối (Block management)',
+    items: [
+      { key: 'block.view', label: 'Giám sát chi phí Khối', desc: 'Xem số liệu phân bổ, thực chi, cảnh báo ngân sách của Block.' },
+      { key: 'block.approve', label: 'Phê duyệt cấp Khối', desc: 'Ghi ý kiến phê duyệt / Đề xuất ngân sách liên phòng.' }
+    ]
+  },
+  {
+    category: 'Quản lý Phòng KD (Team management)',
+    items: [
+      { key: 'team_mgmt.view', label: 'Giám sát hoạt động Đội nhóm', desc: 'Theo dõi đăng ký, tiến độ chạy chi phí của các team trực thuộc.' },
+      { key: 'team_mgmt.approve', label: 'Ý kiến đề xuất cấp Phòng KD', desc: 'Ghi nhận đề xuất/Ý kiến điều hành chung cấp phòng.' }
+    ]
+  },
+  {
+    category: 'Đăng ký ngân sách',
+    items: [
+      { key: 'register.view', label: 'Xem danh sách đăng ký', desc: 'Có quyền xem danh mục đăng ký ngân sách của đội hoặc bản thân.' },
+      { key: 'register.create', label: 'Tạo mới phiếu đăng ký', desc: 'Được phép lập kế hoạch và submit ngân sách tháng mới.' },
+      { key: 'register.edit', label: 'Chỉnh sửa/Xóa phiếu đăng ký cá nhân', desc: 'Sửa hoặc xóa phiếu đăng ký khi ở trạng thái Chờ duyệt.' },
+      { key: 'register.import', label: 'Nhập Excel ngân sách hàng loạt', desc: 'Nhập excel đăng ký nhiều dòng đồng thời.' }
+    ]
+  },
+  {
+    category: 'Ghi nhận chi phí thực tế',
+    items: [
+      { key: 'actual.view', label: 'Xem thực chi chiến dịch', desc: 'Xem danh sách thực chi chiến chiến dịch quảng cáo.' },
+      { key: 'actual.create', label: 'Tạo mới phiếu chi thực tế', desc: 'Tạo phiếu ghi nhận chi phí thực tế hàng tuần.' },
+      { key: 'actual.edit', label: 'Sửa/Xóa phiếu chi thực tế chưa duyệt', desc: 'Sửa hoặc xóa phiếu chi thực tế ở trạng thái chưa đối soát.' },
+      { key: 'actual.import', label: 'Nhập Excel thực tế hàng loạt', desc: 'Nhập hàng loạt các dòng chi thực tế bằng file Excel.' }
+    ]
+  },
+  {
+    category: 'Lịch sử dòng tiền (Transaction History)',
+    items: [
+      { key: 'history.view', label: 'Xem & Tra cứu dòng tiền', desc: 'Tra cứu thông tin minh bạch đối chiếu của dự án/đội nhóm.' },
+      { key: 'history.export', label: 'Tải dòng tiền Excel', desc: 'Xuất dữ liệu lịch sử đối chiếu ra file Excel.' }
+    ]
+  },
+  {
+    category: 'Báo cáo Nghiệm thu (NT Report)',
+    items: [
+      { key: 'report_nt.view', label: 'Xem Báo cáo Nghiệm thu', desc: 'Xem báo cáo nghiệm thu tự động kết nối từ Google Sheet.' },
+      { key: 'report_nt.sync', label: 'Đồng bộ hóa & Cập nhật Sheet Link', desc: 'Đồng bộ lại dữ liệu nghiệm thu, đổi link Google Sheets.' }
+    ]
+  },
+  {
+    category: 'Hỗ trợ kỹ thuật (Support Center)',
+    items: [
+      { key: 'support.create', label: 'Gửi yêu cầu hỗ trợ mới', desc: 'Tạo ticket nhờ hỗ trợ kỹ thuật hoặc báo lỗi.' },
+      { key: 'support.resolve', label: 'Xử lý & Đóng yêu cầu hỗ trợ', desc: 'Viết câu trả lời phản hồi, thay đổi trạng thái ticket (Dành cho Admin/Mod).' }
+    ]
+  },
+  {
+    category: 'Quy trình Marketing',
+    items: [
+      { key: 'process_mkt.create', label: 'Tạo quy trình Marketing', desc: 'Thiết lập quy trình chiến dịch và chuyển giao trạng thái.' },
+      { key: 'process_mkt.approve', label: 'Duyệt quy trình Marketing', desc: 'Phê duyệt các bước trong quy trình Marketing.' }
+    ]
+  },
+  {
+    category: 'Quy trình đối ứng bàn giao',
+    items: [
+      { key: 'process_doiung.create', label: 'Tạo quy trình đối ứng', desc: 'Khởi tạo quy trình bàn giao nhận đối ứng.' },
+      { key: 'process_doiung.approve', label: 'Duyệt quy trình đối ứng', desc: 'Phê duyệt quy trình đối ứng bàn giao.' }
+    ]
+  }
+];
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'user' | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [rolePermissionsList, setRolePermissionsList] = useState<any[]>([]);
+  const [selectedRolePermission, setSelectedRolePermission] = useState<string>('admin');
+  const [editedPermissions, setEditedPermissions] = useState<string[]>([]);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+
+  const currentRolePermissions = useMemo(() => {
+    const found = rolePermissionsList.find(rp => rp.role === selectedRolePermission);
+    const roleKey = userRole || 'user';
+    const activeSaved = rolePermissionsList.find(rp => rp.role === roleKey);
+    if (activeSaved) {
+      return activeSaved.permissions || [];
+    }
+    return DEFAULT_PERMISSIONS[roleKey] || [];
+  }, [rolePermissionsList, userRole]);
+
+  const hasPermission = useCallback((permKey: string) => {
+    if (user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin') {
+      return true;
+    }
+    return currentRolePermissions.includes(permKey);
+  }, [currentRolePermissions, userRole, user?.email]);
+
+  useEffect(() => {
+    const found = rolePermissionsList.find(rp => rp.role === selectedRolePermission);
+    if (found) {
+      setEditedPermissions(found.permissions || []);
+    } else {
+      setEditedPermissions(DEFAULT_PERMISSIONS[selectedRolePermission] || []);
+    }
+  }, [selectedRolePermission, rolePermissionsList]);
+
+  const hasUnsavedChanges = useMemo(() => {
+    const saved = rolePermissionsList.find(rp => rp.role === selectedRolePermission)?.permissions || DEFAULT_PERMISSIONS[selectedRolePermission] || [];
+    if (saved.length !== editedPermissions.length) return true;
+    return [...saved].sort().join(',') !== [...editedPermissions].sort().join(',');
+  }, [selectedRolePermission, rolePermissionsList, editedPermissions]);
+
+  const handleSavePermissions = async () => {
+    setIsSavingPermissions(true);
+    try {
+      const docId = selectedRolePermission;
+      const docRef = doc(db, 'rolePermissions', docId);
+      await setDoc(docRef, {
+        role: selectedRolePermission,
+        permissions: editedPermissions,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || 'admin'
+      });
+      await logAction('UPDATE', 'rolePermissions', docId, {
+        role: selectedRolePermission,
+        permissionsCount: editedPermissions.length
+      });
+      toast.success(`Đã cập nhật phân quyền thành công cho vai trò ${ROLE_NAMES[selectedRolePermission] || selectedRolePermission}`);
+    } catch (error) {
+      console.error("Save system permissions error:", error);
+      toast.error("Không thể lưu phân quyền: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsSavingPermissions(false);
+    }
+  };
   const [userSearch, setUserSearch] = useState('');
   const debouncedUserSearch = useDebounce(userSearch, 300);
   const [loading, setLoading] = useState(true);
@@ -897,6 +1169,17 @@ export default function App() {
   const [isAlertManagementOpen, setIsAlertManagementOpen] = useState(false);
 
   const [adminSubTab, setAdminSubTab] = useState('reports');
+
+  // Báo cáo NT states
+  const [reportNTUrl, setReportNTUrl] = useState('');
+  const [reportNTRecords, setReportNTRecords] = useState<any[]>([]);
+  const [reportNTLastUpdated, setReportNTLastUpdated] = useState<any>(null);
+  const [isSyncingReportNT, setIsSyncingReportNT] = useState(false);
+  const [reportNTSearch, setReportNTSearch] = useState('');
+  const [inputReportNTUrl, setInputReportNTUrl] = useState('');
+  const [ntPage, setNtPage] = useState(1);
+  const [ntSortField, setNtSortField] = useState<string | null>(null);
+  const [ntSortDirection, setNtSortDirection] = useState<'asc' | 'desc' | 'none'>('none');
 
   const syncLogToGoogleSheets = async (logEntry: any) => {
     try {
@@ -1979,6 +2262,7 @@ export default function App() {
       case 'register': return 'Đăng ký';
       case 'actual': return 'Chi phí';
       case 'history': return 'Lịch sử';
+      case 'report-nt': return 'Báo cáo NT';
       case 'support': return 'Hỗ trợ';
       default: return '';
     }
@@ -2177,18 +2461,19 @@ export default function App() {
 
   const menuItems = useMemo(() => {
     return [
-      { value: 'home', label: 'Trang chủ', icon: LayoutDashboard, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Tổng quan báo cáo & hiệu quả' },
-      { value: 'admin', label: 'Quản trị hệ thống', icon: ShieldCheck, color: 'text-rose-600', activeBg: 'bg-slate-900', activeText: 'text-white font-black', visible: (isAdmin || isMod || isAccountant || isGDDA || isInternalStaff), desc: 'Cấu hình dự án, ngân sách, nhân sự' },
-      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: (isGDKhoi || isAdmin || isAccountant), desc: 'Đồng bộ & giám sát ngân sách Khối' },
-      { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: (isGDKD || isAdmin || isAccountant), desc: 'Báo cáo tích lũy, các tổ đội direct' },
-      { value: 'register', label: 'Đăng ký ngân sách', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Lập kế hoạch phân bổ chi phí tháng' },
-      { value: 'actual', label: 'Chi phí thực tế', icon: TrendingUp, color: 'text-amber-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Ghi nhận thực chi chiến dịch chi tiết' },
-      { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Tra cứu lịch sử thu chi minh bạch' },
-      { value: 'support', label: 'Hỗ trợ kỹ thuật', icon: MessageCircle, color: 'text-blue-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, badge: pendingSupportCount, desc: 'Yêu cầu hỗ trợ, phản hồi sự cố' },
-      { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Quản lý quy trình chiến dịch Marketing' },
-      { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Quản lý đối ứng & bàn giao' },
+      { value: 'home', label: 'Trang chủ', icon: LayoutDashboard, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('home.view'), desc: 'Tổng quan báo cáo & hiệu quả' },
+      { value: 'admin', label: 'Quản trị hệ thống', icon: ShieldCheck, color: 'text-rose-600', activeBg: 'bg-slate-900', activeText: 'text-white font-black', visible: (hasPermission('admin.projects.view') || hasPermission('admin.teams.view') || hasPermission('admin.budgets.view') || hasPermission('admin.costs.view') || hasPermission('admin.users.view') || hasPermission('admin.permissions.edit')), desc: 'Cấu hình dự án, ngân sách, nhân sự' },
+      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view'), desc: 'Đồng bộ & giám sát ngân sách Khối' },
+      { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
+      { value: 'register', label: 'Đăng ký ngân sách', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
+      { value: 'actual', label: 'Chi phí thực tế', icon: TrendingUp, color: 'text-amber-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('actual.view'), desc: 'Ghi nhận thực chi chiến dịch chi tiết' },
+      { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
+      { value: 'report-nt', label: 'Báo cáo NT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Báo cáo Nghiệm thu tự động lấy từ Google Sheet' },
+      { value: 'support', label: 'Hỗ trợ kỹ thuật', icon: MessageCircle, color: 'text-blue-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('support.create') || hasPermission('support.resolve'), badge: pendingSupportCount, desc: 'Yêu cầu hỗ trợ, phản hồi sự cố' },
+      { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_mkt.create'), desc: 'Quản lý quy trình chiến dịch Marketing' },
+      { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_doiung.create'), desc: 'Quản lý đối ứng & bàn giao' },
     ].filter(item => item.visible);
-  }, [isAdmin, isMod, isAccountant, isGDDA, isInternalStaff, isGDKhoi, isGDKD, pendingSupportCount]);
+  }, [hasPermission, pendingSupportCount]);
 
   const adminFilteredBudgets = useMemo(() => {
     return budgets.filter(b => {
@@ -2225,6 +2510,119 @@ export default function App() {
         return dateB - dateA;
       });
   }, [costs, debouncedAdminCostSearch, adminCostMonthFilter, projectMap, teamMap, getMarketingMonth]);
+
+  const isProjectKey = useCallback((key: string) => {
+    const k = key.toLowerCase();
+    return k.includes('dự án') || k.includes('project') || k.includes('tên');
+  }, []);
+
+  const isMoneyKey = useCallback((key: string) => {
+    const k = key.toLowerCase();
+    return k.includes('tiền') || k.includes('vnđ') || k.includes('vnd') || k.includes('chi') || k.includes('lượng') || k.includes('giá') || k.includes('cost') || k.includes('budget') || k.includes('amount');
+  }, []);
+
+  const formatNTValue = useCallback((val: any) => {
+    if (val === undefined || val === null) return '-';
+    const strVal = String(val).trim();
+    if (!strVal) return '-';
+
+    const cleanStr = strVal.replace(/\s+/g, '');
+    
+    if (/^-?\d+$/.test(cleanStr)) {
+      return cleanStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    } else if (/^-?\d+\.\d+$/.test(cleanStr)) {
+      const parts = cleanStr.split('.');
+      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      return `${integerPart},${parts[1]}`;
+    } else if (/^-?\d+,\d+$/.test(cleanStr)) {
+      const parts = cleanStr.split(',');
+      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      return `${integerPart},${parts[1]}`;
+    }
+
+    let formattedStr = strVal;
+    formattedStr = formattedStr.replace(/\b\d{4,}\b/g, (match) => {
+      return match.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    });
+
+    return formattedStr;
+  }, []);
+
+  const handleToggleSortNT = (headerKey: string) => {
+    if (ntSortField !== headerKey) {
+      setNtSortField(headerKey);
+      setNtSortDirection('asc');
+    } else if (ntSortDirection === 'asc') {
+      setNtSortDirection('desc');
+    } else if (ntSortDirection === 'desc') {
+      setNtSortDirection('none');
+      setNtSortField(null);
+    } else {
+      setNtSortField(headerKey);
+      setNtSortDirection('asc');
+    }
+  };
+
+  const filteredNTRecords = useMemo(() => {
+    if (!reportNTRecords) return [];
+    
+    // First, filter based on search query
+    let result = [...reportNTRecords];
+    if (reportNTSearch) {
+      const q = reportNTSearch.toLowerCase().trim();
+      result = result.filter(rec => {
+        return Object.entries(rec).some(([key, val]) => {
+          if (key === 'id_row') return false;
+          return String(val).toLowerCase().includes(q);
+        });
+      });
+    }
+
+    // Next, apply sorting if fields and direction are defined
+    if (ntSortField && ntSortDirection !== 'none') {
+      result.sort((a, b) => {
+        let valA = a[ntSortField];
+        let valB = b[ntSortField];
+
+        if (valA === undefined || valA === null) valA = '';
+        if (valB === undefined || valB === null) valB = '';
+
+        // If both values are numeric or represent money numbers, we should parse them cleanly
+        const cleanA = String(valA).replace(/[^0-9-]/g, '').trim();
+        const cleanB = String(valB).replace(/[^0-9-]/g, '').trim();
+        const numA = Number(cleanA);
+        const numB = Number(cleanB);
+
+        const isNumA = cleanA !== '' && !isNaN(numA);
+        const isNumB = cleanB !== '' && !isNaN(numB);
+
+        if (isNumA && isNumB) {
+          return ntSortDirection === 'asc' ? numA - numB : numB - numA;
+        }
+
+        // Fallback to Vietnamese string locale comparison
+        const strA = String(valA).toLowerCase();
+        const strB = String(valB).toLowerCase();
+        return ntSortDirection === 'asc'
+          ? strA.localeCompare(strB, 'vi', { sensitivity: 'base' })
+          : strB.localeCompare(strA, 'vi', { sensitivity: 'base' });
+      });
+    }
+
+    return result;
+  }, [reportNTRecords, reportNTSearch, ntSortField, ntSortDirection]);
+
+  const ntPageSize = 15;
+  const totalNtPages = Math.ceil((filteredNTRecords?.length || 0) / ntPageSize) || 1;
+  const paginatedNTRecords = useMemo(() => {
+    if (!filteredNTRecords) return [];
+    const start = (ntPage - 1) * ntPageSize;
+    return filteredNTRecords.slice(start, start + ntPageSize);
+  }, [filteredNTRecords, ntPage]);
+
+  useEffect(() => {
+    setNtPage(1);
+  }, [reportNTSearch]);
 
   const getWeekRange = (weekStr: string) => {
     if (!weekStr) return '';
@@ -3216,6 +3614,26 @@ export default function App() {
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings'));
 
+    // Listen to Báo cáo NT settings and cached records
+    const unsubReportNT = onSnapshot(doc(db, 'settings', 'report_nt'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setReportNTUrl(data.sheetUrl || '');
+        setInputReportNTUrl(data.sheetUrl || '');
+        setReportNTRecords(data.records || []);
+        setReportNTLastUpdated(data.lastUpdated || null);
+      }
+    }, (error) => {
+      console.warn("Báo cáo NT settings listener skipped or not created yet:", error);
+    });
+
+    // Listen to rolePermissions
+    const unsubRolePerms = onSnapshot(collection(db, 'rolePermissions'), (snapshot) => {
+      setRolePermissionsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("rolePermissions collection listener error:", error);
+    });
+
     return () => {
       unsubProjects();
       unsubTeams();
@@ -3232,6 +3650,8 @@ export default function App() {
       unsubFinalAcceptances();
       unsubSupport();
       unsubSettings();
+      unsubReportNT();
+      unsubRolePerms();
     };
   }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects)]);
 
@@ -7495,6 +7915,105 @@ export default function App() {
     toast.success('Đã xuất danh sách ngân sách Admin đã lọc thành công');
   };
 
+  const handleSyncReportNT = async () => {
+    if (!inputReportNTUrl) {
+      toast.error("Vui lòng nhập link Google Sheet");
+      return;
+    }
+
+    // Extract Spreadsheet ID
+    const match = inputReportNTUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match || !match[1]) {
+      toast.error("Link Google Sheet không đúng định dạng. Cần dạng https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit...");
+      return;
+    }
+
+    const spreadsheetId = match[1];
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
+
+    setIsSyncingReportNT(true);
+
+    try {
+      const response = await fetch(exportUrl);
+      if (!response.ok) {
+        throw new Error("Không thể tải file từ Google Sheet. Hãy chắc chắn link Google Sheet đã được chia sẻ công khai ở chế độ 'Bất kỳ ai có liên kết đều có thể xem' (Anyone with link can view).");
+      }
+      
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
+      
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        throw new Error("Tệp Google Sheet rỗng hoặc không hợp lệ.");
+      }
+
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const dataArr: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      if (dataArr.length < 2) {
+        throw new Error("Google Sheet cần ít nhất 2 hàng làm tiêu đề (hàng 1 và hàng 2) và các hàng tiếp theo làm các bản ghi.");
+      }
+
+      const row1 = dataArr[0] || [];
+      const row2 = dataArr[1] || [];
+      const maxCols = Math.max(row1.length, row2.length);
+
+      // Save headers
+      const headers: string[] = [];
+      for (let c = 0; c < maxCols; c++) {
+        const h1 = String(row1[c] || '').trim();
+        const h2 = String(row2[c] || '').trim();
+        
+        let headerName = '';
+        if (h1 && h2) {
+          headerName = h1 === h2 ? h1 : `${h1} - ${h2}`;
+        } else {
+          headerName = h1 || h2 || `Cột ${c + 1}`;
+        }
+        headers.push(headerName);
+      }
+
+      // Read records (Row index 2 and onward)
+      const records: any[] = [];
+      for (let r = 2; r < dataArr.length; r++) {
+        const rowData = dataArr[r];
+        if (!rowData) continue;
+        
+        const isEmpty = rowData.every(val => val === null || val === undefined || String(val).trim() === '');
+        if (isEmpty) continue;
+
+        const record: Record<string, any> = { id_row: r + 1 };
+        headers.forEach((header, c) => {
+          record[header] = rowData[c] !== undefined && rowData[c] !== null ? rowData[c] : '';
+        });
+        records.push(record);
+      }
+
+      // Check permission: settings can only be saved to Firestore by isAdmin or isAccountant.
+      const canWriteSettings = isAdmin || isAccountant;
+      if (canWriteSettings) {
+        await setDoc(doc(db, 'settings', 'report_nt'), {
+          sheetUrl: inputReportNTUrl,
+          records: records,
+          lastUpdated: new Date().toISOString()
+        });
+        toast.success("Đã cập nhật link Google Sheet và đồng bộ dữ liệu 'Báo cáo NT' lên website thành công!");
+      } else {
+        // Fallback for demo / non-admin testing who want to trigger local sync:
+        setReportNTUrl(inputReportNTUrl);
+        setReportNTRecords(records);
+        setReportNTLastUpdated(new Date().toISOString());
+        toast.warning("Đã đồng bộ cục bộ tạm thời. Lưu ý: Chỉ Quản trị viên/Kế toán mới có quyền lưu cấu hình liên kết lâu dài vào cơ sở dữ liệu hệ thống.");
+      }
+
+    } catch (error: any) {
+      console.error("Lỗi đồng bộ Google Sheet Báo cáo NT:", error);
+      toast.error(`Không thể đồng bộ: ${error.message || error}`);
+    } finally {
+      setIsSyncingReportNT(false);
+    }
+  };
+
   const handleExportCosts = () => {
     if (costs.length === 0) {
       toast.error('Không có dữ liệu chi phí để xuất');
@@ -8752,6 +9271,9 @@ export default function App() {
               <TabsTrigger value="history" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-slate-700 data-[state=active]:text-white font-black transition-all">
                 <History className="w-3.5 h-3.5 mr-1.5" /> Lịch sử
               </TabsTrigger>
+              <TabsTrigger value="report-nt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black transition-all">
+                <FileCheck className="w-3.5 h-3.5 mr-1.5" /> Báo cáo NT
+              </TabsTrigger>
               <TabsTrigger value="support" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white font-black transition-all relative">
                 <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Hỗ trợ
                 {pendingSupportCount > 0 && (
@@ -8884,6 +9406,16 @@ export default function App() {
                       </Button>
                     </>
                   )}
+                  {(isAdmin || hasPermission('admin.permissions.edit')) && (
+                    <Button 
+                      variant={adminSubTab === 'permissions' ? 'secondary' : 'ghost'} 
+                      size="sm"
+                      className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'permissions' ? 'bg-indigo-650 text-white bg-indigo-600 shadow-md hover:bg-indigo-700' : 'text-slate-600'}`}
+                      onClick={() => setAdminSubTab('permissions')}
+                    >
+                      <ShieldAlert className="mr-2 h-4 w-4" /> Phân quyền
+                    </Button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -8961,6 +9493,8 @@ export default function App() {
 
           {/* Home / Dashboard Tab */}
           <TabsContent value="home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {activeTab === 'home' && (
+              <>
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
@@ -9242,11 +9776,15 @@ export default function App() {
                 </div>
               )}
             </Card>
+              </>
+            )}
           </TabsContent>
 
           {/* Block Management Tab (GĐ Khối) */}
           {(isGDKhoi || isAdmin || isAccountant) && (
             <TabsContent value="block-mgmt" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {activeTab === 'block-mgmt' && (
+                <>
               {/* Header Info */}
               <div className="bg-gradient-to-r from-violet-600 to-indigo-700 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-100/30 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
@@ -10414,12 +10952,16 @@ export default function App() {
                   </Card>
                 </TabsContent>
               </Tabs>
+                </>
+              )}
             </TabsContent>
           )}
 
           {/* Team Management Tab (GDKD) */}
           {(isGDKD || isAdmin || isAccountant) && (
             <TabsContent value="team-mgmt" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {activeTab === 'team-mgmt' && (
+                <>
               {/* Header Info */}
               <div className="bg-gradient-to-r from-teal-600 to-emerald-700 p-8 rounded-[32px] text-white shadow-xl shadow-teal-100/30 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
@@ -11163,12 +11705,16 @@ export default function App() {
                   </div>
                 </TabsContent>
               </Tabs>
+                </>
+              )}
             </TabsContent>
           )}
 
           {/* Admin Tab */}
           {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
             <TabsContent value="admin" className="space-y-6">
+              {activeTab === 'admin' && (
+                <>
               {/* Admin Content Area (Full Width) */}
               <div className="min-w-0">
                 <Tabs value={adminSubTab} onValueChange={setAdminSubTab} className="space-y-6">
@@ -11548,6 +12094,8 @@ export default function App() {
 
                     {/* Project Management Tab */}
                     <TabsContent value="projects" className="space-y-6">
+                      {adminSubTab === 'projects' && (
+                        <>
                       <div className="space-y-6">
                         {/* Project Controls Card */}
                         <Card className="border-none shadow-sm overflow-hidden bg-white">
@@ -12019,6 +12567,8 @@ export default function App() {
                       </CardContent>
                     </Card>
                   </div>
+                        </>
+                      )}
                 </TabsContent>
 
                 {/* Region Management Tab */}
@@ -12933,7 +13483,8 @@ export default function App() {
                                   />
                                 </TableHead>
                                 <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
-                                <TableHead className="w-[110px] px-1 tracking-tighter">Team</TableHead>
+                                <TableHead className="w-[100px] px-1 tracking-tighter">Team</TableHead>
+                                <TableHead className="w-[80px] px-1 tracking-tighter">Mã Team</TableHead>
                                 <TableHead className="w-[110px] px-1 tracking-tighter">N.Triển khai</TableHead>
                                 <TableHead className="w-[130px] px-1 text-center tracking-tighter">Hạn kỳ (Kỳ)</TableHead>
                                 <TableHead className="w-[90px] px-1 text-right tracking-tighter">Ngân sách</TableHead>
@@ -12965,7 +13516,10 @@ export default function App() {
                                       <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">ID: {b.projectId.substring(0,8)}</span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[110px] uppercase">{teamMap[b.teamId] || b.teamName}</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase" title={teamMap[b.teamId] || b.teamName}>{teamMap[b.teamId] || b.teamName}</TableCell>
+                                  <TableCell className="px-1 text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50/20 px-1.5 py-0.5 rounded truncate max-w-[80px]">
+                                    {teams.find(t => t.id === b.teamId || t.name === (teamMap[b.teamId] || b.teamName))?.teamCode || ''}
+                                  </TableCell>
                                   <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
                                   <TableCell className="px-1 py-1">
                                     <div className="flex flex-col items-center justify-center gap-0.5">
@@ -15442,12 +15996,208 @@ export default function App() {
                     </div>
                   </DialogContent>
                 </Dialog>
+
+                {/* Permissions Management Tab Content */}
+                <TabsContent value="permissions" className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {/* Left panel: Role list */}
+                    <Card className="border-none shadow-sm h-full lg:col-span-1 bg-white rounded-2xl overflow-hidden">
+                      <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 w-full" />
+                      <CardHeader className="pb-4">
+                        <CardTitle className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                          Vai trò ({Object.keys(ROLE_NAMES).length})
+                        </CardTitle>
+                        <CardDescription className="text-xs text-slate-500">Chọn vai trò để chỉnh sửa và kiểm duyệt các quyền thành phần</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2 p-3 sm:px-4">
+                        {Object.entries(ROLE_NAMES).map(([roleKey, roleLabel]) => {
+                          const isSelected = selectedRolePermission === roleKey;
+                          const hasSavedConfig = rolePermissionsList.some(rp => rp.role === roleKey);
+                          return (
+                            <button
+                              key={roleKey}
+                              type="button"
+                              onClick={() => setSelectedRolePermission(roleKey)}
+                              className={cn(
+                                "w-full flex items-center justify-between p-3 rounded-2xl text-left border-2 transition-all group",
+                                isSelected 
+                                  ? "border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-100/50 shadow-sm" 
+                                  : "border-slate-100 bg-white hover:border-indigo-200 hover:bg-slate-50"
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className={cn("text-xs font-black tracking-tight truncate", isSelected ? "text-indigo-950 font-black scale-[1.01]" : "text-slate-800")}>
+                                  {roleLabel.split(' (')[0]}
+                                </p>
+                                <span className="font-mono text-[9px] text-slate-450 block mt-0.5 uppercase tracking-widest">{roleKey}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                {hasSavedConfig && (
+                                  <Badge className="bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase px-1.5 py-0 border-none">
+                                    Custom
+                                  </Badge>
+                                )}
+                                <div className={cn(
+                                  "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                                  isSelected ? "border-indigo-600 bg-indigo-600 scale-110 animate-bounce-short" : "border-slate-300"
+                                )}>
+                                  {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+
+                    {/* Right panel: Permission checklist categorized by features */}
+                    <Card className="border-none shadow-sm lg:col-span-3 bg-white rounded-2xl overflow-hidden">
+                      <div className="h-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 w-full" />
+                      <CardHeader className="pb-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <LockKeyhole className="w-5 h-5 text-purple-600" />
+                            Phân quyền: <span className="text-indigo-600 underline font-black">{ROLE_NAMES[selectedRolePermission]}</span>
+                          </CardTitle>
+                          <CardDescription className="text-xs font-medium text-slate-500 mt-0.5">Tích chọn các quyền chức năng chi tiết cho hệ thống</CardDescription>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              if (confirm(`Bạn có chắc chắn muốn khôi phục phân quyền ${ROLE_NAMES[selectedRolePermission]} về mặc định ban đầu?`)) {
+                                setEditedPermissions(DEFAULT_PERMISSIONS[selectedRolePermission] || []);
+                                toast.success("Đã nạp bộ quyền mặc định. Ấn 'Lưu cấu hình' để hoàn tất lưu trữ!");
+                              }
+                            }}
+                            className="rounded-xl border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 hover:text-slate-900"
+                          >
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Mặc định
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            disabled={isSavingPermissions}
+                            onClick={handleSavePermissions}
+                            className={cn(
+                              "rounded-xl text-xs font-black font-sans px-5 shadow-lg shadow-indigo-150 transition-all hover:-translate-y-0.5",
+                              hasUnsavedChanges 
+                                ? "bg-indigo-600 hover:bg-indigo-750 text-white" 
+                                : "bg-slate-150 text-slate-400 cursor-not-allowed hover:bg-slate-150"
+                            )}
+                          >
+                            {isSavingPermissions ? (
+                              <div className="flex items-center gap-1.5">
+                                <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                                Đang lưu...
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Lưu cấu hình {hasUnsavedChanges && "*"}
+                              </div>
+                            )}
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-6 pt-6 max-h-[800px] overflow-y-auto custom-scrollbar">
+                        {hasUnsavedChanges && (
+                          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Bạn vừa thực hiện các thay đổi đối với vai trò này. Vui lòng bấm <b>"Lưu cấu hình"</b> ở góc phải để áp dụng!</span>
+                          </div>
+                        )}
+
+                        <div className="space-y-8">
+                          {PERMISSION_GROUPS.map((group, groupIdx) => {
+                            const groupKeys = group.items.map(i => i.key);
+                            const allChecked = groupKeys.every(k => editedPermissions.includes(k));
+                            const someChecked = groupKeys.some(k => editedPermissions.includes(k)) && !allChecked;
+                            
+                            const handleToggleGroup = () => {
+                              if (allChecked) {
+                                // deselect all in group
+                                setEditedPermissions(prev => prev.filter(k => !groupKeys.includes(k)));
+                              } else {
+                                // select all in group
+                                setEditedPermissions(prev => [...new Set([...prev, ...groupKeys])]);
+                              }
+                            };
+
+                            return (
+                              <div key={groupIdx} className="border border-slate-100 rounded-2xl p-4 bg-slate-50/30 hover:bg-slate-50/50 transition-colors">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-dashed border-slate-200 gap-3">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                                    <h4 className="text-sm font-black text-slate-800 tracking-tight">{group.category}</h4>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleToggleGroup}
+                                    className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 text-left underline"
+                                  >
+                                    {allChecked ? "Bỏ chọn tất cả" : "Chọn tất cả nhóm này"}
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {group.items.map((item) => {
+                                    const isChecked = editedPermissions.includes(item.key);
+                                    const handleCheckboxChange = () => {
+                                      if (isChecked) {
+                                        setEditedPermissions(prev => prev.filter(k => k !== item.key));
+                                      } else {
+                                        setEditedPermissions(prev => [...prev, item.key]);
+                                      }
+                                    };
+
+                                    return (
+                                      <div 
+                                        key={item.key} 
+                                        onClick={handleCheckboxChange}
+                                        className={cn(
+                                          "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none bg-white",
+                                          isChecked 
+                                            ? "border-indigo-250 ring-1 ring-indigo-50 shadow-sm" 
+                                            : "border-slate-100 hover:border-slate-200"
+                                        )}
+                                      >
+                                        <div className="mt-0.5 shrink-0">
+                                          <div className={cn(
+                                            "w-4 h-4 rounded border flex items-center justify-center transition-all",
+                                            isChecked ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white hover:border-slate-400"
+                                          )}>
+                                            {isChecked && <Check className="w-2.5 h-2.5 stroke-[3px]" />}
+                                          </div>
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className={cn("text-xs font-black tracking-tight leading-tight", isChecked ? "text-indigo-950 font-black" : "text-slate-705")}>{item.label}</p>
+                                          <p className="text-[10px] text-slate-400 leading-normal font-medium mt-0.5">{item.desc}</p>
+                                          <span className="font-mono text-[9px] text-slate-350 block mt-1 uppercase tracking-wider">{item.key}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
                   </Tabs>
                 </div>
+                </>
+              )}
             </TabsContent>
           )}
 
           <TabsContent value="register" className="space-y-8">
+            {activeTab === 'register' && (
+              <>
             <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
               <div className="h-2 bg-gradient-to-r from-indigo-500 to-blue-600 w-full" />
               <CardHeader className="pb-6">
@@ -15819,6 +16569,7 @@ export default function App() {
                         )}
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Dự án</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Team</TableHead>
+                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Mã Team</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
@@ -15863,8 +16614,13 @@ export default function App() {
                           </TableCell>
                           <TableCell className="py-4">
                             <Badge variant="outline" className="font-normal border-slate-200 text-slate-600 bg-white">
-                              {b.teamName} ({teams.find(t => t.id === b.teamId)?.teamCode || ''})
+                              {b.teamName}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg border border-indigo-100/40">
+                              {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
+                            </span>
                           </TableCell>
                           <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
                           <TableCell className="py-4">
@@ -15945,10 +16701,14 @@ export default function App() {
                 </div>
               </CardContent>
             </Card>
+              </>
+            )}
           </TabsContent>
 
           {/* Actual Cost Tab */}
           <TabsContent value="actual" className="space-y-8">
+            {activeTab === 'actual' && (
+              <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 space-y-8">
                 <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
@@ -16520,10 +17280,14 @@ export default function App() {
                 </Card>
               </div>
             </div>
+              </>
+            )}
           </TabsContent>
 
           {/* Audit History Tab */}
           <TabsContent value="history" className="space-y-6">
+            {activeTab === 'history' && (
+              <>
             <Card className="border-none shadow-sm">
               <CardHeader>
                 <CardTitle>Lịch sử chỉnh sửa</CardTitle>
@@ -16557,26 +17321,310 @@ export default function App() {
                 </div>
               </CardContent>
             </Card>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Báo cáo NT Tab */}
+          <TabsContent value="report-nt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            {activeTab === 'report-nt' && (
+              <>
+            <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 border-b border-indigo-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
+                      <FileCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
+                      Báo cáo Nghiệm thu (Báo cáo NT)
+                    </h3>
+                    <p className="text-xs font-semibold text-indigo-700/80 mt-1 max-w-2xl">
+                      Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
+                    </p>
+                  </div>
+                  
+                  {reportNTLastUpdated && (
+                    <div className="bg-white/80 backdrop-blur border border-indigo-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-[10px] font-black text-slate-600 tracking-tight">
+                        Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <CardContent className="p-6 space-y-6">
+                {/* Configuration form for sheet url */}
+                <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Link className="w-3.5 h-3.5 text-slate-500" />
+                      Liên kết Google Sheet nguồn
+                    </Label>
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <Input
+                        type="text"
+                        placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
+                        value={inputReportNTUrl}
+                        onChange={(e) => setInputReportNTUrl(e.target.value)}
+                        className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 text-xs sm:text-sm h-10"
+                      />
+                      <Button
+                        onClick={handleSyncReportNT}
+                        disabled={isSyncingReportNT}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-indigo-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
+                      >
+                        {isSyncingReportNT ? (
+                          <>
+                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                            <span>Đang đồng bộ...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            <span>Đồng bộ ngay</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">1</span>
+                      <div>
+                        <span className="font-bold text-slate-800">Chia sẻ công khai Sheet:</span> Hãy chắc chắn Google Sheet đã được chuyển chế độ <span className="text-indigo-600 font-bold">"Bất kỳ ai có liên kết đều có thể xem"</span> (Anyone with link can view).
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">2</span>
+                      <div>
+                        <span className="font-bold text-slate-800">Cấu trúc 2 hàng tiêu đề:</span> Hàng 1 và hàng 2 trong sheet gốc sẽ tự động kết hợp thông minh để tạo thành thẻ cột thông tin đại diện rõ ràng nhất.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {reportNTUrl && (
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 px-1 truncate">
+                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2 rounded-full text-[10px] font-bold shrink-0">ĐANG LIÊN KẾT</span>
+                    <a href={reportNTUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 truncate font-mono font-medium">
+                      {reportNTUrl}
+                      <ExternalLink className="w-3 h-3 inline shrink-0" />
+                    </a>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-100 my-6"></div>
+
+                {/* Records list section */}
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <span>Bản ghi dữ liệu đã đưa lên</span>
+                        <Badge className="bg-indigo-100 hover:bg-indigo-100 text-indigo-800 border-none rounded-lg text-xs font-black px-2 py-0.5">
+                          {filteredNTRecords.length} dòng
+                        </Badge>
+                      </h4>
+                      <p className="text-xs text-slate-400 font-medium">Tìm kiếm thời gian thực toàn bộ các trường thông tin thông minh</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 max-w-xs w-full self-stretch sm:self-auto">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input
+                          placeholder="Tìm kiếm dòng thông tin..."
+                          value={reportNTSearch}
+                          onChange={(e) => setReportNTSearch(e.target.value)}
+                          className="pl-9 pr-8 py-1 h-9 rounded-xl border-slate-200 text-xs sm:text-sm focus:border-indigo-400"
+                        />
+                        {reportNTSearch && (
+                          <button
+                            onClick={() => setReportNTSearch('')}
+                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                          >
+                            <X className="w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-full p-0.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {reportNTRecords.length === 0 ? (
+                    /* Zero status placeholder */
+                    <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-150 rounded-2xl bg-slate-25/50 text-center">
+                      <div className="h-16 w-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 animate-bounce">
+                        <FileSpreadsheet className="w-8 h-8" />
+                      </div>
+                      <h5 className="font-black text-slate-800 text-sm font-sans">Chưa có cơ sở dữ liệu Báo cáo NT</h5>
+                      <p className="text-xs text-slate-500 font-semibold max-w-sm mt-1 leading-normal font-sans">
+                        Vui lòng nhập liên kết Google Sheets đã được chia sẻ công khai và nhấp vào nút <span className="text-indigo-600 font-bold font-sans">"Đồng bộ ngay"</span> để tải và khởi tạo dữ liệu lên website.
+                      </p>
+                    </div>
+                  ) : filteredNTRecords.length === 0 ? (
+                    /* Search empty placeholder */
+                    <div className="text-center py-12 bg-slate-25/40 border border-slate-100 rounded-2xl">
+                      <p className="text-sm font-bold text-slate-500">Không tìm thấy bản ghi phù hợp với từ khóa tìm kiếm</p>
+                      <button onClick={() => setReportNTSearch('')} className="text-xs font-bold text-indigo-600 hover:underline mt-1 bg-indigo-50 py-1 px-3 rounded-lg border border-indigo-100">Xóa bộ lọc tìm kiếm</button>
+                    </div>
+                  ) : (
+                    /* Standard gorgeous custom data table */
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-slate-200/70 overflow-hidden bg-white shadow-sm">
+                        <div className="overflow-x-auto max-h-[600px] scrollbar-thin">
+                          <Table className="w-full table-auto">
+                            <TableHeader className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                              <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-14 font-black text-slate-700 text-center bg-slate-50 border-r border-slate-200/60 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-200 text-[10px] sm:text-xs">
+                                  HÀNG
+                                </TableHead>
+                                {Object.keys(reportNTRecords[0])
+                                  .filter(k => k !== 'id_row')
+                                  .map((headerKey) => {
+                                    const isSorted = ntSortField === headerKey;
+                                    const isProj = isProjectKey(headerKey);
+                                    const isMoney = isMoneyKey(headerKey);
+                                    return (
+                                      <TableHead 
+                                        key={headerKey} 
+                                        onClick={() => handleToggleSortNT(headerKey)}
+                                        className={`font-black uppercase text-[10px] sm:text-xs px-2.5 py-2.5 cursor-pointer select-none transition-all duration-200 border-r border-slate-200/50 hover:bg-slate-100/80 active:bg-slate-200/50 relative group ${
+                                          isSorted ? 'bg-indigo-50/50 text-indigo-950 font-extrabold' : 'text-slate-600'
+                                        } ${isMoney ? 'text-right' : 'text-left'} ${
+                                          (isProj || isMoney) ? 'whitespace-nowrap' : 'min-w-[100px] max-w-[200px] break-words'
+                                        }`}
+                                      >
+                                        <div className={`flex items-center gap-1 ${isMoney ? 'justify-end' : 'justify-start'}`}>
+                                          <span className="truncate">{headerKey}</span>
+                                          <span className="shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                                            {isSorted ? (
+                                              ntSortDirection === 'asc' ? (
+                                                <ChevronUp className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
+                                              ) : (
+                                                <ChevronDown className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
+                                              )
+                                            ) : (
+                                              <ArrowUpDown className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 inline transition-opacity" />
+                                            )}
+                                          </span>
+                                        </div>
+                                      </TableHead>
+                                    );
+                                  })}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {paginatedNTRecords.map((record, rIdx) => {
+                                const headersKeys = Object.keys(reportNTRecords[0]).filter(k => k !== 'id_row');
+                                return (
+                                  <TableRow 
+                                    key={record.id_row || rIdx} 
+                                    className="hover:bg-indigo-50/30 transition-colors animate-in fade-in duration-200 even:bg-slate-50/35"
+                                  >
+                                    <TableCell className="font-extrabold font-mono text-center text-[10px] text-slate-500 bg-slate-50/50 border-r border-slate-200/60 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-100 py-1.5 px-1">
+                                      {record.id_row || (rIdx + 3)}
+                                    </TableCell>
+                                    {headersKeys.map((headerKey) => {
+                                      const cellValue = record[headerKey];
+                                      const isProj = isProjectKey(headerKey);
+                                      const isMoney = isMoneyKey(headerKey);
+                                      const formatted = formatNTValue(cellValue);
+                                      return (
+                                        <TableCell 
+                                          key={headerKey} 
+                                          className={`text-[11px] sm:text-xs py-1.5 px-2.5 border-r border-slate-100 transition-colors ${
+                                            isMoney 
+                                              ? 'text-right font-black text-emerald-700 whitespace-nowrap bg-emerald-50/10' 
+                                              : isProj 
+                                                ? 'font-bold text-slate-900 whitespace-nowrap' 
+                                                : 'text-slate-600 break-words font-semibold max-w-[180px]'
+                                          }`}
+                                        >
+                                          {formatted}
+                                        </TableCell>
+                                      );
+                                    })}
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+
+                      {/* Pagination UI footer elements */}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 gap-4">
+                        <div className="text-xs font-semibold text-slate-500">
+                          Hiển thị <span className="font-extrabold text-slate-800">
+                            {Math.min(filteredNTRecords.length, (ntPage - 1) * ntPageSize + 1)}
+                          </span> - <span className="font-extrabold text-slate-800">
+                            {Math.min(filteredNTRecords.length, ntPage * ntPageSize)}
+                          </span> trên tổng số <span className="font-extrabold text-slate-800">{filteredNTRecords.length}</span> bản ghi đã lọc
+                        </div>
+
+                        <div className="flex items-center gap-1.5 self-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={ntPage === 1}
+                            onClick={() => setNtPage(prev => Math.max(1, prev - 1))}
+                            className="h-8 rounded-lg text-xs font-black px-3"
+                          >
+                            Trước
+                          </Button>
+                          
+                          <div className="text-xs font-bold text-slate-700 px-3 bg-slate-100 h-8 flex items-center justify-center rounded-lg border border-slate-200 min-w-[70px]">
+                            Trang {ntPage} / {totalNtPages}
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={ntPage === totalNtPages}
+                            onClick={() => setNtPage(prev => Math.min(totalNtPages, prev + 1))}
+                            className="h-8 rounded-lg text-xs font-black px-3"
+                          >
+                            Sau
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="support" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <SupportManager 
-              isAdmin={isAdmin} 
-              isMod={isMod}
-              isAccountant={isAccountant}
-              user={user} 
-              userProfile={userProfile}
-              supportRequests={supportRequests}
-              handleFirestoreError={handleFirestoreError}
-            />
+            {activeTab === 'support' && (
+              <SupportManager 
+                isAdmin={isAdmin} 
+                isMod={isMod}
+                isAccountant={isAccountant}
+                user={user} 
+                userProfile={userProfile}
+                supportRequests={supportRequests}
+                handleFirestoreError={handleFirestoreError}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="process-mkt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <MktProcessManager />
+            {activeTab === 'process-mkt' && (
+              <MktProcessManager />
+            )}
           </TabsContent>
 
           <TabsContent value="process-doiung" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <DoiUngProcessManager />
+            {activeTab === 'process-doiung' && (
+              <DoiUngProcessManager />
+            )}
           </TabsContent>
         </Tabs>
       </main>

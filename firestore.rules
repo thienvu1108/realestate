@@ -306,5 +306,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin() || isAccountant();
     }
+
+    // ===============================================================
+    // Role Permissions
+    // ===============================================================
+    match /rolePermissions/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }

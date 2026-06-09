@@ -2243,6 +2243,14 @@ export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isWebView, setIsWebView] = useState(false);
+  const [showAuthHelper, setShowAuthHelper] = useState(false);
+
+  useEffect(() => {
+    if (isWebView) {
+      setShowAuthHelper(true);
+    }
+  }, [isWebView]);
 
   useEffect(() => {
     const checkViewport = () => {
@@ -2250,6 +2258,17 @@ export default function App() {
     };
     checkViewport();
     window.addEventListener('resize', checkViewport);
+
+    // Detect if opened inside Zalo or FB Messenger/In-app browser
+    if (typeof window !== 'undefined') {
+      const ua = navigator.userAgent || '';
+      const isZaloBrowser = /Zalo/i.test(ua);
+      const isFB = /FBAN|FBAV|Messenger/i.test(ua);
+      const isInstagram = /Instagram/i.test(ua);
+      const isOtherWebview = /WebView|iPod|iPad|iPhone|Android/i.test(ua) && ((/wv/i.test(ua) || ua.includes('Version/')) && !/Safari|Chrome/i.test(ua));
+      setIsWebView(isZaloBrowser || isFB || isInstagram || isOtherWebview);
+    }
+
     return () => window.removeEventListener('resize', checkViewport);
   }, []);
 
@@ -2280,17 +2299,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setIsScrolled(currentScrollY > 15);
-      if (currentScrollY < 50) {
-        setIsHeaderVisible(true);
-      } else if (currentScrollY > lastScrollY) {
-        setIsHeaderVisible(false);
-      } else {
-        setIsHeaderVisible(true);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          setIsScrolled(currentScrollY > 15);
+          if (currentScrollY < 50) {
+            setIsHeaderVisible(true);
+          } else if (currentScrollY > lastScrollY) {
+            setIsHeaderVisible(false);
+          } else {
+            setIsHeaderVisible(true);
+          }
+          setLastScrollY(currentScrollY);
+          ticking = false;
+        });
+        ticking = true;
       }
-      setLastScrollY(currentScrollY);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -3425,7 +3451,7 @@ export default function App() {
 
     // Listen to projects
     let qProjects;
-    if (isAdmin || isMod || isAccountant || isUser) {
+    if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
@@ -3463,7 +3489,7 @@ export default function App() {
 
     // Listen to budgets
     let qBudgets;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(3000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
@@ -3480,7 +3506,7 @@ export default function App() {
 
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD)) {
+      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -3492,7 +3518,7 @@ export default function App() {
 
     // Listen to costs
     let qCosts;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(3000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
@@ -3509,7 +3535,7 @@ export default function App() {
 
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD)) {
+      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -3539,7 +3565,7 @@ export default function App() {
 
     // Listen to efficiency reports
     let unsubEfficiency = () => {};
-    if (isAdmin || isMod || isAccountant || isUser) {
+    if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(1000));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -3553,7 +3579,7 @@ export default function App() {
 
     // Listen to acceptances
     let unsubAcceptances = () => {};
-    if (isAdmin || isMod || isAccountant) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'), limit(1000));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -3568,7 +3594,7 @@ export default function App() {
     // Listen to final acceptances
     let unsubFinalAcceptances = () => {};
     let unsubDocProcessing = () => {};
-    if (isAdmin || isMod || isAccountant) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'), limit(1000));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -8999,10 +9025,72 @@ export default function App() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-4">
-            <Button onClick={login} className="w-full h-12 text-lg font-medium bg-slate-900 hover:bg-slate-800 transition-all" size="lg">
+          <CardContent className="pt-4 space-y-4">
+            <Button onClick={login} className="w-full h-12 text-lg font-bold bg-[#1A4BAC] hover:bg-[#113273] text-white shadow-md shadow-blue-200/50 transition-all rounded-xl cursor-pointer" size="lg">
               <LogIn className="mr-2 h-5 w-5" /> Đăng nhập bằng Google
             </Button>
+
+            {/* Zalo / WebView Auth Helper Panel */}
+            <div className={`mt-4 border rounded-2xl overflow-hidden transition-all duration-300 ${isWebView ? 'border-amber-200 bg-amber-50/40' : 'border-slate-100 bg-slate-50/50'}`}>
+              <div 
+                className="flex items-center justify-between p-3.5 cursor-pointer hover:bg-slate-50 select-none transition-colors"
+                onClick={() => {
+                  setShowAuthHelper(!showAuthHelper);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Info className={`w-4 h-4 ${isWebView ? 'text-amber-600' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-bold ${isWebView ? 'text-amber-900 font-extrabold' : 'text-slate-705 font-bold'}`}>
+                    {isWebView ? '⚠️ Lỗi Đăng nhập trên Zalo / Messenger?' : 'Trợ giúp khi gặp lỗi Đăng nhập'}
+                  </span>
+                </div>
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isWebView ? 'text-amber-500' : 'text-slate-400'} ${showAuthHelper ? 'rotate-180' : ''}`} />
+              </div>
+
+              {showAuthHelper && (
+                <div className="p-4 pt-0 border-t border-dashed border-slate-200/80 space-y-3.5 text-xs animate-in fade-in duration-200">
+                  <div className="space-y-2 mt-3 text-slate-700 leading-relaxed">
+                    <p>
+                      Mặc định, các ứng dụng chat như <strong>Zalo</strong>, <strong>Facebook</strong> hoặc <strong>Messenger</strong> sẽ mở liên kết bằng trình duyệt tích hợp riêng (WebView).
+                    </p>
+                    <p className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-800 font-medium leading-relaxed">
+                      🔒 Để bảo mật, Google <strong>ngăn cản đăng nhập tài khoản (Lỗi 403: disallowed_useragent)</strong> trong trình duyệt tích hợp này để tránh nguy cơ giả mạo.
+                    </p>
+                  </div>
+
+                  <div className={`p-3.5 rounded-xl border ${isWebView ? 'bg-amber-100/50 border-amber-200 text-amber-900' : 'bg-blue-50/45 border-blue-100 text-slate-800'} space-y-2`}>
+                    <p className="font-bold text-slate-950">💡 Cách khắc phục nhanh trong 5 giây:</p>
+                    <ol className="list-decimal pl-4 space-y-1.5">
+                      <li>Nhìn lên góc trên bên phải màn hình Zalo, nhấn chọn nút <strong>Menu Ba chấm (...)</strong> hoặc biểu tượng Tùy chọn trình duyệt.</li>
+                      <li>Chọn <strong>"Mở bằng trình duyệt"</strong> (hoặc <strong>"Mở bằng Safari / Chrome / Trình duyệt mặc định"</strong>).</li>
+                      <li>Hệ thống sẽ chuyển sang trình duyệt chính thức của điện thoại, giúp bạn đăng nhập Google thành công và an toàn.</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        toast.success('Đã sao chép link ứng dụng!');
+                      }}
+                      className="flex-1 text-[11px] font-bold border-slate-200 text-slate-700 hover:bg-slate-100 h-9 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" /> Sao chép Link chuẩn
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        window.open(window.location.href, '_blank');
+                      }}
+                      className="text-[11px] font-bold border-slate-200 text-slate-700 hover:bg-slate-100 h-9 rounded-xl flex items-center justify-center gap-1.5 px-3.5 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500" /> Thử mở ngoài
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -16584,7 +16672,11 @@ export default function App() {
                           const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
                           const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
                           const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-                          const isAssignedGDDA = isGDDA && userProfile?.assignedProjects?.includes(b.projectId);
+                          const isAssignedGDDA = isGDDA && (
+                            !userProfile?.assignedProjects || 
+                            userProfile.assignedProjects.length === 0 || 
+                            userProfile.assignedProjects.includes(b.projectId)
+                          );
                           
                           return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
                         })

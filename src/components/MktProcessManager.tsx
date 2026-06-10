@@ -22,6 +22,7 @@ export function MktProcessManager() {
   // Calculator states
   const [calcCost, setCalcCost] = useState<string>('20,000,000');
   const [calcPoints, setCalcPoints] = useState<string>('35');
+  const [calcSales, setCalcSales] = useState<string>('1');
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -47,6 +48,7 @@ export function MktProcessManager() {
   // Dynamic calculator processing
   const costNum = parseFloat(calcCost.replace(/[^0-9]/g, '')) || 0;
   const pointsNum = parseFloat(calcPoints) || 0;
+  const salesNum = parseFloat(calcSales) || 0;
 
   let baseRate = 0.6;
   let limit = 0;
@@ -55,16 +57,16 @@ export function MktProcessManager() {
   let groupDesc = '';
 
   if (pointsNum >= 30) {
-    limit = 20000000;
+    limit = 20000000 * salesNum;
     const additionalPoints = Math.max(0, pointsNum - 30);
     bonus = Math.floor(additionalPoints / 10) * 7000000;
     formulaDesc = 'Mốc ≥ 30 điểm đạt thưởng thêm nâng cao';
-    groupDesc = `Cơ bản 60% (Trần giới hạn bồi dưỡng 20 triệu VNĐ) + Thưởng thêm ${Math.floor(additionalPoints / 10)} lần x 7 triệu VNĐ (+${bonus.toLocaleString('vi-VN')} VNĐ)`;
+    groupDesc = `Cơ bản 60% (Trần giới hạn tối đa cơ bản 20 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ) + Thưởng thêm ${Math.floor(additionalPoints / 10)} lần x 7 triệu VNĐ (+${bonus.toLocaleString('vi-VN')} VNĐ)`;
   } else {
-    limit = 15000000;
+    limit = 15000000 * salesNum;
     bonus = 0;
     formulaDesc = 'Mốc 0 - 30 điểm đạt hỗ trợ cơ bản';
-    groupDesc = 'Hỗ trợ 60% chi phí chạy, giới hạn tối đa 15 triệu VNĐ/Sale';
+    groupDesc = `Hỗ trợ 60% chi phí chạy, giới hạn tối đa 15 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ`;
   }
 
   const calculatedBase = costNum * baseRate;
@@ -323,6 +325,22 @@ export function MktProcessManager() {
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">Điểm</span>
                   </div>
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">3. Số lượng sale chấm công đủ 30 công:</label>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      value={calcSales}
+                      onChange={(e) => setCalcSales(e.target.value)}
+                      placeholder="Nhập số lượng sale..."
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-amber-500 rounded-2xl px-4 py-3 text-slate-100 text-sm font-mono font-bold focus:ring-2 focus:ring-amber-500/30 focus:outline-hidden"
+                      min="0"
+                      max="500"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">Sale</span>
+                  </div>
+                </div>
               </div>
 
               {/* Arrow divider */}
@@ -368,6 +386,9 @@ export function MktProcessManager() {
                     <strong className="text-slate-200 font-extrabold uppercase">Ước tính số nhận:</strong>
                     <strong className="text-amber-400 font-black text-lg font-mono">{finalSuggested.toLocaleString('vi-VN')} VNĐ</strong>
                   </div>
+                </div>
+                <div className="text-[11px] text-slate-400 text-center italic mt-3 pt-2.5 border-t border-slate-800/80">
+                  * Công cụ tính chỉ mang tính chất tham khảo.
                 </div>
               </div>
 

@@ -10728,6 +10728,7 @@ export default function App() {
                                     <TableHead className="font-bold">Dự án</TableHead>
                                     <TableHead className="font-bold">Tháng MKT</TableHead>
                                     <TableHead className="font-bold">Nhân sự phụ trách</TableHead>
+                                    <TableHead className="font-bold">Thời gian đăng ký</TableHead>
                                     <TableHead className="font-bold text-right">Mức Ngân Sách</TableHead>
                                     <TableHead className="font-bold text-center">Thao tác</TableHead>
                                   </TableRow>
@@ -10739,6 +10740,9 @@ export default function App() {
                                       <TableCell className="font-semibold text-xs text-indigo-600">{b.projectName || 'N/A'}</TableCell>
                                       <TableCell className="font-mono text-xs">{b.month}</TableCell>
                                       <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
+                                      <TableCell className="text-xs font-mono text-slate-500">
+                                        {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
+                                      </TableCell>
                                       <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
                                         {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
                                       </TableCell>
@@ -11674,6 +11678,7 @@ export default function App() {
                                     <TableHead className="font-bold">Kênh/Dự án</TableHead>
                                     <TableHead className="font-bold">Tháng MKT</TableHead>
                                     <TableHead className="font-bold">Nhân sự phụ trách</TableHead>
+                                    <TableHead className="font-bold">Thời gian đăng ký</TableHead>
                                     <TableHead className="font-bold text-right">Mức Ngân Sách</TableHead>
                                   </TableRow>
                                 </TableHeader>
@@ -11683,6 +11688,9 @@ export default function App() {
                                       <TableCell className="font-semibold text-xs text-indigo-600">{b.projectName || 'N/A'}</TableCell>
                                       <TableCell className="font-mono text-xs">{b.month}</TableCell>
                                       <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
+                                      <TableCell className="text-xs font-mono text-slate-500">
+                                        {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
+                                      </TableCell>
                                       <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
                                         {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
                                       </TableCell>
@@ -13619,8 +13627,8 @@ export default function App() {
                                   </TableCell>
                                   <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px] tabular-nums">{b.amount.toLocaleString()}đ</TableCell>
                                   <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px] tabular-nums">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
-                                  <TableCell className="px-1 text-center font-mono text-[9px] text-slate-400 tabular-nums">
-                                    {b.createdAt?.toDate ? format(b.createdAt.toDate(), 'dd/MM/yyyy') : '-'}
+                                  <TableCell className="px-1 text-center font-mono text-[8px] text-slate-400 leading-tight tabular-nums">
+                                    {b.createdAt?.toDate ? format(b.createdAt.toDate(), 'HH:mm dd/MM/yyyy') : '-'}
                                   </TableCell>
                                   <TableCell className="px-2 text-right">
                                     <div className="flex justify-end gap-0.5">
@@ -16661,6 +16669,7 @@ export default function App() {
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
+                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Thời gian đăng ký</TableHead>
                         <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người nhập</TableHead>
                         {(isAdmin || isAccountant) && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
                       </TableRow>
@@ -16727,6 +16736,9 @@ export default function App() {
                             <span className="font-mono font-bold text-blue-600">
                               {b.amount.toLocaleString()} đ
                             </span>
+                          </TableCell>
+                          <TableCell className="py-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                            {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
                           </TableCell>
                           <TableCell className="py-4">
                             <div className="flex flex-col">

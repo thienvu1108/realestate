@@ -1912,6 +1912,54 @@ export default function App() {
       handleFirestoreError(error, OperationType.WRITE, `costs/${id}`);
     }
   };
+
+  const handleOpenMktReportDialog = (cost: any) => {
+    setSelectedCostForMkt(cost);
+    const report = cost.mktReport || {};
+    setMktTotalLeads(report.totalLeads ? report.totalLeads.toString() : '');
+    setMktContactedLeads(report.contactedLeads ? report.contactedLeads.toString() : '');
+    setMktUnconvertedLeads(report.unconvertedLeads ? report.unconvertedLeads.toString() : '');
+    setMktUnconvertedReason(report.unconvertedReason || '');
+    setMktConvertedLeads(report.convertedLeads ? report.convertedLeads.toString() : '');
+    setMktConversionRevenue(report.conversionRevenue ? report.conversionRevenue.toString() : '');
+    setIsMktReportDialogOpen(true);
+  };
+
+  const handleSaveMktReport = async () => {
+    if (!selectedCostForMkt) return;
+    try {
+      const costRef = doc(db, 'costs', selectedCostForMkt.id);
+      const mktReportData = {
+        totalLeads: Number(mktTotalLeads.toString().replace(/\./g, '')) || 0,
+        contactedLeads: Number(mktContactedLeads.toString().replace(/\./g, '')) || 0,
+        unconvertedLeads: Number(mktUnconvertedLeads.toString().replace(/\./g, '')) || 0,
+        unconvertedReason: mktUnconvertedReason || '',
+        convertedLeads: Number(mktConvertedLeads.toString().replace(/\./g, '')) || 0,
+        conversionRevenue: Number(mktConversionRevenue.toString().replace(/\./g, '')) || 0
+      };
+
+      await updateDoc(costRef, {
+        mktReport: mktReportData,
+        updatedAt: serverTimestamp(),
+        editHistory: arrayUnion({
+          action: 'UPDATE_MKT_REPORT',
+          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorEmail: user?.email,
+          timestamp: new Date().toISOString(),
+          changes: {
+            mktReport: mktReportData
+          }
+        })
+      });
+
+      toast.success('Đã cập nhật Báo cáo Hiệu quả MKT');
+      setIsMktReportDialogOpen(false);
+      setSelectedCostForMkt(null);
+      await logAction('UPDATE_MKT_REPORT', 'costs', selectedCostForMkt.id, mktReportData);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `costs/${selectedCostForMkt.id}`);
+    }
+  };
   const uniqueRegions = useMemo(() => {
     return regions.map(r => r.name).sort();
   }, [regions]);
@@ -3042,6 +3090,25 @@ export default function App() {
   const [costNote, setCostNote] = useState('');
   const [selectedBudgetId, setSelectedBudgetId] = useState('');
   const [costWeek, setCostWeek] = useState(format(new Date(), "yyyy-'W'ww"));
+
+  // MKT Efficiency Report states for addition form
+  const [totalLeads, setTotalLeads] = useState('');
+  const [contactedLeads, setContactedLeads] = useState('');
+  const [unconvertedLeads, setUnconvertedLeads] = useState('');
+  const [unconvertedReason, setUnconvertedReason] = useState('');
+  const [convertedLeads, setConvertedLeads] = useState('');
+  const [conversionRevenue, setConversionRevenue] = useState('');
+  const [showMktReport, setShowMktReport] = useState(false);
+
+  // MKT Efficiency Report states for edit dialog
+  const [isMktReportDialogOpen, setIsMktReportDialogOpen] = useState(false);
+  const [selectedCostForMkt, setSelectedCostForMkt] = useState<any>(null);
+  const [mktTotalLeads, setMktTotalLeads] = useState('');
+  const [mktContactedLeads, setMktContactedLeads] = useState('');
+  const [mktUnconvertedLeads, setMktUnconvertedLeads] = useState('');
+  const [mktUnconvertedReason, setMktUnconvertedReason] = useState('');
+  const [mktConvertedLeads, setMktConvertedLeads] = useState('');
+  const [mktConversionRevenue, setMktConversionRevenue] = useState('');
 
   // Edit states for Budget
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
@@ -6741,6 +6808,15 @@ export default function App() {
     }
 
     try {
+      const mktReportData = {
+        totalLeads: Number(totalLeads.toString().replace(/\./g, '')) || 0,
+        contactedLeads: Number(contactedLeads.toString().replace(/\./g, '')) || 0,
+        unconvertedLeads: Number(unconvertedLeads.toString().replace(/\./g, '')) || 0,
+        unconvertedReason: unconvertedReason || '',
+        convertedLeads: Number(convertedLeads.toString().replace(/\./g, '')) || 0,
+        conversionRevenue: Number(conversionRevenue.toString().replace(/\./g, '')) || 0
+      };
+
       const docRef = await addDoc(collection(db, 'costs'), {
         projectId: actualProjectId,
         projectName: project?.name || 'N/A',
@@ -6761,6 +6837,7 @@ export default function App() {
           otherCost: Number(otherCost)
         },
         note: costNote,
+        mktReport: mktReportData,
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
         userEmail: user?.email?.toLowerCase()
@@ -6779,7 +6856,8 @@ export default function App() {
         otherCost: Number(otherCost),
         totalAmount,
         note: costNote,
-        budgetId: selectedBudgetId 
+        budgetId: selectedBudgetId,
+        mktReport: mktReportData
       });
       setFbAds('');
       setPosting('');
@@ -6789,7 +6867,14 @@ export default function App() {
       setCostNote('');
       setActualProjectId('');
       setSelectedBudgetId('');
-      toast.success('Đã nhập chi phí thực tế');
+      setTotalLeads('');
+      setContactedLeads('');
+      setUnconvertedLeads('');
+      setUnconvertedReason('');
+      setConvertedLeads('');
+      setConversionRevenue('');
+      setShowMktReport(false);
+      toast.success('Đã nhập chi phí thực tế và Báo cáo Hiệu quả MKT');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'costs');
     }
@@ -13806,10 +13891,11 @@ export default function App() {
                                 <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
                                 <TableHead className="w-[110px] px-1 tracking-tighter">Team</TableHead>
                                 <TableHead className="w-[110px] px-1 tracking-tighter">Người triển khai</TableHead>
-                                <TableHead className="w-[130px] px-1 text-center tracking-tighter">Kỳ chi phí</TableHead>
+                                <TableHead className="w-[110px] px-1 text-center tracking-tighter">Kỳ chi phí</TableHead>
                                 <TableHead className="w-[90px] px-1 text-right tracking-tighter">Chi phí</TableHead>
-                                <TableHead className="w-[90px] px-1 text-center tracking-tighter">Ngày ĐK</TableHead>
-                                <TableHead className="w-[70px] px-2 text-right tracking-tighter">Thao tác</TableHead>
+                                <TableHead className="w-[110px] px-1 text-center tracking-tighter">Hiệu quả MKT</TableHead>
+                                <TableHead className="w-[85px] px-1 text-center tracking-tighter">Ngày ĐK</TableHead>
+                                <TableHead className="w-[85px] px-2 text-right tracking-tighter">Thao tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -13846,11 +13932,36 @@ export default function App() {
                                     </div>
                                   </TableCell>
                                   <TableCell className="px-1 text-right font-mono font-black text-rose-600 text-[10px] tabular-nums">{c.amount.toLocaleString()}đ</TableCell>
+                                  <TableCell className="px-1 text-center">
+                                    {c.mktReport ? (
+                                      <div className="flex flex-col items-center justify-center gap-0.5 select-none">
+                                        <span className="inline-flex items-center gap-1 text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100">
+                                          Lead: {c.mktReport.convertedLeads || 0}/{c.mktReport.totalLeads || 0}
+                                        </span>
+                                        {c.mktReport.conversionRevenue > 0 && (
+                                          <span className="text-[7.5px] font-black text-emerald-700 font-mono tracking-tighter">
+                                            +{Math.round((c.mktReport.conversionRevenue / 1000000))}M đ
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 font-bold text-[10px] select-none">-</span>
+                                    )}
+                                  </TableCell>
                                   <TableCell className="px-1 text-center font-mono text-[9px] text-slate-400 tabular-nums">
                                     {c.createdAt?.toDate ? format(c.createdAt.toDate(), 'dd/MM/yyyy') : '-'}
                                   </TableCell>
                                   <TableCell className="px-2 text-right">
                                     <div className="flex justify-end gap-0.5">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50"
+                                        onClick={() => handleOpenMktReportDialog(c)}
+                                        title={c.mktReport ? "Sửa Báo cáo Hiệu quả MKT" : "Thêm Báo cáo Hiệu quả MKT"}
+                                      >
+                                        <Target className="w-3.5 h-3.5" />
+                                      </Button>
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
@@ -13876,7 +13987,7 @@ export default function App() {
                               ))}
                               {adminFilteredCosts.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={8} className="h-32 text-center text-slate-400 text-xs italic font-medium">
+                                  <TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs italic font-medium">
                                     Không tìm thấy dữ liệu chi phí nào phù hợp
                                   </TableCell>
                                 </TableRow>
@@ -13890,7 +14001,7 @@ export default function App() {
                                   <TableCell className="text-right font-mono text-blue-700">
                                     {adminFilteredCosts.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} đ
                                   </TableCell>
-                                  <TableCell></TableCell>
+                                  <TableCell colSpan={3}></TableCell>
                                 </TableRow>
                               </TableFooter>
                             )}
@@ -16871,7 +16982,7 @@ export default function App() {
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoản ngân sách</Label>
                           <Dialog open={isBudgetSelectionDialogOpen} onOpenChange={setIsBudgetSelectionDialogOpen}>
-                            <DialogTrigger nativeButton={false} render={
+                            <DialogTrigger nativeButton={true} render={
                               <Button 
                                 variant="outline" 
                                 className="w-full h-auto py-3 px-4 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300 justify-start text-left focus:ring-green-500 rounded-xl transition-all"
@@ -17134,6 +17245,88 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Báo cáo Hiệu quả MKT Collapsible Section */}
+                      <div className="border border-slate-150 rounded-xl overflow-hidden bg-slate-50/50">
+                        <button
+                          type="button"
+                          onClick={() => setShowMktReport(!showMktReport)}
+                          className="w-full flex items-center justify-between p-3 bg-slate-100/70 hover:bg-slate-100 transition-colors text-xs font-bold text-slate-700 uppercase tracking-wider text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Target className="w-4 h-4 text-emerald-600 animate-pulse" />
+                            <span>Báo cáo Hiệu quả MKT</span>
+                          </div>
+                          {showMktReport ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                        </button>
+
+                        {showMktReport && (
+                          <div className="p-4 space-y-4 border-t border-slate-100 bg-white">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Tổng Lead nhận được</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs font-mono" 
+                                  placeholder="0" 
+                                  value={formatNumberWithCommas(totalLeads)} 
+                                  onChange={handleNumberInputChange(setTotalLeads)} 
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead đã liên hệ</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs font-mono" 
+                                  placeholder="0" 
+                                  value={formatNumberWithCommas(contactedLeads)} 
+                                  onChange={handleNumberInputChange(setContactedLeads)} 
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead chưa chuyển đổi</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs font-mono" 
+                                  placeholder="0" 
+                                  value={formatNumberWithCommas(unconvertedLeads)} 
+                                  onChange={handleNumberInputChange(setUnconvertedLeads)} 
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead đã chuyển đổi</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs font-mono" 
+                                  placeholder="0" 
+                                  value={formatNumberWithCommas(convertedLeads)} 
+                                  onChange={handleNumberInputChange(setConvertedLeads)} 
+                                />
+                              </div>
+                              <div className="space-y-1.5 col-span-2">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Doanh thu chuyển đổi dự kiến (VNĐ)</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs font-mono font-bold text-emerald-600" 
+                                  placeholder="0" 
+                                  value={formatNumberWithCommas(conversionRevenue)} 
+                                  onChange={handleNumberInputChange(setConversionRevenue)} 
+                                />
+                              </div>
+                              <div className="space-y-1.5 col-span-2">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Lý do chưa chuyển đổi</Label>
+                                <Input 
+                                  type="text" 
+                                  className="h-9 text-xs" 
+                                  placeholder="Nhập lý do chưa chuyển đổi..." 
+                                  value={unconvertedReason} 
+                                  onChange={e => setUnconvertedReason(e.target.value)} 
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ghi chú</Label>
                         <Input placeholder="Nhập ghi chú chi phí..." className="bg-slate-50 border-slate-200 h-11" value={costNote} onChange={e => setCostNote(e.target.value)} />
@@ -17238,6 +17431,7 @@ export default function App() {
                           </TableHead>
                           <TableHead className="text-right font-bold text-slate-400 uppercase text-[10px]">Ngân sách</TableHead>
                           <TableHead className="text-right font-bold text-slate-400 uppercase text-[10px]">%</TableHead>
+                          <TableHead className="w-[180px]">Hiệu quả MKT</TableHead>
                           <TableHead>Ghi chú</TableHead>
                           <TableHead className="text-right">Thao tác</TableHead>
                         </TableRow>
@@ -17295,6 +17489,37 @@ export default function App() {
                                 </Badge>
                               ) : '-'}
                             </TableCell>
+                            <TableCell className="text-xs">
+                              {c.mktReport ? (
+                                <div className="space-y-0.5 bg-slate-50/70 p-1.5 rounded-lg border border-slate-100/50 text-[10px]">
+                                  <div className="flex gap-1 justify-between select-none">
+                                    <span className="text-slate-400">Tổng Lead:</span>
+                                    <span className="font-mono font-bold text-slate-850">{c.mktReport.totalLeads?.toLocaleString() || 0}</span>
+                                  </div>
+                                  <div className="flex gap-1 justify-between select-none">
+                                    <span className="text-slate-400">Đã liên hệ:</span>
+                                    <span className="font-mono font-bold text-indigo-500">{c.mktReport.contactedLeads?.toLocaleString() || 0}</span>
+                                  </div>
+                                  <div className="flex gap-1 justify-between select-none">
+                                    <span className="text-slate-400">Chuyển đổi:</span>
+                                    <span className="font-mono font-bold text-emerald-600">{c.mktReport.convertedLeads?.toLocaleString() || 0}</span>
+                                  </div>
+                                  {c.mktReport.conversionRevenue > 0 && (
+                                    <div className="flex gap-1 justify-between text-emerald-700 pt-0.5 border-t border-slate-100 select-none">
+                                      <span>Doanh thu:</span>
+                                      <span className="font-mono font-black">{c.mktReport.conversionRevenue?.toLocaleString()}đ</span>
+                                    </div>
+                                  )}
+                                  {c.mktReport.unconvertedReason && (
+                                    <div className="text-[9px] text-slate-550 truncate mt-0.5 italic" title={c.mktReport.unconvertedReason}>
+                                      Lý do: {c.mktReport.unconvertedReason}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-405 italic text-[11px] select-none">-</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-xs italic text-slate-500 max-w-[150px] truncate">
                               {editingCostId === c.id ? (
                                 <Input 
@@ -17324,6 +17549,9 @@ export default function App() {
                                     </div>
                                   ) : (
                                     <div className="flex justify-end gap-1">
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => handleOpenMktReportDialog(c)} title={c.mktReport ? "Báo cáo Hiệu quả MKT" : "Yêu cầu Báo cáo Hiệu quả MKT"}>
+                                        <Target className="h-3.5 w-3.5" />
+                                      </Button>
                                       <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => handleOpenHistory(c, `${c.projectName} - ${c.teamName}`)} title="Lịch sử thay đổi">
                                         <History className="h-3.5 w-3.5" />
                                       </Button>
@@ -17348,7 +17576,7 @@ export default function App() {
                         ))}
                         {costs.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={(isAdmin || isAccountant) ? 10 : 9} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
+                            <TableCell colSpan={(isAdmin || isAccountant) ? 11 : 10} className="text-center py-12 text-slate-400">Chưa có dữ liệu thực tế</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -17375,7 +17603,7 @@ export default function App() {
                                 );
                               })()}
                             </TableCell>
-                            <TableCell colSpan={2}></TableCell>
+                            <TableCell colSpan={3}></TableCell>
                           </TableRow>
                         </TableFooter>
                       )}
@@ -18366,6 +18594,86 @@ export default function App() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsDeleteAllBudgetsDialogOpen(false)}>Hủy</Button>
             <Button variant="destructive" onClick={confirmDeleteAllBudgets}>Xác nhận XÓA TẤT CẢ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MKT Report Edit/Update Dialog */}
+      <Dialog open={isMktReportDialogOpen} onOpenChange={setIsMktReportDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-600 flex items-center gap-2">
+              <Target className="w-5 h-5 animate-pulse" /> Báo cáo Hiệu quả MKT
+            </DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin chi tiết về hiệu quả marketing cho khoản chi phí của dự án: <span className="font-bold text-slate-800">{selectedCostForMkt ? (selectedCostForMkt.projectName) : ''}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Tổng Lead nhận được</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs font-mono" 
+                placeholder="0" 
+                value={formatNumberWithCommas(mktTotalLeads)} 
+                onChange={handleNumberInputChange(setMktTotalLeads)} 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead đã liên hệ</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs font-mono" 
+                placeholder="0" 
+                value={formatNumberWithCommas(mktContactedLeads)} 
+                onChange={handleNumberInputChange(setMktContactedLeads)} 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead chưa chuyển đổi</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs font-mono" 
+                placeholder="0" 
+                value={formatNumberWithCommas(mktUnconvertedLeads)} 
+                onChange={handleNumberInputChange(setMktUnconvertedLeads)} 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Số Lead đã chuyển đổi</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs font-mono" 
+                placeholder="0" 
+                value={formatNumberWithCommas(mktConvertedLeads)} 
+                onChange={handleNumberInputChange(setMktConvertedLeads)} 
+              />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Doanh thu chuyển đổi dự kiến (VNĐ)</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs font-mono font-bold text-emerald-600" 
+                placeholder="0" 
+                value={formatNumberWithCommas(mktConversionRevenue)} 
+                onChange={handleNumberInputChange(setMktConversionRevenue)} 
+              />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Lý do chưa chuyển đổi</Label>
+              <Input 
+                type="text" 
+                className="h-10 text-xs" 
+                placeholder="Nhập lý do chưa chuyển đổi..." 
+                value={mktUnconvertedReason} 
+                onChange={e => setMktUnconvertedReason(e.target.value)} 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMktReportDialogOpen(false)}>Hủy</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleSaveMktReport}>Cập nhật báo cáo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

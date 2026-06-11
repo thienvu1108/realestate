@@ -1922,6 +1922,8 @@ export default function App() {
     setMktUnconvertedReason(report.unconvertedReason || '');
     setMktConvertedLeads(report.convertedLeads ? report.convertedLeads.toString() : '');
     setMktConversionRevenue(report.conversionRevenue ? report.conversionRevenue.toString() : '');
+    setMktEditStartDate(report.startDate || '');
+    setMktEditEndDate(report.endDate || '');
     setIsMktReportDialogOpen(true);
   };
 
@@ -1935,7 +1937,9 @@ export default function App() {
         unconvertedLeads: Number(mktUnconvertedLeads.toString().replace(/\./g, '')) || 0,
         unconvertedReason: mktUnconvertedReason || '',
         convertedLeads: Number(mktConvertedLeads.toString().replace(/\./g, '')) || 0,
-        conversionRevenue: Number(mktConversionRevenue.toString().replace(/\./g, '')) || 0
+        conversionRevenue: Number(mktConversionRevenue.toString().replace(/\./g, '')) || 0,
+        startDate: mktEditStartDate || '',
+        endDate: mktEditEndDate || ''
       };
 
       await updateDoc(costRef, {
@@ -3098,6 +3102,8 @@ export default function App() {
   const [unconvertedReason, setUnconvertedReason] = useState('');
   const [convertedLeads, setConvertedLeads] = useState('');
   const [conversionRevenue, setConversionRevenue] = useState('');
+  const [mktStartDate, setMktStartDate] = useState('');
+  const [mktEndDate, setMktEndDate] = useState('');
   const [showMktReport, setShowMktReport] = useState(false);
 
   // MKT Efficiency Report states for edit dialog
@@ -3109,6 +3115,8 @@ export default function App() {
   const [mktUnconvertedReason, setMktUnconvertedReason] = useState('');
   const [mktConvertedLeads, setMktConvertedLeads] = useState('');
   const [mktConversionRevenue, setMktConversionRevenue] = useState('');
+  const [mktEditStartDate, setMktEditStartDate] = useState('');
+  const [mktEditEndDate, setMktEditEndDate] = useState('');
 
   // Edit states for Budget
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
@@ -6814,7 +6822,9 @@ export default function App() {
         unconvertedLeads: Number(unconvertedLeads.toString().replace(/\./g, '')) || 0,
         unconvertedReason: unconvertedReason || '',
         convertedLeads: Number(convertedLeads.toString().replace(/\./g, '')) || 0,
-        conversionRevenue: Number(conversionRevenue.toString().replace(/\./g, '')) || 0
+        conversionRevenue: Number(conversionRevenue.toString().replace(/\./g, '')) || 0,
+        startDate: mktStartDate || '',
+        endDate: mktEndDate || ''
       };
 
       const docRef = await addDoc(collection(db, 'costs'), {
@@ -6873,6 +6883,8 @@ export default function App() {
       setUnconvertedReason('');
       setConvertedLeads('');
       setConversionRevenue('');
+      setMktStartDate('');
+      setMktEndDate('');
       setShowMktReport(false);
       toast.success('Đã nhập chi phí thực tế và Báo cáo Hiệu quả MKT');
     } catch (error) {
@@ -13943,6 +13955,11 @@ export default function App() {
                                             +{Math.round((c.mktReport.conversionRevenue / 1000000))}M đ
                                           </span>
                                         )}
+                                        {(c.mktReport.startDate || c.mktReport.endDate) && (
+                                          <span className="text-[7.5px] font-bold text-slate-500 tracking-tighter bg-slate-100 rounded px-1 py-0.5 mt-0.5" title={`Từ ngày ${c.mktReport.startDate ? c.mktReport.startDate.split('-').reverse().join('/') : ''} đến ngày ${c.mktReport.endDate ? c.mktReport.endDate.split('-').reverse().join('/') : ''}`}>
+                                            {c.mktReport.startDate ? c.mktReport.startDate.split('-').reverse().slice(0,2).join('/') : ''} - {c.mktReport.endDate ? c.mktReport.endDate.split('-').reverse().slice(0,2).join('/') : ''}
+                                          </span>
+                                        )}
                                       </div>
                                     ) : (
                                       <span className="text-slate-400 font-bold text-[10px] select-none">-</span>
@@ -17262,6 +17279,33 @@ export default function App() {
                         {showMktReport && (
                           <div className="p-4 space-y-4 border-t border-slate-100 bg-white">
                             <div className="grid grid-cols-2 gap-4">
+                              <div className="col-span-2 space-y-1.5 border-b border-slate-100 pb-3 mb-1">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-emerald-550" /> Thời gian báo cáo
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <div className="text-[9px] text-slate-405 font-medium mb-1">Từ ngày</div>
+                                    <Input 
+                                      type="date" 
+                                      className="h-9 text-xs font-mono" 
+                                      value={mktStartDate} 
+                                      onChange={e => setMktStartDate(e.target.value)} 
+                                    />
+                                  </div>
+                                  <span className="text-xs text-slate-400 mt-5 font-bold">đến</span>
+                                  <div className="flex-1">
+                                    <div className="text-[9px] text-slate-405 font-medium mb-1">Đến ngày</div>
+                                    <Input 
+                                      type="date" 
+                                      className="h-9 text-xs font-mono" 
+                                      value={mktEndDate} 
+                                      onChange={e => setMktEndDate(e.target.value)} 
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-bold text-slate-500 uppercase">Tổng Lead nhận được</Label>
                                 <Input 
@@ -17508,6 +17552,12 @@ export default function App() {
                                     <div className="flex gap-1 justify-between text-emerald-700 pt-0.5 border-t border-slate-100 select-none">
                                       <span>Doanh thu:</span>
                                       <span className="font-mono font-black">{c.mktReport.conversionRevenue?.toLocaleString()}đ</span>
+                                    </div>
+                                  )}
+                                  {(c.mktReport.startDate || c.mktReport.endDate) && (
+                                    <div className="flex gap-1 justify-between select-none pt-0.5 mt-0.5 border-t border-slate-100 text-[9px] font-bold text-slate-500">
+                                      <span>Thời gian:</span>
+                                      <span className="font-mono">{c.mktReport.startDate ? c.mktReport.startDate.split('-').reverse().slice(0,2).join('/') : ''} - {c.mktReport.endDate ? c.mktReport.endDate.split('-').reverse().slice(0,2).join('/') : ''}</span>
                                     </div>
                                   )}
                                   {c.mktReport.unconvertedReason && (
@@ -18610,6 +18660,33 @@ export default function App() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="col-span-2 space-y-1.5 border-b border-slate-100 pb-3 mb-1">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-emerald-500" /> Thời gian báo cáo
+              </Label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <div className="text-[9px] text-slate-405 font-medium mb-1">Từ ngày</div>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs font-mono" 
+                    value={mktEditStartDate} 
+                    onChange={e => setMktEditStartDate(e.target.value)} 
+                  />
+                </div>
+                <span className="text-xs text-slate-400 mt-5 font-bold">đến</span>
+                <div className="flex-1">
+                  <div className="text-[9px] text-slate-405 font-medium mb-1">Đến ngày</div>
+                  <Input 
+                    type="date" 
+                    className="h-9 text-xs font-mono" 
+                    value={mktEditEndDate} 
+                    onChange={e => setMktEditEndDate(e.target.value)} 
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-500 uppercase">Tổng Lead nhận được</Label>
               <Input 

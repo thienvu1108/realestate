@@ -118,6 +118,7 @@ import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { MktProcessManager } from './components/MktProcessManager';
 import { DoiUngProcessManager } from './components/DoiUngProcessManager';
+import { MktEfficiencyManager } from './components/MktEfficiencyManager';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, BarChart, Bar, Legend, Cell, PieChart as RePieChart, Pie,
@@ -2332,6 +2333,7 @@ export default function App() {
       case 'team-mgmt': return 'Quản lý Phòng Kinh doanh';
       case 'register': return 'Đăng ký';
       case 'actual': return 'Chi phí';
+      case 'mkt-efficiency': return 'Hiệu quả MKT';
       case 'history': return 'Lịch sử';
       case 'report-nt': return 'Báo cáo NT';
       case 'support': return 'Hỗ trợ';
@@ -9452,6 +9454,9 @@ export default function App() {
               </TabsTrigger>
               <TabsTrigger value="actual" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-rose-600 data-[state=active]:text-white font-black transition-all">
                 <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Chi phí
+              </TabsTrigger>
+              <TabsTrigger value="mkt-efficiency" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-black transition-all">
+                <Target className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Hiệu quả MKT
               </TabsTrigger>
               <TabsTrigger value="history" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-slate-700 data-[state=active]:text-white font-black transition-all">
                 <History className="w-3.5 h-3.5 mr-1.5" /> Lịch sử
@@ -17666,6 +17671,25 @@ export default function App() {
             )}
           </TabsContent>
 
+          {/* MKT Efficiency Tab */}
+          <TabsContent value="mkt-efficiency" className="space-y-6">
+            {activeTab === 'mkt-efficiency' && (
+              <MktEfficiencyManager 
+                budgets={budgets}
+                costs={costs}
+                projects={projects}
+                teams={teams}
+                onOpenMktReportDialog={handleOpenMktReportDialog}
+                isAdmin={isAdmin}
+                isMod={isMod}
+                isAccountant={isAccountant}
+                isGDDA={isGDDA}
+                user={user}
+                userProfile={userProfile}
+              />
+            )}
+          </TabsContent>
+
           {/* Audit History Tab */}
           <TabsContent value="history" className="space-y-6">
             {activeTab === 'history' && (
@@ -19390,6 +19414,14 @@ export default function App() {
           >
             <TrendingUp className={`w-5 h-5 ${activeTab === 'actual' ? 'animate-in zoom-in duration-300' : ''}`} />
             <span className="text-[10px] font-black uppercase tracking-tighter">Chi phí</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('mkt-efficiency')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'mkt-efficiency' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Target className={`w-5 h-5 ${activeTab === 'mkt-efficiency' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <span className="text-[10px] font-black uppercase tracking-tighter">Eff MKT</span>
           </button>
 
           {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (

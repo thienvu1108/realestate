@@ -2331,8 +2331,8 @@ export default function App() {
       case 'admin': return 'Quản trị';
       case 'block-mgmt': return 'Quản lý Khối';
       case 'team-mgmt': return 'Quản lý Phòng Kinh doanh';
-      case 'register': return 'Đăng ký';
-      case 'actual': return 'Chi phí';
+      case 'register': return 'Đăng ký MKT';
+      case 'actual': return 'Cập nhật Chi phí';
       case 'mkt-efficiency': return 'Hiệu quả MKT';
       case 'history': return 'Lịch sử';
       case 'report-nt': return 'Báo cáo NT';
@@ -2359,13 +2359,7 @@ export default function App() {
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY;
           setIsScrolled(currentScrollY > 15);
-          if (currentScrollY < 50) {
-            setIsHeaderVisible(true);
-          } else if (currentScrollY > lastScrollY) {
-            setIsHeaderVisible(false);
-          } else {
-            setIsHeaderVisible(true);
-          }
+          setIsHeaderVisible(true); // Always visible - turn off auto-hide
           setLastScrollY(currentScrollY);
           ticking = false;
         });
@@ -2545,8 +2539,8 @@ export default function App() {
       { value: 'admin', label: 'Quản trị hệ thống', icon: ShieldCheck, color: 'text-rose-600', activeBg: 'bg-slate-900', activeText: 'text-white font-black', visible: (hasPermission('admin.projects.view') || hasPermission('admin.teams.view') || hasPermission('admin.budgets.view') || hasPermission('admin.costs.view') || hasPermission('admin.users.view') || hasPermission('admin.permissions.edit')), desc: 'Cấu hình dự án, ngân sách, nhân sự' },
       { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view'), desc: 'Đồng bộ & giám sát ngân sách Khối' },
       { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
-      { value: 'register', label: 'Đăng ký ngân sách', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
-      { value: 'actual', label: 'Chi phí thực tế', icon: TrendingUp, color: 'text-amber-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('actual.view'), desc: 'Ghi nhận thực chi chiến dịch chi tiết' },
+      { value: 'register', label: 'Đăng ký MKT', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
+      { value: 'actual', label: 'Cập nhật Chi phí', icon: TrendingUp, color: 'text-amber-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('actual.view'), desc: 'Ghi nhận thực chi chiến dịch chi tiết' },
       { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
       { value: 'report-nt', label: 'Báo cáo NT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Báo cáo Nghiệm thu tự động lấy từ Google Sheet' },
       { value: 'support', label: 'Hỗ trợ kỹ thuật', icon: MessageCircle, color: 'text-blue-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('support.create') || hasPermission('support.resolve'), badge: pendingSupportCount, desc: 'Yêu cầu hỗ trợ, phản hồi sự cố' },
@@ -9450,16 +9444,13 @@ export default function App() {
                 </TabsTrigger>
               )}
               <TabsTrigger value="register" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-black transition-all">
-                <Wallet className="w-3.5 h-3.5 mr-1.5" /> Đăng ký
+                <Wallet className="w-3.5 h-3.5 mr-1.5" /> Đăng ký MKT
               </TabsTrigger>
               <TabsTrigger value="actual" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-rose-600 data-[state=active]:text-white font-black transition-all">
-                <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Chi phí
+                <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Cập nhật Chi phí
               </TabsTrigger>
               <TabsTrigger value="mkt-efficiency" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-black transition-all">
                 <Target className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Hiệu quả MKT
-              </TabsTrigger>
-              <TabsTrigger value="history" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-slate-700 data-[state=active]:text-white font-black transition-all">
-                <History className="w-3.5 h-3.5 mr-1.5" /> Lịch sử
               </TabsTrigger>
               <TabsTrigger value="report-nt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black transition-all">
                 <FileCheck className="w-3.5 h-3.5 mr-1.5" /> Báo cáo NT
@@ -9594,6 +9585,16 @@ export default function App() {
                       >
                         <Settings className="mr-2 h-4 w-4" /> Cài đặt
                       </Button>
+                      {hasPermission('history.view') && (
+                        <Button 
+                          variant={adminSubTab === 'history' ? 'secondary' : 'ghost'} 
+                          size="sm"
+                          className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'history' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-600'}`}
+                          onClick={() => setAdminSubTab('history')}
+                        >
+                          <History className="mr-2 h-4 w-4" /> Lịch sử
+                        </Button>
+                      )}
                     </>
                   )}
                   {(isAdmin || hasPermission('admin.permissions.edit')) && (
@@ -16417,6 +16418,44 @@ export default function App() {
                     </Card>
                   </div>
                 </TabsContent>
+
+                <TabsContent value="history" className="space-y-6">
+                  {adminSubTab === 'history' && (
+                    <Card className="border-none shadow-sm">
+                      <CardHeader>
+                        <CardTitle>Lịch sử chỉnh sửa</CardTitle>
+                        <CardDescription>Theo dõi các thay đổi và người thực hiện</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {auditLogs.slice(0, 20).map(log => (
+                            <div key={log.id} className="flex items-start gap-4 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                              <div className="mt-1">
+                                <Badge variant={log.action === 'CREATE' ? 'default' : 'secondary'}>
+                                  {log.action}
+                                </Badge>
+                              </div>
+                              <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium">
+                                  <span className="text-blue-600">{log.userEmail}</span> đã {log.action === 'CREATE' ? 'thêm mới' : 'cập nhật'} dữ liệu trong <span className="font-bold">{log.collection}</span>
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  ID: {log.docId} | {log.timestamp?.toDate ? safeFormat(log.timestamp.toDate(), 'HH:mm dd/MM/yyyy') : '...'}
+                                </p>
+                                <div className="mt-2 text-xs bg-white p-2 rounded border border-slate-200 font-mono overflow-x-auto">
+                                  {JSON.stringify(log.data)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {auditLogs.length === 0 && (
+                            <div className="text-center py-12 text-slate-400">Chưa có lịch sử hoạt động</div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
                   </Tabs>
                 </div>
                 </>
@@ -17690,46 +17729,7 @@ export default function App() {
             )}
           </TabsContent>
 
-          {/* Audit History Tab */}
-          <TabsContent value="history" className="space-y-6">
-            {activeTab === 'history' && (
-              <>
-            <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle>Lịch sử chỉnh sửa</CardTitle>
-                <CardDescription>Theo dõi các thay đổi và người thực hiện</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {auditLogs.slice(0, 20).map(log => (
-                    <div key={log.id} className="flex items-start gap-4 p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="mt-1">
-                        <Badge variant={log.action === 'CREATE' ? 'default' : 'secondary'}>
-                          {log.action}
-                        </Badge>
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium">
-                          <span className="text-blue-600">{log.userEmail}</span> đã {log.action === 'CREATE' ? 'thêm mới' : 'cập nhật'} dữ liệu trong <span className="font-bold">{log.collection}</span>
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          ID: {log.docId} | {log.timestamp?.toDate ? safeFormat(log.timestamp.toDate(), 'HH:mm dd/MM/yyyy') : '...'}
-                        </p>
-                        <div className="mt-2 text-xs bg-white p-2 rounded border border-slate-200 font-mono overflow-x-auto">
-                          {JSON.stringify(log.data)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {auditLogs.length === 0 && (
-                    <div className="text-center py-12 text-slate-400">Chưa có lịch sử hoạt động</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-              </>
-            )}
-          </TabsContent>
+
 
           {/* Báo cáo NT Tab */}
           <TabsContent value="report-nt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -19405,7 +19405,7 @@ export default function App() {
             className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'register' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Wallet className={`w-5 h-5 ${activeTab === 'register' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Budget</span>
+            <span className="text-[10px] font-black uppercase tracking-tighter">Đăng ký MKT</span>
           </button>
 
           <button 
@@ -19413,7 +19413,7 @@ export default function App() {
             className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'actual' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <TrendingUp className={`w-5 h-5 ${activeTab === 'actual' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Chi phí</span>
+            <span className="text-[10px] font-black uppercase tracking-tighter text-center">Cập nhật Chi phí</span>
           </button>
 
           <button 
@@ -19435,10 +19435,13 @@ export default function App() {
           )}
 
           <button 
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            onClick={() => {
+              setActiveTab('admin');
+              setAdminSubTab('history');
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${(activeTab === 'admin' && adminSubTab === 'history') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <History className={`w-5 h-5 ${activeTab === 'history' ? 'animate-in zoom-in duration-300' : ''}`} />
+            <History className={`w-5 h-5 ${(activeTab === 'admin' && adminSubTab === 'history') ? 'animate-in zoom-in duration-300' : ''}`} />
             <span className="text-[10px] font-black uppercase tracking-tighter">Nhật ký</span>
           </button>
 

@@ -157,8 +157,17 @@ export function MktEfficiencyManager({
       });
 
       // Override raw id or outdated teamName with parent mapped name
-      const resolvedProjectName = projMap[budget.projectId] || budget.projectName || 'N/A';
-      const resolvedTeamName = tMap[budget.teamId] || budget.teamName || 'N/A';
+      const matchedProject = projects.find((p: any) =>
+        (p.id && (p.id === budget.projectId || p.id === budget.projectName)) ||
+        (p.name && (p.name === budget.projectId || p.name === budget.projectName))
+      );
+      const resolvedProjectName = matchedProject ? matchedProject.name : (projMap[budget.projectId] || budget.projectName || 'N/A');
+
+      const matchedTeam = teams.find((t: any) =>
+        (t.id && (t.id === budget.teamId || t.id === budget.teamName)) ||
+        (t.name && (t.name === budget.teamId || t.name === budget.teamName))
+      );
+      const resolvedTeamName = matchedTeam ? matchedTeam.name : (tMap[budget.teamId] || budget.teamName || 'N/A');
 
       return {
         ...budget,
@@ -531,7 +540,7 @@ export function MktEfficiencyManager({
                     <Search className="h-3.5 w-3.5 shrink-0 text-slate-400 mr-2" />
                     <input
                       type="text"
-                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-705"
+                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-700"
                       placeholder="Tìm kiếm dự án..."
                       value={projectSearch}
                       onChange={(e) => setProjectSearch(e.target.value)}
@@ -621,7 +630,7 @@ export function MktEfficiencyManager({
                     <Search className="h-3.5 w-3.5 shrink-0 text-slate-400 mr-2" />
                     <input
                       type="text"
-                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-705"
+                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-700"
                       placeholder="Tìm kiếm team..."
                       value={teamSearch}
                       onChange={(e) => setTeamSearch(e.target.value)}

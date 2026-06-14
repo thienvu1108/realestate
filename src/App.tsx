@@ -3598,8 +3598,9 @@ export default function App() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
     // Listen to budgets
+    const hasMktEffView = currentRolePermissions.includes('mkt_efficiency.view') || user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin';
     let qBudgets;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(3000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
@@ -3628,7 +3629,7 @@ export default function App() {
 
     // Listen to costs
     let qCosts;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
+    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(3000));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
@@ -3789,7 +3790,7 @@ export default function App() {
       unsubReportNT();
       unsubRolePerms();
     };
-  }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects)]);
+  }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects), JSON.stringify(currentRolePermissions)]);
 
   const initialDocProcessingMonthSet = useRef(false);
   useEffect(() => {
@@ -17936,6 +17937,7 @@ export default function App() {
                 isGDDA={isGDDA}
                 user={user}
                 userProfile={userProfile}
+                hasPermission={hasPermission}
               />
             )}
           </TabsContent>

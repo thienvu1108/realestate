@@ -667,7 +667,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'report_nt.view', 'report_nt.sync',
     'support.create', 'support.resolve',
     'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve'
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   admin: [
     'home.view', 'home.export',
@@ -686,7 +687,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'report_nt.view', 'report_nt.sync',
     'support.create', 'support.resolve',
     'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve'
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   mod: [
     'home.view',
@@ -698,7 +700,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'report_nt.view',
     'support.create', 'support.resolve',
     'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve'
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   accountant: [
     'home.view', 'home.export',
@@ -714,7 +717,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'report_nt.view',
     'support.create',
     'process_mkt.create',
-    'process_doiung.create'
+    'process_doiung.create',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   gdda: [
     'home.view',
@@ -723,7 +727,10 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
     'report_nt.view',
-    'support.create'
+    'support.create',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   gd_khoi: [
     'home.view',
@@ -732,7 +739,10 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'actual.view',
     'history.view',
     'report_nt.view',
-    'support.create'
+    'support.create',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   gdkd: [
     'home.view',
@@ -741,7 +751,21 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'actual.view',
     'history.view',
     'report_nt.view',
-    'support.create'
+    'support.create',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+  ],
+  assistant: [
+    'home.view', 'home.export',
+    'register.view', 'register.create', 'register.edit',
+    'actual.view', 'actual.create', 'actual.edit',
+    'history.view', 'history.export',
+    'report_nt.view',
+    'support.create',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   user: [
     'home.view',
@@ -749,7 +773,9 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
     'report_nt.view',
-    'support.create'
+    'support.create',
+    'process_mkt.create',
+    'process_doiung.create'
   ]
 };
 
@@ -761,6 +787,7 @@ export const ROLE_NAMES: Record<string, string> = {
   gdda: "GDDA (Giám đốc Dự án)",
   gd_khoi: "GĐ Khối (Giám đốc Khối)",
   gdkd: "GĐKD (Giám đốc Kinh doanh)",
+  assistant: "Trợ lý (Trợ lý Ban Giám đốc)",
   user: "User (Người dùng thường)"
 };
 
@@ -857,12 +884,20 @@ export const PERMISSION_GROUPS = [
       { key: 'process_doiung.create', label: 'Tạo quy trình đối ứng', desc: 'Khởi tạo quy trình bàn giao nhận đối ứng.' },
       { key: 'process_doiung.approve', label: 'Duyệt quy trình đối ứng', desc: 'Phê duyệt quy trình đối ứng bàn giao.' }
     ]
+  },
+  {
+    category: 'Hiệu quả Marketing (MKT Efficiency)',
+    items: [
+      { key: 'mkt_efficiency.view', label: 'Xem chi tiết Hiệu quả MKT', desc: 'Quyền xem tab Hiệu quả Marketing, các biểu đồ, chi tiết chiến dịch và danh sách bản ghi.' },
+      { key: 'mkt_efficiency.export', label: 'Xuất file Excel Hiệu quả MKT', desc: 'Quyền tải về các bản ghi và báo cáo chiến dịch dưới dạng file Excel.' },
+      { key: 'mkt_efficiency.filter', label: 'Lọc danh sách Hiệu quả MKT', desc: 'Quyền sử dụng tùy chọn lọc theo Dự án, Phòng ban và Tháng trong danh sách hiệu quả.' }
+    ]
   }
 ];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [rolePermissionsList, setRolePermissionsList] = useState<any[]>([]);
   const [selectedRolePermission, setSelectedRolePermission] = useState<string>('admin');
@@ -981,6 +1016,11 @@ export default function App() {
     return role === 'gdkd' || role === 'giám đốc kinh doanh';
   }, [userProfile]);
 
+  const isAssistant = useMemo(() => {
+    const role = userRole?.toLowerCase()?.trim();
+    return role === 'assistant' || role === 'trợ lý' || role === 'tro ly';
+  }, [userRole]);
+
   const isUser = useMemo(() => {
     const role = userRole?.toLowerCase()?.trim();
     return !role || role === 'user' || role === 'người dùng';
@@ -989,12 +1029,12 @@ export default function App() {
   const isInternalStaff = useMemo(() => {
     const role = userRole?.toLowerCase()?.trim() || '';
     const email = user?.email?.toLowerCase() || '';
-    const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'gdkd', 'giám đốc kinh doanh', 'moderator', 'kế toán', 'điều phối', 'accounting'];
+    const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'gdkd', 'giám đốc kinh doanh', 'assistant', 'trợ lý', 'tro ly', 'moderator', 'kế toán', 'điều phối', 'accounting'];
     return internalRoles.includes(role) || 
            email === 'thienvu1108@gmail.com' || 
            email === 'tesscain2022@gmail.com' ||
-           isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isGDKD;
-  }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD]);
+           isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isGDKD || isAssistant;
+  }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, isAssistant]);
   const [activeTab, setActiveTab] = useState('home');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
@@ -2291,7 +2331,6 @@ export default function App() {
   }, [efficiencyChartData, projects, reportProject, reportRegion, reportType, reportTeam, budgets, acceptances, efficiencyReports, resolveTeamName]);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
   const [isMenuCollapsed, setIsMenuCollapsed] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -2359,8 +2398,6 @@ export default function App() {
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY;
           setIsScrolled(currentScrollY > 15);
-          setIsHeaderVisible(true); // Always visible - turn off auto-hide
-          setLastScrollY(currentScrollY);
           ticking = false;
         });
         ticking = true;
@@ -2369,7 +2406,7 @@ export default function App() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+  }, []);
 
   // Tự động đóng menu di động khi chuyển đổi tab
   useEffect(() => {
@@ -3122,6 +3159,7 @@ export default function App() {
   const [editingBudgetTeam, setEditingBudgetTeam] = useState('');
   const [editingBudgetProject, setEditingBudgetProject] = useState('');
   const [editingBudgetImplementer, setEditingBudgetImplementer] = useState('');
+  const [editingBudgetReason, setEditingBudgetReason] = useState('');
   const [isEditBudgetDialogOpen, setIsEditBudgetDialogOpen] = useState(false);
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
   const [editingCostAmount, setEditingCostAmount] = useState('');
@@ -3419,7 +3457,7 @@ export default function App() {
             return;
           }
           
-          let role: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'user' = 'user';
+          let role: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' = 'user';
           if (firebaseUser.email === 'thienvu1108@gmail.com') {
             role = 'super_admin';
           }
@@ -3446,7 +3484,7 @@ export default function App() {
               setUserProfile(data || null);
               
               const rawRole = String(data?.role || 'user').toLowerCase().trim();
-              let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'user' = 'user';
+              let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' = 'user';
               
               if (firebaseUser.email === 'thienvu1108@gmail.com') synchronizedRole = 'super_admin';
               else if (rawRole === 'super_admin') synchronizedRole = 'super_admin';
@@ -3454,6 +3492,7 @@ export default function App() {
               else if (rawRole === 'mod' || rawRole === 'moderator' || rawRole === 'điều phối') synchronizedRole = 'mod';
               else if (rawRole === 'accountant' || rawRole === 'kế toán') synchronizedRole = 'accountant';
               else if (rawRole === 'gdda') synchronizedRole = 'gdda';
+              else if (rawRole === 'assistant' || rawRole === 'trợ lý' || rawRole === 'tro ly') synchronizedRole = 'assistant';
               else synchronizedRole = 'user';
               
               setUserRole(synchronizedRole);
@@ -3480,7 +3519,7 @@ export default function App() {
           // Initial tab redirection logic (based on initial fetch)
           const initialData = userDoc.data();
           const initialRawRole = (initialData?.role || 'user').toLowerCase();
-          if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda'].includes(initialRawRole)) {
+          if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'assistant', 'trợ lý', 'tro ly'].includes(initialRawRole)) {
             setActiveTab('admin');
           } else {
             setActiveTab('register');
@@ -6896,12 +6935,18 @@ export default function App() {
     setEditingBudgetTeam(budget.teamName);
     setEditingBudgetProject(budget.projectId);
     setEditingBudgetImplementer(budget.implementerName);
+    setEditingBudgetReason('');
     setIsEditBudgetDialogOpen(true);
   };
 
   const confirmEditBudget = async () => {
     if (!editingBudgetId || !editingBudgetAmount || !editingBudgetTeam || !editingBudgetMonth || !editingBudgetProject || !editingBudgetImplementer) {
       toast.error('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
+
+    if (!editingBudgetReason || !editingBudgetReason.trim()) {
+      toast.error('Vui lòng nhập Lý do sửa');
       return;
     }
 
@@ -6928,6 +6973,7 @@ export default function App() {
           editorName: userProfile?.fullName || user?.displayName || 'Unknown',
           editorEmail: user?.email,
           timestamp: new Date().toISOString(),
+          reason: editingBudgetReason.trim(),
           changes: {
             amount: { old: originalBudget?.amount, new: Number(editingBudgetAmount) },
             verifiedAmount: { old: originalBudget?.verifiedAmount || 0, new: Number(editingBudgetVerifiedAmount) },
@@ -6954,8 +7000,9 @@ export default function App() {
         await batch.commit();
       }
 
-      await logAction('UPDATE', 'budgets', editingBudgetId, updateData);
+      await logAction('UPDATE', 'budgets', editingBudgetId, { ...updateData, reason: editingBudgetReason.trim() });
       setEditingBudgetId(null);
+      setEditingBudgetReason('');
       setIsEditBudgetDialogOpen(false);
       toast.success('Đã cập nhật ngân sách');
     } catch (error) {
@@ -8111,12 +8158,171 @@ export default function App() {
       // Check permission: settings can only be saved to Firestore by isAdmin or isAccountant.
       const canWriteSettings = isAdmin || isAccountant;
       if (canWriteSettings) {
+        // Helper to match nested/combined/loose column keys in each record object
+        const getVal = (recordObj: Record<string, any>, possibleKeywords: string[]) => {
+          for (const key of Object.keys(recordObj)) {
+            if (key === 'id_row') continue;
+            const cleanKey = key.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '');
+            for (const kw of possibleKeywords) {
+              const cleanKW = kw.trim().toLowerCase().normalize('NFC').replace(/\s+/g, '');
+              if (cleanKey.includes(cleanKW) || cleanKW.includes(cleanKey)) {
+                return recordObj[key];
+              }
+            }
+          }
+          return undefined;
+        };
+
+        const findProjectMatch = (refObj: any) => {
+          if (!refObj) return null;
+          const cleanRef = String(refObj).toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return projects.find(p => {
+            const pId = String(p.id || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            const pCode = String(p.projectCode || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            const pName = String(p.name || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            return pId === cleanRef || pCode === cleanRef || pName === cleanRef || cleanRef.includes(pName) || pName.includes(cleanRef);
+          });
+        };
+
+        const findTeamMatch = (refObj: any) => {
+          if (!refObj) return null;
+          const cleanRef = String(refObj).toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+          if (!cleanRef) return null;
+          return teams.find(t => {
+            const tId = String(t.id || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            const tCode = String(t.teamCode || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            const tName = String(t.name || '').toLowerCase().trim().normalize('NFC').replace(/[^a-z0-9]/g, '');
+            return tId === cleanRef || tCode === cleanRef || tName === cleanRef || cleanRef.includes(tName) || tName.includes(cleanRef);
+          });
+        };
+
+        let updatedCount = 0;
+        let insertedCount = 0;
+        let skippedCount = 0;
+
+        let batch = writeBatch(db);
+        let opCount = 0;
+
+        for (const record of records) {
+          const monthRaw = getVal(record, ['kỳ tháng', 'tháng', 'kỳ', 'month', 'thang']);
+          const month = normalizeMonth(monthRaw);
+
+          const teamRef = getVal(record, ['mã team', 'team', 'mateam', 'idteam', 'mã phòng', 'maphong']);
+          const projectRef = getVal(record, ['tên dự án', 'dự án', 'project', 'tenduan', 'projectname']);
+
+          if (!month || !teamRef || !projectRef) {
+            skippedCount++;
+            continue;
+          }
+
+          const project = findProjectMatch(projectRef);
+          const team = findTeamMatch(teamRef);
+
+          if (!project || !team) {
+            skippedCount++;
+            continue;
+          }
+
+          // Parse cost metrics
+          const fbAds = parseVal(getVal(record, ['Facebook Ads', 'FB Ads', 'FBAds', 'facebookads', 'facebook ads', 'facebook']));
+          const tiktokAds = parseVal(getVal(record, ['Tiktok Ads', 'TikTok', 'tiktokads', 'tiktok ads', 'tiktok']));
+          const zaloAds = parseVal(getVal(record, ['Zalo Ads', 'Zalo', 'zaloads', 'zalo ads', 'zalo']));
+          const googleAds = parseVal(getVal(record, ['Google Ads', 'Google', 'googleads', 'google ads', 'google']));
+          const posting = parseVal(getVal(record, ['Đăng tin', 'Posting', 'dangtin', 'posting']));
+          const visa = parseVal(getVal(record, ['VISA', 'visa', 'visa cost', 'chi phí visa']));
+          const digital = parseVal(getVal(record, ['Digital', 'digital', 'digital cost', 'chi phí digital']));
+          const crm = parseVal(getVal(record, ['CRM', 'crm', 'crm cost', 'chi phí crm']));
+          const other = parseVal(getVal(record, ['Khác', 'Other', 'khac', 'other cost', 'chi phí khác']));
+
+          const totalCost = fbAds + tiktokAds + zaloAds + googleAds + posting + other;
+
+          const existingAcc = acceptances.find(a => 
+            a.projectId === project.id && 
+            a.teamId === team.id && 
+            a.month === month
+          );
+
+          if (existingAcc) {
+            const ref = doc(db, 'acceptances', existingAcc.id);
+            batch.update(ref, {
+              projectName: project.name,
+              projectCode: project.projectCode || '',
+              teamName: team.name,
+              teamCode: team.teamCode || '',
+              facebookCost: fbAds,
+              tiktokCost: tiktokAds,
+              zaloCost: zaloAds,
+              googleCost: googleAds,
+              postingCost: posting,
+              visaCost: visa,
+              digitalCost: digital,
+              crmCost: crm,
+              otherCost: other,
+              totalCost: totalCost,
+              beforeAcceptanceCost: totalCost,
+              afterAcceptanceCost: existingAcc.status === 'Trước nghiệm thu' ? totalCost : existingAcc.afterAcceptanceCost,
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.email || '',
+              updatedByUid: user?.uid || ''
+            });
+            updatedCount++;
+          } else {
+            const ref = doc(collection(db, 'acceptances'));
+            batch.set(ref, {
+              projectId: project.id,
+              projectName: project.name,
+              projectCode: project.projectCode || '',
+              teamId: team.id,
+              teamName: team.name,
+              teamCode: team.teamCode || '',
+              month,
+              facebookCost: fbAds,
+              tiktokCost: tiktokAds,
+              zaloCost: zaloAds,
+              googleCost: googleAds,
+              postingCost: posting,
+              visaCost: visa,
+              digitalCost: digital,
+              crmCost: crm,
+              otherCost: other,
+              totalCost: totalCost,
+              beforeAcceptanceCost: totalCost,
+              afterAcceptanceCost: totalCost,
+              status: 'Trước nghiệm thu',
+              createdAt: serverTimestamp(),
+              createdBy: user?.email || '',
+              createdByUid: user?.uid || '',
+              updatedAt: serverTimestamp(),
+              updatedBy: user?.email || '',
+              updatedByUid: user?.uid || '',
+              breakdown: {}
+            });
+            insertedCount++;
+          }
+
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+
+        if (opCount > 0) {
+          await batch.commit();
+        }
+
         await setDoc(doc(db, 'settings', 'report_nt'), {
           sheetUrl: inputReportNTUrl,
           records: records,
           lastUpdated: new Date().toISOString()
         });
-        toast.success("Đã cập nhật link Google Sheet và đồng bộ dữ liệu 'Báo cáo NT' lên website thành công!");
+
+        toast.success(`Đồng bộ thành công! Cập nhật ${updatedCount} bản ghi, thêm mới ${insertedCount} bản ghi nghiệm thu.`);
+        if (skippedCount > 0) {
+          toast.info(`Bỏ qua ${skippedCount} bản ghi không khớp Tên Dự án, Mã Team hoặc Tháng.`);
+        }
       } else {
         // Fallback for demo / non-admin testing who want to trigger local sync:
         setReportNTUrl(inputReportNTUrl);
@@ -9449,9 +9655,11 @@ export default function App() {
               <TabsTrigger value="actual" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-rose-600 data-[state=active]:text-white font-black transition-all">
                 <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Cập nhật Chi phí
               </TabsTrigger>
-              <TabsTrigger value="mkt-efficiency" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-black transition-all">
-                <Target className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Hiệu quả MKT
-              </TabsTrigger>
+               {hasPermission('mkt_efficiency.view') && (
+                <TabsTrigger value="mkt-efficiency" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white font-black transition-all">
+                  <Target className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Hiệu quả MKT
+                </TabsTrigger>
+              )}
               <TabsTrigger value="report-nt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black transition-all">
                 <FileCheck className="w-3.5 h-3.5 mr-1.5" /> Báo cáo NT
               </TabsTrigger>
@@ -11473,7 +11681,7 @@ export default function App() {
 
                         {/* Phân rã chi tiết */}
                         <div className="p-3 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-2 mt-2">
-                          <Label className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">Bóc tách Kênh (Không bắt buộc)</Label>
+                          <Label className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">Bóc tách Kênh</Label>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="space-y-0.5">
                               <Label className="text-[10px]">FB Ads</Label>
@@ -15457,12 +15665,13 @@ export default function App() {
                                       <SelectItem value="mod">Mod</SelectItem>
                                       <SelectItem value="accountant">Kế toán</SelectItem>
                                       <SelectItem value="gdda">GDDA</SelectItem>
+                                      <SelectItem value="assistant">Trợ lý</SelectItem>
                                       <SelectItem value="user">User</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
                                 <TableCell>
-                                  {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda') ? (
+                                  {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda' || u.role === 'assistant') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
                                         <DialogTrigger nativeButton={true} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
@@ -15474,6 +15683,8 @@ export default function App() {
                                             <DialogDescription>
                                               {(u.role === 'mod' || u.role === 'accountant')
                                                 ? 'Chọn các dự án mà Mod/Kế toán này có quyền xem.' 
+                                                : u.role === 'assistant'
+                                                ? 'Chọn các dự án mà Trợ lý này có quyền xem.'
                                                 : 'Chọn các dự án mà GDDA này có quyền xem báo cáo.'}
                                             </DialogDescription>
                                           </DialogHeader>
@@ -18959,6 +19170,18 @@ export default function App() {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-400">đ</span>
               </div>
             </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase text-rose-600 flex items-center gap-1">
+                Lý do sửa <span className="text-rose-500 font-bold">*</span>
+              </Label>
+              <Input 
+                placeholder="Nhập lý do điều chỉnh ngân sách... (bắt buộc)" 
+                value={editingBudgetReason} 
+                onChange={e => setEditingBudgetReason(e.target.value)} 
+                className="bg-slate-50 border-rose-200 focus:border-rose-500 focus:ring-rose-500 font-medium placeholder:text-slate-400"
+              />
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsEditBudgetDialogOpen(false)}>Hủy</Button>
@@ -19373,6 +19596,11 @@ export default function App() {
                           ))}
                         </div>
                       )}
+                      {entry.reason && (
+                        <div className="mt-1.5 p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px] text-amber-800 font-sans">
+                          <span className="font-bold">Lý do sửa:</span> {entry.reason}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -19416,13 +19644,15 @@ export default function App() {
             <span className="text-[10px] font-black uppercase tracking-tighter text-center">Cập nhật Chi phí</span>
           </button>
 
-          <button 
-            onClick={() => setActiveTab('mkt-efficiency')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'mkt-efficiency' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <Target className={`w-5 h-5 ${activeTab === 'mkt-efficiency' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Eff MKT</span>
-          </button>
+          {hasPermission('mkt_efficiency.view') && (
+            <button 
+              onClick={() => setActiveTab('mkt-efficiency')}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'mkt-efficiency' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Target className={`w-5 h-5 ${activeTab === 'mkt-efficiency' ? 'animate-in zoom-in duration-300' : ''}`} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">Eff MKT</span>
+            </button>
+          )}
 
           {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
             <button 

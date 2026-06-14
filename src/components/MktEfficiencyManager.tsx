@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Target, TrendingUp, Users, Calendar, Search, Filter, 
   ChevronDown, ChevronUp, AlertCircle, HelpCircle, 
   Percent, ArrowUpRight, DollarSign, ListFilter, Edit2, 
-  Building2, ArrowUpDown
+  Building2, ArrowUpDown, Download, Check, ChevronsUpDown, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 interface MktEfficiencyManagerProps {
   budgets: any[];
@@ -24,6 +26,7 @@ interface MktEfficiencyManagerProps {
   isGDDA: boolean;
   user: any;
   userProfile: any;
+  hasPermission?: (permKey: string) => boolean;
 }
 
 export function MktEfficiencyManager({
@@ -37,13 +40,60 @@ export function MktEfficiencyManager({
   isAccountant,
   isGDDA,
   user,
-  userProfile
+  userProfile,
+  hasPermission
 }: MktEfficiencyManagerProps) {
+  // Permission checks
+  const canExport = useMemo(() => {
+    return hasPermission ? hasPermission('mkt_efficiency.export') : true;
+  }, [hasPermission]);
+
+  const canFilter = useMemo(() => {
+    return hasPermission ? hasPermission('mkt_efficiency.filter') : true;
+  }, [hasPermission]);
+
   // Filter states
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // Dropdown search states & refs
+  const projectRef = useRef<HTMLDivElement>(null);
+  const teamRef = useRef<HTMLDivElement>(null);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+  const [teamSearch, setTeamSearch] = useState('');
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (projectRef.current && !projectRef.current.contains(event.target as Node)) {
+        setIsProjectDropdownOpen(false);
+        setProjectSearch('');
+      }
+      if (teamRef.current && !teamRef.current.contains(event.target as Node)) {
+        setIsTeamDropdownOpen(false);
+        setTeamSearch('');
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    if (!projectSearch) return projects;
+    const s = projectSearch.toLowerCase();
+    return projects.filter(p => p.name?.toLowerCase().includes(s));
+  }, [projects, projectSearch]);
+
+  const filteredTeamsList = useMemo(() => {
+    if (!teamSearch) return teams;
+    const s = teamSearch.toLowerCase();
+    return teams.filter(t => t.name?.toLowerCase().includes(s));
+  }, [teams, teamSearch]);
   
   // Sort state
   const [sortBy, setSortBy] = useState<'month' | 'budget' | 'actual' | 'leads' | 'roi'>('month');
@@ -70,6 +120,17 @@ export function MktEfficiencyManager({
 
   // Aggregate marketing costs matching budgets
   const budgetLogsMapped = useMemo(() => {
+    // Build real id-to-name lookup maps from parents
+    const projMap: Record<string, string> = {};
+    projects.forEach(p => {
+      if (p.id) projMap[p.id] = p.name;
+    });
+
+    const tMap: Record<string, string> = {};
+    teams.forEach(t => {
+      if (t.id) tMap[t.id] = t.name;
+    });
+
     return budgets.map(budget => {
       // Find costs that belong to this budget
       const relatedCosts = costs.filter(c => c.budgetId === budget.id);
@@ -95,8 +156,14 @@ export function MktEfficiencyManager({
         }
       });
 
+      // Override raw id or outdated teamName with parent mapped name
+      const resolvedProjectName = projMap[budget.projectId] || budget.projectName || 'N/A';
+      const resolvedTeamName = tMap[budget.teamId] || budget.teamName || 'N/A';
+
       return {
         ...budget,
+        projectName: resolvedProjectName,
+        teamName: resolvedTeamName,
         relatedCosts,
         totalMktActual,
         totalLeads,
@@ -112,7 +179,7 @@ export function MktEfficiencyManager({
         roi: totalMktActual > 0 ? (conversionRevenue / totalMktActual) * 100 : 0
       };
     });
-  }, [budgets, costs]);
+  }, [budgets, costs, projects, teams]);
 
   // Filter budgets based on user selections
   const filteredBudgetLogs = useMemo(() => {
@@ -206,6 +273,98 @@ export function MktEfficiencyManager({
       setSortBy(field);
       setSortOrder('desc');
     }
+  };
+
+  const handleExportExcel = () => {
+    if (sortedBudgetLogs.length === 0) {
+      toast.error('Không có dữ liệu để xuất');
+      return;
+    }
+
+    // 1. Map overview budget/marketing data
+    const overviewData = sortedBudgetLogs.map((blog, idx) => {
+      return {
+        'STT': idx + 1,
+        'Kỳ': blog.month || 'N/A',
+        'Dự án': blog.projectName || 'N/A',
+        'Phòng / Team': blog.teamName || 'N/A',
+        'Người đề xuất': blog.implementerName || 'N/A',
+        'Ngân sách Đăng ký (đ)': blog.amount || 0,
+        'Thực chi Marketing (đ)': blog.totalMktActual || 0,
+        'Tỉ lệ sử dụng (%)': blog.amount > 0 ? Number(((blog.totalMktActual / blog.amount) * 100).toFixed(1)) : 0,
+        'Tổng Leads nhận': blog.totalLeads || 0,
+        'MKT Leads đã liên hệ': blog.contactedLeads || 0,
+        'MKT Leads đã chuyển đổi': blog.convertedLeads || 0,
+        'Tỉ lệ chuyển đổi (%)': Number(blog.conversionRate.toFixed(1)),
+        'CPL trung bình (đ)': Math.round(blog.cpl),
+        'CAC trung bình (đ)': Math.round(blog.cac),
+        'Doanh thu dự kiến (đ)': blog.conversionRevenue || 0,
+        'Chỉ số ROI (%)': Number(blog.roi.toFixed(1))
+      };
+    });
+
+    // 2. Map detailed campaigns data
+    const drilldownData: any[] = [];
+    let dIdx = 1;
+    sortedBudgetLogs.forEach(blog => {
+      if (blog.relatedCosts && blog.relatedCosts.length > 0) {
+        blog.relatedCosts.forEach((c: any) => {
+          drilldownData.push({
+            'STT': dIdx++,
+            'Kỳ hoạch toán': blog.month || 'N/A',
+            'Dự án': blog.projectName || 'N/A',
+            'Phòng / Team': blog.teamName || 'N/A',
+            'Chứng từ / Chiến dịch': c.description || 'N/A',
+            'Kênh truyền thông': c.channel || 'Khác',
+            'Số tiền chi ra (đ)': c.amount || 0,
+            'Từ ngày': c.mktReport?.startDate || '-',
+            'Đến ngày': c.mktReport?.endDate || '-',
+            'Tổng Leads': c.mktReport?.totalLeads !== undefined ? c.mktReport.totalLeads : 0,
+            'Đã liên hệ': c.mktReport?.contactedLeads !== undefined ? c.mktReport.contactedLeads : 0,
+            'Đã chuyển đổi': c.mktReport?.convertedLeads !== undefined ? c.mktReport.convertedLeads : 0,
+            'Doanh thu dự đoán (đ)': c.mktReport?.conversionRevenue || 0,
+            'Lý do chưa chuyển đổi tốt / Ghi chú': c.mktReport?.unconvertedReason || '-'
+          });
+        });
+      }
+    });
+
+    const workbook = XLSX.utils.book_new();
+
+    // Add Overview Sheet
+    const wsOverview = XLSX.utils.json_to_sheet(overviewData);
+    XLSX.utils.book_append_sheet(workbook, wsOverview, "Tổng hợp Hiệu quả MKT");
+
+    // Add Detailed Sheet (only if there are details)
+    if (drilldownData.length > 0) {
+      const wsDetail = XLSX.utils.json_to_sheet(drilldownData);
+      XLSX.utils.book_append_sheet(workbook, wsDetail, "Chi tiết Chiến dịch");
+    }
+
+    // Set nice column widths for Overview
+    wsOverview['!cols'] = [
+      { wch: 6 },   // STT
+      { wch: 10 },  // Kỳ
+      { wch: 25 },  // Dự án
+      { wch: 20 },  // Phòng / Team
+      { wch: 20 },  // Người đề xuất
+      { wch: 22 },  // Ngân sách Đăng ký (đ)
+      { wch: 22 },  // Thực chi Marketing (đ)
+      { wch: 18 },  // Tỉ lệ sử dụng (%)
+      { wch: 16 },  // Tổng Leads nhận
+      { wch: 20 },  // MKT Leads đã liên hệ
+      { wch: 22 },  // MKT Leads đã chuyển đổi
+      { wch: 18 },  // Tỉ lệ chuyển đổi (%)
+      { wch: 20 },  // CPL trung bình (đ)
+      { wch: 20 },  // CAC trung bình (đ)
+      { wch: 22 },  // Doanh thu dự kiến (đ)
+      { wch: 16 }   // Chỉ số ROI (%)
+    ];
+
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}_${d.getHours().toString().padStart(2, '0')}${d.getMinutes().toString().padStart(2, '0')}`;
+    XLSX.writeFile(workbook, `Bao_cao_Hieu_qua_MKT_${dateStr}.xlsx`);
+    toast.success('Đã xuất file báo cáo Excel hiệu quả Marketing thành công!');
   };
 
   return (
@@ -332,49 +491,204 @@ export function MktEfficiencyManager({
       {/* Control Filter Panel Card */}
       <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white overflow-hidden">
         <CardContent className="p-5 sm:p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-50">
-            <ListFilter className="w-4 h-4 text-indigo-500" />
-            <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">Bộ lọc & Công cụ tìm kiếm nhanh</h4>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-50 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ListFilter className="w-4 h-4 text-indigo-500" />
+              <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">Bộ lọc & Công cụ tìm kiếm nhanh</h4>
+            </div>
+            {!canFilter && (
+              <Badge className="bg-rose-50 text-rose-650 border border-slate-200 font-bold px-2.5 py-0.5 text-[9px] uppercase rounded-full tracking-wider">
+                🔒 Vô hiệu hóa Bộ lọc (Chưa cấp quyền)
+              </Badge>
+            )}
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* Filter 1: Project */}
-            <div className="space-y-1.5">
+            {/* Filter 1: Project with inline search */}
+            <div className="space-y-1.5 relative" ref={projectRef}>
               <Label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Dự án</Label>
-              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                <SelectTrigger className="h-10 text-xs font-bold rounded-xl border-slate-200 bg-slate-50/50 hover:bg-slate-50">
-                  <SelectValue placeholder="Tất cả dự án" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] rounded-xl">
-                  <SelectItem value="all">Tất cả dự án</SelectItem>
-                  {projects.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              
+              <button
+                type="button"
+                onClick={() => canFilter && setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                disabled={!canFilter}
+                className={`flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-bold shadow-sm transition-all text-left ${
+                  !canFilter ? 'cursor-not-allowed opacity-50' : 'hover:bg-slate-50 active:scale-[0.99] border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+                }`}
+              >
+                <span className="truncate">
+                  {selectedProjectId === 'all' 
+                    ? 'Tất cả dự án' 
+                    : (projects.find(p => p.id === selectedProjectId)?.name || 'Dự án đã chọn')}
+                </span>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+              </button>
 
-            {/* Filter 2: Team */}
-            <div className="space-y-1.5">
+              {isProjectDropdownOpen && (
+                <div className="absolute left-0 z-50 mt-1 max-h-60 w-full overflow-hidden rounded-xl border border-slate-250 bg-white shadow-lg animate-in fade-in duration-100">
+                  <div className="flex items-center border-b border-slate-100 px-3 py-2 bg-slate-50/20">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-slate-400 mr-2" />
+                    <input
+                      type="text"
+                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-705"
+                      placeholder="Tìm kiếm dự án..."
+                      value={projectSearch}
+                      onChange={(e) => setProjectSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {projectSearch && (
+                      <button 
+                        type="button" 
+                        onClick={() => setProjectSearch('')} 
+                        className="text-slate-400 hover:text-slate-600 ml-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-44 overflow-y-auto p-1 py-1.5 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId('all');
+                        setIsProjectDropdownOpen(false);
+                        setProjectSearch('');
+                      }}
+                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold ${
+                        selectedProjectId === 'all' 
+                          ? 'bg-indigo-50 text-indigo-600 font-extrabold' 
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="truncate">Tất cả dự án</span>
+                      {selectedProjectId === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />}
+                    </button>
+                    
+                    {filteredProjects.length === 0 ? (
+                      <div className="p-3 text-center text-[11px] text-slate-400 italic">
+                        Không tìm thấy dự án nào
+                      </div>
+                    ) : (
+                      filteredProjects.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(p.id);
+                            setIsProjectDropdownOpen(false);
+                            setProjectSearch('');
+                          }}
+                          className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold ${
+                            selectedProjectId === p.id 
+                              ? 'bg-indigo-50 text-indigo-600 font-extrabold' 
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="truncate text-left">{p.name}</span>
+                          {selectedProjectId === p.id && <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+ 
+            {/* Filter 2: Team with inline search */}
+            <div className="space-y-1.5 relative" ref={teamRef}>
               <Label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Phòng kinh doanh / Team</Label>
-              <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                <SelectTrigger className="h-10 text-xs font-bold rounded-xl border-slate-200 bg-slate-50/50 hover:bg-slate-50">
-                  <SelectValue placeholder="Tất cả các phòng" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] rounded-xl">
-                  <SelectItem value="all">Tất cả các phòng</SelectItem>
-                  {teams.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              
+              <button
+                type="button"
+                onClick={() => canFilter && setIsTeamDropdownOpen(!isTeamDropdownOpen)}
+                disabled={!canFilter}
+                className={`flex h-10 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-bold shadow-sm transition-all text-left ${
+                  !canFilter ? 'cursor-not-allowed opacity-50' : 'hover:bg-slate-50 active:scale-[0.99] border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+                }`}
+              >
+                <span className="truncate">
+                  {selectedTeamId === 'all' 
+                    ? 'Tất cả các phòng' 
+                    : (teams.find(t => t.id === selectedTeamId)?.name || 'Team đã chọn')}
+                </span>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+              </button>
 
+              {isTeamDropdownOpen && (
+                <div className="absolute left-0 z-50 mt-1 max-h-60 w-full overflow-hidden rounded-xl border border-slate-250 bg-white shadow-lg animate-in fade-in duration-100">
+                  <div className="flex items-center border-b border-slate-100 px-3 py-2 bg-slate-50/20">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-slate-400 mr-2" />
+                    <input
+                      type="text"
+                      className="w-full bg-transparent text-xs outline-none border-none placeholder-slate-400 font-medium py-0.5 text-slate-705"
+                      placeholder="Tìm kiếm team..."
+                      value={teamSearch}
+                      onChange={(e) => setTeamSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {teamSearch && (
+                      <button 
+                        type="button" 
+                        onClick={() => setTeamSearch('')} 
+                        className="text-slate-400 hover:text-slate-600 ml-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-44 overflow-y-auto p-1 py-1.5 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTeamId('all');
+                        setIsTeamDropdownOpen(false);
+                        setTeamSearch('');
+                      }}
+                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold ${
+                        selectedTeamId === 'all' 
+                          ? 'bg-indigo-50 text-indigo-600 font-extrabold' 
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="truncate">Tất cả các phòng</span>
+                      {selectedTeamId === 'all' && <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />}
+                    </button>
+                    
+                    {filteredTeamsList.length === 0 ? (
+                      <div className="p-3 text-center text-[11px] text-slate-400 italic">
+                        Không tìm thấy team nào
+                      </div>
+                    ) : (
+                      filteredTeamsList.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTeamId(t.id);
+                            setIsTeamDropdownOpen(false);
+                            setTeamSearch('');
+                          }}
+                          className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-semibold ${
+                            selectedTeamId === t.id 
+                              ? 'bg-indigo-50 text-indigo-600 font-extrabold' 
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="truncate text-left">{t.name}</span>
+                          {selectedTeamId === t.id && <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+ 
             {/* Filter 3: Month */}
             <div className="space-y-1.5">
               <Label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tháng chi phí</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={!canFilter}>
                 <SelectTrigger className="h-10 text-xs font-bold rounded-xl border-slate-200 bg-slate-50/50 hover:bg-slate-50">
                   <SelectValue placeholder="Tất cả các tháng" />
                 </SelectTrigger>
@@ -386,7 +700,7 @@ export function MktEfficiencyManager({
                 </SelectContent>
               </Select>
             </div>
-
+ 
             {/* Filter 4: Text search */}
             <div className="space-y-1.5">
               <Label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tìm kiếm</Label>
@@ -394,10 +708,11 @@ export function MktEfficiencyManager({
                 <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Nhập tên dự án, team, người đăng ký..."
+                  placeholder={canFilter ? "Nhập tên dự án, team, người đăng ký..." : "Bộ lọc đã bị khóa"}
                   className="h-10 pl-9 text-xs rounded-xl border-slate-200 bg-slate-50/50"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
+                  disabled={!canFilter}
                 />
               </div>
             </div>
@@ -450,6 +765,24 @@ export function MktEfficiencyManager({
             >
               ROI % {sortBy === 'roi' && <ArrowUpDown className="w-2.5 h-2.5" />}
             </button>
+
+            {!canExport ? (
+              <Button 
+                disabled={true}
+                className="bg-slate-100 text-slate-400 border border-slate-250 cursor-not-allowed font-medium px-3 py-1.5 text-[10px] h-auto rounded-lg flex items-center gap-1.5 shadow-none"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>🔒 Khóa Xuất Excel</span>
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleExportExcel} 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-1.5 text-[10px] h-auto rounded-lg flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Excel</span>
+              </Button>
+            )}
           </div>
         </div>
 

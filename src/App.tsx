@@ -119,6 +119,7 @@ import Papa from 'papaparse';
 import { MktProcessManager } from './components/MktProcessManager';
 import { DoiUngProcessManager } from './components/DoiUngProcessManager';
 import { MktEfficiencyManager } from './components/MktEfficiencyManager';
+import { AcceptanceManager } from './components/AcceptanceManager';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, BarChart, Bar, Legend, Cell, PieChart as RePieChart, Pie,
@@ -301,6 +302,41 @@ const SearchableTeamSelect = memo(({ value, onValueChange, teams = [], uniqueTea
       searchPlaceholder="Tìm team..."
       triggerClassName="bg-white border-slate-200 shadow-sm transition-all hover:border-blue-300 focus:ring-2 focus:ring-blue-100 h-10"
       triggerDisplay={value === 'all' ? "Tất cả các đội" : `${value} (${teams.find((t: any) => t.name === value)?.teamCode || ''})`}
+    />
+  );
+});
+
+const SearchableBlockDirectorSelect = memo(({ value, onValueChange, allUsers = [], emptyValue = "", emptyLabel = "-- Chưa gán / Chọn sau --" }: any) => {
+  const items = useMemo(() => {
+    const list = (allUsers || []).map((u: any) => {
+      const uValue = u.uid || u.id;
+      const displayName = u.displayName || u.fullName || u.email || "";
+      const email = u.email || "";
+      return {
+        value: uValue,
+        label: `${displayName} (${email})`,
+        searchString: `${displayName} ${email}`.toLowerCase()
+      };
+    });
+    return [{ value: emptyValue, label: emptyLabel, searchString: emptyLabel.toLowerCase() }, ...list];
+  }, [allUsers, emptyValue, emptyLabel]);
+
+  const selectedUser = allUsers.find((u: any) => (u.uid || u.id) === value);
+  const displayLabel = value === emptyValue || !value
+    ? emptyLabel
+    : selectedUser 
+      ? `${selectedUser.displayName || selectedUser.fullName || selectedUser.email} (${selectedUser.email || ''})`
+      : value;
+
+  return (
+    <SearchableSelectGeneric
+      value={value}
+      onValueChange={onValueChange}
+      items={items}
+      placeholder="Chọn tài khoản..."
+      searchPlaceholder="Tìm tài khoản và email..."
+      triggerClassName="w-full bg-slate-50 border-slate-200 rounded-xl h-9 text-xs text-slate-700"
+      triggerDisplay={displayLabel}
     />
   );
 });
@@ -1036,6 +1072,7 @@ export default function App() {
            isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isGDKD || isAssistant;
   }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, isAssistant]);
   const [activeTab, setActiveTab] = useState('home');
+  const [reportNtSubTab, setReportNtSubTab] = useState<'direct' | 'google-sheet'>('direct');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
   useEffect(() => {
@@ -3764,13 +3801,6 @@ export default function App() {
       console.warn("Báo cáo NT settings listener skipped or not created yet:", error);
     });
 
-    // Listen to rolePermissions
-    const unsubRolePerms = onSnapshot(collection(db, 'rolePermissions'), (snapshot) => {
-      setRolePermissionsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.warn("rolePermissions collection listener error:", error);
-    });
-
     return () => {
       unsubProjects();
       unsubTeams();
@@ -3788,9 +3818,18 @@ export default function App() {
       unsubSupport();
       unsubSettings();
       unsubReportNT();
-      unsubRolePerms();
     };
-  }, [user?.uid, userRole, JSON.stringify(userProfile?.assignedProjects), JSON.stringify(currentRolePermissions)]);
+  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions)]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubRolePerms = onSnapshot(collection(db, 'rolePermissions'), (snapshot) => {
+      setRolePermissionsList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("rolePermissions collection listener error:", error);
+    });
+    return () => unsubRolePerms();
+  }, [user?.uid]);
 
   const initialDocProcessingMonthSet = useRef(false);
   useEffect(() => {
@@ -3802,6 +3841,61 @@ export default function App() {
       }
     }
   }, [finalAcceptances]);
+
+  const googleSheetTableRef = useRef<HTMLDivElement>(null);
+
+  // Implement mouse-drag horizontal scroll for best UX in Google Sheet view
+  useEffect(() => {
+    const slider = googleSheetTableRef.current;
+    if (!slider) return;
+
+    let isDown = false;
+    let startX: number;
+    let scrollLeft: number;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Skip dragging on interactive tags
+      if (target.closest('input, select, button, a, [role="button"], label, svg')) return;
+      isDown = true;
+      slider.classList.add('cursor-grabbing');
+      slider.classList.remove('cursor-grab');
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    };
+
+    const handleMouseLeave = () => {
+      isDown = false;
+      slider.classList.remove('cursor-grabbing');
+      slider.classList.add('cursor-grab');
+    };
+
+    const handleMouseUp = () => {
+      isDown = false;
+      slider.classList.remove('cursor-grabbing');
+      slider.classList.add('cursor-grab');
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * 1.5; // Scroll speed multiplier
+      slider.scrollLeft = scrollLeft - walk;
+    };
+
+    slider.addEventListener('mousedown', handleMouseDown);
+    slider.addEventListener('mouseleave', handleMouseLeave);
+    slider.addEventListener('mouseup', handleMouseUp);
+    slider.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      slider.removeEventListener('mousedown', handleMouseDown);
+      slider.removeEventListener('mouseleave', handleMouseLeave);
+      slider.removeEventListener('mouseup', handleMouseUp);
+      slider.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
 
   const handleImportEfficiency = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -8226,17 +8320,32 @@ export default function App() {
           }
 
           // Parse cost metrics
-          const fbAds = parseVal(getVal(record, ['Facebook Ads', 'FB Ads', 'FBAds', 'facebookads', 'facebook ads', 'facebook']));
-          const tiktokAds = parseVal(getVal(record, ['Tiktok Ads', 'TikTok', 'tiktokads', 'tiktok ads', 'tiktok']));
-          const zaloAds = parseVal(getVal(record, ['Zalo Ads', 'Zalo', 'zaloads', 'zalo ads', 'zalo']));
-          const googleAds = parseVal(getVal(record, ['Google Ads', 'Google', 'googleads', 'google ads', 'google']));
-          const posting = parseVal(getVal(record, ['Đăng tin', 'Posting', 'dangtin', 'posting']));
-          const visa = parseVal(getVal(record, ['VISA', 'visa', 'visa cost', 'chi phí visa']));
-          const digital = parseVal(getVal(record, ['Digital', 'digital', 'digital cost', 'chi phí digital']));
-          const crm = parseVal(getVal(record, ['CRM', 'crm', 'crm cost', 'chi phí crm']));
-          const other = parseVal(getVal(record, ['Khác', 'Other', 'khac', 'other cost', 'chi phí khác']));
+          const fbDigitalChuaVat = parseVal(getVal(record, ['FB Digital Chưa VAT', 'FB Digital C.VAT', 'Facebook Chưa VAT', 'fb digital chua vat', 'fb chua vat']));
+          let fbAds = parseVal(getVal(record, ['Facebook Ads', 'FB Ads', 'FBAds', 'facebookads', 'facebook ads', 'facebook', 'Digital (VAT 10%)', 'Digital VAT']));
+          if (fbAds === 0 && fbDigitalChuaVat > 0) {
+            fbAds = Math.round(fbDigitalChuaVat * 1.10);
+          }
 
-          const totalCost = fbAds + tiktokAds + zaloAds + googleAds + posting + other;
+          const caNhanCost = parseVal(getVal(record, ['Cá nhân', 'ca nhan', 'Cá nhân cost', 'ca nhan cost']));
+          const fbVisaCostChuaVat = parseVal(getVal(record, ['FB Visa Chưa VAT', 'FB Visa Trực Chạy Chưa VAT', 'Visa Chưa VAT', 'fb visa chua vat', 'visa chua vat']));
+          let visa = parseVal(getVal(record, ['VISA', 'visa', 'visa cost', 'chi phí visa', 'Visa Trực Chạy (10%)', 'Visa Trực Chạy 10%']));
+          if (visa === 0 && fbVisaCostChuaVat > 0) {
+            visa = Math.round(fbVisaCostChuaVat * 1.10);
+          }
+
+          const dangTinCaNhanCost = parseVal(getVal(record, ['Đăng Tin Cá Nhân', 'dang tin ca nhan', 'Đăng tin C.Nhân', 'dang tin ca nhan cost']));
+          const dangTinCongTyChuaVat = parseVal(getVal(record, ['Đăng Tin Công Ty Chưa VAT', 'Đăng Tin C.Ty Chưa VAT', 'dang tin cong ty chua vat', 'dang tin c ty chua vat']));
+          let posting = parseVal(getVal(record, ['Đăng tin', 'Posting', 'dangtin', 'posting', 'Đăng Tin C.Ty (8%)', 'Đăng tin công ty 8%']));
+          if (posting === 0 && dangTinCongTyChuaVat > 0) {
+            posting = Math.round(dangTinCongTyChuaVat * 1.08);
+          }
+
+          const zaloAds = parseVal(getVal(record, ['Zalo Ads', 'Zalo', 'zaloads', 'zalo ads', 'zalo']));
+          const googleAds = parseVal(getVal(record, ['Google Ads', 'Google', 'googleads', 'google ads', 'google', 'Google / Native']));
+          const tiktokAds = parseVal(getVal(record, ['Tiktok Ads', 'TikTok', 'tiktokads', 'tiktok ads', 'tiktok']));
+          const other = caNhanCost; // Map caNhanCost of other/caNhan for backwards compatibility with budget charts
+
+          const totalCost = fbAds + caNhanCost + visa + dangTinCaNhanCost + posting + zaloAds + googleAds + tiktokAds;
 
           const existingAcc = acceptances.find(a => 
             a.projectId === project.id && 
@@ -8251,15 +8360,19 @@ export default function App() {
               projectCode: project.projectCode || '',
               teamName: team.name,
               teamCode: team.teamCode || '',
+              fbDigitalChuaVat: fbDigitalChuaVat,
               facebookCost: fbAds,
               tiktokCost: tiktokAds,
               zaloCost: zaloAds,
               googleCost: googleAds,
               postingCost: posting,
               visaCost: visa,
-              digitalCost: digital,
-              crmCost: crm,
-              otherCost: other,
+              digitalCost: fbAds,
+              otherCost: caNhanCost,
+              fbVisaCostChuaVat: fbVisaCostChuaVat,
+              dangTinCaNhanCost: dangTinCaNhanCost,
+              dangTinCongTyChuaVat: dangTinCongTyChuaVat,
+              caNhanCost: caNhanCost,
               totalCost: totalCost,
               beforeAcceptanceCost: totalCost,
               afterAcceptanceCost: existingAcc.status === 'Trước nghiệm thu' ? totalCost : existingAcc.afterAcceptanceCost,
@@ -8278,15 +8391,19 @@ export default function App() {
               teamName: team.name,
               teamCode: team.teamCode || '',
               month,
+              fbDigitalChuaVat: fbDigitalChuaVat,
               facebookCost: fbAds,
               tiktokCost: tiktokAds,
               zaloCost: zaloAds,
               googleCost: googleAds,
               postingCost: posting,
               visaCost: visa,
-              digitalCost: digital,
-              crmCost: crm,
-              otherCost: other,
+              digitalCost: fbAds,
+              otherCost: caNhanCost,
+              fbVisaCostChuaVat: fbVisaCostChuaVat,
+              dangTinCaNhanCost: dangTinCaNhanCost,
+              dangTinCongTyChuaVat: dangTinCongTyChuaVat,
+              caNhanCost: caNhanCost,
               totalCost: totalCost,
               beforeAcceptanceCost: totalCost,
               afterAcceptanceCost: totalCost,
@@ -10336,19 +10453,13 @@ export default function App() {
 
                                     <div className="space-y-1">
                                       <Label className="text-xs font-bold text-slate-700">Phân Quyền Giám Đốc Khối</Label>
-                                      <Select value={blockDirectorUid} onValueChange={setBlockDirectorUid}>
-                                        <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl h-9 text-xs text-slate-700">
-                                          <SelectValue placeholder="Chọn tài khoản..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="">-- Chưa gán / Chọn sau --</SelectItem>
-                                          {allUsers.map((u) => (
-                                            <SelectItem key={u.id} value={u.uid || u.id} className="text-xs">
-                                              {u.displayName || u.fullName || u.email} ({u.email})
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                      <SearchableBlockDirectorSelect 
+                                        value={blockDirectorUid} 
+                                        onValueChange={setBlockDirectorUid}
+                                        allUsers={allUsers}
+                                        emptyValue=""
+                                        emptyLabel="-- Chưa gán / Chọn sau --"
+                                      />
                                     </div>
 
                                     <div className="space-y-1.5">
@@ -10803,19 +10914,13 @@ export default function App() {
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs font-bold text-slate-700">Chọn Giám đốc Khối</Label>
-                                <Select value={editBlockDirectorUid ?? ''} onValueChange={setEditBlockDirectorUid}>
-                                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl h-9 text-xs text-slate-700">
-                                    <SelectValue placeholder="Chọn tài khoản..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="_empty">-- Chưa gán / Để trống --</SelectItem>
-                                    {allUsers.map((u) => (
-                                      <SelectItem key={u.id} value={u.uid || u.id} className="text-xs">
-                                        {u.displayName || u.fullName || u.email}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <SearchableBlockDirectorSelect 
+                                  value={editBlockDirectorUid ?? ''} 
+                                  onValueChange={setEditBlockDirectorUid}
+                                  allUsers={allUsers}
+                                  emptyValue="_empty"
+                                  emptyLabel="-- Chưa gán / Để trống --"
+                                />
                               </div>
                             </div>
                           </div>
@@ -15781,6 +15886,7 @@ export default function App() {
                       isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
                       setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
                       handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                      blocks={blocks}
                     />
                   </TabsContent>
 
@@ -17948,274 +18054,354 @@ export default function App() {
           <TabsContent value="report-nt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             {activeTab === 'report-nt' && (
               <>
-            <Card className="border-none shadow-sm overflow-hidden bg-white">
-              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 border-b border-indigo-100">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
-                      <FileCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
-                      Báo cáo Nghiệm thu (Báo cáo NT)
-                    </h3>
-                    <p className="text-xs font-semibold text-indigo-700/80 mt-1 max-w-2xl">
-                      Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
-                    </p>
-                  </div>
-                  
-                  {reportNTLastUpdated && (
-                    <div className="bg-white/80 backdrop-blur border border-indigo-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
-                      <span className="text-[10px] font-black text-slate-600 tracking-tight">
-                        Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <CardContent className="p-6 space-y-6">
-                {/* Configuration form for sheet url */}
-                <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
-                  <div className="flex flex-col gap-2">
-                    <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Link className="w-3.5 h-3.5 text-slate-500" />
-                      Liên kết Google Sheet nguồn
-                    </Label>
-                    <div className="flex flex-col sm:flex-row gap-2.5">
-                      <Input
-                        type="text"
-                        placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
-                        value={inputReportNTUrl}
-                        onChange={(e) => setInputReportNTUrl(e.target.value)}
-                        className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 text-xs sm:text-sm h-10"
-                      />
-                      <Button
-                        onClick={handleSyncReportNT}
-                        disabled={isSyncingReportNT}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-indigo-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
-                      >
-                        {isSyncingReportNT ? (
-                          <>
-                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                            <span>Đang đồng bộ...</span>
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="w-4 h-4" />
-                            <span>Đồng bộ ngay</span>
-                          </>
-                        )}
-                      </Button>
+                {/* Secondary navigation for NT styles */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <FileCheck className="w-6 h-6 text-indigo-600" />
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 leading-none">Báo cáo Nghiệm thu (Báo cáo NT)</h3>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Tách biệt Dữ liệu trực tiếp và dữ liệu Google Sheet</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-slate-500 font-semibold leading-relaxed">
-                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">1</span>
-                      <div>
-                        <span className="font-bold text-slate-800">Chia sẻ công khai Sheet:</span> Hãy chắc chắn Google Sheet đã được chuyển chế độ <span className="text-indigo-600 font-bold">"Bất kỳ ai có liên kết đều có thể xem"</span> (Anyone with link can view).
-                      </div>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">2</span>
-                      <div>
-                        <span className="font-bold text-slate-800">Cấu trúc 2 hàng tiêu đề:</span> Hàng 1 và hàng 2 trong sheet gốc sẽ tự động kết hợp thông minh để tạo thành thẻ cột thông tin đại diện rõ ràng nhất.
-                      </div>
-                    </div>
+                  <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setReportNtSubTab('direct')}
+                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                        reportNtSubTab === 'direct'
+                          ? 'bg-white text-indigo-700 shadow-sm font-black'
+                          : 'text-slate-500 hover:text-slate-800 font-bold'
+                      }`}
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      Nhập trực tiếp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportNtSubTab('google-sheet')}
+                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                        reportNtSubTab === 'google-sheet'
+                          ? 'bg-white text-indigo-700 shadow-sm font-strong'
+                          : 'text-slate-500 hover:text-slate-800 font-bold'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      Đồng bộ Google Sheet
+                    </button>
                   </div>
                 </div>
 
-                {reportNTUrl && (
-                  <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 px-1 truncate">
-                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2 rounded-full text-[10px] font-bold shrink-0">ĐANG LIÊN KẾT</span>
-                    <a href={reportNTUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 truncate font-mono font-medium">
-                      {reportNTUrl}
-                      <ExternalLink className="w-3 h-3 inline shrink-0" />
-                    </a>
-                  </div>
+                {reportNtSubTab === 'direct' && (
+                  <AcceptanceManager 
+                    isAdmin={isAdmin}
+                    isSuperAdmin={isSuperAdmin}
+                    isMod={isMod}
+                    isAccountant={isAccountant}
+                    user={user}
+                    teams={teams}
+                    uniqueTeams={uniqueTeams}
+                    projects={projects}
+                    acceptances={acceptances}
+                    finalAcceptances={finalAcceptances}
+                    teamMap={teamMap}
+                    projectMap={projectMap}
+                    formatCurrency={formatCurrency}
+                    getMarketingMonth={getMarketingMonth}
+                    handleFirestoreError={handleFirestoreError}
+                    formatCurrencyInput={formatCurrencyInput}
+                    isImportingAcceptances={isImportingAcceptances}
+                    setIsImportingAcceptances={setIsImportingAcceptances}
+                    isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
+                    setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
+                    handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                    blocks={blocks}
+                  />
                 )}
 
-                <div className="border-t border-slate-100 my-6"></div>
-
-                {/* Records list section */}
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <span>Bản ghi dữ liệu đã đưa lên</span>
-                        <Badge className="bg-indigo-100 hover:bg-indigo-100 text-indigo-800 border-none rounded-lg text-xs font-black px-2 py-0.5">
-                          {filteredNTRecords.length} dòng
-                        </Badge>
-                      </h4>
-                      <p className="text-xs text-slate-400 font-medium">Tìm kiếm thời gian thực toàn bộ các trường thông tin thông minh</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 max-w-xs w-full self-stretch sm:self-auto">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input
-                          placeholder="Tìm kiếm dòng thông tin..."
-                          value={reportNTSearch}
-                          onChange={(e) => setReportNTSearch(e.target.value)}
-                          className="pl-9 pr-8 py-1 h-9 rounded-xl border-slate-200 text-xs sm:text-sm focus:border-indigo-400"
-                        />
-                        {reportNTSearch && (
-                          <button
-                            onClick={() => setReportNTSearch('')}
-                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
-                          >
-                            <X className="w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-full p-0.5" />
-                          </button>
+                {reportNtSubTab === 'google-sheet' && (
+                  <Card className="border-none shadow-sm overflow-hidden bg-white">
+                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 border-b border-indigo-100">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
+                            <FileCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
+                            Dữ liệu Nghiệm thu đồng bộ từ Google Sheet
+                          </h3>
+                          <p className="text-xs font-semibold text-indigo-700/80 mt-1 max-w-2xl">
+                            Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
+                          </p>
+                        </div>
+                        
+                        {reportNTLastUpdated && (
+                          <div className="bg-white/80 backdrop-blur border border-indigo-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span className="text-[10px] font-black text-slate-600 tracking-tight">
+                              Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {reportNTRecords.length === 0 ? (
-                    /* Zero status placeholder */
-                    <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-150 rounded-2xl bg-slate-25/50 text-center">
-                      <div className="h-16 w-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 animate-bounce">
-                        <FileSpreadsheet className="w-8 h-8" />
-                      </div>
-                      <h5 className="font-black text-slate-800 text-sm font-sans">Chưa có cơ sở dữ liệu Báo cáo NT</h5>
-                      <p className="text-xs text-slate-500 font-semibold max-w-sm mt-1 leading-normal font-sans">
-                        Vui lòng nhập liên kết Google Sheets đã được chia sẻ công khai và nhấp vào nút <span className="text-indigo-600 font-bold font-sans">"Đồng bộ ngay"</span> để tải và khởi tạo dữ liệu lên website.
-                      </p>
-                    </div>
-                  ) : filteredNTRecords.length === 0 ? (
-                    /* Search empty placeholder */
-                    <div className="text-center py-12 bg-slate-25/40 border border-slate-100 rounded-2xl">
-                      <p className="text-sm font-bold text-slate-500">Không tìm thấy bản ghi phù hợp với từ khóa tìm kiếm</p>
-                      <button onClick={() => setReportNTSearch('')} className="text-xs font-bold text-indigo-600 hover:underline mt-1 bg-indigo-50 py-1 px-3 rounded-lg border border-indigo-100">Xóa bộ lọc tìm kiếm</button>
-                    </div>
-                  ) : (
-                    /* Standard gorgeous custom data table */
-                    <div className="space-y-4">
-                      <div className="rounded-2xl border border-slate-200/70 overflow-hidden bg-white shadow-sm">
-                        <div className="overflow-x-auto max-h-[600px] scrollbar-thin">
-                          <Table className="w-full table-auto">
-                            <TableHeader className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                              <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-14 font-black text-slate-700 text-center bg-slate-50 border-r border-slate-200/60 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-200 text-[10px] sm:text-xs">
-                                  HÀNG
-                                </TableHead>
-                                {Object.keys(reportNTRecords[0])
-                                  .filter(k => k !== 'id_row')
-                                  .map((headerKey) => {
-                                    const isSorted = ntSortField === headerKey;
-                                    const isProj = isProjectKey(headerKey);
-                                    const isMoney = isMoneyKey(headerKey);
-                                    return (
-                                      <TableHead 
-                                        key={headerKey} 
-                                        onClick={() => handleToggleSortNT(headerKey)}
-                                        className={`font-black uppercase text-[10px] sm:text-xs px-2.5 py-2.5 cursor-pointer select-none transition-all duration-200 border-r border-slate-200/50 hover:bg-slate-100/80 active:bg-slate-200/50 relative group ${
-                                          isSorted ? 'bg-indigo-50/50 text-indigo-950 font-extrabold' : 'text-slate-600'
-                                        } ${isMoney ? 'text-right' : 'text-left'} ${
-                                          (isProj || isMoney) ? 'whitespace-nowrap' : 'min-w-[100px] max-w-[200px] break-words'
-                                        }`}
-                                      >
-                                        <div className={`flex items-center gap-1 ${isMoney ? 'justify-end' : 'justify-start'}`}>
-                                          <span className="truncate">{headerKey}</span>
-                                          <span className="shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
-                                            {isSorted ? (
-                                              ntSortDirection === 'asc' ? (
-                                                <ChevronUp className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
-                                              ) : (
-                                                <ChevronDown className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
-                                              )
-                                            ) : (
-                                              <ArrowUpDown className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 inline transition-opacity" />
-                                            )}
-                                          </span>
-                                        </div>
-                                      </TableHead>
-                                    );
-                                  })}
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {paginatedNTRecords.map((record, rIdx) => {
-                                const headersKeys = Object.keys(reportNTRecords[0]).filter(k => k !== 'id_row');
-                                return (
-                                  <TableRow 
-                                    key={record.id_row || rIdx} 
-                                    className="hover:bg-indigo-50/30 transition-colors animate-in fade-in duration-200 even:bg-slate-50/35"
-                                  >
-                                    <TableCell className="font-extrabold font-mono text-center text-[10px] text-slate-500 bg-slate-50/50 border-r border-slate-200/60 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-100 py-1.5 px-1">
-                                      {record.id_row || (rIdx + 3)}
-                                    </TableCell>
-                                    {headersKeys.map((headerKey) => {
-                                      const cellValue = record[headerKey];
-                                      const isProj = isProjectKey(headerKey);
-                                      const isMoney = isMoneyKey(headerKey);
-                                      const formatted = formatNTValue(cellValue);
-                                      return (
-                                        <TableCell 
-                                          key={headerKey} 
-                                          className={`text-[11px] sm:text-xs py-1.5 px-2.5 border-r border-slate-100 transition-colors ${
-                                            isMoney 
-                                              ? 'text-right font-black text-emerald-700 whitespace-nowrap bg-emerald-50/10' 
-                                              : isProj 
-                                                ? 'font-bold text-slate-900 whitespace-nowrap' 
-                                                : 'text-slate-600 break-words font-semibold max-w-[180px]'
-                                          }`}
-                                        >
-                                          {formatted}
-                                        </TableCell>
-                                      );
-                                    })}
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
+                    <CardContent className="p-6 space-y-6">
+                      {/* Configuration form for sheet url */}
+                      <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <Link className="w-3.5 h-3.5 text-slate-500" />
+                            Liên kết Google Sheet nguồn
+                          </Label>
+                          <div className="flex flex-col sm:flex-row gap-2.5">
+                            <Input
+                              type="text"
+                              placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
+                              value={inputReportNTUrl}
+                              onChange={(e) => setInputReportNTUrl(e.target.value)}
+                              className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 text-xs sm:text-sm h-10"
+                            />
+                            <Button
+                              onClick={handleSyncReportNT}
+                              disabled={isSyncingReportNT}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-indigo-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
+                            >
+                              {isSyncingReportNT ? (
+                                <>
+                                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                  <span>Đang đồng bộ...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-4 h-4" />
+                                  <span>Đồng bộ ngay</span>
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-slate-500 font-semibold leading-relaxed">
+                          <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">1</span>
+                            <div>
+                              <span className="font-bold text-slate-800">Chia sẻ công khai Sheet:</span> Hãy chắc chắn Google Sheet đã được chuyển chế độ <span className="text-indigo-600 font-bold">"Bất kỳ ai có liên kết đều có thể xem"</span> (Anyone with link can view).
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">2</span>
+                            <div>
+                              <span className="font-bold text-slate-800">Cấu trúc 2 hàng tiêu đề:</span> Hàng 1 và hàng 2 trong sheet gốc sẽ tự động kết hợp thông minh để tạo thành thẻ cột thông tin đại diện rõ ràng nhất.
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Pagination UI footer elements */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 gap-4">
-                        <div className="text-xs font-semibold text-slate-500">
-                          Hiển thị <span className="font-extrabold text-slate-800">
-                            {Math.min(filteredNTRecords.length, (ntPage - 1) * ntPageSize + 1)}
-                          </span> - <span className="font-extrabold text-slate-800">
-                            {Math.min(filteredNTRecords.length, ntPage * ntPageSize)}
-                          </span> trên tổng số <span className="font-extrabold text-slate-800">{filteredNTRecords.length}</span> bản ghi đã lọc
+                      {reportNTUrl && (
+                        <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 px-1 truncate">
+                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2 rounded-full text-[10px] font-bold shrink-0">ĐANG LIÊN KẾT</span>
+                          <a href={reportNTUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 truncate font-mono font-medium">
+                            {reportNTUrl}
+                            <ExternalLink className="w-3 h-3 inline shrink-0" />
+                          </a>
                         </div>
+                      )}
 
-                        <div className="flex items-center gap-1.5 self-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={ntPage === 1}
-                            onClick={() => setNtPage(prev => Math.max(1, prev - 1))}
-                            className="h-8 rounded-lg text-xs font-black px-3"
-                          >
-                            Trước
-                          </Button>
-                          
-                          <div className="text-xs font-bold text-slate-700 px-3 bg-slate-100 h-8 flex items-center justify-center rounded-lg border border-slate-200 min-w-[70px]">
-                            Trang {ntPage} / {totalNtPages}
+                      <div className="border-t border-slate-100 my-6"></div>
+
+                      {/* Records list section */}
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div>
+                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                              <span>Bản ghi dữ liệu đã đưa lên</span>
+                              <Badge className="bg-indigo-100 hover:bg-indigo-100 text-indigo-800 border-none rounded-lg text-xs font-black px-2 py-0.5">
+                                {filteredNTRecords.length} dòng
+                              </Badge>
+                            </h4>
+                            <p className="text-xs text-slate-400 font-medium">Tìm kiếm thời gian thực toàn bộ các trường thông tin thông minh</p>
                           </div>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={ntPage === totalNtPages}
-                            onClick={() => setNtPage(prev => Math.min(totalNtPages, prev + 1))}
-                            className="h-8 rounded-lg text-xs font-black px-3"
-                          >
-                            Sau
-                          </Button>
+                          <div className="flex items-center gap-2 max-w-xs w-full self-stretch sm:self-auto">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                placeholder="Tìm kiếm dòng thông tin..."
+                                value={reportNTSearch}
+                                onChange={(e) => setReportNTSearch(e.target.value)}
+                                className="pl-9 pr-8 py-1 h-9 rounded-xl border-slate-200 text-xs sm:text-sm focus:border-indigo-400"
+                              />
+                              {reportNTSearch && (
+                                <button
+                                  onClick={() => setReportNTSearch('')}
+                                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                                >
+                                  <X className="w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-full p-0.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
+
+                        {reportNTRecords.length === 0 ? (
+                          /* Zero status placeholder */
+                          <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-150 rounded-2xl bg-slate-25/50 text-center">
+                            <div className="h-16 w-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 animate-bounce">
+                              <FileSpreadsheet className="w-8 h-8" />
+                            </div>
+                            <h5 className="font-black text-slate-800 text-sm font-sans">Chưa có cơ sở dữ liệu Báo cáo NT</h5>
+                            <p className="text-xs text-slate-500 font-semibold max-w-sm mt-1 leading-normal font-sans">
+                              Vui lòng nhập liên kết Google Sheets đã được chia sẻ công khai và nhấp vào nút <span className="text-indigo-600 font-bold font-sans">"Đồng bộ ngay"</span> để tải và khởi tạo dữ liệu lên website.
+                            </p>
+                          </div>
+                        ) : filteredNTRecords.length === 0 ? (
+                          /* Search empty placeholder */
+                          <div className="text-center py-12 bg-slate-25/40 border border-slate-100 rounded-2xl">
+                            <p className="text-sm font-bold text-slate-500">Không tìm thấy bản ghi phù hợp với từ khóa tìm kiếm</p>
+                            <button onClick={() => setReportNTSearch('')} className="text-xs font-bold text-indigo-600 hover:underline mt-1 bg-indigo-50 py-1 px-3 rounded-lg border border-indigo-100">Xóa bộ lọc tìm kiếm</button>
+                          </div>
+                        ) : (
+                          /* Standard gorgeous custom data table */
+                          <div className="space-y-4">
+                            <div className="px-4 py-2 bg-indigo-50/40 border border-indigo-100/60 rounded-xl flex items-center justify-between text-[11px] font-medium text-indigo-750 font-sans">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                                <span><strong>Mẹo cuộn dữ liệu:</strong> Nhấn giữ chuột trái kéo sang hai bên để trượt ngang, hoặc giữ phím <strong>Shift</strong> + cuộn chuột.</span>
+                              </div>
+                              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full uppercase">Kéo chuột trượt ngang</span>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200/70 overflow-hidden bg-white shadow-sm">
+                              <div 
+                                ref={googleSheetTableRef} 
+                                className="overflow-auto max-h-[600px] scrollbar-thin cursor-grab active:cursor-grabbing select-none"
+                              >
+                                <div className="select-text">
+                                  <Table className="w-full table-auto">
+                                  <TableHeader className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                                    <TableRow className="hover:bg-transparent">
+                                      <TableHead className="w-14 font-black text-slate-700 text-center bg-slate-50 border-r border-slate-200/60 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-200 text-[10px] sm:text-xs">
+                                        HÀNG
+                                      </TableHead>
+                                      {Object.keys(reportNTRecords[0])
+                                        .filter(k => k !== 'id_row')
+                                        .map((headerKey) => {
+                                          const isSorted = ntSortField === headerKey;
+                                          const isProj = isProjectKey(headerKey);
+                                          const isMoney = isMoneyKey(headerKey);
+                                          return (
+                                            <TableHead 
+                                              key={headerKey} 
+                                              onClick={() => handleToggleSortNT(headerKey)}
+                                              className={`font-black uppercase text-[10px] sm:text-xs px-2.5 py-2.5 cursor-pointer select-none transition-all duration-200 border-r border-slate-200/50 hover:bg-slate-100/80 active:bg-slate-200/50 relative group ${
+                                                isSorted ? 'bg-indigo-50/50 text-indigo-950 font-extrabold' : 'text-slate-600'
+                                              } ${isMoney ? 'text-right' : 'text-left'} ${
+                                                (isProj || isMoney) ? 'whitespace-nowrap' : 'min-w-[100px] max-w-[200px] break-words'
+                                              }`}
+                                            >
+                                              <div className={`flex items-center gap-1 ${isMoney ? 'justify-end' : 'justify-start'}`}>
+                                                <span className="truncate">{headerKey}</span>
+                                                <span className="shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
+                                                  {isSorted ? (
+                                                    ntSortDirection === 'asc' ? (
+                                                      <ChevronUp className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
+                                                    ) : (
+                                                      <ChevronDown className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
+                                                    )
+                                                  ) : (
+                                                    <ArrowUpDown className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 inline transition-opacity" />
+                                                  )}
+                                                </span>
+                                              </div>
+                                            </TableHead>
+                                          );
+                                        })}
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {paginatedNTRecords.map((record, rIdx) => {
+                                      const headersKeys = Object.keys(reportNTRecords[0]).filter(k => k !== 'id_row');
+                                      return (
+                                        <TableRow 
+                                          key={record.id_row || rIdx} 
+                                          className="hover:bg-indigo-50/30 transition-colors animate-in fade-in duration-200 even:bg-slate-50/35"
+                                        >
+                                          <TableCell className="font-extrabold font-mono text-center text-[10px] text-slate-500 bg-slate-50/50 border-r border-slate-200/60 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-100 py-1.5 px-1">
+                                            {record.id_row || (rIdx + 3)}
+                                          </TableCell>
+                                          {headersKeys.map((headerKey) => {
+                                            const cellValue = record[headerKey];
+                                            const isProj = isProjectKey(headerKey);
+                                            const isMoney = isMoneyKey(headerKey);
+                                            const formatted = formatNTValue(cellValue);
+                                            return (
+                                              <TableCell 
+                                                key={headerKey} 
+                                                className={`text-[11px] sm:text-xs py-1.5 px-2.5 border-r border-slate-100 transition-colors ${
+                                                  isMoney 
+                                                    ? 'text-right font-black text-emerald-700 whitespace-nowrap bg-emerald-50/10' 
+                                                    : isProj 
+                                                      ? 'font-bold text-slate-900 whitespace-nowrap' 
+                                                      : 'text-slate-600 break-words font-semibold max-w-[180px]'
+                                                }`}
+                                              >
+                                                {formatted}
+                                              </TableCell>
+                                            );
+                                          })}
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          </div>
+
+                            {/* Pagination UI footer elements */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 gap-4">
+                              <div className="text-xs font-semibold text-slate-500">
+                                Hiển thị <span className="font-extrabold text-slate-800">
+                                  {Math.min(filteredNTRecords.length, (ntPage - 1) * ntPageSize + 1)}
+                                </span> - <span className="font-extrabold text-slate-800">
+                                  {Math.min(filteredNTRecords.length, ntPage * ntPageSize)}
+                                </span> trên tổng số <span className="font-extrabold text-slate-800">{filteredNTRecords.length}</span> bản ghi đã lọc
+                              </div>
+
+                              <div className="flex items-center gap-1.5 self-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={ntPage === 1}
+                                  onClick={() => setNtPage(prev => Math.max(1, prev - 1))}
+                                  className="h-8 rounded-lg text-xs font-black px-3"
+                                >
+                                  Trước
+                                </Button>
+                                
+                                <div className="text-xs font-bold text-slate-700 px-3 bg-slate-100 h-8 flex items-center justify-center rounded-lg border border-slate-200 min-w-[70px]">
+                                  Trang {ntPage} / {totalNtPages}
+                                </div>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={ntPage === totalNtPages}
+                                  onClick={() => setNtPage(prev => Math.min(totalNtPages, prev + 1))}
+                                  className="h-8 rounded-lg text-xs font-black px-3"
+                                >
+                                  Sau
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </TabsContent>
@@ -19885,7 +20071,7 @@ export default function App() {
  * AcceptanceManager Component
  * Encapsulates the Acceptance tab logic and UI to improve performance and reduce input lag.
  */
-const AcceptanceManager = React.memo(({ 
+const OLD_AcceptanceManager = React.memo(({ 
   isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
   isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,

@@ -679,6 +679,25 @@ const extractTeamCode = (name: string) => {
   return '';
 };
 
+const extractGDKD = (name: string) => {
+  if (!name) return '';
+  const teamCode = extractTeamCode(name);
+  if (teamCode) {
+    const idx = name.toLowerCase().indexOf(teamCode.toLowerCase());
+    if (idx !== -1) {
+      let rest = name.substring(idx + teamCode.length);
+      rest = rest.replace(/^[\s.\-_/]+/, '').trim();
+      if (rest) return rest;
+    }
+  }
+  const codeRegex = /^[A-Z0-9.-]+\s+/i;
+  const codeMatch = name.match(codeRegex);
+  if (codeMatch) {
+    return name.substring(codeMatch[0].length).trim();
+  }
+  return name;
+};
+
 const extractProjectCode = (name: string) => {
   // Look for uppercase blocks DA-xxx or just capitalized acronyms
   const match = name.match(/[A-Z0-9-]{3,}/);
@@ -5086,10 +5105,19 @@ export default function App() {
     );
 
     return filtered.sort((a, b) => {
-      const aValue = a[teamSort.key] || '';
-      const bValue = b[teamSort.key] || '';
-      if (aValue < bValue) return teamSort.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return teamSort.direction === 'asc' ? 1 : -1;
+      let aValue = '';
+      let bValue = '';
+      if (teamSort.key === 'gdkd') {
+        aValue = extractGDKD(a.name);
+        bValue = extractGDKD(b.name);
+      } else {
+        aValue = a[teamSort.key] || '';
+        bValue = b[teamSort.key] || '';
+      }
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      if (aStr < bStr) return teamSort.direction === 'asc' ? -1 : 1;
+      if (aStr > bStr) return teamSort.direction === 'asc' ? 1 : -1;
       return 0;
     });
   }, [teams, teamSort, debouncedTeamSearch]);
@@ -8079,15 +8107,22 @@ export default function App() {
       return;
     }
 
-    const data = budgets.map(b => ({
-      'ID Dự án': b.projectId,
-      'Tên Dự án': b.projectName || '',
-      'ID Team': b.teamId,
-      'Tên Team': b.teamName || '',
-      'Tháng': b.month,
-      'Người triển khai': b.implementerName || 'N/A',
-      'Ngân sách': b.amount
-    }));
+    const data = budgets.map(b => {
+      const teamName = teamMap[b.teamId] || b.teamName || '';
+      const teamObj = teams.find((t: any) => t.id === b.teamId || t.name === teamName);
+      const mainTeamName = teamObj?.name || teamName;
+      return {
+        'ID Dự án': b.projectId,
+        'Tên Dự án': b.projectName || '',
+        'ID Team': b.teamId,
+        'Tên Team': mainTeamName,
+        'Mã Team': teamObj?.teamCode || extractTeamCode(mainTeamName),
+        'GĐKD': extractGDKD(mainTeamName),
+        'Tháng': b.month,
+        'Người triển khai': b.implementerName || 'N/A',
+        'Ngân sách': b.amount
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -8102,17 +8137,24 @@ export default function App() {
       return;
     }
 
-    const data = budgetReportWithActuals.map((b, idx) => ({
-      'STT': idx + 1,
-      'Đội (Team)': b.teamName || '',
-      'Người triển khai': b.implementerName || 'N/A',
-      'Dự án': b.projectName || 'N/A',
-      'Ngân sách đăng ký (VNĐ)': b.amount,
-      'Thực chi (VNĐ)': b.actualCost || 0,
-      'Chênh lệch (VNĐ)': (b.amount - (b.actualCost || 0)),
-      'Kỳ (Tháng)': b.month || '',
-      'Người đăng ký': b.userEmail || ''
-    }));
+    const data = budgetReportWithActuals.map((b, idx) => {
+      const teamName = b.teamName || '';
+      const teamObj = teams.find((t: any) => t.id === b.teamId || t.name === teamName);
+      const mainTeamName = teamObj?.name || teamName;
+      return {
+        'STT': idx + 1,
+        'Đội (Team)': mainTeamName,
+        'Mã Team': teamObj?.teamCode || extractTeamCode(mainTeamName),
+        'GĐKD': extractGDKD(mainTeamName),
+        'Người triển khai': b.implementerName || 'N/A',
+        'Dự án': b.projectName || 'N/A',
+        'Ngân sách đăng ký (VNĐ)': b.amount,
+        'Thực chi (VNĐ)': b.actualCost || 0,
+        'Chênh lệch (VNĐ)': (b.amount - (b.actualCost || 0)),
+        'Kỳ (Tháng)': b.month || '',
+        'Người đăng ký': b.userEmail || ''
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -8121,6 +8163,8 @@ export default function App() {
     worksheet['!cols'] = [
       { wch: 6 },  // STT
       { wch: 20 }, // Đội (Team)
+      { wch: 15 }, // Mã Team
+      { wch: 20 }, // GĐKD
       { wch: 20 }, // Người triển khai
       { wch: 25 }, // Dự án
       { wch: 22 }, // Ngân sách đăng ký
@@ -8141,18 +8185,25 @@ export default function App() {
       return;
     }
 
-    const data = adminFilteredBudgets.map((b, idx) => ({
-      'STT': idx + 1,
-      'ID Dự án': b.projectId,
-      'Tên Dự án': projectMap[b.projectId] || b.projectName || 'N/A',
-      'Mã Đội / Tên Team': teamMap[b.teamId] || b.teamName || '',
-      'Người triển khai': b.implementerName || 'N/A',
-      'Kỳ (Tháng)': b.month || '',
-      'Ngân sách đăng ký (VNĐ)': b.amount || 0,
-      'Thực nghiệm thu (VNĐ)': acceptanceMap[b.id] || 0,
-      'Ngày đăng ký': b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'dd/MM/yyyy HH:mm:ss') : '',
-      'Người đăng ký': b.userEmail || ''
-    }));
+    const data = adminFilteredBudgets.map((b, idx) => {
+      const teamName = teamMap[b.teamId] || b.teamName || '';
+      const teamObj = teams.find((t: any) => t.id === b.teamId || t.name === teamName);
+      const mainTeamName = teamObj?.name || teamName;
+      return {
+        'STT': idx + 1,
+        'ID Dự án': b.projectId,
+        'Tên Dự án': projectMap[b.projectId] || b.projectName || 'N/A',
+        'Tên Team': mainTeamName,
+        'Mã Team': teamObj?.teamCode || extractTeamCode(mainTeamName),
+        'GĐKD': extractGDKD(mainTeamName),
+        'Người triển khai': b.implementerName || 'N/A',
+        'Kỳ (Tháng)': b.month || '',
+        'Ngân sách đăng ký (VNĐ)': b.amount || 0,
+        'Thực nghiệm thu (VNĐ)': acceptanceMap[b.id] || 0,
+        'Ngày đăng ký': b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'dd/MM/yyyy HH:mm:ss') : '',
+        'Người đăng ký': b.userEmail || ''
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -8162,7 +8213,9 @@ export default function App() {
       { wch: 6 },  // STT
       { wch: 15 }, // ID Dự án
       { wch: 25 }, // Tên Dự án
-      { wch: 20 }, // Mã Đội / Tên Team
+      { wch: 20 }, // Tên Team
+      { wch: 15 }, // Mã Team
+      { wch: 20 }, // GĐKD
       { wch: 20 }, // Người triển khai
       { wch: 12 }, // Kỳ (Tháng)
       { wch: 22 }, // Ngân sách đăng ký
@@ -11142,6 +11195,7 @@ export default function App() {
                                 <TableHeader className="bg-slate-50/70">
                                   <TableRow>
                                     <TableHead className="font-bold">Nhóm</TableHead>
+                                    <TableHead className="font-bold">GĐKD</TableHead>
                                     <TableHead className="font-bold">Dự án</TableHead>
                                     <TableHead className="font-bold">Tháng MKT</TableHead>
                                     <TableHead className="font-bold">Nhân sự phụ trách</TableHead>
@@ -11154,6 +11208,9 @@ export default function App() {
                                   {filteredBlockBudgets.map((b) => (
                                     <TableRow key={b.id} className="hover:bg-slate-50/50">
                                       <TableCell className="font-semibold text-xs text-slate-700">{b.teamName || 'N/A'}</TableCell>
+                                      <TableCell className="font-semibold text-xs text-rose-600">
+                                        {extractGDKD(b.teamName || '')}
+                                      </TableCell>
                                       <TableCell className="font-semibold text-xs text-indigo-600">{b.projectName || 'N/A'}</TableCell>
                                       <TableCell className="font-mono text-xs">{b.month}</TableCell>
                                       <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
@@ -13776,6 +13833,9 @@ export default function App() {
                                 <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'name', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2">Tên Team <ArrowUpDown className="w-3 h-3" /></div>
                                 </TableHead>
+                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'gdkd', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2">GĐKD <ArrowUpDown className="w-3 h-3" /></div>
+                                </TableHead>
                                 <TableHead>Ngày tạo</TableHead>
                                 <TableHead className="text-right">Thao tác</TableHead>
                               </TableRow>
@@ -13814,6 +13874,9 @@ export default function App() {
                                         }
                                       }} className="h-8" />
                                     ) : t.name}
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-xs text-rose-600">
+                                    {extractGDKD(editingTeamId === t.id ? editingTeamName : t.name)}
                                   </TableCell>
                                   <TableCell className="text-xs text-slate-500">
                                     {safeFormat(t.createdAt?.toDate ? t.createdAt.toDate() : new Date(), 'dd/MM/yyyy')}
@@ -13998,6 +14061,7 @@ export default function App() {
                                 <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
                                 <TableHead className="w-[100px] px-1 tracking-tighter">Team</TableHead>
                                 <TableHead className="w-[80px] px-1 tracking-tighter">Mã Team</TableHead>
+                                <TableHead className="w-[110px] px-1 tracking-tighter">GĐKD</TableHead>
                                 <TableHead className="w-[110px] px-1 tracking-tighter">N.Triển khai</TableHead>
                                 <TableHead className="w-[130px] px-1 text-center tracking-tighter">Hạn kỳ (Kỳ)</TableHead>
                                 <TableHead className="w-[90px] px-1 text-right tracking-tighter">Ngân sách</TableHead>
@@ -14032,6 +14096,9 @@ export default function App() {
                                   <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase" title={teamMap[b.teamId] || b.teamName}>{teamMap[b.teamId] || b.teamName}</TableCell>
                                   <TableCell className="px-1 text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50/20 px-1.5 py-0.5 rounded truncate max-w-[80px]">
                                     {teams.find(t => t.id === b.teamId || t.name === (teamMap[b.teamId] || b.teamName))?.teamCode || ''}
+                                  </TableCell>
+                                  <TableCell className="px-1 text-[10px] font-bold text-slate-700 truncate max-w-[110px]">
+                                    {extractGDKD(teamMap[b.teamId] || b.teamName || '')}
                                   </TableCell>
                                   <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
                                   <TableCell className="px-1 py-1">
@@ -14073,7 +14140,7 @@ export default function App() {
                               ))}
                               {adminFilteredBudgets.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs italic font-medium">
+                                  <TableCell colSpan={10} className="h-32 text-center text-slate-400 text-xs italic font-medium">
                                     Không tìm thấy dữ liệu ngân sách nào phù hợp
                                   </TableCell>
                                 </TableRow>
@@ -14083,7 +14150,7 @@ export default function App() {
                               <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
                                   <TableRow className="h-10 font-bold">
                                     <TableCell></TableCell>
-                                    <TableCell colSpan={4} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
+                                    <TableCell colSpan={5} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
                                     <TableCell className="px-1 text-right font-mono text-slate-900 text-[10px]">
                                       {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}đ
                                     </TableCell>

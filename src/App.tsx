@@ -627,11 +627,35 @@ const getMarketingMonth = (date: Date | any) => {
   return format(d, 'yyyy-MM');
 };
 
+const parseTimestampToDate = (val: any): Date | null => {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  if (typeof val.toDate === 'function') {
+    try {
+      return val.toDate();
+    } catch (e) {}
+  }
+  if (typeof val === 'object') {
+    const seconds = val.seconds ?? val._seconds;
+    if (typeof seconds === 'number') {
+      return new Date(seconds * 1000 + Math.floor((val.nanoseconds ?? val._nanoseconds ?? 0) / 1000000));
+    }
+  }
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d;
+  } catch (e) {}
+  return null;
+};
+
 const safeFormat = (date: any, formatStr: string) => {
-  if (!date) return '';
-  const d = date instanceof Date ? date : new Date(date);
-  if (isNaN(d.getTime())) return '';
-  return format(d, formatStr);
+  const d = parseTimestampToDate(date);
+  if (!d) return '';
+  try {
+    return format(d, formatStr);
+  } catch (e) {
+    return '';
+  }
 };
 
 const formatYAxis = (value: number) => {
@@ -1093,6 +1117,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [reportNtSubTab, setReportNtSubTab] = useState<'direct' | 'google-sheet'>('direct');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [showQuotaGuide, setShowQuotaGuide] = useState(false);
 
   useEffect(() => {
     const handleQuotaExceeded = () => {
@@ -8074,7 +8099,7 @@ export default function App() {
       'ID': t.id,
       'Mã Team': t.teamCode || '',
       'Tên Team': t.name,
-      'Ngày tạo': t.createdAt ? format(t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+      'Ngày tạo': safeFormat(t.createdAt, 'dd/MM/yyyy HH:mm:ss')
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -8096,7 +8121,7 @@ export default function App() {
       'Tên Dự án': p.name,
       'Khu vực': p.region || 'N/A',
       'Loại hình': p.type || 'N/A',
-      'Ngày tạo': p.createdAt ? format(p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt), 'dd/MM/yyyy HH:mm:ss') : ''
+      'Ngày tạo': safeFormat(p.createdAt, 'dd/MM/yyyy HH:mm:ss')
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -8205,7 +8230,7 @@ export default function App() {
         'Kỳ (Tháng)': b.month || '',
         'Ngân sách đăng ký (VNĐ)': b.amount || 0,
         'Thực nghiệm thu (VNĐ)': acceptanceMap[b.id] || 0,
-        'Ngày đăng ký': b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'dd/MM/yyyy HH:mm:ss') : '',
+        'Ngày đăng ký': safeFormat(b.createdAt, 'dd/MM/yyyy HH:mm:ss'),
         'Người đăng ký': b.userEmail || ''
       };
     });
@@ -9704,27 +9729,123 @@ export default function App() {
 
       {/* Main Content */}
       {isQuotaExceeded && (
-        <div className="max-w-[1600px] mx-auto px-4 pt-4">
-          <div className="bg-amber-500/10 border-2 border-amber-500/30 text-amber-900 p-4 sm:p-5 rounded-[2rem] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg shadow-amber-500/5 animate-in fade-in duration-500">
-            <div className="flex items-start gap-3">
-              <span className="p-2 sm:p-2.5 bg-amber-500 text-white rounded-2xl shrink-0 mt-0.5">
-                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
-              </span>
-              <div className="space-y-1 font-sans">
-                <h4 className="text-sm font-black uppercase tracking-wider text-amber-850 flex items-center gap-2">
-                  Chế độ Offline/Demo đã kích hoạt
-                </h4>
-                <p className="text-xs font-semibold leading-relaxed text-amber-700/95">
-                  Cơ sở dữ liệu đám mây Google Firebase đã vượt quá hạn nghạch đọc miễn phí hàng ngày (Free daily read units quota exceeded). Để hỗ trợ bạn tiếp tục chạy thử nghiệm và kiểm duyệt đầy đủ tính năng hoàn hảo, ứng dụng đã kích hoạt công cụ Sao lưu Cục bộ (Local Storage).
-                </p>
-                <p className="text-[10px] font-medium text-amber-600/80">
-                  Mọi dữ liệu bạn thêm mới, chỉnh sửa hay xóa sẽ được lưu giữ lập tức ngay trong Trình duyệt này của bạn!
-                </p>
+        <div className="max-w-[1600px] mx-auto px-4 pt-4 space-y-3">
+          {/* Main Notice */}
+          <div className="bg-amber-500/10 border-2 border-amber-500/20 text-slate-800 p-5 rounded-[2rem] shadow-lg shadow-amber-500/5 transition-all duration-300">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="p-3 bg-amber-500 text-white rounded-2xl shrink-0">
+                  <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
+                </span>
+                <div className="space-y-1 font-sans">
+                  <h4 className="text-sm font-black uppercase tracking-wider text-amber-900 flex items-center gap-2">
+                    Chế độ Offline/Demo đã tự động kích hoạt
+                  </h4>
+                  <p className="text-xs font-semibold leading-relaxed text-slate-600">
+                    Cơ sở dữ liệu đám mây Google Firebase của bạn đã vượt quá hạn ngạch đọc miễn phí hàng ngày (<span className="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">Free daily read units quota exceeded</span>). Để đảm bảo hệ thống thử nghiệm luôn hoạt động trơn tru 100%, ứng dụng đã chuyển hướng sang cơ sở dữ liệu dự phòng cục bộ (Local Storage).
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500">
+                    Mọi thao tác CRUD (Thêm, Sửa, Xóa) sẽ được lưu trữ và đồng bộ cục bộ ngay trên trình duyệt của bạn mà không lo gián đoạn công việc!
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                <Button 
+                  onClick={() => setShowQuotaGuide(!showQuotaGuide)}
+                  variant="outline"
+                  className="bg-white border-amber-200 hover:bg-amber-50 hover:text-amber-900 text-amber-950 font-black text-[11px] uppercase tracking-wider px-4 py-2 h-10 rounded-xl flex items-center gap-2 cursor-pointer"
+                >
+                  <span>{showQuotaGuide ? 'Ẩn hướng khắc phục' : 'Xem hướng khắc phục'}</span>
+                  {showQuotaGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </Button>
+                <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-none shadow-md py-2 px-3 rounded-xl font-bold font-mono tracking-wider">
+                  LOCAL FALLBACK ACTIVE
+                </Badge>
               </div>
             </div>
-            <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-none shadow-md whitespace-nowrap self-stretch sm:self-center flex items-center justify-center py-1.5 px-3 rounded-xl font-bold font-mono tracking-wider shrink-0">
-              OFFLINE LOCAL DB ACTIVE
-            </Badge>
+
+            {/* Expansible detailed Guide with smooth motion */}
+            <AnimatePresence>
+              {showQuotaGuide && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-5 mt-5 border-t border-amber-200/40 grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
+                    
+                    {/* Column 1: Upgrade Guide */}
+                    <div className="bg-white/85 rounded-2xl p-5 border border-amber-200/30 space-y-3.5">
+                      <div className="flex items-center gap-2 text-amber-950 font-black text-sm border-b pb-2 border-slate-100">
+                        <Database className="w-4 h-4 text-amber-600" />
+                        <span>1. HƯỚNG DẪN NÂNG CẤP HẠN NGẠCH (UPGRADE PLAN)</span>
+                      </div>
+                      <p className="text-slate-600 font-medium leading-relaxed">
+                        Để loại bỏ vĩnh viễn giới hạn đọc miễn phí hàng ngày (mặc định 50.000 lượt đọc/ngày của Firebase Spark) và sẵn sàng đưa ứng dụng chạy thực tế ổn định, bạn hãy tiến hành nâng cấp dự án Firebase:
+                      </p>
+                      <ol className="space-y-2 list-decimal pl-4 font-medium text-slate-600 leading-relaxed">
+                        <li>
+                          Truy cập trang quản trị <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-3 h-3" /></a> và chọn dự án Firebase liên quan.
+                        </li>
+                        <li>
+                          Nhìn vào góc góc dưới cùng bên trái màn hình, nhấp vào nút <strong className="text-slate-900 font-black bg-slate-100 px-1.5 py-0.5 rounded">Upgrade (Nâng cấp)</strong> ngay cạnh gói Spark Plan.
+                        </li>
+                        <li>
+                          Chuyển đổi dự án sang gói <strong className="text-indigo-800 font-black">Blaze Plan (Pay-as-you-go)</strong> và điền thông tin thẻ thanh toán (Visa hoặc Mastercard).
+                        </li>
+                        <li>
+                          <span className="text-emerald-700 font-bold">Yên tâm tuyệt đối:</span> Gói Blaze vẫn hoàn toàn MIỄN PHÍ một hạn mức hàng ngày rộng rãi tương đương gói Spark. Bạn chỉ phải chi trả vài xu cực nhỏ nếu thực sự dùng vượt trên lượng hạn mức đó.
+                        </li>
+                        <li>
+                          Hãy thiết lập cảnh báo ngân sách (<strong className="text-slate-800">Budget Alerts</strong>) trong Google Cloud Billing để kiểm soát chi phí hiệu quả và an tâm nhất.
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Column 2: Read Optimization */}
+                    <div className="bg-white/85 rounded-2xl p-5 border border-amber-200/30 space-y-3.5">
+                      <div className="flex items-center gap-2 text-slate-900 font-black text-sm border-b pb-2 border-slate-100">
+                        <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                        <span>2. TỐI ƯU HÓA CODE TRUY VẤN (READ OPTIMIZATION)</span>
+                      </div>
+                      <p className="text-slate-600 font-medium leading-relaxed">
+                        Thực hiện rà soát nghiêm túc mã nguồn và áp dụng các mẫu thiết kế tối ưu truy vấn để giảm thiểu "Read Units":
+                      </p>
+                      <div className="space-y-2.5 font-medium text-slate-650">
+                        <div className="flex gap-2.5 items-start">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                          <p className="leading-relaxed">
+                            <strong className="text-slate-900">Sử dụng Phân trang (Pagination):</strong> Tuyệt đối không dùng query tải toàn bộ collection cùng lúc lên đến hàng ngàn bản ghi. Hãy sử dụng hàm <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">limit()</code> kết hợp với <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">startAfter()</code> để chỉ tải từ 10 - 20 bản ghi cho mỗi trang dữ liệu.
+                          </p>
+                        </div>
+                        <div className="flex gap-2.5 items-start">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                          <p className="leading-relaxed">
+                            <strong className="text-slate-900">Bật Cache (Offline Persistence):</strong> Cấu hình SDK Firebase của bạn để ưu tiên lấy thông tin từ bộ nhớ đệm (cache) cục bộ đối với những dữ liệu tĩnh ít biến động (như danh mục dự án, thông tin cố định), chỉ gọi truy vấn mới lên máy chủ khi cần thực sự cập nhật.
+                          </p>
+                        </div>
+                        <div className="flex gap-2.5 items-start">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                          <p className="leading-relaxed">
+                            <strong className="text-slate-900">Tránh lọc dữ liệu ở Client:</strong> Đừng kéo lọc dữ liệu sau khi tải đầy đủ về client bằng Javascript filter. Hãy tận dụng triệt để toán tử <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">where()</code> của Firebase Firestore để lọc trực tiếp trên đám mây, giảm tối đa "lượt đọc" không cần thiết.
+                          </p>
+                        </div>
+                        <div className="flex gap-2.5 items-start">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                          <p className="leading-relaxed">
+                            <strong className="text-slate-900">Tránh vòng lặp useEffect (Infinite Loop Guard):</strong> Kiểm tra nghiêm khắc các lifecycle hook và dependency của <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">useEffect</code> trong React. Tránh cập nhật state lỏng lẻo gây re-render tuần hoàn khiến ứng dụng gọi tới server Firebase hàng trăm lần mỗi giây.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
           </div>
         </div>
       )}
@@ -11220,7 +11341,7 @@ export default function App() {
                                       <TableCell className="font-mono text-xs">{b.month}</TableCell>
                                       <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
                                       <TableCell className="text-xs font-mono text-slate-500">
-                                        {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
+                                        {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                                       </TableCell>
                                       <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
                                         {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
@@ -12168,7 +12289,7 @@ export default function App() {
                                       <TableCell className="font-mono text-xs">{b.month}</TableCell>
                                       <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
                                       <TableCell className="text-xs font-mono text-slate-500">
-                                        {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
+                                        {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                                       </TableCell>
                                       <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
                                         {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
@@ -14132,7 +14253,7 @@ export default function App() {
                                   <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px] tabular-nums">{b.amount.toLocaleString()}đ</TableCell>
                                   <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px] tabular-nums">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
                                   <TableCell className="px-1 text-center font-mono text-[8px] text-slate-400 leading-tight tabular-nums">
-                                    {b.createdAt?.toDate ? format(b.createdAt.toDate(), 'HH:mm dd/MM/yyyy') : '-'}
+                                    {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                                   </TableCell>
                                   <TableCell className="px-2 text-right">
                                     <div className="flex justify-end gap-0.5">
@@ -14373,7 +14494,7 @@ export default function App() {
                                     )}
                                   </TableCell>
                                   <TableCell className="px-1 text-center font-mono text-[9px] text-slate-400 tabular-nums">
-                                    {c.createdAt?.toDate ? format(c.createdAt.toDate(), 'dd/MM/yyyy') : '-'}
+                                    {safeFormat(c.createdAt, 'dd/MM/yyyy') || '-'}
                                   </TableCell>
                                   <TableCell className="px-2 text-right">
                                     <div className="flex justify-end gap-0.5">
@@ -16485,7 +16606,7 @@ export default function App() {
                                 }`}>
                                   {log.action === 'DELETE_ALL' ? 'Xóa tất cả' : log.action === 'DELETE_BULK' ? 'Xóa nhiều' : log.action === 'IMPORT_BUDGETS' ? 'Dữ liệu Nhập' : 'Khôi phục'}
                                 </Badge>
-                                <span className="text-[11px] font-black text-slate-900">{log.timestamp?.toDate ? format(log.timestamp.toDate(), 'HH:mm dd/MM/yyyy') : ''}</span>
+                                <span className="text-[11px] font-black text-slate-900">{safeFormat(log.timestamp, 'HH:mm dd/MM/yyyy')}</span>
                               </div>
                               <p className="text-[10px] text-slate-500 font-medium">
                                 <span className="font-bold text-slate-700">{log.userEmail}</span> | 
@@ -17315,7 +17436,7 @@ export default function App() {
                             </span>
                           </TableCell>
                           <TableCell className="py-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                            {b.createdAt ? format(b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt), 'HH:mm dd/MM/yyyy') : '-'}
+                            {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                           </TableCell>
                           <TableCell className="py-4">
                             <div className="flex flex-col">
@@ -17960,7 +18081,7 @@ export default function App() {
                             </TableCell>
                             <TableCell className="text-xs">{c.implementerName}</TableCell>
                             <TableCell className="text-[10px] font-medium text-slate-500">
-                              {c.createdAt ? format(c.createdAt.toDate ? c.createdAt.toDate() : new Date(c.createdAt), 'HH:mm dd/MM') : 'N/A'}
+                              {safeFormat(c.createdAt, 'HH:mm dd/MM') || 'N/A'}
                             </TableCell>
                             <TableCell className="text-right font-mono font-medium text-xs">
                               {editingCostId === c.id ? (
@@ -20779,7 +20900,7 @@ const OLD_AcceptanceManager = React.memo(({
       'Tổng tạm tính': a.totalCost || 0,
       'Quyết toán': a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || a.totalActualCost || 0) : '-',
       'Trạng thái': a.status,
-      'Ngày cập nhật': a.updatedAt ? format(a.updatedAt.toDate ? a.updatedAt.toDate() : new Date(a.updatedAt), 'dd/MM/yyyy HH:mm') : ''
+      'Ngày cập nhật': safeFormat(a.updatedAt, 'dd/MM/yyyy HH:mm')
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -21744,7 +21865,7 @@ const OLD_AcceptanceManager = React.memo(({
                       <TableCell className="px-2 text-right">
                         <div className="flex flex-col items-end">
                           <span className="text-[9px] font-bold text-slate-500">
-                            {a.finalizedAt ? format(a.finalizedAt.toDate ? a.finalizedAt.toDate() : new Date(a.finalizedAt), 'dd/MM HH:mm') : '-'}
+                            {safeFormat(a.finalizedAt, 'dd/MM HH:mm') || '-'}
                           </span>
                           {a.finalizedBy && (
                             <span className="text-[8px] font-black text-slate-300 uppercase truncate max-w-[80px]">
@@ -22918,7 +23039,7 @@ const SupportManager = React.memo(({
                       </div>
                     </div>
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
-                      {req.createdAt ? format(req.createdAt.toDate ? req.createdAt.toDate() : new Date(req.createdAt), 'dd/MM/yyyy HH:mm') : ''}
+                      {safeFormat(req.createdAt, 'dd/MM/yyyy HH:mm')}
                     </span>
                   </div>
 
@@ -22930,7 +23051,7 @@ const SupportManager = React.memo(({
                       <div className="flex items-center gap-2">
                         <Badge className="bg-emerald-600 text-white border-none py-0 px-2 text-[8px] font-black uppercase">Admin Phản hồi</Badge>
                         <span className="text-[8px] font-bold text-emerald-500 uppercase italic">
-                          {req.repliedAt ? format(req.repliedAt.toDate ? req.repliedAt.toDate() : new Date(req.repliedAt), 'dd/MM HH:mm') : ''}
+                          {safeFormat(req.repliedAt, 'dd/MM HH:mm')}
                         </span>
                       </div>
                       <p className="text-emerald-900 text-xs font-bold leading-relaxed">

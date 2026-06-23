@@ -23,9 +23,14 @@ function isQuotaError(err: any): boolean {
   const msg = String(err.message || err).toLowerCase();
   return (
     err.code === 'resource-exhausted' ||
+    err.code === 'unavailable' ||
+    err.code === 'failed-precondition' ||
     msg.includes('quota') ||
     msg.includes('exhausted') ||
-    msg.includes('limit')
+    msg.includes('limit') ||
+    msg.includes('offline') ||
+    msg.includes('network') ||
+    msg.includes('connection')
   );
 }
 

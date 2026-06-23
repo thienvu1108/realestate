@@ -9729,7 +9729,7 @@ export default function App() {
 
       {/* Main Content */}
       {isQuotaExceeded && (
-        <div className="max-w-[1600px] mx-auto px-4 pt-4 space-y-3">
+        <div className="max-w-[1600px] mx-auto px-4 pt-4">
           {/* Main Notice */}
           <div className="bg-amber-500/10 border-2 border-amber-500/20 text-slate-800 p-5 rounded-[2rem] shadow-lg shadow-amber-500/5 transition-all duration-300">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
@@ -9749,103 +9749,12 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                <Button 
-                  onClick={() => setShowQuotaGuide(!showQuotaGuide)}
-                  variant="outline"
-                  className="bg-white border-amber-200 hover:bg-amber-50 hover:text-amber-900 text-amber-950 font-black text-[11px] uppercase tracking-wider px-4 py-2 h-10 rounded-xl flex items-center gap-2 cursor-pointer"
-                >
-                  <span>{showQuotaGuide ? 'Ẩn hướng khắc phục' : 'Xem hướng khắc phục'}</span>
-                  {showQuotaGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </Button>
+              <div className="flex items-center gap-2 shrink-0 self-center lg:self-auto">
                 <Badge className="bg-amber-600 hover:bg-amber-700 text-white border-none shadow-md py-2 px-3 rounded-xl font-bold font-mono tracking-wider">
                   LOCAL FALLBACK ACTIVE
                 </Badge>
               </div>
             </div>
-
-            {/* Expansible detailed Guide with smooth motion */}
-            <AnimatePresence>
-              {showQuotaGuide && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="overflow-hidden"
-                >
-                  <div className="pt-5 mt-5 border-t border-amber-200/40 grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
-                    
-                    {/* Column 1: Upgrade Guide */}
-                    <div className="bg-white/85 rounded-2xl p-5 border border-amber-200/30 space-y-3.5">
-                      <div className="flex items-center gap-2 text-amber-950 font-black text-sm border-b pb-2 border-slate-100">
-                        <Database className="w-4 h-4 text-amber-600" />
-                        <span>1. HƯỚNG DẪN NÂNG CẤP HẠN NGẠCH (UPGRADE PLAN)</span>
-                      </div>
-                      <p className="text-slate-600 font-medium leading-relaxed">
-                        Để loại bỏ vĩnh viễn giới hạn đọc miễn phí hàng ngày (mặc định 50.000 lượt đọc/ngày của Firebase Spark) và sẵn sàng đưa ứng dụng chạy thực tế ổn định, bạn hãy tiến hành nâng cấp dự án Firebase:
-                      </p>
-                      <ol className="space-y-2 list-decimal pl-4 font-medium text-slate-600 leading-relaxed">
-                        <li>
-                          Truy cập trang quản trị <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold inline-flex items-center gap-0.5">Firebase Console <ExternalLink className="w-3 h-3" /></a> và chọn dự án Firebase liên quan.
-                        </li>
-                        <li>
-                          Nhìn vào góc góc dưới cùng bên trái màn hình, nhấp vào nút <strong className="text-slate-900 font-black bg-slate-100 px-1.5 py-0.5 rounded">Upgrade (Nâng cấp)</strong> ngay cạnh gói Spark Plan.
-                        </li>
-                        <li>
-                          Chuyển đổi dự án sang gói <strong className="text-indigo-800 font-black">Blaze Plan (Pay-as-you-go)</strong> và điền thông tin thẻ thanh toán (Visa hoặc Mastercard).
-                        </li>
-                        <li>
-                          <span className="text-emerald-700 font-bold">Yên tâm tuyệt đối:</span> Gói Blaze vẫn hoàn toàn MIỄN PHÍ một hạn mức hàng ngày rộng rãi tương đương gói Spark. Bạn chỉ phải chi trả vài xu cực nhỏ nếu thực sự dùng vượt trên lượng hạn mức đó.
-                        </li>
-                        <li>
-                          Hãy thiết lập cảnh báo ngân sách (<strong className="text-slate-800">Budget Alerts</strong>) trong Google Cloud Billing để kiểm soát chi phí hiệu quả và an tâm nhất.
-                        </li>
-                      </ol>
-                    </div>
-
-                    {/* Column 2: Read Optimization */}
-                    <div className="bg-white/85 rounded-2xl p-5 border border-amber-200/30 space-y-3.5">
-                      <div className="flex items-center gap-2 text-slate-900 font-black text-sm border-b pb-2 border-slate-100">
-                        <ShieldAlert className="w-4 h-4 text-indigo-600" />
-                        <span>2. TỐI ƯU HÓA CODE TRUY VẤN (READ OPTIMIZATION)</span>
-                      </div>
-                      <p className="text-slate-600 font-medium leading-relaxed">
-                        Thực hiện rà soát nghiêm túc mã nguồn và áp dụng các mẫu thiết kế tối ưu truy vấn để giảm thiểu "Read Units":
-                      </p>
-                      <div className="space-y-2.5 font-medium text-slate-650">
-                        <div className="flex gap-2.5 items-start">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
-                          <p className="leading-relaxed">
-                            <strong className="text-slate-900">Sử dụng Phân trang (Pagination):</strong> Tuyệt đối không dùng query tải toàn bộ collection cùng lúc lên đến hàng ngàn bản ghi. Hãy sử dụng hàm <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">limit()</code> kết hợp với <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">startAfter()</code> để chỉ tải từ 10 - 20 bản ghi cho mỗi trang dữ liệu.
-                          </p>
-                        </div>
-                        <div className="flex gap-2.5 items-start">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
-                          <p className="leading-relaxed">
-                            <strong className="text-slate-900">Bật Cache (Offline Persistence):</strong> Cấu hình SDK Firebase của bạn để ưu tiên lấy thông tin từ bộ nhớ đệm (cache) cục bộ đối với những dữ liệu tĩnh ít biến động (như danh mục dự án, thông tin cố định), chỉ gọi truy vấn mới lên máy chủ khi cần thực sự cập nhật.
-                          </p>
-                        </div>
-                        <div className="flex gap-2.5 items-start">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
-                          <p className="leading-relaxed">
-                            <strong className="text-slate-900">Tránh lọc dữ liệu ở Client:</strong> Đừng kéo lọc dữ liệu sau khi tải đầy đủ về client bằng Javascript filter. Hãy tận dụng triệt để toán tử <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">where()</code> của Firebase Firestore để lọc trực tiếp trên đám mây, giảm tối đa "lượt đọc" không cần thiết.
-                          </p>
-                        </div>
-                        <div className="flex gap-2.5 items-start">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
-                          <p className="leading-relaxed">
-                            <strong className="text-slate-900">Tránh vòng lặp useEffect (Infinite Loop Guard):</strong> Kiểm tra nghiêm khắc các lifecycle hook và dependency của <code className="font-mono bg-slate-105 text-indigo-700 px-1 rounded font-bold">useEffect</code> trong React. Tránh cập nhật state lỏng lẻo gây re-render tuần hoàn khiến ứng dụng gọi tới server Firebase hàng trăm lần mỗi giây.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
           </div>
         </div>
       )}

@@ -5110,6 +5110,11 @@ export default function App() {
       if (teamSort.key === 'gdkd') {
         aValue = extractGDKD(a.name);
         bValue = extractGDKD(b.name);
+      } else if (teamSort.key === 'blockName') {
+        const aBlock = blocks.find(b => b.id === a.blockId || b.blockCode === a.blockCode);
+        aValue = aBlock?.name || a.blockCode || '';
+        const bBlock = blocks.find(b => b.id === b.blockId || b.blockCode === b.blockCode);
+        bValue = bBlock?.name || b.blockCode || '';
       } else {
         aValue = a[teamSort.key] || '';
         bValue = b[teamSort.key] || '';
@@ -5120,7 +5125,7 @@ export default function App() {
       if (aStr > bStr) return teamSort.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [teams, teamSort, debouncedTeamSearch]);
+  }, [teams, teamSort, debouncedTeamSearch, blocks]);
 
   const myBlockTeams = useMemo(() => {
     const block = currentActiveBlock;
@@ -13833,6 +13838,9 @@ export default function App() {
                                 <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'name', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2">Tên Team <ArrowUpDown className="w-3 h-3" /></div>
                                 </TableHead>
+                                <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'blockName', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2">Khối <ArrowUpDown className="w-3 h-3" /></div>
+                                </TableHead>
                                 <TableHead className="cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setTeamSort({ key: 'gdkd', direction: teamSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2">GĐKD <ArrowUpDown className="w-3 h-3" /></div>
                                 </TableHead>
@@ -13841,8 +13849,10 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {sortedTeams.map(t => (
-                                <TableRow key={t.id} className={selectedTeamIds.includes(t.id) ? "bg-blue-50/30" : ""}>
+                              {sortedTeams.map(t => {
+                                const tBlock = blocks.find(b => b.id === t.blockId || b.blockCode === t.blockCode);
+                                return (
+                                  <TableRow key={t.id} className={selectedTeamIds.includes(t.id) ? "bg-blue-50/30" : ""}>
                                   {(isAdmin || isAccountant) && (
                                     <TableCell>
                                       <input 
@@ -13874,6 +13884,15 @@ export default function App() {
                                         }
                                       }} className="h-8" />
                                     ) : t.name}
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-xs text-violet-750">
+                                    {tBlock ? (
+                                      <span className="bg-violet-50 text-violet-700 px-2 py-1 rounded border border-violet-100 font-bold uppercase text-[10px]">
+                                        {tBlock.name}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 italic text-[10px]">Chưa phân bổ</span>
+                                    )}
                                   </TableCell>
                                   <TableCell className="font-semibold text-xs text-rose-600">
                                     {extractGDKD(editingTeamId === t.id ? editingTeamName : t.name)}
@@ -13911,10 +13930,11 @@ export default function App() {
                                     )}
                                   </TableCell>
                                 </TableRow>
-                              ))}
+                              );
+                            })}
                               {sortedTeams.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={3} className="h-24 text-center text-slate-500">
+                                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
                                     Không tìm thấy team nào phù hợp
                                   </TableCell>
                                 </TableRow>

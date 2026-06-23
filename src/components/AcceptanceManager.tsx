@@ -14,7 +14,8 @@ import {
 import { 
   Trash2, Edit2, Upload, FileSpreadsheet, Check, ShieldCheck, 
   ChevronDown, Search, ArrowUpDown, Filter, Plus, FileDown, 
-  CheckSquare, FileText, AlertCircle, RefreshCw, X, ChevronRight, PlusCircle
+  CheckSquare, FileText, AlertCircle, RefreshCw, X, ChevronRight, PlusCircle,
+  Calculator
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -40,6 +41,178 @@ enum OperationType {
   DELETE = 'DELETE'
 }
 
+const getSortValue = (item: any, key: string, teams: any[] = [], blocks: any[] = []) => {
+  if (!item) return '';
+  switch (key) {
+    case 'blockName': {
+      const teamObj = (teams || []).find((t: any) => t.id === item.teamId || t.name === item.teamName || (item.teamCode && t.teamCode === item.teamCode));
+      if (teamObj) {
+        const blk = (blocks || []).find((b: any) => b.id === teamObj.blockId || b.blockCode === teamObj.blockCode);
+        if (blk) return blk.name || blk.blockCode || '';
+      }
+      return item.blockName || item.blockCode || '';
+    }
+    case 'teamName':
+      return item.teamName || '';
+    case 'teamCode':
+      return item.teamCode || '';
+    case 'gdkdName':
+      return item.gdkdName || '';
+    case 'implementerName':
+      return item.implementerName || '';
+    case 'projectName':
+      return item.projectName || '';
+    case 'fbDigitalChuaVat':
+      return item.fbDigitalChuaVat !== undefined ? item.fbDigitalChuaVat : Math.round((item.facebookCost || 0) / 1.1);
+    case 'facebookCost':
+      return item.facebookCost || 0;
+    case 'caNhanCost':
+      return item.caNhanCost !== undefined ? item.caNhanCost : (item.otherCost || 0);
+    case 'fbVisaCostChuaVat':
+      return item.fbVisaCostChuaVat !== undefined ? item.fbVisaCostChuaVat : Math.round((item.visaCost || 0) / 1.1);
+    case 'visaCost':
+      return item.visaCost || 0;
+    case 'dangTinCaNhanCost':
+      return item.dangTinCaNhanCost || 0;
+    case 'dangTinCongTyChuaVat':
+      return item.dangTinCongTyChuaVat !== undefined ? item.dangTinCongTyChuaVat : Math.round((item.postingCost || 0) / 1.08);
+    case 'postingCost':
+      return item.postingCost || 0;
+    case 'zaloCost':
+      return item.zaloCost || 0;
+    case 'googleCost':
+      return item.googleCost || 0;
+    case 'tiktokCost':
+      return item.tiktokCost || 0;
+    case 'totalCost':
+      return item.totalCost || item.afterAcceptanceCost || 0;
+    case 'month':
+      return item.month || '';
+    case 'notes':
+      return item.notes || '';
+    default:
+      return item[key] !== undefined ? item[key] : '';
+  }
+};
+
+// --- EXCEL-STYLE MATH MULTI-VALUE PARSER & CHANNELS AUDITOR ENGINE ---
+export const parseCurrencyFormula = (input: string | number | undefined | null): { total: number; items: { amount: number; label: string }[]; displayString: string } => {
+  if (input === undefined || input === null) return { total: 0, items: [], displayString: '' };
+  if (typeof input === 'number') {
+    return {
+      total: input,
+      items: [{ amount: input, label: 'Khoản chi' }],
+      displayString: input.toLocaleString('vi-VN') + ' đ'
+    };
+  }
+  const str = String(input).trim();
+  if (!str) return { total: 0, items: [], displayString: '' };
+
+  const parts = str.split(/[+\n;]/);
+  const items: { amount: number; label: string }[] = [];
+  let total = 0;
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+
+    const numRegex = /(-?[0-9.,]+)\s*([kKmM]?)/;
+    const match = trimmed.match(numRegex);
+
+    if (match) {
+      let numStr = match[1].replace(/[.,]/g, '');
+      let val = parseFloat(numStr) || 0;
+
+      const unit = match[2].toLowerCase();
+      if (unit === 'k') {
+        val *= 1000;
+      } else if (unit === 'm') {
+        val *= 1000000;
+      }
+
+      let label = trimmed.replace(match[0], '').trim();
+      label = label.replace(/^\s*[()]\s*/, '').replace(/\s*[()]\s*$/, '').trim();
+
+      items.push({
+        amount: val,
+        label: label || 'Khoản chi'
+      });
+      total += val;
+    }
+  }
+
+  const displayString = items
+    .map(itm => `${itm.amount.toLocaleString('vi-VN')} đ${itm.label !== 'Khoản chi' ? ` (${itm.label})` : ''}`)
+    .join(' + ');
+
+  return {
+    total,
+    items,
+    displayString
+  };
+};
+
+const handleCostInputChange = (value: string, updateFn: (val: string) => void) => {
+  const hasFormulaChar = /[+;\nKkMm()a-zA-Z]/.test(value) && !/^\d+$/.test(value.replace(/[.\s]/g, ''));
+  if (hasFormulaChar) {
+    updateFn(value);
+  } else {
+    const cleaned = value.replace(/\D/g, '');
+    const formatted = cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    updateFn(formatted);
+  }
+};
+
+const buildCostBreakdownsOfRecord = (rowState: any) => {
+  const fields = ['fbDigital', 'caNhan', 'fbVisa', 'dangTinCaNhan', 'dangTinCongTy', 'zalo', 'google', 'tiktok'];
+  const breakdowns: any = {};
+  for (const field of fields) {
+    const val = rowState[field] || '';
+    const parsed = parseCurrencyFormula(val);
+    if (parsed.items.length > 0) {
+      breakdowns[field] = {
+        rawInput: val,
+        total: parsed.total,
+        items: parsed.items
+      };
+    }
+  }
+  return breakdowns;
+};
+
+const SortableHeader = ({ sortKey, currentSort, onSort, align = 'left', className = '', children }: any) => {
+  const isSorted = currentSort.key === sortKey;
+  const isAsc = currentSort.direction === 'asc';
+  
+  let alignClass = 'text-left';
+  let flexClass = 'justify-start';
+  if (align === 'center') {
+    alignClass = 'text-center';
+    flexClass = 'justify-center';
+  } else if (align === 'right') {
+    alignClass = 'text-right';
+    flexClass = 'justify-end';
+  }
+
+  return (
+    <TableHead 
+      className={`cursor-pointer hover:bg-slate-200/60 transition-colors select-none group border-b border-slate-200 ${alignClass} ${className}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <div className={`flex items-center gap-1 ${flexClass}`}>
+        <span className="truncate">{children}</span>
+        <ArrowUpDown 
+          className={`w-3 h-3 shrink-0 transition-opacity ${
+            isSorted 
+              ? 'text-indigo-600 font-bold opacity-100' 
+              : 'text-slate-400 opacity-20 group-hover:opacity-100'
+          }`} 
+        />
+      </div>
+    </TableHead>
+  );
+};
+
 export const AcceptanceManager = React.memo(({ 
   isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
@@ -59,6 +232,61 @@ export const AcceptanceManager = React.memo(({
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [acceptanceToFinalize, setAcceptanceToFinalize] = useState<any>(null);
+
+  // State hooks for Multi-Value Sum dialog calculator
+  const [activeCalculatorField, setActiveCalculatorField] = useState<string | null>(null);
+  const [calculatorFieldNameVN, setCalculatorFieldNameVN] = useState('');
+  const [calculatorInput, setCalculatorInput] = useState('');
+  const [calculatorUpdateFn, setCalculatorUpdateFn] = useState<((val: string) => void) | null>(null);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+
+  const handleOpenCalculator = (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => {
+    setActiveCalculatorField(fieldKey);
+    setCalculatorFieldNameVN(fieldVNName);
+    setCalculatorInput(currentVal || '');
+    setCalculatorUpdateFn(() => onUpdate);
+    setIsCalculatorOpen(true);
+  };
+
+  const RenderValueWithBreakdown = (amount: number, breakdown: any, label: string) => {
+    const formattedAmount = formatCurrency(amount).replace(' đ', '');
+    const items = breakdown?.items || [];
+    
+    if (items.length <= 1) {
+      return <span>{formattedAmount}</span>;
+    }
+    
+    return (
+      <span className="relative group/tooltip inline-flex items-center justify-end gap-1 cursor-help">
+        <span className="font-semibold text-indigo-700 underline decoration-indigo-400 decoration-dashed underline-offset-2 hover:text-indigo-900 transition-colors">
+          {formattedAmount}
+        </span>
+        <Calculator className="w-3 h-3 text-indigo-500 hover:text-indigo-700 flex-shrink-0" />
+        
+        {/* Absolute tooltip container */}
+        <span className="absolute right-0 bottom-full mb-2 hidden group-hover/tooltip:block bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-lg shadow-2xl text-[10px] min-w-[210px] text-right z-[999] pointer-events-none font-sans font-medium scale-95 origin-bottom-right transition-all leading-relaxed whitespace-nowrap">
+          <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400 border-b border-slate-800 pb-1.5 mb-1.5 text-center font-sans flex items-center justify-center gap-1.5">
+            <Calculator className="w-3 h-3 text-indigo-400" />
+            <span>TRA SOÁT CHI TIẾT ({label})</span>
+          </span>
+          <span className="block space-y-1 max-h-36 overflow-y-auto pr-1">
+            {items.map((sub: any, sidx: number) => (
+              <span key={sidx} className="flex justify-between gap-4 text-[10px] items-center py-0.5">
+                <span className="text-slate-400 truncate max-w-[125px] text-left">• {sub.label}</span>
+                <span className="font-mono font-bold text-slate-100">
+                  {formatCurrency(sub.amount).replace(' đ', '')}
+                </span>
+              </span>
+            ))}
+          </span>
+          <span className="border-t border-slate-800 pt-1.5 mt-1.5 flex justify-between gap-4 font-mono font-bold text-indigo-400">
+            <span className="text-[9px] uppercase font-sans text-slate-400">Tổng cộng (SUM):</span>
+            <span className="font-bold">{formatCurrency(amount).replace(' đ', '')}</span>
+          </span>
+        </span>
+      </span>
+    );
+  };
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -304,17 +532,21 @@ export const AcceptanceManager = React.memo(({
     if (!sortConfig.key || !sortConfig.direction) return filtered;
 
     return [...filtered].sort((a, b) => {
-      let aVal = a[sortConfig.key] || '';
-      let bVal = b[sortConfig.key] || '';
+      let aVal = getSortValue(a, sortConfig.key, teams, blocks);
+      let bVal = getSortValue(b, sortConfig.key, teams, blocks);
       
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
 
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+
+      if (aStr < bStr) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, acceptanceBlockFilter, sortConfig]);
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, acceptanceBlockFilter, sortConfig, teams, blocks]);
 
   const filteredFinalAcceptances = useMemo(() => {
     const filtered = (finalAcceptances || []).filter((a: any) => {
@@ -348,17 +580,21 @@ export const AcceptanceManager = React.memo(({
     if (!sortConfig.key || !sortConfig.direction) return filtered;
 
     return [...filtered].sort((a, b) => {
-      let aVal = a[sortConfig.key] || '';
-      let bVal = b[sortConfig.key] || '';
+      let aVal = getSortValue(a, sortConfig.key, teams, blocks);
+      let bVal = getSortValue(b, sortConfig.key, teams, blocks);
       
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
 
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+
+      if (aStr < bStr) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, sortConfig]);
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, sortConfig, teams, blocks]);
 
   // Aggregate stats calculations of column totals
   const calculatedPendingTotals = useMemo(() => {
@@ -454,22 +690,22 @@ export const AcceptanceManager = React.memo(({
       const selectedProj = projects.find((p: any) => p.id === draftRow.projectId);
       const selectedBlock = (blocks || []).find((b: any) => b.id === selectedTeam?.blockId || b.blockCode === selectedTeam?.blockCode);
 
-      const fbDigitalChuaVatNum = parseFloat(draftRow.fbDigital.replace(/\./g, '')) || 0;
+      const fbDigitalChuaVatNum = parseCurrencyFormula(draftRow.fbDigital).total;
       const digitalCostNum = Math.round(fbDigitalChuaVatNum * 1.10);
 
-      const caNhanNum = parseFloat(draftRow.caNhan.replace(/\./g, '')) || 0;
+      const caNhanNum = parseCurrencyFormula(draftRow.caNhan).total;
 
-      const fbVisaChuaVatNum = parseFloat(draftRow.fbVisa.replace(/\./g, '')) || 0;
+      const fbVisaChuaVatNum = parseCurrencyFormula(draftRow.fbVisa).total;
       const visaCostNum = Math.round(fbVisaChuaVatNum * 1.10);
 
-      const dangTinCaNhanNum = parseFloat(draftRow.dangTinCaNhan.replace(/\./g, '')) || 0;
+      const dangTinCaNhanNum = parseCurrencyFormula(draftRow.dangTinCaNhan).total;
 
-      const dangTinCongTyChuaVatNum = parseFloat(draftRow.dangTinCongTy.replace(/\./g, '')) || 0;
+      const dangTinCongTyChuaVatNum = parseCurrencyFormula(draftRow.dangTinCongTy).total;
       const dangTinCongTyCostNum = Math.round(dangTinCongTyChuaVatNum * 1.08);
 
-      const zaloNum = parseFloat(draftRow.zalo.replace(/\./g, '')) || 0;
-      const googleNum = parseFloat(draftRow.google.replace(/\./g, '')) || 0;
-      const tiktokNum = parseFloat(draftRow.tiktok.replace(/\./g, '')) || 0;
+      const zaloNum = parseCurrencyFormula(draftRow.zalo).total;
+      const googleNum = parseCurrencyFormula(draftRow.google).total;
+      const tiktokNum = parseCurrencyFormula(draftRow.tiktok).total;
 
       const totalCostNum = digitalCostNum + caNhanNum + visaCostNum + dangTinCaNhanNum + dangTinCongTyCostNum + zaloNum + googleNum + tiktokNum;
 
@@ -517,6 +753,8 @@ export const AcceptanceManager = React.memo(({
           tiktok: [{ account: draftRow.implementerName || 'Mặc định', amount: tiktokNum, tax: 0 }]
         },
 
+        costBreakdowns: buildCostBreakdownsOfRecord(draftRow),
+
         createdAt: serverTimestamp(),
         createdBy: user?.email || '',
         createdByUid: user?.uid || '',
@@ -550,14 +788,14 @@ export const AcceptanceManager = React.memo(({
       gdkdName: acc.gdkdName || '',
       implementerName: acc.implementerName || '',
       projectId: acc.projectId || '',
-      fbDigital: formatCurrencyInput(String(acc.fbDigitalChuaVat !== undefined ? acc.fbDigitalChuaVat : Math.round((acc.facebookCost || 0) / 1.1))),
-      caNhan: formatCurrencyInput(String(acc.caNhanCost !== undefined ? acc.caNhanCost : (acc.otherCost || 0))),
-      fbVisa: formatCurrencyInput(String(acc.fbVisaCostChuaVat !== undefined ? acc.fbVisaCostChuaVat : Math.round((acc.visaCost || 0) / 1.1))),
-      dangTinCaNhan: formatCurrencyInput(String(acc.dangTinCaNhanCost || 0)),
-      dangTinCongTy: formatCurrencyInput(String(acc.dangTinCongTyChuaVat !== undefined ? acc.dangTinCongTyChuaVat : Math.round((acc.postingCost || 0) / 1.08))),
-      zalo: formatCurrencyInput(String(acc.zaloCost || 0)),
-      google: formatCurrencyInput(String(acc.googleCost || 0)),
-      tiktok: formatCurrencyInput(String(acc.tiktokCost || 0)),
+      fbDigital: acc.costBreakdowns?.fbDigital?.rawInput || formatCurrencyInput(String(acc.fbDigitalChuaVat !== undefined ? acc.fbDigitalChuaVat : Math.round((acc.facebookCost || 0) / 1.1))),
+      caNhan: acc.costBreakdowns?.caNhan?.rawInput || formatCurrencyInput(String(acc.caNhanCost !== undefined ? acc.caNhanCost : (acc.otherCost || 0))),
+      fbVisa: acc.costBreakdowns?.fbVisa?.rawInput || formatCurrencyInput(String(acc.fbVisaCostChuaVat !== undefined ? acc.fbVisaCostChuaVat : Math.round((acc.visaCost || 0) / 1.1))),
+      dangTinCaNhan: acc.costBreakdowns?.dangTinCaNhan?.rawInput || formatCurrencyInput(String(acc.dangTinCaNhanCost || 0)),
+      dangTinCongTy: acc.costBreakdowns?.dangTinCongTy?.rawInput || formatCurrencyInput(String(acc.dangTinCongTyChuaVat !== undefined ? acc.dangTinCongTyChuaVat : Math.round((acc.postingCost || 0) / 1.08))),
+      zalo: acc.costBreakdowns?.zalo?.rawInput || formatCurrencyInput(String(acc.zaloCost || 0)),
+      google: acc.costBreakdowns?.google?.rawInput || formatCurrencyInput(String(acc.googleCost || 0)),
+      tiktok: acc.costBreakdowns?.tiktok?.rawInput || formatCurrencyInput(String(acc.tiktokCost || 0)),
       month: acc.month || '',
       notes: acc.notes || ''
     });
@@ -583,22 +821,22 @@ export const AcceptanceManager = React.memo(({
       const selectedProj = projects.find((p: any) => p.id === editingRowState.projectId);
       const selectedBlock = (blocks || []).find((b: any) => b.id === selectedTeam?.blockId || b.blockCode === selectedTeam?.blockCode);
 
-      const fbDigitalChuaVatNum = parseFloat(editingRowState.fbDigital.replace(/\./g, '')) || 0;
+      const fbDigitalChuaVatNum = parseCurrencyFormula(editingRowState.fbDigital).total;
       const digitalCostNum = Math.round(fbDigitalChuaVatNum * 1.10);
 
-      const caNhanNum = parseFloat(editingRowState.caNhan.replace(/\./g, '')) || 0;
+      const caNhanNum = parseCurrencyFormula(editingRowState.caNhan).total;
 
-      const fbVisaChuaVatNum = parseFloat(editingRowState.fbVisa.replace(/\./g, '')) || 0;
+      const fbVisaChuaVatNum = parseCurrencyFormula(editingRowState.fbVisa).total;
       const visaCostNum = Math.round(fbVisaChuaVatNum * 1.10);
 
-      const dangTinCaNhanNum = parseFloat(editingRowState.dangTinCaNhan.replace(/\./g, '')) || 0;
+      const dangTinCaNhanNum = parseCurrencyFormula(editingRowState.dangTinCaNhan).total;
 
-      const dangTinCongTyChuaVatNum = parseFloat(editingRowState.dangTinCongTy.replace(/\./g, '')) || 0;
+      const dangTinCongTyChuaVatNum = parseCurrencyFormula(editingRowState.dangTinCongTy).total;
       const dangTinCongTyCostNum = Math.round(dangTinCongTyChuaVatNum * 1.08);
 
-      const zaloNum = parseFloat(editingRowState.zalo.replace(/\./g, '')) || 0;
-      const googleNum = parseFloat(editingRowState.google.replace(/\./g, '')) || 0;
-      const tiktokNum = parseFloat(editingRowState.tiktok.replace(/\./g, '')) || 0;
+      const zaloNum = parseCurrencyFormula(editingRowState.zalo).total;
+      const googleNum = parseCurrencyFormula(editingRowState.google).total;
+      const tiktokNum = parseCurrencyFormula(editingRowState.tiktok).total;
 
       const totalCostNum = digitalCostNum + caNhanNum + visaCostNum + dangTinCaNhanNum + dangTinCongTyCostNum + zaloNum + googleNum + tiktokNum;
 
@@ -644,6 +882,8 @@ export const AcceptanceManager = React.memo(({
           google: [{ account: editingRowState.implementerName || 'Mặc định', amount: googleNum, tax: 0 }],
           tiktok: [{ account: editingRowState.implementerName || 'Mặc định', amount: tiktokNum, tax: 0 }]
         },
+
+        costBreakdowns: buildCostBreakdownsOfRecord(editingRowState),
 
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
@@ -1034,26 +1274,26 @@ export const AcceptanceManager = React.memo(({
                         <span>STT</span>
                       </div>
                     </TableHead>
-                    <TableHead className="w-32 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Khối</TableHead>
-                    <TableHead className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Team</TableHead>
-                    <TableHead className="w-28 text-center text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Mã Team</TableHead>
-                    <TableHead className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">GĐKD</TableHead>
-                    <TableHead className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Người Phụ trách</TableHead>
-                    <TableHead className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Dự án</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">FB Digital (Chưa VAT)</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Digital (VAT 10%)/Thực chi</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Cá nhân</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">FB Visa Trực Chạy (C.VAT)</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Visa Trực Chạy (10%)</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Đăng Tin C.Nhân</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Đăng Tin C.Ty (C.VAT)</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Đăng Tin C.Ty (8%)</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Zalo</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Google / Native</TableHead>
-                    <TableHead className="w-36 text-right text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Tiktok</TableHead>
-                    <TableHead className="w-40 text-right text-[10px] font-black bg-indigo-50/40 text-indigo-800 uppercase sticky top-0 z-20 border-b border-indigo-200 font-bold">Tổng tiền</TableHead>
-                    <TableHead className="w-32 text-center text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Tháng</TableHead>
-                    <TableHead className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20 border-b border-slate-200">Ghi chú</TableHead>
+                    <SortableHeader sortKey="blockName" currentSort={sortConfig} onSort={handleSort} className="w-32 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Khối</SortableHeader>
+                    <SortableHeader sortKey="teamName" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Team</SortableHeader>
+                    <SortableHeader sortKey="teamCode" currentSort={sortConfig} onSort={handleSort} align="center" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Mã Team</SortableHeader>
+                    <SortableHeader sortKey="gdkdName" currentSort={sortConfig} onSort={handleSort} className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">GĐKD</SortableHeader>
+                    <SortableHeader sortKey="implementerName" currentSort={sortConfig} onSort={handleSort} className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Người Phụ trách</SortableHeader>
+                    <SortableHeader sortKey="projectName" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Dự án</SortableHeader>
+                    <SortableHeader sortKey="fbDigitalChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Digital (Chưa VAT)</SortableHeader>
+                    <SortableHeader sortKey="facebookCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Digital (VAT 10%)/Thực chi</SortableHeader>
+                    <SortableHeader sortKey="caNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Cá nhân</SortableHeader>
+                    <SortableHeader sortKey="fbVisaCostChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Visa Trực Chạy (C.VAT)</SortableHeader>
+                    <SortableHeader sortKey="visaCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Visa Trực Chạy (10%)</SortableHeader>
+                    <SortableHeader sortKey="dangTinCaNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Nhân</SortableHeader>
+                    <SortableHeader sortKey="dangTinCongTyChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (C.VAT)</SortableHeader>
+                    <SortableHeader sortKey="postingCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (8%)</SortableHeader>
+                    <SortableHeader sortKey="zaloCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-25">Zalo</SortableHeader>
+                    <SortableHeader sortKey="googleCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Google / Native</SortableHeader>
+                    <SortableHeader sortKey="tiktokCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Tiktok</SortableHeader>
+                    <SortableHeader sortKey="totalCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-40 text-[10px] font-black bg-indigo-50/40 text-indigo-800 uppercase sticky top-0 z-20 border-b border-indigo-200 font-bold">Tổng tiền</SortableHeader>
+                    <SortableHeader sortKey="month" currentSort={sortConfig} onSort={handleSort} align="center" className="w-32 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Tháng</SortableHeader>
+                    <SortableHeader sortKey="notes" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Ghi chú</SortableHeader>
                     <TableHead className="w-44 text-center text-[10px] font-black text-slate-600 uppercase sticky right-0 top-0 bg-slate-100 z-30 border-b border-slate-200 shadow-l">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1067,22 +1307,22 @@ export const AcceptanceManager = React.memo(({
                     const teamCode = selectedTeam?.teamCode || '';
                     const gdkdName = getGDKDName(selectedTeam);
 
-                    const fbDigitalChuaVatVal = parseFloat(draft.fbDigital.replace(/\./g, '')) || 0;
+                    const fbDigitalChuaVatVal = parseCurrencyFormula(draft.fbDigital).total;
                     const digitalCostVal = Math.round(fbDigitalChuaVatVal * 1.10);
 
-                    const caNhanVal = parseFloat(draft.caNhan.replace(/\./g, '')) || 0;
+                    const caNhanVal = parseCurrencyFormula(draft.caNhan).total;
 
-                    const fbVisaChuaVatVal = parseFloat(draft.fbVisa.replace(/\./g, '')) || 0;
+                    const fbVisaChuaVatVal = parseCurrencyFormula(draft.fbVisa).total;
                     const visaCostVal = Math.round(fbVisaChuaVatVal * 1.10);
 
-                    const dangTinCaNhanVal = parseFloat(draft.dangTinCaNhan.replace(/\./g, '')) || 0;
+                    const dangTinCaNhanVal = parseCurrencyFormula(draft.dangTinCaNhan).total;
 
-                    const dangTinCongTyChuaVatVal = parseFloat(draft.dangTinCongTy.replace(/\./g, '')) || 0;
+                    const dangTinCongTyChuaVatVal = parseCurrencyFormula(draft.dangTinCongTy).total;
                     const dangTinCongTyCostVal = Math.round(dangTinCongTyChuaVatVal * 1.08);
 
-                    const zaloVal = parseFloat(draft.zalo.replace(/\./g, '')) || 0;
-                    const googleVal = parseFloat(draft.google.replace(/\./g, '')) || 0;
-                    const tiktokVal = parseFloat(draft.tiktok.replace(/\./g, '')) || 0;
+                    const zaloVal = parseCurrencyFormula(draft.zalo).total;
+                    const googleVal = parseCurrencyFormula(draft.google).total;
+                    const tiktokVal = parseCurrencyFormula(draft.tiktok).total;
 
                     const totalCostVal = digitalCostVal + caNhanVal + visaCostVal + dangTinCaNhanVal + dangTinCongTyCostVal + zaloVal + googleVal + tiktokVal;
 
@@ -1133,77 +1373,157 @@ export const AcceptanceManager = React.memo(({
                           />
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.fbDigital}
-                            onChange={(e) => updateDraftField('fbDigital', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.fbDigital}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('fbDigital', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('fbDigital', 'FB Digital (Chưa VAT)', draft.fbDigital, (val) => updateDraftField('fbDigital', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1 text-right font-mono font-bold text-xs text-indigo-700">
                           {formatCurrency(digitalCostVal).replace(' đ', '')}
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.caNhan}
-                            onChange={(e) => updateDraftField('caNhan', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.caNhan}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('caNhan', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('caNhan', 'Cá nhân', draft.caNhan, (val) => updateDraftField('caNhan', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.fbVisa}
-                            onChange={(e) => updateDraftField('fbVisa', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.fbVisa}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('fbVisa', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('fbVisa', 'FB Visa (Chưa VAT)', draft.fbVisa, (val) => updateDraftField('fbVisa', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1 text-right font-mono font-bold text-xs text-indigo-700">
                           {formatCurrency(visaCostVal).replace(' đ', '')}
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.dangTinCaNhan}
-                            onChange={(e) => updateDraftField('dangTinCaNhan', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.dangTinCaNhan}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('dangTinCaNhan', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('dangTinCaNhan', 'Đăng tin cá nhân', draft.dangTinCaNhan, (val) => updateDraftField('dangTinCaNhan', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.dangTinCongTy}
-                            onChange={(e) => updateDraftField('dangTinCongTy', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.dangTinCongTy}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('dangTinCongTy', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('dangTinCongTy', 'Đăng tin công ty (Chưa VAT)', draft.dangTinCongTy, (val) => updateDraftField('dangTinCongTy', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1 text-right font-mono font-bold text-xs text-indigo-700">
                           {formatCurrency(dangTinCongTyCostVal).replace(' đ', '')}
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.zalo}
-                            onChange={(e) => updateDraftField('zalo', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.zalo}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('zalo', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('zalo', 'Zalo', draft.zalo, (val) => updateDraftField('zalo', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.google}
-                            onChange={(e) => updateDraftField('google', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.google}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('google', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('google', 'Google', draft.google, (val) => updateDraftField('google', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input
-                            placeholder="0"
-                            className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
-                            value={draft.tiktok}
-                            onChange={(e) => updateDraftField('tiktok', formatCurrencyInput(e.target.value))}
-                          />
+                          <div className="relative group/input">
+                            <Input
+                              placeholder="0"
+                              className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-slate-200"
+                              value={draft.tiktok}
+                              onChange={(e) => handleCostInputChange(e.target.value, (val) => updateDraftField('tiktok', val))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCalculator('tiktok', 'Tiktok', draft.tiktok, (val) => updateDraftField('tiktok', val))}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity"
+                              title="Tự động tính tổng nhiều chi phí (Sum)"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="p-1 text-right font-mono font-black text-xs text-emerald-700 bg-emerald-50/40">
                           {formatCurrency(totalCostVal).replace(' đ', '')}
@@ -1267,22 +1587,22 @@ export const AcceptanceManager = React.memo(({
                         const teamCode = selectedTeam?.teamCode || '';
                         const gdkdName = getGDKDName(selectedTeam);
 
-                        const fbDigitalChuaVatVal = parseFloat(editingRowState.fbDigital.replace(/\./g, '')) || 0;
+                        const fbDigitalChuaVatVal = parseCurrencyFormula(editingRowState.fbDigital).total;
                         const digitalCostVal = Math.round(fbDigitalChuaVatVal * 1.10);
 
-                        const caNhanVal = parseFloat(editingRowState.caNhan.replace(/\./g, '')) || 0;
+                        const caNhanVal = parseCurrencyFormula(editingRowState.caNhan).total;
 
-                        const fbVisaChuaVatVal = parseFloat(editingRowState.fbVisa.replace(/\./g, '')) || 0;
+                        const fbVisaChuaVatVal = parseCurrencyFormula(editingRowState.fbVisa).total;
                         const visaCostVal = Math.round(fbVisaChuaVatVal * 1.10);
 
-                        const dangTinCaNhanVal = parseFloat(editingRowState.dangTinCaNhan.replace(/\./g, '')) || 0;
+                        const dangTinCaNhanVal = parseCurrencyFormula(editingRowState.dangTinCaNhan).total;
 
-                        const dangTinCongTyChuaVatVal = parseFloat(editingRowState.dangTinCongTy.replace(/\./g, '')) || 0;
+                        const dangTinCongTyChuaVatVal = parseCurrencyFormula(editingRowState.dangTinCongTy).total;
                         const dangTinCongTyCostVal = Math.round(dangTinCongTyChuaVatVal * 1.08);
 
-                        const zaloVal = parseFloat(editingRowState.zalo.replace(/\./g, '')) || 0;
-                        const googleVal = parseFloat(editingRowState.google.replace(/\./g, '')) || 0;
-                        const tiktokVal = parseFloat(editingRowState.tiktok.replace(/\./g, '')) || 0;
+                        const zaloVal = parseCurrencyFormula(editingRowState.zalo).total;
+                        const googleVal = parseCurrencyFormula(editingRowState.google).total;
+                        const tiktokVal = parseCurrencyFormula(editingRowState.tiktok).total;
 
                         const totalCostVal = digitalCostVal + caNhanVal + visaCostVal + dangTinCaNhanVal + dangTinCongTyCostVal + zaloVal + googleVal + tiktokVal;
 
@@ -1333,77 +1653,157 @@ export const AcceptanceManager = React.memo(({
                               />
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.fbDigital}
-                                onChange={(e) => updateEditingField('fbDigital', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.fbDigital}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('fbDigital', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('fbDigital', 'FB Digital (Chưa VAT)', editingRowState.fbDigital, (val) => updateEditingField('fbDigital', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1 text-right font-mono font-bold text-xs text-amber-800">
                               {formatCurrency(digitalCostVal).replace(' đ', '')}
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.caNhan}
-                                onChange={(e) => updateEditingField('caNhan', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.caNhan}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('caNhan', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('caNhan', 'Cá nhân', editingRowState.caNhan, (val) => updateEditingField('caNhan', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.fbVisa}
-                                onChange={(e) => updateEditingField('fbVisa', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.fbVisa}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('fbVisa', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('fbVisa', 'FB Visa (Chưa VAT)', editingRowState.fbVisa, (val) => updateEditingField('fbVisa', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1 text-right font-mono font-bold text-xs text-amber-800">
                               {formatCurrency(visaCostVal).replace(' đ', '')}
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.dangTinCaNhan}
-                                onChange={(e) => updateEditingField('dangTinCaNhan', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.dangTinCaNhan}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('dangTinCaNhan', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('dangTinCaNhan', 'Đăng tin cá nhân', editingRowState.dangTinCaNhan, (val) => updateEditingField('dangTinCaNhan', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.dangTinCongTy}
-                                onChange={(e) => updateEditingField('dangTinCongTy', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.dangTinCongTy}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('dangTinCongTy', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('dangTinCongTy', 'Đăng tin công ty (Chưa VAT)', editingRowState.dangTinCongTy, (val) => updateEditingField('dangTinCongTy', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1 text-right font-mono font-bold text-xs text-amber-800">
                               {formatCurrency(dangTinCongTyCostVal).replace(' đ', '')}
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.zalo}
-                                onChange={(e) => updateEditingField('zalo', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.zalo}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('zalo', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('zalo', 'Zalo', editingRowState.zalo, (val) => updateEditingField('zalo', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.google}
-                                onChange={(e) => updateEditingField('google', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.google}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('google', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('google', 'Google', editingRowState.google, (val) => updateEditingField('google', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1">
-                              <Input
-                                placeholder="0"
-                                className="h-8 px-2 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
-                                value={editingRowState.tiktok}
-                                onChange={(e) => updateEditingField('tiktok', formatCurrencyInput(e.target.value))}
-                              />
+                              <div className="relative group/input">
+                                <Input
+                                  placeholder="0"
+                                  className="h-8 pl-1 pr-5 text-[10px] font-mono font-bold text-right bg-white border border-amber-300"
+                                  value={editingRowState.tiktok}
+                                  onChange={(e) => handleCostInputChange(e.target.value, (val) => updateEditingField('tiktok', val))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCalculator('tiktok', 'Tiktok', editingRowState.tiktok, (val) => updateEditingField('tiktok', val))}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 focus/input:opacity-100 p-0.5 text-slate-400 hover:text-amber-600 rounded transition-opacity"
+                                  title="Tự động tính tổng nhiều chi phí (Sum)"
+                                >
+                                  <Calculator className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell className="p-1 text-right font-mono font-black text-xs text-amber-900 bg-amber-100/40">
                               {formatCurrency(totalCostVal).replace(' đ', '')}
@@ -1478,7 +1878,14 @@ export const AcceptanceManager = React.memo(({
                           </TableCell>
                           {/* 2. KHỐI */}
                           <TableCell className="font-bold text-[10px] text-slate-500 uppercase">
-                            {item.blockName || item.blockCode || 'N/A'}
+                            {(() => {
+                              const teamObj = (teams || []).find((t: any) => t.id === item.teamId || t.name === item.teamName || (item.teamCode && t.teamCode === item.teamCode));
+                              if (teamObj) {
+                                const blk = (blocks || []).find((b: any) => b.id === teamObj.blockId || b.blockCode === teamObj.blockCode);
+                                if (blk) return blk.name || blk.blockCode || 'N/A';
+                              }
+                              return item.blockName || item.blockCode || 'N/A';
+                            })()}
                           </TableCell>
                           {/* 3. TEAM */}
                           <TableCell className="font-extrabold text-[11px] text-slate-900 truncate max-w-[150px]" title={item.teamName}>
@@ -1502,47 +1909,68 @@ export const AcceptanceManager = React.memo(({
                           </TableCell>
                           {/* 8. FB DIGITAL (Chưa VAT) */}
                           <TableCell className="text-right font-mono text-xs text-slate-500 font-medium">
-                            {formatCurrency(fbChuaVat).replace(' đ', '')}
+                            {RenderValueWithBreakdown(fbChuaVat, item.costBreakdowns?.fbDigital, 'FB Digital CHƯA VAT')}
                           </TableCell>
                           {/* 9. DIGITAL (VAT 10%) */}
                           <TableCell className="text-right font-mono text-xs font-black text-slate-900">
-                            {formatCurrency(item.facebookCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(
+                              item.facebookCost || 0,
+                              item.costBreakdowns?.fbDigital ? { 
+                                ...item.costBreakdowns.fbDigital, 
+                                items: item.costBreakdowns.fbDigital.items.map((it: any) => ({ ...it, amount: Math.round(it.amount * 1.10) })) 
+                              } : null,
+                              'FB Digital ĐÃ VAT'
+                            )}
                           </TableCell>
                           {/* 10. CÁ NHÂN */}
                           <TableCell className="text-right font-mono text-xs text-slate-600">
-                            {formatCurrency(caNhan).replace(' đ', '')}
+                            {RenderValueWithBreakdown(caNhan, item.costBreakdowns?.caNhan, 'Cá nhân')}
                           </TableCell>
                           {/* 11. FB VISA TỰ CHẠY (Chưa VAT) */}
                           <TableCell className="text-right font-mono text-xs text-slate-500">
-                            {formatCurrency(visaChuaVat).replace(' đ', '')}
+                            {RenderValueWithBreakdown(visaChuaVat, item.costBreakdowns?.fbVisa, 'FB Visa CHƯA VAT')}
                           </TableCell>
                           {/* 12. TỰ CHẠY VISA (VAT 10%) */}
                           <TableCell className="text-right font-mono text-xs font-black text-indigo-800">
-                            {formatCurrency(item.visaCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(
+                              item.visaCost || 0,
+                              item.costBreakdowns?.fbVisa ? { 
+                                ...item.costBreakdowns.fbVisa, 
+                                items: item.costBreakdowns.fbVisa.items.map((it: any) => ({ ...it, amount: Math.round(it.amount * 1.10) })) 
+                              } : null,
+                              'FB Visa ĐÃ VAT'
+                            )}
                           </TableCell>
                           {/* 13. ĐĂNG TIN CÁ NHÂN */}
                           <TableCell className="text-right font-mono text-xs text-slate-600">
-                            {formatCurrency(item.dangTinCaNhanCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(item.dangTinCaNhanCost || 0, item.costBreakdowns?.dangTinCaNhan, 'Đăng tin cá nhân')}
                           </TableCell>
                           {/* 14. ĐĂNG TIN CÔNG TY (Chưa VAT) */}
                           <TableCell className="text-right font-mono text-xs text-slate-500">
-                            {formatCurrency(dangTinChuaVat).replace(' đ', '')}
+                            {RenderValueWithBreakdown(dangTinChuaVat, item.costBreakdowns?.dangTinCongTy, 'Đăng tin công ty CHƯA VAT')}
                           </TableCell>
                           {/* 15. ĐĂNG TIN CÔNG TY (VAT 10%) */}
                           <TableCell className="text-right font-mono text-xs font-bold text-slate-900">
-                            {formatCurrency(item.postingCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(
+                              item.postingCost || 0,
+                              item.costBreakdowns?.dangTinCongTy ? { 
+                                ...item.costBreakdowns.dangTinCongTy, 
+                                items: item.costBreakdowns.dangTinCongTy.items.map((it: any) => ({ ...it, amount: Math.round(it.amount * 1.08) })) 
+                              } : null,
+                              'Đăng tin công ty ĐÃ VAT'
+                            )}
                           </TableCell>
                           {/* 16. ZALO */}
                           <TableCell className="text-right font-mono text-xs text-slate-700">
-                            {formatCurrency(item.zaloCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(item.zaloCost || 0, item.costBreakdowns?.zalo, 'Zalo')}
                           </TableCell>
                           {/* 17. GOOGLE */}
                           <TableCell className="text-right font-mono text-xs text-slate-700">
-                            {formatCurrency(item.googleCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(item.googleCost || 0, item.costBreakdowns?.google, 'Google')}
                           </TableCell>
                           {/* 18. TIKTOK */}
                           <TableCell className="text-right font-mono text-xs text-slate-700">
-                            {formatCurrency(item.tiktokCost || 0).replace(' đ', '')}
+                            {RenderValueWithBreakdown(item.tiktokCost || 0, item.costBreakdowns?.tiktok, 'Tiktok')}
                           </TableCell>
                           {/* 19. TỔNG TIỀN */}
                           <TableCell className="text-right font-mono text-xs font-black bg-indigo-50/10 text-emerald-800 font-extrabold">
@@ -1681,6 +2109,114 @@ export const AcceptanceManager = React.memo(({
           </div>
         </CardContent>
       </Card>
+
+      {/* 📊 Interactive Multi-Value Sum Calculator Dialog */}
+      <Dialog open={isCalculatorOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsCalculatorOpen(false);
+          setActiveCalculatorField(null);
+          setCalculatorUpdateFn(null);
+        }
+      }}>
+        <DialogContent className="max-w-md rounded-3xl p-6 bg-white border-none shadow-2xl">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                <Calculator className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Phân rã chi phí / Tự động SUM
+                </h3>
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">
+                  Cột: {calculatorFieldNameVN}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                Nhập công thức hoặc chuỗi giá trị cộng dồn:
+              </label>
+              <textarea
+                value={calculatorInput}
+                onChange={(e) => setCalculatorInput(e.target.value)}
+                rows={3}
+                className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl p-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-normal"
+                placeholder="Ví dụ:&#10;10m + 1.25m + 300k&#10;Hoặc line-by-line:&#10;10.000.000&#10;5.500.000 (Tên nhãn)&#10;300.000; 1.200.000"
+              />
+              <p className="text-[9.5px] font-semibold text-slate-400 leading-relaxed italic">
+                * Hỗ trợ viết nhãn kèm theo trong ngoặc: <strong>10m (Phí setup) + 500k (Banner)</strong>. Hệ thống tự động bóc tách số và tính tổng. Hỗ trợ đơn vị viết tắt: m (triệu), k (nghìn).
+              </p>
+            </div>
+
+            {/* Live Traceability Results */}
+            {(() => {
+              const { total, items } = parseCurrencyFormula(calculatorInput);
+              return (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                      Bảng tra soát chi tiết học được (SUM):
+                    </span>
+                    <span className="font-mono text-sm font-black text-indigo-650 font-bold">
+                      {formatCurrency(total).replace(' đ', '')}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {items.length === 0 ? (
+                      <div className="text-center py-4 text-[11px] font-bold text-slate-400">
+                        Chưa có giá trị hợp lệ. Hãy bắt đầu gõ công thức ở trên!
+                      </div>
+                    ) : (
+                      items.map((sub: any, sidx: number) => (
+                        <div key={sidx} className="flex justify-between items-center text-[10.5px]">
+                          <span className="text-slate-500 font-medium truncate max-w-[200px]">
+                            {sidx + 1}. {sub.label || 'Mục nhỏ'}
+                          </span>
+                          <span className="font-mono font-bold text-slate-850">
+                            {formatCurrency(sub.amount).replace(' đ', '')}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] uppercase rounded-xl"
+                onClick={() => {
+                  if (activeCalculatorField && calculatorUpdateFn) {
+                    calculatorUpdateFn(calculatorInput);
+                  }
+                  setIsCalculatorOpen(false);
+                  setActiveCalculatorField(null);
+                  setCalculatorUpdateFn(null);
+                }}
+              >
+                Áp dụng & Ghi nhận
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                className="h-10 text-slate-550 hover:text-slate-800 font-bold text-[11px] uppercase rounded-xl border border-slate-200 px-4"
+                onClick={() => {
+                  setIsCalculatorOpen(false);
+                  setActiveCalculatorField(null);
+                  setCalculatorUpdateFn(null);
+                }}
+              >
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* dialog warning/confirmations */}
       <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>

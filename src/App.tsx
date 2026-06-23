@@ -76,7 +76,7 @@ import {
   LogIn, LogOut, Plus, Search, Trash2, Edit2, 
   FileBox, BarChart3, Users, Settings, Filter, Download, 
   Upload, CheckCircle2, XCircle, AlertCircle, RefreshCw, 
-  ChevronRight, Calendar, User as UserIcon, LayoutDashboard, 
+  ChevronLeft, ChevronRight, Calendar, User as UserIcon, LayoutDashboard, 
   ArrowUpRight, ArrowDownRight, PieChart, TrendingUp, History, 
   FileText, Check, MoreHorizontal, FileDown, Eye, Send, MessageSquare, Info, ShieldCheck, UserCheck, ChevronDown, ChevronDown as ChevronDownIcon,
   ChevronUp, ChevronUp as ChevronUpIcon,
@@ -1055,6 +1055,14 @@ export default function App() {
   const [docProcessingStatus, setDocProcessingStatus] = useState<any[]>([]);
   const [supportRequests, setSupportRequests] = useState<any[]>([]);
 
+  // Pagination states for 20 items per page
+  const [projectPage, setProjectPage] = useState(1);
+  const [teamPage, setTeamPage] = useState(1);
+  const [budgetPage, setBudgetPage] = useState(1);
+  const [costPage, setCostPage] = useState(1);
+  const [efficiencyPage, setEfficiencyPage] = useState(1);
+  const [acceptancePage, setAcceptancePage] = useState(1);
+
   // Report states moved up
   const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[] } | null>(null);
   const [budgetWarningThreshold, setBudgetWarningThreshold] = useState(80);
@@ -1789,6 +1797,11 @@ export default function App() {
       return 0;
     });
   }, [filteredBudgets, budgetReportSort]);
+
+  const paginatedBudgetReportWithActuals = useMemo(() => {
+    const start = (budgetPage - 1) * 20;
+    return (budgetReportWithActuals || []).slice(start, start + 20);
+  }, [budgetReportWithActuals, budgetPage]);
 
   const overBudgetStats = useMemo(() => {
     return {
@@ -2683,6 +2696,11 @@ export default function App() {
     });
   }, [budgets, debouncedAdminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap]);
 
+  const paginatedAdminFilteredBudgets = useMemo(() => {
+    const start = (budgetPage - 1) * 20;
+    return (adminFilteredBudgets || []).slice(start, start + 20);
+  }, [adminFilteredBudgets, budgetPage]);
+
   const adminFilteredCosts = useMemo(() => {
     return costs
       .filter(c => {
@@ -2702,6 +2720,11 @@ export default function App() {
         return dateB - dateA;
       });
   }, [costs, debouncedAdminCostSearch, adminCostMonthFilter, projectMap, teamMap, getMarketingMonth]);
+
+  const paginatedAdminFilteredCosts = useMemo(() => {
+    const start = (costPage - 1) * 20;
+    return (adminFilteredCosts || []).slice(start, start + 20);
+  }, [adminFilteredCosts, costPage]);
 
   const isProjectKey = useCallback((key: string) => {
     const k = key.toLowerCase();
@@ -2804,7 +2827,7 @@ export default function App() {
     return result;
   }, [reportNTRecords, reportNTSearch, ntSortField, ntSortDirection]);
 
-  const ntPageSize = 15;
+  const ntPageSize = 20;
   const totalNtPages = Math.ceil((filteredNTRecords?.length || 0) / ntPageSize) || 1;
   const paginatedNTRecords = useMemo(() => {
     if (!filteredNTRecords) return [];
@@ -3640,22 +3663,22 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // Listen to projects
+    // Listen to projects with dynamic query pagination limit
     let qProjects;
     if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'), limit(projectPage * 20 + 1));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
+      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects), limit(projectPage * 20 + 1));
     } else {
-      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
+      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'), limit(projectPage * 20 + 1));
     }
 
     const unsubProjects = onSnapshot(qProjects, (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
 
-    // Listen to teams
-    const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'));
+    // Listen to teams with dynamic query pagination limit
+    const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'), limit(teamPage * 20 + 1));
     const unsubTeams = onSnapshot(qTeams, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
@@ -3678,13 +3701,13 @@ export default function App() {
       setTypes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
-    // Listen to budgets
+    // Listen to budgets with dynamic query pagination limit
     const hasMktEffView = currentRolePermissions.includes('mkt_efficiency.view') || user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin';
     let qBudgets;
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(3000));
+      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(budgetPage * 20 + 1));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
+      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects), limit(budgetPage * 20 + 1));
     } else {
       qBudgets = query(
         collection(db, 'budgets'), 
@@ -3692,7 +3715,8 @@ export default function App() {
           where('createdBy', '==', user.uid),
           where('userEmail', '==', user.email?.toLowerCase()),
           where('assignedUserEmail', '==', user.email?.toLowerCase())
-        )
+        ),
+        limit(budgetPage * 20 + 1)
       );
     }
 
@@ -3708,12 +3732,12 @@ export default function App() {
       setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
-    // Listen to costs
+    // Listen to costs with dynamic query pagination limit
     let qCosts;
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(3000));
+      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(costPage * 20 + 1));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
+      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects), limit(costPage * 20 + 1));
     } else {
       qCosts = query(
         collection(db, 'costs'), 
@@ -3721,7 +3745,8 @@ export default function App() {
           where('createdBy', '==', user.uid),
           where('userEmail', '==', user.email?.toLowerCase()),
           where('assignedUserEmail', '==', user.email?.toLowerCase())
-        )
+        ),
+        limit(costPage * 20 + 1)
       );
     }
 
@@ -3755,39 +3780,39 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
     }
 
-    // Listen to efficiency reports
+    // Listen to efficiency reports with dynamic query pagination limit
     let unsubEfficiency = () => {};
     if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(1000));
+      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(efficiencyPage * 20 + 1));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects));
+      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects), limit(efficiencyPage * 20 + 1));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     }
 
-    // Listen to acceptances
+    // Listen to acceptances with dynamic query pagination limit
     let unsubAcceptances = () => {};
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'), limit(1000));
+      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'), limit(acceptancePage * 20 + 1));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects));
+      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects), limit(acceptancePage * 20 + 1));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     }
 
-    // Listen to final acceptances
+    // Listen to final acceptances with dynamic query pagination limit
     let unsubFinalAcceptances = () => {};
     let unsubDocProcessing = () => {};
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'), limit(1000));
+      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'), limit(acceptancePage * 20 + 1));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -3797,7 +3822,7 @@ export default function App() {
         setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
+      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects), limit(acceptancePage * 20 + 1));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -3863,7 +3888,7 @@ export default function App() {
       unsubSettings();
       unsubReportNT();
     };
-  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions)]);
+  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions), projectPage, teamPage, budgetPage, costPage, efficiencyPage, acceptancePage]);
 
   useEffect(() => {
     if (!user) return;
@@ -4805,6 +4830,11 @@ export default function App() {
     });
   }, [efficiencyReports, debouncedAdminEfficiencySearch, adminEfficiencyMonthFilter, projectMap, teamMap, adminEfficiencySort]);
 
+  const paginatedFilteredEfficiencyReports = useMemo(() => {
+    const start = (efficiencyPage - 1) * 20;
+    return (filteredEfficiencyReports || []).slice(start, start + 20);
+  }, [filteredEfficiencyReports, efficiencyPage]);
+
   const login = async () => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -5122,6 +5152,11 @@ export default function App() {
     });
   }, [projects, projectSort, debouncedProjectSearch, adminProjectRegionFilter, adminProjectTypeFilter, userRole, userProfile]);
 
+  const paginatedProjects = useMemo(() => {
+    const start = (projectPage - 1) * 20;
+    return (sortedProjects || []).slice(start, start + 20);
+  }, [sortedProjects, projectPage]);
+
 
 
   const sortedTeams = useMemo(() => {
@@ -5151,6 +5186,11 @@ export default function App() {
       return 0;
     });
   }, [teams, teamSort, debouncedTeamSearch, blocks]);
+
+  const paginatedTeams = useMemo(() => {
+    const start = (teamPage - 1) * 20;
+    return (sortedTeams || []).slice(start, start + 20);
+  }, [sortedTeams, teamPage]);
 
   const myBlockTeams = useMemo(() => {
     const block = currentActiveBlock;
@@ -12602,9 +12642,9 @@ export default function App() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {filteredEfficiencyReports.map((report, idx) => (
+                                {paginatedFilteredEfficiencyReports.map((report, idx) => (
                                   <TableRow key={report.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <TableCell className="w-12 pl-4 py-3 font-black text-slate-400 text-xs text-center border-r border-slate-50/50">{idx + 1}</TableCell>
+                                    <TableCell className="w-12 pl-4 py-3 font-black text-slate-400 text-xs text-center border-r border-slate-50/50">{(efficiencyPage - 1) * 20 + idx + 1}</TableCell>
                                     <TableCell className="w-10 px-2 py-3">
                                       <input 
                                         type="checkbox" 
@@ -12692,7 +12732,33 @@ export default function App() {
                               )}
                             </Table>
                           </div>
-                          </CardContent>
+                          {/* Pagination Bar for Marketing Efficiency */}
+                          <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                            <div className="text-xs text-slate-500 font-medium font-sans">
+                              Trang {efficiencyPage} (Hiển thị tối đa 20 dòng báo cáo)
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-slate-200"
+                                disabled={efficiencyPage === 1}
+                                onClick={() => setEfficiencyPage(p => Math.max(1, p - 1))}
+                              >
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-slate-200"
+                                disabled={filteredEfficiencyReports.length <= efficiencyPage * 20}
+                                onClick={() => setEfficiencyPage(p => p + 1)}
+                              >
+                                Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
                         </Card>
                       </div>
                     )}
@@ -13023,7 +13089,7 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {sortedProjects.map(p => (
+                              {paginatedProjects.map(p => (
                                 <TableRow key={p.id} className={`group transition-colors border-b border-slate-50 ${selectedProjectIds.includes(p.id) ? "bg-blue-50/20" : "hover:bg-slate-50/30"}`}>
                                   {(isAdmin || isAccountant) && (
                                     <TableCell className="pl-6 py-4">
@@ -13168,6 +13234,32 @@ export default function App() {
                               )}
                             </TableBody>
                           </Table>
+                        </div>
+                        {/* Pagination Bar */}
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                          <div className="text-xs text-slate-500 font-medium">
+                            Trang {projectPage} (Hiển thị tối đa 20 dự án)
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={projectPage === 1}
+                              onClick={() => setProjectPage(p => Math.max(1, p - 1))}
+                            >
+                              <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={sortedProjects.length <= projectPage * 20}
+                              onClick={() => setProjectPage(p => p + 1)}
+                            >
+                              Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -13879,7 +13971,7 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {sortedTeams.map(t => {
+                              {paginatedTeams.map(t => {
                                 const tBlock = blocks.find(b => b.id === t.blockId || b.blockCode === t.blockCode);
                                 return (
                                   <TableRow key={t.id} className={selectedTeamIds.includes(t.id) ? "bg-blue-50/30" : ""}>
@@ -13971,6 +14063,32 @@ export default function App() {
                               )}
                             </TableBody>
                           </Table>
+                        </div>
+                        {/* Pagination Bar for Teams */}
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                          <div className="text-xs text-slate-500 font-medium">
+                            Trang {teamPage} (Hiển thị tối đa 20 team)
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={teamPage === 1}
+                              onClick={() => setTeamPage(p => Math.max(1, p - 1))}
+                            >
+                              <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={sortedTeams.length <= teamPage * 20}
+                              onClick={() => setTeamPage(p => p + 1)}
+                            >
+                              Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -14121,7 +14239,7 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {adminFilteredBudgets.map(b => (
+                              {paginatedAdminFilteredBudgets.map(b => (
                                 <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
                                   <TableCell className="px-1 text-center">
                                     <input 
@@ -14212,6 +14330,32 @@ export default function App() {
                               </TableFooter>
                             )}
                           </Table>
+                        </div>
+                        {/* Pagination Bar for Budgets */}
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                          <div className="text-xs text-slate-500 font-medium">
+                            Trang {budgetPage} (Hiển thị tối đa 20 dòng ngân sách)
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={budgetPage === 1}
+                              onClick={() => setBudgetPage(p => Math.max(1, p - 1))}
+                            >
+                              <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={adminFilteredBudgets.length <= budgetPage * 20}
+                              onClick={() => setBudgetPage(p => p + 1)}
+                            >
+                              Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -14348,7 +14492,7 @@ export default function App() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {adminFilteredCosts.map(c => (
+                              {paginatedAdminFilteredCosts.map(c => (
                                 <TableRow key={c.id} className={`${selectedCostIds.includes(c.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
                                   <TableCell className="px-1 text-center">
                                     <input 
@@ -14460,6 +14604,32 @@ export default function App() {
                               </TableFooter>
                             )}
                           </Table>
+                        </div>
+                        {/* Pagination Bar for Costs */}
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                          <div className="text-xs text-slate-500 font-medium font-sans">
+                            Trang {costPage} (Hiển thị tối đa 20 dòng chi phí)
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={costPage === 1}
+                              onClick={() => setCostPage(p => Math.max(1, p - 1))}
+                            >
+                              <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-slate-200"
+                              disabled={adminFilteredCosts.length <= costPage * 20}
+                              onClick={() => setCostPage(p => p + 1)}
+                            >
+                              Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -15742,9 +15912,9 @@ export default function App() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {budgetReportWithActuals.map((b, idx) => (
+                          {paginatedBudgetReportWithActuals.map((b, idx) => (
                             <TableRow key={b.id} className={selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : b.actualCost > b.amount ? "bg-red-50/30" : ""}>
-                              <TableCell className="text-center font-mono text-[10px] text-slate-400">{idx + 1}</TableCell>
+                              <TableCell className="text-center font-mono text-[10px] text-slate-400">{(budgetPage - 1) * 20 + idx + 1}</TableCell>
                               {(isAdmin || isMod || isAccountant) && (
                                 <TableCell>
                                   <input 
@@ -15827,6 +15997,32 @@ export default function App() {
                           </TableFooter>
                         )}
                       </Table>
+                    </div>
+                    {/* Pagination Bar for General Budgets */}
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                      <div className="text-xs text-slate-500 font-medium font-sans">
+                        Trang {budgetPage} (Hiển thị tối đa 20 ngân sách)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-xl border-slate-200"
+                          disabled={budgetPage === 1}
+                          onClick={() => setBudgetPage(p => Math.max(1, p - 1))}
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-xl border-slate-200"
+                          disabled={budgetReportWithActuals.length <= budgetPage * 20}
+                          onClick={() => setBudgetPage(p => p + 1)}
+                        >
+                          Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

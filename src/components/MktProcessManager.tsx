@@ -7,6 +7,9 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { 
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
+} from '@/components/ui/table';
 
 export function MktProcessManager() {
   const [activeStep, setActiveStep] = useState<number>(1);
@@ -396,193 +399,211 @@ export function MktProcessManager() {
           </div>
 
           {/* Section II: Cơ Chế Cộng Điểm Sự Kiện */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
+          <div id="mkt-event-points-sec" className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
             <div className="flex items-center gap-3">
               <span className="p-3 bg-amber-50 text-amber-600 rounded-2xl shadow-xs">
                 <Sparkles className="w-5 h-5 text-amber-600" />
               </span>
               <div>
-                <h3 className="text-base font-black text-slate-950 uppercase">II. CƠ CHẾ CỘNG ĐIỂM SỰ KIỆN</h3>
+                <h3 id="mkt-section-ii-title" className="text-base font-black text-slate-950 uppercase">II. CƠ CHẾ CỘNG ĐIỂM SỰ KIỆN</h3>
                 <p className="text-xs text-slate-500 font-medium font-sans">Ghi nhận điểm số tham gia chương trình thực chạy</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-amber-100 bg-amber-50/10 p-5 rounded-2xl space-y-3 flex flex-col justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-extrabold text-[#112a43] text-xs uppercase tracking-wider">01. Đồng bộ hệ thống SALEPRO</div>
-                  <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                    Nhân sự kinh doanh tham gia trực tiếp các sự kiện được mở ra và ghi nhận chính thức trên hệ thống phần mềm quản lý <strong className="text-slate-900">SALEPRO</strong>.
+              <div id="mkt-event-card-1" className="border border-amber-100 bg-amber-50/10 p-5 rounded-2xl space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5 font-sans text-xs">
+                  <div className="font-extrabold text-[#112a43] text-xs uppercase tracking-wider">01. Hệ thống SALEPRO</div>
+                  <p className="text-slate-600 leading-relaxed font-semibold">
+                    Nhân sự kinh doanh tham gia các sự kiện được mở và ghi nhận trên hệ thống SALEPRO.
                   </p>
                 </div>
                 <Badge className="bg-slate-900 text-white font-mono text-[9px] w-fit font-black rounded-md tracking-wider">SALEPRO SYSTEM</Badge>
               </div>
 
-              <div className="border border-slate-200 bg-slate-50 p-5 rounded-2xl space-y-3 flex flex-col justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-extrabold text-slate-700 text-xs uppercase tracking-wider">02. Trách nhiệm đề xuất từ GĐDA</div>
-                  <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                    <strong className="text-slate-900">Giám đốc dự án (GĐDA)</strong> chịu trách nhiệm lập danh sách tổng hợp, đề xuất mức cộng điểm phù hợp, sau đó nộp trình phê duyệt lên BLĐ để làm căn cứ hạch toán đối soát chính thức kỳ tiếp theo.
+              <div id="mkt-event-card-2" className="border border-slate-200 bg-slate-50 p-5 rounded-2xl space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5 font-sans text-xs">
+                  <div className="font-extrabold text-slate-700 text-xs uppercase tracking-wider">02. Đề xuất từ GĐDA</div>
+                  <p className="text-slate-600 leading-relaxed font-semibold">
+                    Giám đốc dự án có trách nhiệm tổng hợp danh sách, đề xuất mức cộng điểm và trình phê duyệt để làm căn cứ ghi nhận và đối soát.
                   </p>
                 </div>
-                <Badge className="bg-amber-140 bg-amber-100 text-amber-900 font-mono text-[9px] w-fit font-bold rounded-md">DUYỆT ĐỀ XUẤT</Badge>
+                <Badge className="bg-amber-100 text-amber-900 font-mono text-[9px] w-fit font-bold rounded-md">DUYỆT ĐỀ XUẤT</Badge>
               </div>
             </div>
           </div>
 
           {/* Section III: Quy Trình Nghiệm Thu &amp; Thanh Toán */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
+          <div id="mkt-payout-process-sec" className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <span className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-xs">
                   <Clock className="w-5 h-5 text-blue-600" />
                 </span>
                 <div>
-                  <h3 className="text-base font-black text-slate-950 uppercase font-sans">III. QUY TRÌNH NGHIỆM THU VÀ THANH TOÁN</h3>
+                  <h3 id="mkt-section-iii-title" className="text-base font-black text-slate-950 uppercase font-sans">III. QUY TRÌNH NGHIỆM THU VÀ THANH TOÁN</h3>
                   <p className="text-xs text-slate-500 font-medium font-sans">Quy định chu kỳ thực hiện &amp; thời hạn hạch toán chi phí</p>
                 </div>
               </div>
               <Badge className="bg-slate-900 text-white border-none font-black font-mono text-xs py-1.5 px-3 rounded-lg leading-none">
-                📅 Kỳ nghiệm thu: Từ ngày 21 tháng trước – ngày 20 tháng sau
+                📅 Kỳ nghiệm thu: Từ ngày 21 tháng trước đến ngày 20 tháng sau
               </Badge>
             </div>
 
             <div className="bg-slate-50 border rounded-2.5xl p-5 space-y-2">
-              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider">Ví dụ chu kỳ hạch toán thực tế:</span>
+              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider">KỲ NGHIỆM THU:</span>
               <p className="font-mono text-xs text-slate-700 font-black bg-white border border-slate-200 px-3.5 py-2 rounded-xl inline-block shadow-xs">
-                🗓️ Chu kỳ chi trả: 21/05/2026 – 20/06/2026
+                🗓️ Ví dụ: 21/05/2026 – 20/06/2026
               </p>
             </div>
 
-            {/* Steps Infographic Cycle */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-              {/* Step 1 */}
-              <div className="bg-white border text-center p-5 rounded-2xl flex flex-col justify-between items-center relative space-y-3 shadow-xs">
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center font-bold text-slate-950 text-xs shadow-md">01</span>
-                <div className="text-xs font-black uppercase text-amber-500 mt-2 font-mono">MARKETING</div>
-                <h4 className="text-xs font-extrabold text-slate-800">Thu Nhận &amp; Nghiệm Thu</h4>
-                <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                  Đại diện Marketing tiếp nhận toàn bộ số liệu tổng hợp độc lập, hạch toán đối soát và hoàn thành biên bản nghiệm thu.
-                </p>
-                <div className="bg-amber-50 border border-amber-200 text-amber-800 font-black py-1 px-3 rounded-lg font-mono text-[10px] uppercase mt-2">
-                  Ngày 21 - 25 hàng tháng
-                </div>
-              </div>
+            {/* Steps Steps Table matching Page 2 PDF */}
+            <div className="border border-slate-200 rounded-3xl overflow-hidden bg-white shadow-xs">
+              <Table id="mkt-process-table">
+                <TableHeader className="bg-slate-900 hover:bg-slate-900 border-b border-slate-200">
+                  <TableRow>
+                    <TableHead className="w-16 text-center text-[11px] font-black uppercase tracking-wider text-slate-100">BƯỚC</TableHead>
+                    <TableHead className="w-48 text-[11px] font-black uppercase tracking-wider text-slate-100">BỘ PHẬN XỬ LÝ</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-wider text-slate-100">NỘI DUNG THỰC HIỆN</TableHead>
+                    <TableHead className="w-48 text-[11px] font-black uppercase tracking-wider text-slate-100">THỜI GIAN THỰC HIỆN</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="text-xs font-sans">
+                  <TableRow className="hover:bg-slate-50/40 border-slate-100">
+                    <TableCell className="text-center font-mono font-black text-slate-700">01</TableCell>
+                    <TableCell className="font-extrabold text-[#112a43]">Digital Marketing</TableCell>
+                    <TableCell className="font-medium text-slate-600 leading-relaxed">
+                      Tiếp nhận số liệu tổng hợp, đối soát và thực hiện nghiệm thu.
+                    </TableCell>
+                    <TableCell className="font-extrabold text-amber-600 font-mono">
+                      Từ ngày <span className="font-sans font-black text-slate-900">21</span> đến ngày <span className="font-sans font-black text-slate-900">25</span> hàng tháng
+                    </TableCell>
+                  </TableRow>
 
-              {/* Step 2 */}
-              <div className="bg-white border text-center p-5 rounded-2xl flex flex-col justify-between items-center relative space-y-3 shadow-xs">
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center font-bold text-white text-xs shadow-md">02</span>
-                <div className="text-xs font-black uppercase text-blue-500 mt-2 font-mono">MARKETING &amp; TEAM KD</div>
-                <h4 className="text-xs font-extrabold text-slate-800">Gửi Số Liệu &amp; Nộp Đề Nghị</h4>
-                <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                  MKT gửi số liệu cho Kế Toán. Đồng thời, Team KD lập hồ sơ nộp đề nghị thanh toán về phòng kế toán (Trụ sở), hoặc HC chi nhánh (ở các Tỉnh).
-                </p>
-                <div className="bg-blue-50 border border-blue-200 text-blue-800 font-black py-1 px-3 rounded-lg font-mono text-[10px] uppercase mt-2">
-                  Trước ngày 30 hàng tháng
-                </div>
-              </div>
+                  <TableRow className="hover:bg-slate-50/40 border-slate-100">
+                    <TableCell className="text-center font-mono font-black text-slate-700">02</TableCell>
+                    <TableCell className="font-extrabold text-[#112a43] leading-relaxed">
+                      <div>Digital Marketing</div>
+                      <div className="text-slate-400 font-bold">&amp; Team KD</div>
+                    </TableCell>
+                    <TableCell className="font-semibold text-slate-600 leading-relaxed space-y-2">
+                      <div className="bg-indigo-50/40 p-2.5 rounded-lg border border-indigo-100/40">
+                        <strong className="text-indigo-900 block font-bold mb-0.5">• Digital Marketing:</strong>
+                        Gửi số liệu tổng hợp cho Phòng Kế toán.
+                      </div>
+                      <div className="bg-blue-50/40 p-2.5 rounded-lg border border-blue-100/40">
+                        <strong className="text-blue-900 block font-bold mb-0.5">• Team KD:</strong>
+                        Nộp đề nghị thanh toán về Phòng Kế toán.
+                        <div className="text-slate-400 text-[11px] mt-0.5 font-medium italic">
+                          (Đối với các chi nhánh tỉnh, nộp cho Hành chính tại Chi nhánh).
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-extrabold text-blue-600 font-mono">
+                      Trước ngày <span className="font-sans font-black text-slate-900">30</span> hàng tháng
+                    </TableCell>
+                  </TableRow>
 
-              {/* Step 3 */}
-              <div className="bg-white border text-center p-5 rounded-2xl flex flex-col justify-between items-center relative space-y-3 shadow-xs">
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center font-bold text-white text-xs shadow-md">03</span>
-                <div className="text-xs font-black uppercase text-emerald-500 mt-2 font-mono">KẾ TOÁN</div>
-                <h4 className="text-xs font-extrabold text-slate-800">Thanh Toán Hỗ Trợ MKT</h4>
-                <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                  Đại diện phòng Kế toán thực hiện giải ngân chi trả theo đúng số liệu tổng và bộ chứng từ hồ sơ đã được đối soát duyệt thông qua.
-                </p>
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-black py-1 px-3 rounded-lg font-mono text-[10px] uppercase mt-2">
-                  Trước ngày 10 tháng sau
-                </div>
-              </div>
+                  <TableRow className="hover:bg-slate-50/40 border-slate-100">
+                    <TableCell className="text-center font-mono font-black text-slate-700">03</TableCell>
+                    <TableCell className="font-extrabold text-[#112a43]">Kế toán</TableCell>
+                    <TableCell className="font-medium text-slate-600 leading-relaxed">
+                      Thực hiện thanh toán hỗ trợ Marketing theo đúng hồ sơ và số liệu đã được nghiệm thu.
+                    </TableCell>
+                    <TableCell className="font-extrabold text-emerald-600 font-mono">
+                      Trước ngày <span className="font-sans font-black text-slate-900">10</span> của tháng kế tiếp
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
 
             {/* Warning late blocks */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="border border-amber-200 bg-amber-50/10 p-4 rounded-xl flex items-start gap-2.5">
-                <span className="text-amber-500 mt-0.5 font-bold">⚠️</span>
-                <div className="text-xs">
-                  <strong className="text-amber-900 block font-bold">Hồ sơ trễ hạn:</strong>
-                  <span className="text-slate-600 font-semibold">Các trường hợp nộp muộn tờ trình/đề xuất sẽ tự động bị lùi chu kỳ thanh toán hạch toán sang chu kỳ giải ngân tiếp theo của tháng sau.</span>
+              <div id="mkt-warning-card-1" className="bg-amber-50/15 border border-amber-200/60 p-4.5 rounded-2xl flex items-start gap-3 shadow-xs">
+                <span className="p-2 bg-amber-100 text-amber-700 rounded-lg text-lg shrink-0 leading-none">⚠️</span>
+                <div className="text-xs font-sans">
+                  <strong className="text-amber-950 block font-bold mb-0.5">Lưu ý gửi hồ sơ muộn:</strong>
+                  <span className="text-slate-600 font-semibold leading-relaxed">Các trường hợp gửi hồ sơ muộn sẽ được chuyển sang tháng sau.</span>
                 </div>
               </div>
 
-              <div className="border border-rose-200 bg-rose-50/10 p-4 rounded-xl flex items-start gap-2.5">
-                <span className="text-rose-500 mt-0.5 font-bold">🚫</span>
-                <div className="text-xs">
-                  <strong className="text-rose-900 block font-bold">Chậm hồ sơ liên tiếp 2 tháng:</strong>
-                  <span className="text-slate-600 font-semibold">Tài chính sẽ chính thức <strong className="text-rose-600 font-bold font-black">CẮT HOÀN TOÀN hỗ trợ Marketing</strong> đối với đơn vị vi phạm.</span>
+              <div id="mkt-warning-card-2" className="bg-rose-50/15 border border-rose-200/60 p-4.5 rounded-2xl flex items-start gap-3 shadow-xs">
+                <span className="p-2 bg-rose-100 text-rose-700 rounded-lg text-lg shrink-0 leading-none">🚫</span>
+                <div className="text-xs font-sans">
+                  <strong className="text-rose-950 block font-bold mb-0.5">Yêu cầu thời gian nộp hồ sơ:</strong>
+                  <span className="text-slate-600 font-semibold leading-relaxed">Hai tháng liên tiếp chậm gửi hồ sơ sẽ bị cắt hỗ trợ.</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Section IV: Nguyên Tắc Hồ Sơ Nhận Chi Phí MKT */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
+          <div id="mkt-docs-principles-sec" className="bg-white rounded-[2.5rem] border border-slate-200 shadow-md p-6 md:p-8 space-y-6">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
               <span className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl shadow-xs">
                 <Receipt className="w-5 h-5 text-indigo-600" />
               </span>
               <div>
-                <h3 className="text-base font-black text-slate-950 uppercase font-sans">IV. NGUYÊN TẮC HỒ SƠ CHỨNG TỪ NHẬN HỖ TRỢ MKT</h3>
+                <h3 id="mkt-section-iv-title" className="text-base font-black text-slate-950 uppercase font-sans">IV. NGUYÊN TẮC HỒ SƠ CHỨNG TỪ NHẬN HỖ TRỢ MKT</h3>
                 <p className="text-xs text-slate-500 font-medium">Quyết định thủ tục nhận kinh phí hỗ trợ theo dòng hoa hồng liên kết</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Group A: Pháp nhân */}
-              <div className="border border-slate-200 bg-slate-50/30 p-5 rounded-2.5xl space-y-4">
+              <div id="mkt-docs-group-corporate" className="border border-slate-200 bg-slate-50/30 p-5 rounded-2.5xl space-y-4">
                 <div className="flex items-center gap-2 bg-slate-900 text-white py-1.5 px-3 rounded-lg w-fit text-[11px] font-black uppercase tracking-wider font-mono">
-                  <Landmark className="w-3.5 h-3.5" /> 1. Team nhận hoa hồng qua PHÁP NHÂN
+                  <Landmark className="w-3.5 h-3.5" /> 1. CÁC TEAM NHẬN HOA HỒNG QUA PHÁP NHÂN
                 </div>
-                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                  Các Team/Đội nhận hoa hồng thông qua Pháp nhân thì chi phí hỗ trợ Marketing <strong className="text-slate-950 font-black">BẮT BUỘC nhận thông qua Pháp nhân tương ứng</strong>.
+                <p className="text-xs text-slate-700 font-bold leading-relaxed font-sans">
+                  Các team nhận Hoa hồng qua pháp nhân thì Hỗ trợ MKT yêu cầu nhận qua pháp nhân.
                 </p>
 
                 <div className="space-y-3 mt-4 text-xs font-sans">
                   {/* Case 1 */}
                   <div className="bg-white border rounded-2xl p-4.5 space-y-2 shadow-xs">
-                    <strong className="text-blue-600 block font-black">Trường hợp 1: Xuất hóa đơn dịch vụ Marketing</strong>
+                    <strong className="text-blue-600 block font-black">• Trường hợp 1: Nhận Hỗ trợ MKT theo hình thức “Xuất hóa đơn Marketing”</strong>
                     <p className="text-slate-600 leading-relaxed font-semibold">Nhân sự/Team thực hiện lập đầy đủ bộ hồ sơ hỗ trợ Marketing bao gồm:</p>
-                    <div className="space-y-1.5 pl-4 text-slate-600 font-semibold">
-                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Hợp đồng Marketing.</div>
-                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Phiếu đăng ký tham gia chương trình hoạt động.</div>
-                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Biên bản nghiệm thu dịch vụ hoàn thiện.</div>
-                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Hóa đơn tài chính GTGT hợp quy.</div>
+                    <div className="space-y-1.5 pl-4 text-slate-600 font-semibold font-sans">
+                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Hợp đồng.</div>
+                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Phiếu đăng ký tham gia chương trình.</div>
+                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Biên bản nghiệm thu.</div>
+                      <div className="flex items-center gap-2"><span className="text-amber-500 font-bold">o</span> Hoá đơn.</div>
                     </div>
                   </div>
 
                   {/* Case 2 */}
                   <div className="bg-white border rounded-2xl p-4.5 space-y-1 shadow-xs">
-                    <strong className="text-indigo-600 block font-black">Trường hợp 2: Chi trả qua Hoa hồng môi giới bổ sung</strong>
+                    <strong className="text-indigo-600 block font-black">• Trường hợp 2: Nhận Hỗ trợ MKT theo hình thức “Hoa hồng môi giới bổ sung”</strong>
                     <p className="text-slate-600 leading-relaxed font-semibold">
-                      Khoản chi phí hỗ trợ Marketing sẽ được <strong className="text-slate-950 font-bold">hạch toán cộng trực tiếp bổ sung vào dòng hoa hồng</strong> của căn hộ mà Pháp nhân đó đã hoàn thành xuất hóa đơn gửi cho Công ty trong năm 2026.
+                      Khoản chi phí Marketing sẽ được bổ sung vào hoa hồng của căn mà pháp nhân đã xuất hóa đơn cho Công ty trong năm 2026.
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Group B: Cá nhân */}
-              <div className="border border-slate-200 bg-slate-50/30 p-5 rounded-2.5xl space-y-4 flex flex-col justify-between">
+              <div id="mkt-docs-group-individual" className="border border-slate-200 bg-slate-50/30 p-5 rounded-2.5xl space-y-4 flex flex-col justify-between">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 bg-slate-900 text-white py-1.5 px-3 rounded-lg w-fit text-[11px] font-black uppercase tracking-wider font-mono">
-                    <Users className="w-3.5 h-3.5" /> 2. Team nhận hoa hồng qua CÁ NHÂN
+                    <Users className="w-3.5 h-3.5" /> 2. CÁC TEAM NHẬN HOA HỒNG QUA CÁ NHÂN
                   </div>
                   
-                  <div className="space-y-3 text-xs leading-relaxed">
-                    <p className="text-slate-700 font-semibold">
-                      Đối với các Team/Đội nhận hoa hồng theo hình thức cá nhân:
+                  <div className="space-y-3 font-sans text-xs leading-relaxed">
+                    <p className="text-slate-700 font-bold">
+                      Nhận hỗ trợ thông qua tài khoản cá nhân:
                     </p>
-                    <div className="bg-white border p-5 rounded-2xl space-y-2.5 shadow-xs">
-                      <p className="text-slate-800 font-extrabold flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" /> Điều kiện nhân sự thụ hưởng hỗ trợ:</p>
-                      <p className="text-slate-600 font-semibold pl-4">
-                        Người được đề xuất cử đại diện nhận phí hỗ trợ Marketing phải là <strong className="text-slate-950 font-bold">Sale đã từng trực tiếp phát sinh và nhận chi trả hoa hồng</strong> từ Công ty trong cả chu kỳ năm 2026, <strong className="text-slate-950 font-bold">HOẶC</strong> là Sale có phát sinh giao dịch bán hàng được ghi nhận thành công chính trong tháng xét duyệt hỗ trợ Marketing đó.
+                    <div className="bg-white border p-5 rounded-2xl space-y-2.5 shadow-xs font-sans">
+                      <p className="text-slate-600 font-semibold leading-relaxed">
+                        Người nhận hỗ trợ Marketing phải là Sale đã từng nhận hoa hồng từ Công ty trong năm 2026 hoặc là Sale có phát sinh giao dịch bán hàng trong tháng xét duyệt Marketing.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-amber-100/60 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-center text-[11px] font-bold mt-4">
-                  ⚡ Ngày bắt đầu áp dụng chính sách chính thức: 21/05/2026
+                <div id="mkt-policy-footer-badge" className="bg-amber-100/60 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-center text-[11px] font-bold mt-4">
+                  ⚡ Thời gian áp dụng: 21/05/2026
                 </div>
               </div>
             </div>

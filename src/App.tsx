@@ -3663,22 +3663,22 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // Listen to projects with dynamic query pagination limit
+    // Listen to projects - load all relevant projects to ensure mapping and search work perfectly
     let qProjects;
     if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'), limit(projectPage * 20 + 1));
+      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects), limit(projectPage * 20 + 1));
+      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
     } else {
-      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'), limit(projectPage * 20 + 1));
+      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
     }
 
     const unsubProjects = onSnapshot(qProjects, (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
 
-    // Listen to teams with dynamic query pagination limit
-    const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'), limit(teamPage * 20 + 1));
+    // Listen to teams - load all teams to ensure mapping and search work perfectly
+    const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'));
     const unsubTeams = onSnapshot(qTeams, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
@@ -3701,13 +3701,13 @@ export default function App() {
       setTypes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
-    // Listen to budgets with dynamic query pagination limit
+    // Listen to budgets - load all relevant budgets to ensure mapping and search work perfectly
     const hasMktEffView = currentRolePermissions.includes('mkt_efficiency.view') || user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin';
     let qBudgets;
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'), limit(budgetPage * 20 + 1));
+      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects), limit(budgetPage * 20 + 1));
+      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qBudgets = query(
         collection(db, 'budgets'), 
@@ -3715,8 +3715,7 @@ export default function App() {
           where('createdBy', '==', user.uid),
           where('userEmail', '==', user.email?.toLowerCase()),
           where('assignedUserEmail', '==', user.email?.toLowerCase())
-        ),
-        limit(budgetPage * 20 + 1)
+        )
       );
     }
 
@@ -3732,12 +3731,12 @@ export default function App() {
       setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
-    // Listen to costs with dynamic query pagination limit
+    // Listen to costs - load all relevant costs to ensure mapping and search work perfectly
     let qCosts;
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'), limit(costPage * 20 + 1));
+      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects), limit(costPage * 20 + 1));
+      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
     } else {
       qCosts = query(
         collection(db, 'costs'), 
@@ -3745,8 +3744,7 @@ export default function App() {
           where('createdBy', '==', user.uid),
           where('userEmail', '==', user.email?.toLowerCase()),
           where('assignedUserEmail', '==', user.email?.toLowerCase())
-        ),
-        limit(costPage * 20 + 1)
+        )
       );
     }
 
@@ -3780,39 +3778,39 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
     }
 
-    // Listen to efficiency reports with dynamic query pagination limit
+    // Listen to efficiency reports - load all relevant efficiency reports to ensure mapping and search work perfectly
     let unsubEfficiency = () => {};
     if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'), limit(efficiencyPage * 20 + 1));
+      const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects), limit(efficiencyPage * 20 + 1));
+      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     }
 
-    // Listen to acceptances with dynamic query pagination limit
+    // Listen to acceptances - load all relevant acceptances to ensure mapping and search work perfectly
     let unsubAcceptances = () => {};
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'), limit(acceptancePage * 20 + 1));
+      const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects), limit(acceptancePage * 20 + 1));
+      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     }
 
-    // Listen to final acceptances with dynamic query pagination limit
+    // Listen to final acceptances - load all relevant final acceptances to ensure mapping and search work perfectly
     let unsubFinalAcceptances = () => {};
     let unsubDocProcessing = () => {};
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'), limit(acceptancePage * 20 + 1));
+      const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -3822,7 +3820,7 @@ export default function App() {
         setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects), limit(acceptancePage * 20 + 1));
+      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
@@ -3888,7 +3886,7 @@ export default function App() {
       unsubSettings();
       unsubReportNT();
     };
-  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions), projectPage, teamPage, budgetPage, costPage, efficiencyPage, acceptancePage]);
+  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions)]);
 
   useEffect(() => {
     if (!user) return;

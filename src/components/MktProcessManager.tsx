@@ -23,7 +23,8 @@ export function MktProcessManager() {
   });
 
   // Calculator states
-  const [calcCost, setCalcCost] = useState<string>('20,000,000');
+  const [calcBudget, setCalcBudget] = useState<string>('20,000,000');
+  const [calcCost, setCalcCost] = useState<string>('18,000,000');
   const [calcPoints, setCalcPoints] = useState<string>('35');
   const [calcSales, setCalcSales] = useState<string>('1');
 
@@ -33,7 +34,7 @@ export function MktProcessManager() {
   };
 
   const steps = [
-    { id: 1, title: 'Đăng ký Ngân sách', date: 'Ngày 15 - 20', color: 'amber' },
+    { id: 1, title: 'Đăng ký Ngân sách', date: 'Lần 1: 15-20 | Lần 2: 01-05', color: 'amber' },
     { id: 2, title: 'Lập Báo cáo MKT', date: 'Ngày 21 - 25', color: 'blue' },
     { id: 3, title: 'Nghiệm thu Tài khoản', date: 'Ngày 25 - 31', color: 'indigo' },
     { id: 4, title: 'Nộp Hồ sơ Bản cứng', date: 'Trước ngày 05', color: 'emerald' }
@@ -50,26 +51,38 @@ export function MktProcessManager() {
 
   // Dynamic calculator processing
   const costNum = parseFloat(calcCost.replace(/[^0-9]/g, '')) || 0;
+  const budgetNum = parseFloat(calcBudget.replace(/[^0-9]/g, '')) || 0;
   const pointsNum = parseFloat(calcPoints) || 0;
   const salesNum = parseFloat(calcSales) || 0;
 
-  let baseRate = 0.6;
+  // Tính tỷ lệ thực tế so với ngân sách đăng ký
+  const budgetRatio = budgetNum > 0 ? (costNum / budgetNum) * 100 : 0;
+  const isRatioValid = budgetRatio >= 70 && budgetRatio <= 150;
+
+  let baseRate = isRatioValid ? 0.6 : 0.4;
   let limit = 0;
   let bonus = 0;
   let formulaDesc = '';
   let groupDesc = '';
 
-  if (pointsNum >= 30) {
-    limit = 20000000 * salesNum;
-    const additionalPoints = Math.max(0, pointsNum - 30);
-    bonus = Math.floor(additionalPoints / 10) * 7000000;
-    formulaDesc = 'Mốc ≥ 30 điểm đạt thưởng thêm nâng cao';
-    groupDesc = `Cơ bản 60% (Trần giới hạn tối đa cơ bản 20 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ) + Thưởng thêm ${Math.floor(additionalPoints / 10)} lần x 7 triệu VNĐ (+${bonus.toLocaleString('vi-VN')} VNĐ)`;
+  if (isRatioValid) {
+    if (pointsNum >= 30) {
+      limit = 20000000 * salesNum;
+      const additionalPoints = Math.max(0, pointsNum - 30);
+      bonus = Math.floor(additionalPoints / 10) * 7000000;
+      formulaDesc = 'Chi phí thực tế hợp lệ (70% - 150% ngân sách) -> Đạt mức hỗ trợ 60% + Thưởng thêm';
+      groupDesc = `Cơ bản 60% (Trần giới hạn tối đa cơ bản 20 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ) + Thưởng thêm ${Math.floor(additionalPoints / 10)} lần x 7 triệu VNĐ (+${bonus.toLocaleString('vi-VN')} VNĐ)`;
+    } else {
+      limit = 15000000 * salesNum;
+      bonus = 0;
+      formulaDesc = 'Chi phí thực tế hợp lệ (70% - 150% ngân sách) -> Đạt mức hỗ trợ cơ bản 60%';
+      groupDesc = `Hỗ trợ 60% chi phí chạy, giới hạn tối đa 15 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ`;
+    }
   } else {
     limit = 15000000 * salesNum;
     bonus = 0;
-    formulaDesc = 'Mốc 0 - 30 điểm đạt hỗ trợ cơ bản';
-    groupDesc = `Hỗ trợ 60% chi phí chạy, giới hạn tối đa 15 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ`;
+    formulaDesc = 'Ngoài khoảng 70% - 150% ngân sách -> Chỉ được hỗ trợ 40%, không nhận Bonus';
+    groupDesc = `Chi phí thực tế (${budgetRatio.toFixed(1)}% ngân sách) nằm ngoài khoảng 70% - 150% -> Phạt giảm tỷ lệ hỗ trợ xuống 40% trên thực tế và không được thưởng Bonus thêm. Giới hạn tối đa cơ bản 15 triệu VNĐ/Sale x ${salesNum} Sale = ${limit.toLocaleString('vi-VN')} VNĐ`;
   }
 
   const calculatedBase = costNum * baseRate;
@@ -91,6 +104,16 @@ export function MktProcessManager() {
     }
     const num = parseInt(numeric, 10);
     setCalcCost(num.toLocaleString('vi-VN'));
+  };
+
+  const handleBudgetChange = (val: string) => {
+    const numeric = val.replace(/[^0-9]/g, '');
+    if (numeric === '') {
+      setCalcBudget('');
+      return;
+    }
+    const num = parseInt(numeric, 10);
+    setCalcBudget(num.toLocaleString('vi-VN'));
   };
 
   return (
@@ -300,13 +323,13 @@ export function MktProcessManager() {
               {/* Inputs */}
               <div className="lg:col-span-5 space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">1. Chi phí Thực tế Chạy MKT (VNĐ):</label>
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">1. Ngân sách Đăng ký MKT (VNĐ):</label>
                   <div className="relative">
                     <input 
                       type="text"
-                      value={calcCost}
-                      onChange={(e) => handleCostChange(e.target.value)}
-                      placeholder="Nhập số tiền..."
+                      value={calcBudget}
+                      onChange={(e) => handleBudgetChange(e.target.value)}
+                      placeholder="Nhập ngân sách đăng ký..."
                       className="w-full bg-slate-900 border border-slate-800 focus:border-amber-500 rounded-2xl px-4 py-3 text-slate-100 text-sm font-mono font-bold focus:ring-2 focus:ring-amber-500/30 focus:outline-hidden"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">VNĐ</span>
@@ -314,7 +337,21 @@ export function MktProcessManager() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">2. Đầu Điểm Thi Đua Đạt Được (GĐKD):</label>
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">2. Chi phí Thực tế Chạy MKT (VNĐ):</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      value={calcCost}
+                      onChange={(e) => handleCostChange(e.target.value)}
+                      placeholder="Nhập thực chi..."
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-amber-500 rounded-2xl px-4 py-3 text-slate-100 text-sm font-mono font-bold focus:ring-2 focus:ring-amber-500/30 focus:outline-hidden"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">VNĐ</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">3. Đầu Điểm Thi Đua Đạt Được (GĐKD):</label>
                   <div className="relative">
                     <input 
                       type="number"
@@ -330,7 +367,7 @@ export function MktProcessManager() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">3. Số lượng sale chấm công đủ 30 công:</label>
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">4. Số lượng sale chấm công đủ 30 công:</label>
                   <div className="relative">
                     <input 
                       type="number"
@@ -359,8 +396,8 @@ export function MktProcessManager() {
 
                 <div className="space-y-1">
                   <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase font-mono block">Mốc Đạt Được</span>
-                  <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  <div className={`text-xs font-bold flex items-center gap-1.5 ${isRatioValid ? 'text-amber-400' : 'text-red-400'}`}>
+                    <span className={`inline-block w-2 h-2 rounded-full animate-ping ${isRatioValid ? 'bg-amber-500' : 'bg-red-500'}`} />
                     {formulaDesc}
                   </div>
                 </div>
@@ -371,7 +408,17 @@ export function MktProcessManager() {
                     <span className="text-slate-200 font-bold text-right max-w-[240px] leading-relaxed">{groupDesc}</span>
                   </div>
                   <div className="flex justify-between py-2">
-                    <span className="text-slate-400 font-medium">Hỗ trợ cơ bản (60%):</span>
+                    <span className="text-slate-400 font-medium">Tỷ lệ thực tế / ngân sách:</span>
+                    <span className={`font-mono font-extrabold ${isRatioValid ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {budgetRatio.toFixed(1)}% {isRatioValid ? '(Hợp lệ từ 70% đến 150%)' : '(Không hợp lệ: ngoài khoảng 70% - 150%)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400 font-medium">Hỗ trợ cơ bản áp dụng:</span>
+                    <span className="text-slate-200 font-bold font-mono">{(baseRate * 100)}% trên thực tế</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-400 font-medium">Mức hỗ trợ sau trần tối đa:</span>
                     <span className="text-slate-200 font-bold font-mono">{acceptedBase.toLocaleString('vi-VN')} VNĐ</span>
                   </div>
                   <div className="flex justify-between py-2">
@@ -394,7 +441,6 @@ export function MktProcessManager() {
                   * Công cụ tính chỉ mang tính chất tham khảo.
                 </div>
               </div>
-
             </div>
           </div>
 
@@ -676,7 +722,7 @@ export function MktProcessManager() {
                   <p className="text-xs text-amber-50 font-medium">Cấu hình ngân sách dự toán trước chu kỳ</p>
                 </div>
                 <Badge className="bg-white text-amber-700 hover:bg-amber-50 py-1 px-3 text-xs font-bold rounded-lg shrink-0 shadow-sm font-mono">
-                  Ngày 15 - 20 Hàng Tháng
+                  Lần 1: 15 - 20 | Lần 2: 01 - 05 hàng tháng
                 </Badge>
               </div>
 
@@ -688,7 +734,7 @@ export function MktProcessManager() {
                       <Laptop className="w-5 h-5" />
                     </span>
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800">Cổng đăng ký trực tuyến</h4>
+                      <h4 className="text-sm font-bold text-slate-800">Cổng đăng ký trực tuyến (giữ nguyên)</h4>
                       <p className="text-[11px] text-slate-500 font-medium">Hệ thống ghi nhận tờ trình tự động</p>
                     </div>
                   </div>
@@ -727,7 +773,7 @@ export function MktProcessManager() {
 
                 {/* 3 Core Rules */}
                 <div className="space-y-4 pt-2">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">Quy tắc đăng ký ngân sách</h4>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">Quy tắc đăng ký ngân sách mới</h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="border border-emerald-200/80 bg-emerald-50/15 p-4 rounded-2xl flex flex-col justify-between space-y-3">
@@ -735,22 +781,22 @@ export function MktProcessManager() {
                         <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg shrink-0">
                           <CheckCircle2 className="w-4 h-4" />
                         </span>
-                        <span className="text-xs font-extrabold uppercase text-emerald-800 tracking-wider">Tiêu chuẩn</span>
+                        <span className="text-xs font-extrabold uppercase text-emerald-800 tracking-wider">Lần 1: Đăng ký</span>
                       </div>
                       <p className="text-[11px] font-semibold leading-relaxed text-slate-700">
-                        Cam kết <strong>100% trung thực</strong> và thiết lập kế hoạch triển khai chi tiết rõ ràng trước khi bấm đăng ký.
+                        Thời gian đăng ký ban đầu từ <strong>ngày 15 hàng tháng</strong> đến ngày <strong>20 hàng tháng</strong>.
                       </p>
                     </div>
 
-                    <div className="border border-rose-200/80 bg-rose-50/15 p-4 rounded-2xl flex flex-col justify-between space-y-3">
+                    <div className="border border-blue-200/80 bg-blue-50/15 p-4 rounded-2xl flex flex-col justify-between space-y-3">
                       <div className="flex items-center gap-2">
-                        <span className="p-1.5 bg-rose-100 text-rose-600 rounded-lg shrink-0">
-                          <XCircle className="w-4 h-4" />
+                        <span className="p-1.5 bg-blue-100 text-blue-600 rounded-lg shrink-0">
+                          <Laptop className="w-4 h-4" />
                         </span>
-                        <span className="text-xs font-extrabold uppercase text-rose-800 tracking-wider">Nghiêm cấm</span>
+                        <span className="text-xs font-extrabold uppercase text-blue-800 tracking-wider">Lần 2: Cập nhật</span>
                       </div>
                       <p className="text-[11px] font-semibold leading-relaxed text-slate-700">
-                        <strong>KHÔNG tự ý điều chỉnh</strong> kế hoạch ngân sách sau thời gian chốt. Mọi chỉnh sửa bắt buộc phải liên hệ Team Digital.
+                        Thời gian cập nhật, điều chỉnh từ <strong>ngày 01 tháng tiếp theo</strong> đến ngày <strong>05 tháng tiếp theo</strong>.
                       </p>
                     </div>
 
@@ -759,10 +805,10 @@ export function MktProcessManager() {
                         <span className="p-1.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
                           <AlertTriangle className="w-4 h-4" />
                         </span>
-                        <span className="text-xs font-extrabold uppercase text-amber-800 tracking-wider">Quá hạn</span>
+                        <span className="text-xs font-extrabold uppercase text-amber-800 tracking-wider">So khớp thực tế</span>
                       </div>
                       <p className="text-[11px] font-semibold leading-relaxed text-slate-700">
-                        Nộp trễ hạn (sau ngày 20) = <strong>Hệ thống tự từ chối</strong> xem xét hỗ trợ (trừ trường hợp được BLĐ duyệt qua Email văn bản).
+                        Kết thúc kỳ, thực tế nằm trong khoảng <strong>70% - 150%</strong> ngân sách &rarr; hỗ trợ <strong>60% thực tế + Bonus</strong>. Ngoài khoảng này &rarr; hỗ trợ <strong>40% thực tế</strong> (Không có Bonus).
                       </p>
                     </div>
                   </div>

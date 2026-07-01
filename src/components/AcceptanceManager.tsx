@@ -1274,24 +1274,24 @@ export const AcceptanceManager = React.memo(({
                         <span>STT</span>
                       </div>
                     </TableHead>
-                    <SortableHeader sortKey="blockName" currentSort={sortConfig} onSort={handleSort} className="w-32 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Khối</SortableHeader>
-                    <SortableHeader sortKey="teamName" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Team</SortableHeader>
-                    <SortableHeader sortKey="teamCode" currentSort={sortConfig} onSort={handleSort} align="center" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Mã Team</SortableHeader>
-                    <SortableHeader sortKey="gdkdName" currentSort={sortConfig} onSort={handleSort} className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">GĐKD</SortableHeader>
-                    <SortableHeader sortKey="implementerName" currentSort={sortConfig} onSort={handleSort} className="w-40 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Người Phụ trách</SortableHeader>
-                    <SortableHeader sortKey="projectName" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Dự án</SortableHeader>
-                    <SortableHeader sortKey="fbDigitalChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Digital (Chưa VAT)</SortableHeader>
-                    <SortableHeader sortKey="facebookCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Digital (VAT 10%)/Thực chi</SortableHeader>
-                    <SortableHeader sortKey="caNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Cá nhân</SortableHeader>
-                    <SortableHeader sortKey="fbVisaCostChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Visa Trực Chạy (C.VAT)</SortableHeader>
-                    <SortableHeader sortKey="visaCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Visa Trực Chạy (10%)</SortableHeader>
-                    <SortableHeader sortKey="dangTinCaNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Nhân</SortableHeader>
-                    <SortableHeader sortKey="dangTinCongTyChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (C.VAT)</SortableHeader>
-                    <SortableHeader sortKey="postingCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (8%)</SortableHeader>
-                    <SortableHeader sortKey="zaloCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-25">Zalo</SortableHeader>
-                    <SortableHeader sortKey="googleCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Google / Native</SortableHeader>
-                    <SortableHeader sortKey="tiktokCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Tiktok</SortableHeader>
-                    <SortableHeader sortKey="totalCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-40 text-[10px] font-black bg-indigo-50/40 text-indigo-800 uppercase sticky top-0 z-20 border-b border-indigo-200 font-bold">Tổng tiền</SortableHeader>
+                    <SortableHeader sortKey="blockName" currentSort={sortConfig} onSort={handleSort} className="w-24 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Khối</SortableHeader>
+                    <SortableHeader sortKey="teamName" currentSort={sortConfig} onSort={handleSort} className="w-36 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Team</SortableHeader>
+                    <SortableHeader sortKey="teamCode" currentSort={sortConfig} onSort={handleSort} align="center" className="min-w-[100px] text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Mã Team</SortableHeader>
+                    <SortableHeader sortKey="gdkdName" currentSort={sortConfig} onSort={handleSort} className="min-w-[140px] text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">GĐKD</SortableHeader>
+                    <SortableHeader sortKey="implementerName" currentSort={sortConfig} onSort={handleSort} className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Người Phụ trách</SortableHeader>
+                    <SortableHeader sortKey="projectName" currentSort={sortConfig} onSort={handleSort} className="min-w-[200px] text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Dự án</SortableHeader>
+                    <SortableHeader sortKey="fbDigitalChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Digital (Chưa VAT)</SortableHeader>
+                    <SortableHeader sortKey="facebookCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Digital (VAT 10%)/Thực chi</SortableHeader>
+                    <SortableHeader sortKey="caNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Cá nhân</SortableHeader>
+                    <SortableHeader sortKey="fbVisaCostChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">FB Visa Trực Chạy (C.VAT)</SortableHeader>
+                    <SortableHeader sortKey="visaCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Visa Trực Chạy (10%)</SortableHeader>
+                    <SortableHeader sortKey="dangTinCaNhanCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Nhân</SortableHeader>
+                    <SortableHeader sortKey="dangTinCongTyChuaVat" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (C.VAT)</SortableHeader>
+                    <SortableHeader sortKey="postingCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Đăng Tin C.Ty (8%)</SortableHeader>
+                    <SortableHeader sortKey="zaloCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-25">Zalo</SortableHeader>
+                    <SortableHeader sortKey="googleCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Google / Native</SortableHeader>
+                    <SortableHeader sortKey="tiktokCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-28 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Tiktok</SortableHeader>
+                    <SortableHeader sortKey="totalCost" currentSort={sortConfig} onSort={handleSort} align="right" className="w-32 text-[10px] font-black bg-indigo-50/40 text-indigo-800 uppercase sticky top-0 z-20 border-b border-indigo-200 font-bold">Tổng tiền</SortableHeader>
                     <SortableHeader sortKey="month" currentSort={sortConfig} onSort={handleSort} align="center" className="w-32 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Tháng</SortableHeader>
                     <SortableHeader sortKey="notes" currentSort={sortConfig} onSort={handleSort} className="w-56 text-[10px] font-black text-slate-600 uppercase sticky top-0 bg-slate-100 z-20">Ghi chú</SortableHeader>
                     <TableHead className="w-44 text-center text-[10px] font-black text-slate-600 uppercase sticky right-0 top-0 bg-slate-100 z-30 border-b border-slate-200 shadow-l">Thao tác</TableHead>
@@ -1349,16 +1349,16 @@ export const AcceptanceManager = React.memo(({
                             searchPlaceholder="Tìm kiếm..."
                           />
                         </TableCell>
-                        <TableCell className="text-center p-1 text-xs font-bold font-mono text-slate-600">
+                        <TableCell className="text-center p-1 text-xs font-bold font-mono text-slate-600 whitespace-nowrap min-w-[100px]">
                           {teamCode || '-'}
                         </TableCell>
-                        <TableCell className="p-1 truncate max-w-[150px] text-xs font-bold text-slate-600 text-left" title={gdkdName}>
+                        <TableCell className="p-1 whitespace-nowrap min-w-[140px] text-xs font-bold text-slate-600 text-left" title={gdkdName}>
                           {gdkdName || '-'}
                         </TableCell>
                         <TableCell className="p-1">
                           <Input
                             placeholder="Người phụ trách..."
-                            className="h-8 px-2 text-[10px] bg-white border border-slate-200"
+                            className="h-8 px-2 text-[10px] bg-white border border-slate-200 max-w-[110px]"
                             value={draft.implementerName}
                             onChange={(e) => updateDraftField('implementerName', e.target.value)}
                           />
@@ -1629,16 +1629,16 @@ export const AcceptanceManager = React.memo(({
                                 searchPlaceholder="Tìm kiếm..."
                               />
                             </TableCell>
-                            <TableCell className="text-center p-1 text-xs font-bold font-mono text-slate-800">
+                            <TableCell className="text-center p-1 text-xs font-bold font-mono text-slate-800 whitespace-nowrap min-w-[100px]">
                               {teamCode || '-'}
                             </TableCell>
-                            <TableCell className="p-1 truncate max-w-[150px] text-xs font-bold text-slate-850 text-left" title={gdkdName}>
+                            <TableCell className="p-1 whitespace-nowrap min-w-[140px] text-xs font-bold text-slate-850 text-left" title={gdkdName}>
                               {gdkdName || '-'}
                             </TableCell>
                             <TableCell className="p-1">
                               <Input
                                 placeholder="Người phụ trách..."
-                                className="h-8 px-2 text-[10px] bg-white border border-amber-300"
+                                className="h-8 px-2 text-[10px] bg-white border border-amber-300 max-w-[110px]"
                                 value={editingRowState.implementerName}
                                 onChange={(e) => updateEditingField('implementerName', e.target.value)}
                               />
@@ -1888,23 +1888,23 @@ export const AcceptanceManager = React.memo(({
                             })()}
                           </TableCell>
                           {/* 3. TEAM */}
-                          <TableCell className="font-extrabold text-[11px] text-slate-900 truncate max-w-[150px]" title={item.teamName}>
+                          <TableCell className="font-extrabold text-[11px] text-slate-900 truncate max-w-[130px]" title={item.teamName}>
                             {item.teamName}
                           </TableCell>
                           {/* 4. MÃ TEAM */}
-                          <TableCell className="text-center font-bold font-mono text-xs text-slate-650">
+                          <TableCell className="text-center font-bold font-mono text-xs text-slate-650 whitespace-nowrap min-w-[100px]">
                             {item.teamCode || '-'}
                           </TableCell>
                           {/* 5. GĐKD */}
-                          <TableCell className="font-bold text-xs text-slate-600">
+                          <TableCell className="font-bold text-xs text-slate-600 whitespace-nowrap min-w-[140px]">
                             {item.gdkdName || '-'}
                           </TableCell>
                           {/* 6. Người Phụ trách */}
-                          <TableCell className="font-semibold text-xs text-slate-600">
+                          <TableCell className="font-semibold text-xs text-slate-600 truncate max-w-[110px]" title={item.implementerName}>
                             {item.implementerName || '-'}
                           </TableCell>
                           {/* 7. DỰ ÁN */}
-                          <TableCell className="font-black text-xs text-slate-700 truncate max-w-[150px]" title={item.projectName}>
+                          <TableCell className="font-black text-xs text-slate-800 min-w-[200px] break-words whitespace-normal" title={item.projectName}>
                             {item.projectName}
                           </TableCell>
                           {/* 8. FB DIGITAL (Chưa VAT) */}

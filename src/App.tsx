@@ -6751,10 +6751,14 @@ export default function App() {
     
     const now = new Date();
     const day = now.getDate();
-    const start = systemSettings.budgetStartDay || 1;
-    const end = systemSettings.budgetEndDay || 20;
+    const start = Number(systemSettings.budgetStartDay || 15);
+    const end = Number(systemSettings.budgetEndDay || 5);
 
-    return day >= Number(start) && day <= Number(end);
+    if (start > end) {
+      return day >= start || day <= end;
+    } else {
+      return day >= start && day <= end;
+    }
   };
 
   const firebaseUserEmail = user?.email?.toLowerCase() || '';
@@ -9883,6 +9887,9 @@ export default function App() {
                   <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Quản trị
                 </TabsTrigger>
               )}
+              <TabsTrigger value="process-mkt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-amber-600 data-[state=active]:text-white font-black transition-all">
+                <FileText className="w-3.5 h-3.5 mr-1.5" /> Quy trình hỗ trợ MKT
+              </TabsTrigger>
               {(isGDKhoi || isAdmin || isAccountant) && (
                 <TabsTrigger value="block-mgmt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white font-black transition-all">
                   <Building2 className="w-3.5 h-3.5 mr-1.5" /> Quản lý Khối
@@ -9914,9 +9921,6 @@ export default function App() {
                     {pendingSupportCount}
                   </span>
                 )}
-              </TabsTrigger>
-              <TabsTrigger value="process-mkt" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-amber-600 data-[state=active]:text-white font-black transition-all">
-                <FileText className="w-3.5 h-3.5 mr-1.5" /> Quy trình hỗ trợ MKT
               </TabsTrigger>
               <TabsTrigger value="process-doiung" className="shrink-0 rounded-lg py-1.5 px-3 sm:py-2 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white font-black transition-all">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Quy trình đối ứng
@@ -16474,7 +16478,8 @@ export default function App() {
                           <div className="text-xs text-indigo-700 leading-relaxed font-medium">
                             <p className="font-bold mb-1 underline">Cơ chế hoạt động:</p>
                             <ul className="list-disc list-inside space-y-1">
-                              <li>Users chỉ có thể <b>Đăng ký</b> hoặc <b>Chỉnh sửa</b> ngân sách trong khoảng từ ngày <b>Bắt đầu</b> đến ngày <b>Kết thúc</b> của mỗi tháng.</li>
+                              <li>Users chỉ có thể <b>Đăng ký</b> hoặc <b>Chỉnh sửa</b> ngân sách trong khoảng từ ngày <b>Bắt đầu</b> đến ngày <b>Kết thúc</b>.</li>
+                              <li>Hỗ trợ cấu hình vắt qua tháng (Ví dụ: Bắt đầu từ ngày 15 tháng trước, Kết thúc vào ngày 5 của tháng tiếp theo).</li>
                               <li>Ngoài khoảng thời gian này, các tính năng thêm/sửa ngân sách sẽ bị khóa.</li>
                               <li><b>Admin</b> và các tài khoản được chỉ định vẫn có quyền chỉnh sửa bất cứ lúc nào.</li>
                             </ul>
@@ -16497,7 +16502,7 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
                               </div>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-medium italic">* Thường là ngày 01 đầu tháng</p>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 15 tháng trước</p>
                           </div>
 
                           <div className="space-y-2">
@@ -16515,7 +16520,7 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
                               </div>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 10 hàng tháng</p>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 05 tháng tiếp theo</p>
                           </div>
                         </div>
 

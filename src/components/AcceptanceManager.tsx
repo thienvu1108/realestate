@@ -230,6 +230,7 @@ export const AcceptanceManager = React.memo(({
   const [sortConfig, setSortConfig] = useState<any>({ key: null, direction: null });
 
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
+  const processingFinalizeRef = useRef<Record<string, boolean>>({});
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [acceptanceToFinalize, setAcceptanceToFinalize] = useState<any>(null);
 
@@ -947,8 +948,25 @@ export const AcceptanceManager = React.memo(({
     setIsDeletingAcceptance(true);
     const toastId = toast.loading('Đang xóa bản ghi thực tế...');
     try {
+      const targetFa = (finalAcceptances || []).find((fa: any) => fa.id === id);
+      const originalAcceptanceId = targetFa?.originalAcceptanceId;
+
       await deleteDoc(doc(db, 'finalAcceptances', id));
-      toast.success('Đã xóa bản ghi thực tế', { id: toastId });
+
+      if (originalAcceptanceId) {
+        try {
+          await updateDoc(doc(db, 'acceptances', originalAcceptanceId), {
+            status: 'Trước nghiệm thu',
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.email || '',
+            updatedByUid: user?.uid || ''
+          });
+        } catch (e) {
+          console.warn("Could not find or update original acceptance:", originalAcceptanceId, e);
+        }
+      }
+
+      toast.success('Đã xóa bản ghi thực tế và khôi phục trạng thái chưa nghiệm thu', { id: toastId });
       setIsDeleteFinalDialogOpen(false);
       setFinalAcceptanceToDelete(null);
     } catch (error: any) {
@@ -1009,6 +1027,11 @@ export const AcceptanceManager = React.memo(({
 
   const handleFinalizeAcceptance = async (acc: any) => {
     if (!acc) return;
+    if (processingFinalizeRef.current[acc.id]) {
+      console.log("Already finalizing this record:", acc.id);
+      return;
+    }
+    processingFinalizeRef.current[acc.id] = true;
     
     setIsFinalizing(acc.id);
     const toastId = toast.loading('Đang xử lý chốt số liệu quyết toán...');
@@ -1069,6 +1092,7 @@ export const AcceptanceManager = React.memo(({
       toast.error('Lỗi khi chốt số liệu. Vui lòng thử lại.', { id: toastId });
     } finally {
       setIsFinalizing(null);
+      delete processingFinalizeRef.current[acc.id];
     }
   };
 
@@ -1114,11 +1138,44 @@ export const AcceptanceManager = React.memo(({
       <Card className="border-none shadow-sm overflow-hidden bg-white">
         <CardHeader className="pb-4 space-y-4 border-b border-slate-50">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest font-sans">
-                Nghiệm thu ({filteredAcceptances.length} bản ghi)
-              </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest font-sans">
+                  Nghiệm thu ({acceptanceListView === 'pending' ? filteredAcceptances.length : filteredFinalAcceptances.length} bản ghi)
+                </h2>
+              </div>
+              
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAcceptanceListView('pending');
+                    setSelectedAcceptanceIds([]);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                    acceptanceListView === 'pending'
+                      ? 'bg-white text-indigo-700 shadow-sm font-black'
+                      : 'text-slate-500 hover:text-slate-800 font-bold'
+                  }`}
+                >
+                  Chưa nghiệm thu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAcceptanceListView('finalized');
+                    setSelectedAcceptanceIds([]);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                    acceptanceListView === 'finalized'
+                      ? 'bg-white text-indigo-700 shadow-sm font-black'
+                      : 'text-slate-500 hover:text-slate-800 font-bold'
+                  }`}
+                >
+                  Đã nghiệm thu
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 w-full md:w-auto">

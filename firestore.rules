@@ -278,17 +278,25 @@ service cloud.firestore {
     // Acceptances & Final Acceptances
     // ===============================================================
     match /acceptances/{acceptanceId} {
-      allow read: if isInternalStaff();
+      allow read: if true;
       allow create: if isInternalStaff();
       allow update: if isInternalStaff();
       allow delete: if isAdmin() || isAccountant();
     }
 
     match /finalAcceptances/{finalId} {
-      allow read: if isInternalStaff();
+      allow read: if true;
       allow create: if isAdmin() || isMod() || isAccountant();
       allow update: if isAdmin() || isMod() || isAccountant();
       allow delete: if isAdmin() || isAccountant();
+    }
+
+    // ===============================================================
+    // Audit Logs
+    // ===============================================================
+    match /auditLogs/{logId} {
+      allow read: if true;
+      allow create: if isSignedIn();
     }
 
     // ===============================================================

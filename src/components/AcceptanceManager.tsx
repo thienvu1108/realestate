@@ -15,7 +15,7 @@ import {
   Trash2, Edit2, Upload, FileSpreadsheet, Check, ShieldCheck, 
   ChevronDown, Search, ArrowUpDown, Filter, Plus, FileDown, 
   CheckSquare, FileText, AlertCircle, RefreshCw, X, ChevronRight, PlusCircle,
-  Calculator
+  Calculator, History, ArrowRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -233,6 +233,23 @@ export const AcceptanceManager = React.memo(({
   const processingFinalizeRef = useRef<Record<string, boolean>>({});
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [acceptanceToFinalize, setAcceptanceToFinalize] = useState<any>(null);
+
+  // --- STATE FOR EDIT HISTORY DIALOG ---
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [historyToView, setHistoryToView] = useState<any[]>([]);
+  const [historyTargetName, setHistoryTargetName] = useState('');
+
+  const handleOpenHistory = (acc: any) => {
+    const history = Array.isArray(acc.editHistory) ? acc.editHistory : [];
+    setHistoryToView(history);
+    
+    const blockText = acc.blockName || acc.blockCode || '';
+    const teamText = acc.teamName || acc.teamCode || '';
+    const projText = acc.projectName || '';
+    const monthText = acc.month || '';
+    setHistoryTargetName(`${monthText} | ${blockText} > ${teamText} > ${projText}`);
+    setIsHistoryDialogOpen(true);
+  };
 
   // State hooks for Multi-Value Sum dialog calculator
   const [activeCalculatorField, setActiveCalculatorField] = useState<string | null>(null);
@@ -761,7 +778,19 @@ export const AcceptanceManager = React.memo(({
         createdByUid: user?.uid || '',
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
-        updatedByUid: user?.uid || ''
+        updatedByUid: user?.uid || '',
+        editHistory: [{
+          action: 'CREATE',
+          editorName: user?.displayName || user?.email || 'Unknown',
+          editorEmail: user?.email || '',
+          timestamp: new Date().toISOString(),
+          changes: {
+            "Tháng": { old: null, new: draftRow.month },
+            "Team": { old: null, new: selectedTeam?.name || '' },
+            "Dự án": { old: null, new: selectedProj?.name || '' },
+            "Tổng chi phí": { old: null, new: totalCostNum }
+          }
+        }]
       };
 
       await addDoc(collection(db, 'acceptances'), payload);
@@ -841,6 +870,71 @@ export const AcceptanceManager = React.memo(({
 
       const totalCostNum = digitalCostNum + caNhanNum + visaCostNum + dangTinCaNhanNum + dangTinCongTyCostNum + zaloNum + googleNum + tiktokNum;
 
+      const oldRecord = acceptances.find((a: any) => a.id === editingRowId);
+      const changes: any = {};
+      if (oldRecord) {
+        if (oldRecord.month !== editingRowState.month) {
+          changes["Tháng"] = { old: oldRecord.month, new: editingRowState.month };
+        }
+        if (oldRecord.teamId !== editingRowState.teamId) {
+          changes["Team"] = { old: oldRecord.teamName || oldRecord.teamId, new: selectedTeam?.name || editingRowState.teamId };
+        }
+        if (oldRecord.projectId !== editingRowState.projectId) {
+          changes["Dự án"] = { old: oldRecord.projectName || oldRecord.projectId, new: selectedProj?.name || editingRowState.projectId };
+        }
+        if (oldRecord.implementerName !== editingRowState.implementerName) {
+          changes["Người thực hiện"] = { old: oldRecord.implementerName || '', new: editingRowState.implementerName };
+        }
+        if (oldRecord.fbDigitalChuaVat !== fbDigitalChuaVatNum) {
+          changes["FB Digital Chưa VAT"] = { old: oldRecord.fbDigitalChuaVat || 0, new: fbDigitalChuaVatNum };
+        }
+        if (oldRecord.facebookCost !== digitalCostNum) {
+          changes["Facebook Cost"] = { old: oldRecord.facebookCost || 0, new: digitalCostNum };
+        }
+        if (oldRecord.caNhanCost !== caNhanNum) {
+          changes["Cá nhân Cost"] = { old: oldRecord.caNhanCost || 0, new: caNhanNum };
+        }
+        if (oldRecord.fbVisaCostChuaVat !== fbVisaChuaVatNum) {
+          changes["FB Visa Chưa VAT"] = { old: oldRecord.fbVisaCostChuaVat || 0, new: fbVisaChuaVatNum };
+        }
+        if (oldRecord.visaCost !== visaCostNum) {
+          changes["Visa Cost"] = { old: oldRecord.visaCost || 0, new: visaCostNum };
+        }
+        if (oldRecord.dangTinCaNhanCost !== dangTinCaNhanNum) {
+          changes["Đăng Tin Cá Nhân"] = { old: oldRecord.dangTinCaNhanCost || 0, new: dangTinCaNhanNum };
+        }
+        if (oldRecord.dangTinCongTyChuaVat !== dangTinCongTyChuaVatNum) {
+          changes["Đăng Tin C.Ty Chưa VAT"] = { old: oldRecord.dangTinCongTyChuaVat || 0, new: dangTinCongTyChuaVatNum };
+        }
+        if (oldRecord.postingCost !== dangTinCongTyCostNum) {
+          changes["Posting Cost"] = { old: oldRecord.postingCost || 0, new: dangTinCongTyCostNum };
+        }
+        if (oldRecord.zaloCost !== zaloNum) {
+          changes["Zalo Cost"] = { old: oldRecord.zaloCost || 0, new: zaloNum };
+        }
+        if (oldRecord.googleCost !== googleNum) {
+          changes["Google Cost"] = { old: oldRecord.googleCost || 0, new: googleNum };
+        }
+        if (oldRecord.tiktokCost !== tiktokNum) {
+          changes["Tiktok Cost"] = { old: oldRecord.tiktokCost || 0, new: tiktokNum };
+        }
+        if (oldRecord.totalCost !== totalCostNum) {
+          changes["Tổng chi phí"] = { old: oldRecord.totalCost || 0, new: totalCostNum };
+        }
+        if (oldRecord.notes !== editingRowState.notes) {
+          changes["Ghi chú"] = { old: oldRecord.notes || '', new: editingRowState.notes || '' };
+        }
+      }
+
+      const oldHistory = oldRecord && Array.isArray(oldRecord.editHistory) ? oldRecord.editHistory : [];
+      const newHistoryEntry = {
+        action: 'UPDATE',
+        editorName: user?.displayName || user?.email || 'Unknown',
+        editorEmail: user?.email || '',
+        timestamp: new Date().toISOString(),
+        changes
+      };
+
       const payload = {
         month: editingRowState.month,
         teamId: editingRowState.teamId,
@@ -888,7 +982,8 @@ export const AcceptanceManager = React.memo(({
 
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
-        updatedByUid: user?.uid || ''
+        updatedByUid: user?.uid || '',
+        editHistory: [...oldHistory, newHistoryEntry]
       };
 
       await updateDoc(doc(db, 'acceptances', editingRowId), payload);
@@ -955,11 +1050,24 @@ export const AcceptanceManager = React.memo(({
 
       if (originalAcceptanceId) {
         try {
+          const originalAcc = (acceptances || []).find((a: any) => a.id === originalAcceptanceId);
+          const oldHistory = originalAcc && Array.isArray(originalAcc.editHistory) ? originalAcc.editHistory : [];
+          const restoreHistoryEntry = {
+            action: 'RESTORE_PENDING',
+            editorName: user?.displayName || user?.email || 'Unknown',
+            editorEmail: user?.email || '',
+            timestamp: new Date().toISOString(),
+            changes: {
+              "Trạng thái": { old: 'Đã nghiệm thu', new: 'Trước nghiệm thu' }
+            }
+          };
+
           await updateDoc(doc(db, 'acceptances', originalAcceptanceId), {
             status: 'Trước nghiệm thu',
             updatedAt: serverTimestamp(),
             updatedBy: user?.email || '',
-            updatedByUid: user?.uid || ''
+            updatedByUid: user?.uid || '',
+            editHistory: [...oldHistory, restoreHistoryEntry]
           });
         } catch (e) {
           console.warn("Could not find or update original acceptance:", originalAcceptanceId, e);
@@ -1036,6 +1144,18 @@ export const AcceptanceManager = React.memo(({
     setIsFinalizing(acc.id);
     const toastId = toast.loading('Đang xử lý chốt số liệu quyết toán...');
     try {
+      const oldHistory = Array.isArray(acc.editHistory) ? acc.editHistory : [];
+      const finalizeHistoryEntry = {
+        action: 'FINALIZE',
+        editorName: user?.displayName || user?.email || 'Unknown',
+        editorEmail: user?.email || '',
+        timestamp: new Date().toISOString(),
+        changes: {
+          "Trạng thái": { old: acc.status || 'Trước nghiệm thu', new: 'Đã nghiệm thu' }
+        }
+      };
+      const updatedHistory = [...oldHistory, finalizeHistoryEntry];
+
       const finalPayload = {
         originalAcceptanceId: acc.id,
         month: acc.month || '',
@@ -1068,7 +1188,8 @@ export const AcceptanceManager = React.memo(({
         finalizedBy: user?.email || '',
         finalizedByUid: user?.uid || '',
         status: 'Đã nghiệm thu',
-        notes: acc.notes || ''
+        notes: acc.notes || '',
+        editHistory: updatedHistory
       };
       
       await addDoc(collection(db, 'finalAcceptances'), finalPayload);
@@ -1079,7 +1200,8 @@ export const AcceptanceManager = React.memo(({
         finalizedBy: user?.email || '',
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
-        updatedByUid: user?.uid || ''
+        updatedByUid: user?.uid || '',
+        editHistory: updatedHistory
       });
       
       setIsFinalizeDialogOpen(false);
@@ -2042,8 +2164,18 @@ export const AcceptanceManager = React.memo(({
                             {item.notes || '-'}
                           </TableCell>
                           {/* Action cell */}
-                          <TableCell className="p-1 sticky right-0 bg-white/95 text-center shadow-l min-w-[130px] group-hover:bg-slate-50/95 duration-100 backdrop-blur-sm z-20">
+                          <TableCell className="p-1 sticky right-0 bg-white/95 text-center shadow-l min-w-[150px] group-hover:bg-slate-50/95 duration-100 backdrop-blur-sm z-20">
                             <div className="flex justify-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleOpenHistory(item)}
+                                className="h-8 w-8 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-full"
+                                title="Lịch sử chỉnh sửa"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </Button>
+
                               {item.status !== 'Đã nghiệm thu' ? (
                                 <>
                                   <Button
@@ -2449,6 +2581,104 @@ export const AcceptanceManager = React.memo(({
 
             <DialogFooter className="pt-4 border-t border-slate-50 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setIsImportAcceptancesDialogOpen(false)} className="rounded-xl font-black uppercase text-[10px] tracking-widest text-slate-500 h-10 px-6">
+                Đóng
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-[550px] rounded-3xl p-6 bg-white border-none shadow-2xl">
+          <div className="space-y-4">
+            <div>
+              <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <History className="w-6 h-6 text-indigo-600" />
+                Lịch sử thay đổi báo cáo NT
+              </DialogTitle>
+              <p className="text-xs font-bold text-slate-400 mt-1">
+                Chi tiết các thao tác trên: <span className="text-slate-700">{historyTargetName}</span>
+              </p>
+            </div>
+
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1 scrollbar-thin">
+              {historyToView && historyToView.length > 0 ? (
+                historyToView.slice().reverse().map((entry: any, idx: number) => {
+                  const getActionLabel = (act: string) => {
+                    switch (act) {
+                      case 'CREATE': return 'Tạo mới';
+                      case 'CREATE_IMPORT': return 'Nhập file CSV';
+                      case 'CREATE_SYNC': return 'Đồng bộ Sheets';
+                      case 'UPDATE': return 'Chỉnh sửa';
+                      case 'UPDATE_SYNC': return 'Cập nhật đồng bộ';
+                      case 'FINALIZE': return 'Chốt số liệu';
+                      case 'RESTORE_PENDING': return 'Hủy chốt số liệu';
+                      default: return act;
+                    }
+                  };
+
+                  const getActionColor = (act: string) => {
+                    switch (act) {
+                      case 'CREATE':
+                      case 'CREATE_IMPORT':
+                      case 'CREATE_SYNC':
+                        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+                      case 'FINALIZE':
+                        return 'bg-blue-50 text-blue-700 border-blue-100';
+                      case 'RESTORE_PENDING':
+                        return 'bg-rose-50 text-rose-700 border-rose-100';
+                      default:
+                        return 'bg-amber-50 text-amber-700 border-amber-100';
+                    }
+                  };
+
+                  return (
+                    <div key={idx} className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${getActionColor(entry.action)}`}>
+                          {getActionLabel(entry.action)}
+                        </Badge>
+                        <span className="text-[10px] text-slate-400 font-bold font-mono">
+                          {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm') : '-'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                          Thực hiện: {entry.editorName || entry.editorEmail || 'Hệ thống'}
+                        </p>
+
+                        <div className="space-y-1 pl-3 border-l border-slate-200">
+                          {entry.changes && Object.entries(entry.changes).map(([field, delta]: [string, any], cIdx: number) => {
+                            const formatVal = (val: any) => {
+                              if (val === null || val === undefined) return 'Trống';
+                              if (typeof val === 'number') return val.toLocaleString('vi-VN') + ' đ';
+                              return String(val);
+                            };
+
+                            return (
+                              <p key={cIdx} className="text-[11px] text-slate-600 flex flex-wrap gap-1 items-center">
+                                <span className="font-bold text-slate-400">{field}:</span>
+                                <span className="line-through text-slate-300 font-mono">{formatVal(delta.old)}</span>
+                                <span className="text-slate-400 mx-0.5">→</span>
+                                <span className="font-extrabold text-indigo-600 font-mono bg-indigo-50/50 px-1.5 py-0.25 rounded">{formatVal(delta.new)}</span>
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-12 text-center text-slate-400 italic text-xs font-bold">
+                  Chưa có lịch sử thao tác cho bản ghi này
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2 border-t border-slate-50 flex justify-end">
+              <Button onClick={() => setIsHistoryDialogOpen(false)} className="rounded-xl font-black uppercase text-[10px] tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white h-10 px-6">
                 Đóng
               </Button>
             </DialogFooter>

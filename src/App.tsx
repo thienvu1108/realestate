@@ -306,6 +306,43 @@ const SearchableTeamSelect = memo(({ value, onValueChange, teams = [], uniqueTea
   );
 });
 
+const SearchableUserTeamSelect = memo(({ value, onValueChange, teams = [] }: any) => {
+  const items = useMemo(() => {
+    const list = teams.map((t: any) => ({
+      value: t.name,
+      label: `${t.name} (${t.teamCode || ''})`,
+      searchString: `${t.name} ${t.teamCode || ''}`.toLowerCase()
+    }));
+    
+    if (value && value !== 'no_team' && !teams.some((t: any) => t.name === value)) {
+      list.push({
+        value,
+        label: value,
+        searchString: value.toLowerCase()
+      });
+    }
+
+    return [
+      { value: 'no_team', label: '-- Chưa gán --', searchString: 'chua gan no team empty' },
+      ...list
+    ];
+  }, [teams, value]);
+
+  const displayVal = value && value !== 'no_team' ? value : '-- Chưa gán --';
+
+  return (
+    <SearchableSelectGeneric
+      value={value || 'no_team'}
+      onValueChange={(val: string) => onValueChange(val === 'no_team' ? '' : val)}
+      items={items}
+      placeholder="-- Chọn team --"
+      searchPlaceholder="Tìm team..."
+      triggerClassName="w-[160px] h-8 text-xs font-semibold"
+      triggerDisplay={displayVal}
+    />
+  );
+});
+
 const SearchableBlockDirectorSelect = memo(({ value, onValueChange, allUsers = [], emptyValue = "", emptyLabel = "-- Chưa gán / Chọn sau --" }: any) => {
   const items = useMemo(() => {
     const list = (allUsers || []).map((u: any) => {
@@ -5088,6 +5125,19 @@ export default function App() {
     }
   };
 
+  const handleUpdateUserTeam = async (userId: string, teamName: string) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        teamName,
+        updatedAt: serverTimestamp()
+      });
+      await logAction('UPDATE_USER_TEAM', 'users', userId, { teamName });
+      toast.success('Đã cập nhật team người dùng');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'users');
+    }
+  };
+
   const handleAdminUpdateUserTeamAndBlock = async (userId: string, teamName: string, assignedBlock: string) => {
     try {
       await updateDoc(doc(db, 'users', userId), {
@@ -9428,7 +9478,19 @@ export default function App() {
             updatedAt: serverTimestamp(),
             updatedBy: user?.email || '',
             updatedByUid: user?.uid || '',
-            breakdown: {}
+            breakdown: {},
+            editHistory: [{
+              action: 'CREATE_IMPORT',
+              editorName: user?.displayName || user?.email || 'Unknown',
+              editorEmail: user?.email || '',
+              timestamp: new Date().toISOString(),
+              changes: {
+                "Tháng": { old: null, new: month },
+                "Team": { old: null, new: team.name },
+                "Dự án": { old: null, new: project.name },
+                "Tổng chi phí": { old: null, new: totalCost }
+              }
+            }]
           });
           count++;
         }
@@ -9768,6 +9830,230 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Mobile Drawer Navigation Overlay */}
+      {isMobile && isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in" 
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Drawer Panel */}
+          <div className="relative flex w-full max-w-xs flex-col bg-white h-full shadow-2xl animate-in slide-in-from-left duration-300 z-50">
+            {/* Drawer Header */}
+            <div className="flex h-16 items-center justify-between px-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                  <img 
+                    src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 80' fill='none'><path d='M50 15 L88 53 H74 L50 28 L26 53 H12 Z' fill='%23E45A1D'/><path d='M50 28 L64 42 L50 56 L36 42 Z' fill='%23E45A1D'/><path d='M12 53 L31 21 H43 L24 53 Z' fill='%23E45A1D'/><path d='M88 53 L69 21 H57 L76 53 Z' fill='%23E45A1D'/></svg>" 
+                    alt="MAYHOMES" 
+                    className="w-full h-full object-contain p-1"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <span className="font-black text-slate-900 tracking-tight text-xs uppercase">Mayhomes Portal</span>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100 touch-manipulation"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            {/* Scrollable menu content */}
+            <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+              {/* Profile Info */}
+              <div className="px-3 py-3 bg-indigo-50/40 rounded-2xl border border-indigo-100/20 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-xs uppercase shrink-0">
+                    {user.displayName?.charAt(0) || 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-900 truncate leading-none mb-1">{user.displayName}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC MENU</p>
+              
+              {menuItems.map((item) => {
+                const IconComponent = item.icon;
+                const isActive = activeTab === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    onClick={() => {
+                      setActiveTab(item.value);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black transition-all touch-manipulation",
+                      isActive 
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" 
+                        : "text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <IconComponent className={cn("w-4 h-4 shrink-0", isActive ? "text-white" : item.color)} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Collapsible Admin sub-tabs directly inside the mobile drawer menu! */}
+              {activeTab === 'admin' && (isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
+                <>
+                  <div className="h-px bg-slate-100 my-3 mx-2" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC QUẢN TRỊ</p>
+                  
+                  <div className="space-y-1 pl-1">
+                    <button
+                      onClick={() => { setAdminSubTab('reports'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        adminSubTab === 'reports' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Báo cáo Quản trị</span>
+                    </button>
+
+                    {isInternalStaff && (
+                      <>
+                        <button
+                          onClick={() => { setAdminSubTab('projects'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'projects' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Building2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Dự án</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('teams'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'teams' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Users className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Team</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('budgets'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'budgets' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Wallet className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Ngân sách</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('costs'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'costs' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Chi phí</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('efficiency'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'efficiency' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Target className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Hiệu quả</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('acceptance'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'acceptance' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Nghiệm thu</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('doc-processing'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'doc-processing' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Đối soát</span>
+                        </button>
+                      </>
+                    )}
+
+                    {(isAdmin || isAccountant) && (
+                      <>
+                        <button
+                          onClick={() => { setAdminSubTab('users'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'users' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <UserCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>Quản lý Thành viên</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setAdminSubTab('settings'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'settings' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Settings className="w-3.5 h-3.5 shrink-0" />
+                          <span>Cài đặt hệ thống</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50/50">
+              <Button 
+                onClick={() => { setIsMobileMenuOpen(false); logout(); }} 
+                variant="destructive" 
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-xl font-bold text-xs shadow-sm touch-manipulation"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>ĐĂNG XUẤT</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       {isQuotaExceeded && (
@@ -14291,6 +14577,7 @@ export default function App() {
                                         size="icon" 
                                         className="h-7 w-7 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50"
                                         onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                        title="Xem lịch sử thay đổi"
                                       >
                                         <History className="w-3.5 h-3.5" />
                                       </Button>
@@ -14298,8 +14585,20 @@ export default function App() {
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
+                                          className="h-7 w-7 text-slate-300 hover:text-blue-600 hover:bg-blue-50"
+                                          onClick={() => handleOpenEditBudget(b)}
+                                          title="Điều chỉnh ngân sách"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      )}
+                                      {(isAdmin || isMod || isAccountant) && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
                                           className="h-7 w-7 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
                                           onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                          title="Xóa đăng ký"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
@@ -16057,6 +16356,7 @@ export default function App() {
                             <TableRow>
                               <TableHead>Người dùng</TableHead>
                               <TableHead>Vai trò</TableHead>
+                              <TableHead>Team (Phòng KD)</TableHead>
                               <TableHead>Dự án gán (cho Mod)</TableHead>
                               <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
@@ -16090,6 +16390,13 @@ export default function App() {
                                       <SelectItem value="user">User</SelectItem>
                                     </SelectContent>
                                   </Select>
+                                </TableCell>
+                                <TableCell>
+                                  <SearchableUserTeamSelect 
+                                    value={u.teamName}
+                                    onValueChange={(val: string) => handleUpdateUserTeam(u.id, val)}
+                                    teams={teams}
+                                  />
                                 </TableCell>
                                 <TableCell>
                                   {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda' || u.role === 'assistant') ? (
@@ -17449,166 +17756,306 @@ export default function App() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="bg-slate-50/50">
-                      <TableRow className="hover:bg-transparent border-b border-slate-100">
-                        {(isAdmin || isAccountant) && (
-                          <TableHead className="w-[40px] py-4">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-slate-300"
-                              checked={selectedBudgetIds.length === Math.min(budgets.length, 10) && budgets.length > 0}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedBudgetIds(budgets.slice(0, 10).map(b => b.id));
-                                } else {
-                                  setSelectedBudgetIds([]);
-                                }
-                              }}
-                            />
-                          </TableHead>
-                        )}
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Dự án</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Team</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Mã Team</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Thời gian đăng ký</TableHead>
-                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người nhập</TableHead>
-                        {(isAdmin || isAccountant) && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {budgets
-                        .filter(b => {
-                          const userEmail = user?.email?.toLowerCase();
-                          const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                          const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-                          const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-                          const isAssignedGDDA = isGDDA && (
-                            !userProfile?.assignedProjects || 
-                            userProfile.assignedProjects.length === 0 || 
-                            userProfile.assignedProjects.includes(b.projectId)
-                          );
-                          
-                          return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
-                        })
-                        .slice(0, 10).map(b => (
-                        <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
-                        {(isAdmin || isAccountant) && (
-                          <TableCell className="py-4">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-slate-300"
-                              checked={selectedBudgetIds.includes(b.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedBudgetIds(prev => [...prev, b.id]);
-                                } else {
-                                  setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
-                                }
-                              }}
-                            />
-                          </TableCell>
-                        )}
-                          <TableCell className="py-4">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
-                              <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-4">
-                            <Badge variant="outline" className="font-normal border-slate-200 text-slate-600 bg-white">
-                              {b.teamName}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-4">
-                            <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg border border-indigo-100/40">
-                              {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
-                          <TableCell className="py-4">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
-                                {b.month}
-                              </span>
-                              <span className="text-[10px] text-blue-600 font-medium">{getReportingPeriod(b.month)}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-4 text-right">
-                            <span className="font-mono font-bold text-blue-600">
-                              {b.amount.toLocaleString()} đ
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                            {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                          </TableCell>
-                          <TableCell className="py-4">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{b.userEmail}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-4 text-right">
-                             <div className="flex justify-end gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                                  onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
-                                  title="Lịch sử thay đổi"
-                                >
-                                  <History className="h-3.5 w-3.5" />
-                                </Button>
-                                {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-slate-400 hover:text-blue-600"
-                                    onClick={() => {
-                                      setEditingBudgetId(b.id);
-                                      setEditingBudgetProject(b.projectId);
-                                      setEditingBudgetTeam(b.teamId);
-                                      setEditingBudgetAmount(b.amount.toString());
-                                      setEditingBudgetMonth(b.month);
-                                      setEditingBudgetImplementer(b.implementerName);
-                                      setIsEditBudgetDialogOpen(true);
-                                    }}
-                                  >
-                                    <Edit2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                {(isAdmin || isAccountant) && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-slate-400 hover:text-red-600"
-                                    onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {budgets.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-12 text-slate-400">
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center">
-                                <Plus className="w-6 h-6 text-slate-200" />
+                {isMobile ? (
+                  <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
+                    {budgets
+                      .filter(b => {
+                        const userEmail = user?.email?.toLowerCase();
+                        const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                        const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+                        const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
+                        const isAssignedGDDA = isGDDA && (
+                          !userProfile?.assignedProjects || 
+                          userProfile.assignedProjects.length === 0 || 
+                          userProfile.assignedProjects.includes(b.projectId)
+                        );
+                        
+                        return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
+                      })
+                      .slice(0, 10).map(b => (
+                        <div 
+                          key={b.id} 
+                          className={cn(
+                            "p-4 rounded-2xl border transition-all duration-300 bg-slate-50/50 hover:bg-slate-50/80",
+                            selectedBudgetIds.includes(b.id) ? "border-blue-500 bg-blue-50/30" : "border-slate-100"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <span className="font-bold text-slate-800 text-sm truncate">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
+                              <div className="flex flex-wrap gap-1.5 items-center">
+                                <span className="text-[10px] text-slate-500 font-bold">
+                                  {projects.find(p => p.id === b.projectId)?.projectCode || ''}
+                                </span>
+                                <Badge variant="outline" className="font-bold border-indigo-200 text-indigo-700 bg-indigo-50/50 py-0 px-1.5 h-4 text-[9px] rounded">
+                                  {b.teamName}
+                                </Badge>
+                                <span className="font-mono text-[9px] font-black text-indigo-600 bg-indigo-50/50 px-1 py-0.5 rounded border border-indigo-100/40">
+                                  {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
+                                </span>
                               </div>
-                              <span>Chưa có dữ liệu đăng ký ngân sách</span>
                             </div>
-                          </TableCell>
+
+                            {(isAdmin || isAccountant) && (
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-slate-300 h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500 shrink-0"
+                                checked={selectedBudgetIds.includes(b.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBudgetIds(prev => [...prev, b.id]);
+                                  } else {
+                                    setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 mb-4 bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
+                            <div>
+                              <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Kỳ ngân sách</p>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-slate-700">{b.month}</span>
+                                <span className="text-[9px] text-blue-600 font-medium font-sans">({getReportingPeriod(b.month)})</span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5 text-right">Ngân sách đăng ký</p>
+                              <p className="font-mono font-black text-sm text-blue-600 text-right">
+                                {b.amount.toLocaleString()} đ
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1 text-[10px] text-slate-500 mb-3.5 border-t border-dashed border-slate-100 pt-2.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 font-medium">Người triển khai:</span>
+                              <span className="font-bold text-slate-700">{b.implementerName}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 font-medium">Người nhập:</span>
+                              <span className="font-bold text-slate-700 truncate max-w-[150px]">{b.userEmail}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 font-medium">Thời gian đăng ký:</span>
+                              <span className="font-mono font-semibold text-slate-700">{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2.5">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 text-[11px] font-bold text-slate-500 hover:bg-slate-50 border-slate-200 rounded-lg touch-manipulation px-2"
+                              onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                            >
+                              <History className="h-3.5 w-3.5 mr-1" /> Lịch sử
+                            </Button>
+                            {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[11px] font-bold text-blue-600 hover:bg-blue-50/50 hover:text-blue-700 border-blue-200 rounded-lg touch-manipulation px-2"
+                                onClick={() => {
+                                  setEditingBudgetId(b.id);
+                                  setEditingBudgetProject(b.projectId);
+                                  setEditingBudgetTeam(b.teamId);
+                                  setEditingBudgetAmount(b.amount.toString());
+                                  setEditingBudgetMonth(b.month);
+                                  setEditingBudgetImplementer(b.implementerName);
+                                  setIsEditBudgetDialogOpen(true);
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5 mr-1" /> Sửa
+                              </Button>
+                            )}
+                            {(isAdmin || isAccountant) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[11px] font-bold text-rose-600 hover:bg-rose-50 border-rose-200 rounded-lg touch-manipulation px-2"
+                                onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Xóa
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    {budgets.length === 0 && (
+                      <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-100">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center">
+                            <Plus className="w-6 h-6 text-slate-200" />
+                          </div>
+                          <span>Chưa có dữ liệu đăng ký ngân sách</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50/50">
+                        <TableRow className="hover:bg-transparent border-b border-slate-100">
+                          {(isAdmin || isAccountant) && (
+                            <TableHead className="w-[40px] py-4">
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-slate-300"
+                                checked={selectedBudgetIds.length === Math.min(budgets.length, 10) && budgets.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBudgetIds(budgets.slice(0, 10).map(b => b.id));
+                                  } else {
+                                    setSelectedBudgetIds([]);
+                                  }
+                                }}
+                              />
+                            </TableHead>
+                          )}
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Dự án</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Team</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Mã Team</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Thời gian đăng ký</TableHead>
+                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người nhập</TableHead>
+                          {(isAdmin || isAccountant) && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {budgets
+                          .filter(b => {
+                            const userEmail = user?.email?.toLowerCase();
+                            const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
+                            const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+                            const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
+                            const isAssignedGDDA = isGDDA && (
+                              !userProfile?.assignedProjects || 
+                              userProfile.assignedProjects.length === 0 || 
+                              userProfile.assignedProjects.includes(b.projectId)
+                            );
+                            
+                            return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
+                          })
+                          .slice(0, 10).map(b => (
+                          <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
+                          {(isAdmin || isAccountant) && (
+                            <TableCell className="py-4">
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-slate-300"
+                                checked={selectedBudgetIds.includes(b.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBudgetIds(prev => [...prev, b.id]);
+                                  } else {
+                                    setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          )}
+                            <TableCell className="py-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
+                                <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <Badge variant="outline" className="font-normal border-slate-200 text-slate-600 bg-white">
+                                {b.teamName}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg border border-indigo-100/40">
+                                {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
+                            <TableCell className="py-4">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
+                                  {b.month}
+                                </span>
+                                <span className="text-[10px] text-blue-600 font-medium">{getReportingPeriod(b.month)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 text-right">
+                              <span className="font-mono font-bold text-blue-600">
+                                {b.amount.toLocaleString()} đ
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                              {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                            </TableCell>
+                            <TableCell className="py-4">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{b.userEmail}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 text-right">
+                               <div className="flex justify-end gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                    onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                    title="Lịch sử thay đổi"
+                                  >
+                                    <History className="h-3.5 w-3.5" />
+                                  </Button>
+                                  {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                      onClick={() => {
+                                        setEditingBudgetId(b.id);
+                                        setEditingBudgetProject(b.projectId);
+                                        setEditingBudgetTeam(b.teamId);
+                                        setEditingBudgetAmount(b.amount.toString());
+                                        setEditingBudgetMonth(b.month);
+                                        setEditingBudgetImplementer(b.implementerName);
+                                        setIsEditBudgetDialogOpen(true);
+                                      }}
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {(isAdmin || isAccountant) && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                      onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                               </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {budgets.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={10} className="text-center py-12 text-slate-400">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center">
+                                  <Plus className="w-6 h-6 text-slate-200" />
+                                </div>
+                                <span>Chưa có dữ liệu đăng ký ngân sách</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
               </>
@@ -19554,12 +20001,12 @@ export default function App() {
       </Dialog>
       {/* Edit Budget Dialog */}
       <Dialog open={isEditBudgetDialogOpen} onOpenChange={setIsEditBudgetDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[600px] max-h-[90vh] overflow-y-auto custom-scrollbar">
           <DialogHeader>
-            <DialogTitle className="text-blue-600 flex items-center gap-2">
+            <DialogTitle className="text-blue-600 flex items-center gap-2 font-black text-lg md:text-xl">
               <Edit2 className="w-5 h-5" /> Sửa thông tin Đăng ký Ngân sách
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs md:text-sm font-medium">
               Cập nhật các thông tin về dự án, team, người triển khai và số tiền ngân sách.
             </DialogDescription>
           </DialogHeader>
@@ -19567,12 +20014,12 @@ export default function App() {
             <div className="space-y-2 md:col-span-2">
               <Label className="text-xs font-bold text-slate-500 uppercase">Dự án</Label>
               <Select value={editingBudgetProject} onValueChange={setEditingBudgetProject}>
-                <SelectTrigger className="bg-slate-50 border-slate-200">
+                <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-xs">
                   <SelectValue placeholder="Chọn dự án">
                     {editingBudgetProject ? `${projectMap[editingBudgetProject] || projects.find((p: any) => p.id === editingBudgetProject)?.name || editingBudgetProject} (${projects.find(p => p.id === editingBudgetProject)?.projectCode || ''})` : "Chọn dự án"}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="w-[400px] md:w-[550px]">
+                <SelectContent className="w-[88vw] sm:w-[500px] md:w-[550px]">
                   <div className="p-2 sticky top-0 bg-popover z-10 border-b">
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -19607,7 +20054,7 @@ export default function App() {
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase">Team</Label>
               <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
-                <SelectTrigger className="bg-slate-50 border-slate-200">
+                <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-xs">
                   <SelectValue placeholder="Chọn team">
                     {editingBudgetTeam ? `${teamMap[editingBudgetTeam] || editingBudgetTeam} (${teams.find(t => (t.id === editingBudgetTeam || t.name === editingBudgetTeam))?.teamCode || ''})` : "Chọn team"}
                   </SelectValue>
@@ -19615,7 +20062,7 @@ export default function App() {
                 <SelectContent>
                   <SelectGroup>
                     {teams.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name} ({t.teamCode})</SelectItem>
+                      <SelectItem key={t.id} value={t.id} className="text-xs">{t.name} ({t.teamCode})</SelectItem>
                     ))}
                   </SelectGroup>
                 </SelectContent>
@@ -19627,7 +20074,7 @@ export default function App() {
               <Input 
                 value={editingBudgetImplementer} 
                 onChange={e => setEditingBudgetImplementer(e.target.value)} 
-                className="bg-slate-50 border-slate-200"
+                className="bg-slate-50 border-slate-200 h-11 text-xs"
               />
             </div>
 
@@ -19635,12 +20082,12 @@ export default function App() {
               <Label className="text-xs font-bold text-slate-500 uppercase">Tháng báo cáo</Label>
               <div className="space-y-1">
                 <Select value={editingBudgetMonth} onValueChange={setEditingBudgetMonth}>
-                  <SelectTrigger className="bg-slate-50 border-slate-200">
+                  <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-xs">
                     <SelectValue placeholder="Chọn tháng" />
                   </SelectTrigger>
                   <SelectContent>
                     {getMonthOptions().map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
                         {opt.label}
                       </SelectItem>
                     ))}
@@ -19656,7 +20103,7 @@ export default function App() {
                   type="text" 
                   value={formatNumberWithCommas(editingBudgetAmount)} 
                   onChange={handleNumberInputChange(setEditingBudgetAmount)} 
-                  className="bg-slate-50 border-slate-200 pr-8 font-mono font-bold"
+                  className="bg-slate-50 border-slate-200 pr-8 font-mono font-bold h-11 text-xs"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">đ</span>
               </div>
@@ -19669,7 +20116,7 @@ export default function App() {
                   type="text" 
                   value={formatNumberWithCommas(editingBudgetVerifiedAmount)} 
                   onChange={handleNumberInputChange(setEditingBudgetVerifiedAmount)} 
-                  className="bg-blue-50 border-blue-200 pr-8 font-mono font-bold text-blue-700"
+                  className="bg-blue-50 border-blue-200 pr-8 font-mono font-bold text-blue-700 h-11 text-xs"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-400">đ</span>
               </div>
@@ -19683,7 +20130,7 @@ export default function App() {
                 placeholder="Nhập lý do điều chỉnh ngân sách... (bắt buộc)" 
                 value={editingBudgetReason} 
                 onChange={e => setEditingBudgetReason(e.target.value)} 
-                className="bg-slate-50 border-rose-200 focus:border-rose-500 focus:ring-rose-500 font-medium placeholder:text-slate-400"
+                className="bg-slate-50 border-rose-200 focus:border-rose-500 focus:ring-rose-500 font-medium placeholder:text-slate-400 h-11 text-xs"
               />
             </div>
           </div>
@@ -20123,73 +20570,41 @@ export default function App() {
       
       {/* Bottom Navigation for Mobile */}
       <nav className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
-        <div className="bg-white/80 backdrop-blur-2xl border border-white/40 shadow-2xl shadow-indigo-100/50 rounded-[28px] p-2 flex items-center justify-between">
+        <div className="bg-white/95 backdrop-blur-2xl border border-slate-200/50 shadow-2xl shadow-indigo-100/40 rounded-[24px] p-1.5 flex items-center justify-around gap-1">
           <button 
             onClick={() => setActiveTab('home')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'home' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ${activeTab === 'home' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <LayoutDashboard className={`w-5 h-5 ${activeTab === 'home' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Trang chủ</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Trang chủ</span>
           </button>
           
           <button 
             onClick={() => setActiveTab('register')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'register' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ${activeTab === 'register' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Wallet className={`w-5 h-5 ${activeTab === 'register' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Đăng ký MKT</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Đăng ký MKT</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('actual')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'actual' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ${activeTab === 'actual' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <TrendingUp className={`w-5 h-5 ${activeTab === 'actual' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter text-center">Cập nhật Chi phí</span>
-          </button>
-
-          {hasPermission('mkt_efficiency.view') && (
-            <button 
-              onClick={() => setActiveTab('mkt-efficiency')}
-              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'mkt-efficiency' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <Target className={`w-5 h-5 ${activeTab === 'mkt-efficiency' ? 'animate-in zoom-in duration-300' : ''}`} />
-              <span className="text-[10px] font-black uppercase tracking-tighter">Eff MKT</span>
-            </button>
-          )}
-
-          {(isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
-            <button 
-              onClick={() => setActiveTab('admin')}
-              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${activeTab === 'admin' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <ShieldCheck className={`w-5 h-5 ${activeTab === 'admin' ? 'animate-in zoom-in duration-300' : ''}`} />
-              <span className="text-[10px] font-black uppercase tracking-tighter">Quản trị</span>
-            </button>
-          )}
-
-          <button 
-            onClick={() => {
-              setActiveTab('admin');
-              setAdminSubTab('history');
-            }}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 ${(activeTab === 'admin' && adminSubTab === 'history') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <History className={`w-5 h-5 ${(activeTab === 'admin' && adminSubTab === 'history') ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Nhật ký</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter text-center">Chi phí</span>
           </button>
 
           <button 
-            onClick={() => setActiveTab('support')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all duration-300 relative ${activeTab === 'support' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'text-slate-400 hover:text-slate-600'}`}
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ${isMobileMenuOpen ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <MessageCircle className={`w-5 h-5 ${activeTab === 'support' ? 'animate-in zoom-in duration-300' : ''}`} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Hỗ trợ</span>
-            {pendingSupportCount > 0 && (
-              <span className="absolute top-1 right-4 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white shadow-lg shadow-rose-200">
-                {pendingSupportCount}
-              </span>
+            {isMobileMenuOpen ? (
+              <X className="w-5 h-5 animate-in rotate-in duration-300" />
+            ) : (
+              <Menu className="w-5 h-5" />
             )}
+            <span className="text-[9px] font-black uppercase tracking-tighter">Menu</span>
           </button>
         </div>
 

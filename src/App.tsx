@@ -1214,6 +1214,7 @@ export default function App() {
 
   // Block management states
   const [selectedBlockId, setSelectedBlockId] = useState<string>('');
+  const [activeTeamMgmtId, setActiveTeamMgmtId] = useState<string>('');
   const [blockNameInput, setBlockNameInput] = useState('');
   const [blockCodeInput, setBlockCodeInput] = useState('');
   const [blockPrefixInput, setBlockPrefixInput] = useState('');
@@ -2532,7 +2533,7 @@ export default function App() {
       case 'actual': return 'Cập nhật Chi phí';
       case 'mkt-efficiency': return 'Hiệu quả MKT';
       case 'history': return 'Lịch sử';
-      case 'report-nt': return 'Báo cáo NT';
+      case 'report-nt': return 'Nghiệm thu MKT';
       case 'support': return 'Hỗ trợ';
       default: return '';
     }
@@ -2737,7 +2738,7 @@ export default function App() {
       { value: 'register', label: 'Đăng ký MKT', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
       { value: 'actual', label: 'Cập nhật Chi phí', icon: TrendingUp, color: 'text-amber-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('actual.view'), desc: 'Ghi nhận thực chi chiến dịch chi tiết' },
       { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
-      { value: 'report-nt', label: 'Báo cáo NT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Báo cáo Nghiệm thu tự động lấy từ Google Sheet' },
+      { value: 'report-nt', label: 'Nghiệm thu MKT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Nghiệm thu MKT tự động lấy từ Google Sheet' },
       { value: 'support', label: 'Hỗ trợ kỹ thuật', icon: MessageCircle, color: 'text-blue-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('support.create') || hasPermission('support.resolve'), badge: pendingSupportCount, desc: 'Yêu cầu hỗ trợ, phản hồi sự cố' },
       { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_mkt.create'), desc: 'Quản lý quy trình chiến dịch Marketing' },
       { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_doiung.create'), desc: 'Quản lý đối ứng & bàn giao' },
@@ -5393,43 +5394,73 @@ export default function App() {
     return Object.values(data);
   }, [myBlockBudgets, myBlockCosts]);
 
+  const currentActiveTeam = useMemo(() => {
+    if (isGDKD && userProfile?.teamName) {
+      const tn = userProfile.teamName.toLowerCase().trim();
+      return teams.find(t => t.name.toLowerCase().trim() === tn || (t.teamCode && t.teamCode.toLowerCase().trim() === tn)) || null;
+    }
+    if (activeTeamMgmtId) {
+      return teams.find(t => t.id === activeTeamMgmtId) || null;
+    }
+    if (userProfile?.teamName) {
+      const tn = userProfile.teamName.toLowerCase().trim();
+      const found = teams.find(t => t.name.toLowerCase().trim() === tn || (t.teamCode && t.teamCode.toLowerCase().trim() === tn));
+      if (found) return found;
+    }
+    return teams[0] || null;
+  }, [isGDKD, userProfile?.teamName, activeTeamMgmtId, teams]);
+
   const teamMembers = useMemo(() => {
-    if (!userProfile?.teamName) return [];
-    const targetTeam = userProfile.teamName.toLowerCase().trim();
-    return allUsers.filter(u => (u.teamName || '').toLowerCase().trim() === targetTeam);
-  }, [allUsers, userProfile?.teamName]);
+    const activeTeam = currentActiveTeam;
+    if (!activeTeam) return [];
+    const targetTeam = activeTeam.name.toLowerCase().trim();
+    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
+    return allUsers.filter(u => {
+      const uTeam = (u.teamName || '').toLowerCase().trim();
+      return uTeam === targetTeam || (targetCode && uTeam === targetCode);
+    });
+  }, [allUsers, currentActiveTeam]);
 
   const myTeamCosts = useMemo(() => {
-    if (!userProfile?.teamName) return [];
-    const targetTeam = userProfile.teamName.toLowerCase().trim();
-    return costs.filter(c => (c.teamName || '').toLowerCase().trim() === targetTeam);
-  }, [costs, userProfile?.teamName]);
-
-  const myTeam = useMemo(() => {
-    if (!userProfile?.teamName) return null;
-    const tn = userProfile.teamName.toLowerCase().trim();
-    return teams.find(t => t.name.toLowerCase().trim() === tn || (t.teamCode && t.teamCode.toLowerCase().trim() === tn));
-  }, [userProfile?.teamName, teams]);
-
-  const myTeamBudgets = useMemo(() => {
-    if (!userProfile?.teamName) return [];
-    const targetTn = userProfile.teamName.toLowerCase().trim();
-    const teamId = myTeam?.id;
-    return budgets.filter(b => {
-      if (b.teamId && teamId && b.teamId === teamId) return true;
-      return (b.teamName || '').toLowerCase().trim() === targetTn;
-    });
-  }, [budgets, userProfile?.teamName, myTeam]);
-
-  const myTeamActualCosts = useMemo(() => {
-    if (!userProfile?.teamName) return [];
-    const targetTn = userProfile.teamName.toLowerCase().trim();
-    const teamId = myTeam?.id;
+    const activeTeam = currentActiveTeam;
+    if (!activeTeam) return [];
+    const targetTeam = activeTeam.name.toLowerCase().trim();
+    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
+    const teamId = activeTeam.id;
     return costs.filter(c => {
       if (c.teamId && teamId && c.teamId === teamId) return true;
-      return (c.teamName || '').toLowerCase().trim() === targetTn;
+      const cTeam = (c.teamName || '').toLowerCase().trim();
+      return cTeam === targetTeam || (targetCode && cTeam === targetCode);
     });
-  }, [costs, userProfile?.teamName, myTeam]);
+  }, [costs, currentActiveTeam]);
+
+  const myTeam = currentActiveTeam;
+
+  const myTeamBudgets = useMemo(() => {
+    const activeTeam = currentActiveTeam;
+    if (!activeTeam) return [];
+    const targetTn = activeTeam.name.toLowerCase().trim();
+    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
+    const teamId = activeTeam.id;
+    return budgets.filter(b => {
+      if (b.teamId && teamId && b.teamId === teamId) return true;
+      const bTeam = (b.teamName || '').toLowerCase().trim();
+      return bTeam === targetTn || (targetCode && bTeam === targetCode);
+    });
+  }, [budgets, currentActiveTeam]);
+
+  const myTeamActualCosts = useMemo(() => {
+    const activeTeam = currentActiveTeam;
+    if (!activeTeam) return [];
+    const targetTn = activeTeam.name.toLowerCase().trim();
+    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
+    const teamId = activeTeam.id;
+    return costs.filter(c => {
+      if (c.teamId && teamId && c.teamId === teamId) return true;
+      const cTeam = (c.teamName || '').toLowerCase().trim();
+      return cTeam === targetTn || (targetCode && cTeam === targetCode);
+    });
+  }, [costs, currentActiveTeam]);
 
   const availableTeamBudgetMonths = useMemo(() => {
     const list = Array.from(new Set(myTeamBudgets.map(b => b.month))).filter((m): m is string => typeof m === 'string' && !!m);
@@ -10166,27 +10197,6 @@ export default function App() {
                           <span>Quản lý Hiệu quả</span>
                         </button>
 
-                        <button
-                          onClick={() => { setAdminSubTab('acceptance'); setIsMobileMenuOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'acceptance' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                          )}
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                          <span>Quản lý Nghiệm thu</span>
-                        </button>
-
-                        <button
-                          onClick={() => { setAdminSubTab('doc-processing'); setIsMobileMenuOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'doc-processing' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                          )}
-                        >
-                          <FileCheck className="w-3.5 h-3.5 shrink-0" />
-                          <span>Quản lý Đối soát</span>
-                        </button>
                       </>
                     )}
 
@@ -10213,6 +10223,32 @@ export default function App() {
                           <Settings className="w-3.5 h-3.5 shrink-0" />
                           <span>Cài đặt hệ thống</span>
                         </button>
+
+                        {hasPermission('history.view') && (
+                          <button
+                            onClick={() => { setAdminSubTab('history'); setIsMobileMenuOpen(false); }}
+                            className={cn(
+                              "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                              adminSubTab === 'history' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            )}
+                          >
+                            <History className="w-3.5 h-3.5 shrink-0" />
+                            <span>Lịch sử dòng tiền</span>
+                          </button>
+                        )}
+
+                        {(isAdmin || hasPermission('admin.permissions.edit')) && (
+                          <button
+                            onClick={() => { setAdminSubTab('permissions'); setIsMobileMenuOpen(false); }}
+                            className={cn(
+                              "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                              adminSubTab === 'permissions' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            )}
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                            <span>Phân quyền vai trò</span>
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -10381,22 +10417,6 @@ export default function App() {
                         onClick={() => setAdminSubTab('efficiency')}
                       >
                         <Target className="mr-2 h-4 w-4" /> Hiệu quả
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'acceptance' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('acceptance')}
-                      >
-                        <ShieldCheck className="mr-2 h-4 w-4" /> Nghiệm thu
-                      </Button>
-                      <Button 
-                        variant={adminSubTab === 'doc-processing' ? 'secondary' : 'ghost'} 
-                        size="sm"
-                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'doc-processing' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('doc-processing')}
-                      >
-                        <FileCheck className="mr-2 h-4 w-4" /> Đối soát
                       </Button>
                     </>
                   )}
@@ -10808,7 +10828,7 @@ export default function App() {
           </TabsContent>
 
           {/* Block Management Tab (GĐ Khối) */}
-          {(isGDKhoi || isAdmin || isAccountant) && (
+          {hasPermission('block.view') && (
             <TabsContent value="block-mgmt" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {activeTab === 'block-mgmt' && (
                 <>
@@ -10826,7 +10846,7 @@ export default function App() {
                       </h2>
                     </div>
                     {/* Block selector for Admin/Accountant */}
-                    {(isAdmin || isAccountant) && (
+                    {!isGDKhoi && (
                       <div className="min-w-[250px] bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
                         <Label className="text-[10px] text-indigo-200 uppercase font-black block mb-1.5 px-1">Chọn Khối Quản Lý</Label>
                         <Select 
@@ -10884,9 +10904,6 @@ export default function App() {
                   </TabsTrigger>
                   <TabsTrigger value="block-summary" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <BarChart3 className="w-4 h-4 mr-2" /> Tổng hợp Dữ liệu
-                  </TabsTrigger>
-                  <TabsTrigger value="block-acceptances" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                    <FileCheck className="w-4 h-4 mr-2" /> Báo cáo Nghiệm thu
                   </TabsTrigger>
                 </TabsList>
 
@@ -11978,44 +11995,6 @@ export default function App() {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="block-acceptances" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="bg-white p-4 sm:p-6 rounded-[32px] border border-slate-100 shadow-lg space-y-6">
-                    <div>
-                      <h3 className="text-base font-black text-slate-800 flex items-center gap-2 font-sans uppercase tracking-wider">
-                        <FileCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
-                        Báo cáo Nghiệm thu thuộc Khối
-                      </h3>
-                      <p className="text-xs text-slate-500 font-sans mt-1">
-                        Dưới đây là danh sách báo cáo nghiệm thu của các phòng kinh doanh trực thuộc khối của bạn. Bạn có thể theo dõi và quản lý dữ liệu này.
-                      </p>
-                    </div>
-
-                    <AcceptanceManager 
-                      isAdmin={isAdmin}
-                      isSuperAdmin={isSuperAdmin}
-                      isMod={isMod}
-                      isAccountant={isAccountant}
-                      user={user}
-                      teams={myBlockTeams}
-                      uniqueTeams={myBlockTeams}
-                      projects={projects}
-                      acceptances={myBlockAcceptances}
-                      finalAcceptances={myBlockFinalAcceptances}
-                      teamMap={teamMap}
-                      projectMap={projectMap}
-                      formatCurrency={formatCurrency}
-                      getMarketingMonth={getMarketingMonth}
-                      handleFirestoreError={handleFirestoreError}
-                      formatCurrencyInput={formatCurrencyInput}
-                      isImportingAcceptances={isImportingAcceptances}
-                      setIsImportingAcceptances={setIsImportingAcceptances}
-                      isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
-                      setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
-                      handleImportAcceptancesCSV={handleImportAcceptancesCSV}
-                      blocks={blocks}
-                    />
-                  </div>
-                </TabsContent>
               </Tabs>
                 </>
               )}
@@ -12023,20 +12002,52 @@ export default function App() {
           )}
 
           {/* Team Management Tab (GDKD) */}
-          {(isGDKD || isAdmin || isAccountant) && (
+          {hasPermission('team_mgmt.view') && (
             <TabsContent value="team-mgmt" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {activeTab === 'team-mgmt' && (
                 <>
               {/* Header Info */}
               <div className="bg-gradient-to-r from-teal-600 to-emerald-700 p-8 rounded-[32px] text-white shadow-xl shadow-teal-100/30 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
-                <div className="relative z-10 space-y-2">
-                  <span className="bg-white/20 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full tracking-wider inline-block">
-                    Khu vực Dành cho Giám đốc Kinh doanh (GDKD)
-                  </span>
-                  <h2 className="text-3xl font-black tracking-tight">
-                    Quản lý Team: <span className="underline decoration-emerald-300 decoration-3">{userProfile?.teamName || "Chưa gán"}</span>
-                  </h2>
+                <div className="relative z-10 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <span className="bg-white/20 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full tracking-wider inline-block">
+                        Khu vực Dành cho Giám đốc Kinh doanh (GDKD)
+                      </span>
+                      <h2 className="text-3xl font-black tracking-tight mt-1">
+                        Quản lý Team: <span className="underline decoration-emerald-300 decoration-3">{currentActiveTeam ? `${currentActiveTeam.name} (${currentActiveTeam.teamCode || ''})` : "Chưa chọn Team"}</span>
+                      </h2>
+                    </div>
+                    {/* Team selector for non-GDKD roles (Admin/Accountant etc) */}
+                    {!isGDKD && (
+                      <div className="min-w-[250px] bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
+                        <Label className="text-[10px] text-teal-200 uppercase font-black block mb-1.5 px-1">Chọn Team Quản Lý</Label>
+                        <Select 
+                          value={activeTeamMgmtId || (teams[0]?.id || '')} 
+                          onValueChange={(val) => setActiveTeamMgmtId(val)}
+                        >
+                          <SelectTrigger className="bg-white text-slate-800 border-none rounded-xl font-bold h-9 text-xs">
+                            <SelectValue placeholder="Chọn một team...">
+                              <span className="truncate block text-left flex-1 font-sans">
+                                {(() => {
+                                  const currentSelTeam = teams.find(t => t.id === (activeTeamMgmtId || (teams[0]?.id || '')));
+                                  return currentSelTeam ? `${currentSelTeam.name} (${currentSelTeam.teamCode || ''})` : "Chọn một team...";
+                                })()}
+                              </span>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teams.map((t) => (
+                              <SelectItem key={t.id} value={t.id} className="text-xs font-bold font-sans">
+                                {t.name} ({t.teamCode || ''})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-teal-100 text-sm max-w-2xl font-medium">
                     Quản lý danh sách các thành viên trong nhóm kinh doanh do bạn phụ trách, ghi nhận chi phí thực tế cho nhân sự của đội, và kiểm soát tổng hạn mức chiến dịch.
                   </p>
@@ -12110,8 +12121,9 @@ export default function App() {
                               toast.error("Vui lòng nhập đầy đủ tên và email thành viên!");
                               return;
                             }
-                            if (!userProfile?.teamName) {
-                              toast.error("Bạn chưa có tên team gán cho tài khoản GDKD này!");
+                            const activeTeamName = currentActiveTeam?.name;
+                            if (!activeTeamName) {
+                              toast.error("Vui lòng chọn team trước khi thêm thành viên!");
                               return;
                             }
                             try {
@@ -12119,11 +12131,11 @@ export default function App() {
                                 fullName: newMemberName.trim(),
                                 displayName: newMemberName.trim(),
                                 email: newMemberEmail.trim().toLowerCase(),
-                                teamName: userProfile.teamName,
+                                teamName: activeTeamName,
                                 role: newMemberRole,
                                 createdAt: serverTimestamp()
                               });
-                              await logAction('CREATE', 'users', docRef.id, { fullName: newMemberName, email: newMemberEmail, teamName: userProfile.teamName, role: newMemberRole });
+                              await logAction('CREATE', 'users', docRef.id, { fullName: newMemberName, email: newMemberEmail, teamName: activeTeamName, role: newMemberRole });
                               toast.success("Thêm thành viên vào team thành công!");
                               setNewMemberName('');
                               setNewMemberEmail('');
@@ -12388,7 +12400,7 @@ export default function App() {
                             const project = projects.find(p => p.id === teamCostProject);
                             
                             // Auto Link Budget
-                            const matchBudget = budgets.find(b => b.projectId === teamCostProject && b.teamName?.toLowerCase().trim() === userProfile?.teamName?.toLowerCase().trim() && b.month === teamCostMonth);
+                            const matchBudget = budgets.find(b => b.projectId === teamCostProject && b.teamName?.toLowerCase().trim() === currentActiveTeam?.name?.toLowerCase().trim() && b.month === teamCostMonth);
                             
                             try {
                               const fb = parseVal(teamCostFb);
@@ -12401,9 +12413,9 @@ export default function App() {
                                 projectId: teamCostProject,
                                 projectName: project?.name || 'N/A',
                                 budgetId: matchBudget?.id || null,
-                                teamId: matchBudget?.teamId || null,
+                                teamId: currentActiveTeam?.id || matchBudget?.teamId || null,
                                 implementerName: teamCostMember,
-                                teamName: userProfile?.teamName || 'N/A',
+                                teamName: currentActiveTeam?.name || 'N/A',
                                 weekNumber: 1,
                                 year: new Date(teamCostMonth).getFullYear().toString(),
                                 month: teamCostMonth,
@@ -12610,7 +12622,7 @@ export default function App() {
                         </div>
                         <div className="space-y-1.5">
                           <span className="text-slate-400 font-bold">Team đại diện:</span>
-                          <p className="font-semibold text-slate-800 font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-max">{userProfile?.teamName || "N/A"}</p>
+                          <p className="font-semibold text-slate-800 font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-max">{currentActiveTeam?.name || "N/A"}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -12707,7 +12719,7 @@ export default function App() {
                         </div>
                         <div className="space-y-1.5">
                           <span className="text-slate-400 font-bold">Team trực thuộc:</span>
-                          <p className="font-semibold text-slate-800 font-mono text-rose-600 bg-rose-50 px-2 py-0.5 rounded w-max">{userProfile?.teamName || "N/A"}</p>
+                          <p className="font-semibold text-slate-800 font-mono text-rose-600 bg-rose-50 px-2 py-0.5 rounded w-max">{currentActiveTeam?.name || "N/A"}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -16622,63 +16634,6 @@ export default function App() {
 
               {(isAdmin || isMod || isAccountant) && (
                 <>
-                  {/* Tab Nghiệm thu */}
-                  <TabsContent value="acceptance" className="space-y-6">
-                    <AcceptanceManager 
-                      isAdmin={isAdmin}
-                      isSuperAdmin={isSuperAdmin}
-                      isMod={isMod}
-                      isAccountant={isAccountant}
-                      user={user}
-                      teams={teams}
-                      uniqueTeams={uniqueTeams}
-                      projects={projects}
-                      acceptances={acceptances}
-                      finalAcceptances={finalAcceptances}
-                      teamMap={teamMap}
-                      projectMap={projectMap}
-                      formatCurrency={formatCurrency}
-                      getMarketingMonth={getMarketingMonth}
-                      handleFirestoreError={handleFirestoreError}
-                      formatCurrencyInput={formatCurrencyInput}
-                      isImportingAcceptances={isImportingAcceptances}
-                      setIsImportingAcceptances={setIsImportingAcceptances}
-                      isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
-                      setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
-                      handleImportAcceptancesCSV={handleImportAcceptancesCSV}
-                      blocks={blocks}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="doc-processing" className="space-y-6">
-                    <DocProcessingManager 
-                      projects={projects}
-                      projectMap={projectMap}
-                      teamMap={teamMap}
-                      teams={teams}
-                      uniqueTeams={uniqueTeams}
-                      groupedDocProcessing={groupedDocProcessing}
-                      finalAcceptances={finalAcceptances}
-                      handleUpdateDocProcessing={handleUpdateDocProcessing}
-                      handleFirestoreError={handleFirestoreError}
-                      formatCurrency={formatCurrency}
-                      acceptanceSearch={acceptanceSearch}
-                      debouncedAcceptanceSearch={debouncedAcceptanceSearch}
-                      setAcceptanceSearch={setAcceptanceSearch}
-                      acceptanceMonthFilter={acceptanceMonthFilter}
-                      setAcceptanceMonthFilter={setAcceptanceMonthFilter}
-                      acceptanceProjectFilter={acceptanceProjectFilter}
-                      setAcceptanceProjectFilter={setAcceptanceProjectFilter}
-                      acceptanceTeamFilter={acceptanceTeamFilter}
-                      setAcceptanceTeamFilter={setAcceptanceTeamFilter}
-                      acceptanceCategoryFilter={acceptanceCategoryFilter}
-                      setAcceptanceCategoryFilter={setAcceptanceCategoryFilter}
-                      isAdmin={isAdmin}
-                      isMod={isMod}
-                      isAccountant={isAccountant}
-                      getMarketingMonth={getMarketingMonth}
-                    />
-                  </TabsContent>
 
                 <TabsContent value="audit" className="space-y-6">
                   <Card className="border-none shadow-sm">

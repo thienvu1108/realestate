@@ -992,7 +992,7 @@ export function MktProcessManager() {
                         <CheckCircle2 className="w-4 h-4" /> NÊN (Mẫu Chuẩn)
                       </div>
                       <div className="font-mono font-bold text-slate-800 bg-white p-2 rounded border mt-1 select-all text-center">
-                        Mayhomes - MH01.1 - OCP23
+                        Mayhomes - MAY01.1 - OCP23
                       </div>
                     </div>
 
@@ -1001,7 +1001,7 @@ export function MktProcessManager() {
                         <XCircle className="w-4 h-4" /> KHÔNG NÊN (Sai Lỗi)
                       </div>
                       <div className="font-mono font-bold text-slate-400 bg-white/40 p-2 rounded border border-dashed mt-1 text-center line-through">
-                        MH - MH01.1 - OCP23
+                        MH - MAY01.1 - OCP23
                       </div>
                       <p className="text-[10px] text-rose-600 font-bold mt-1.5 italic">Lỗi nghiêm trọng: Viết tắt chữ Mayhomes</p>
                     </div>

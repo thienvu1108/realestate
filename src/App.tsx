@@ -86,7 +86,7 @@ import {
   Undo,
   X,
   Menu,
-  ArrowUpDown,
+  ArrowUpDown, ArrowUp, ArrowDown,
   AlertTriangle,
   UserCircle,
   Map as MapIcon,
@@ -731,12 +731,25 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+export const convertMhToMay = (val: any): string => {
+  if (val === undefined || val === null) return '';
+  const strVal = String(val);
+  return strVal
+    .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
+    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
+    .replace(/\bMH\b/gi, 'MAY');
+};
+
 const extractTeamCode = (name: string) => {
-  // Pattern MH follow by digits and dots (e.g., MH17, MH79.28, MH04.1)
-  const match = name.match(/MH[0-9.]+/i);
+  if (!name) return '';
+  // Pattern MAY or MH or any letters followed by digits and dots (e.g., MAY04.1, MH17)
+  const match = name.match(/(?:MAY|MH|[A-Z]+)[0-9.]+/i);
   if (match) {
-    // Return and trim any trailing dots if they were just punctuation
-    return match[0].toUpperCase().replace(/\.+$/, '');
+    let code = match[0].toUpperCase().replace(/\.+$/, '');
+    if (code.startsWith('MH')) {
+      code = 'MAY' + code.slice(2);
+    }
+    return code;
   }
   return '';
 };
@@ -749,7 +762,8 @@ const isTeamInBlock = (t: any, block: any) => {
   if (t.blockId && t.blockId !== block.id) return false;
   if (t.blockCode && t.blockCode !== block.blockCode) return false;
   
-  const prefix = (block.teamPrefix || '').toUpperCase().trim();
+  let prefix = (block.teamPrefix || '').toUpperCase().trim();
+  if (prefix === 'MH') prefix = 'MAY';
   if (!prefix) return false;
   const code = t.teamCode || extractTeamCode(t.name || '');
   return code.toUpperCase().trim().startsWith(prefix);
@@ -1122,12 +1136,12 @@ export default function App() {
 
   const isAdmin = useMemo(() => {
     const role = userRole?.toLowerCase()?.trim();
-    return role === 'admin' || role === 'super_admin' || role === 'quản trị' || user?.email === 'thienvu1108@gmail.com';
+    return role === 'admin' || role === 'super_admin' || role === 'quản trị' || user?.email?.toLowerCase() === 'thienvu1108@gmail.com';
   }, [userRole, user]);
 
   const isSuperAdmin = useMemo(() => {
     const role = userRole?.toLowerCase()?.trim();
-    return role === 'super_admin' || user?.email === 'thienvu1108@gmail.com';
+    return role === 'super_admin' || user?.email?.toLowerCase() === 'thienvu1108@gmail.com';
   }, [userRole, user]);
 
   const isMod = useMemo(() => {
@@ -1207,7 +1221,7 @@ export default function App() {
   const teamMap = useMemo(() => {
     const map: Record<string, string> = {};
     teams.forEach(t => {
-      map[t.id] = t.name;
+      map[t.id] = convertMhToMay(t.name);
     });
     return map;
   }, [teams]);
@@ -1282,6 +1296,16 @@ export default function App() {
   const [adminBudgetSearch, setAdminBudgetSearch] = useState('');
   const debouncedAdminBudgetSearch = useDebounce(adminBudgetSearch, 300);
   const [adminBudgetMonthFilter, setAdminBudgetMonthFilter] = useState(getMarketingMonth(new Date()));
+  const [adminBudgetSort, setAdminBudgetSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
+
+  const handleAdminBudgetSort = useCallback((key: string) => {
+    setAdminBudgetSort(prev => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  }, []);
   const [adminCostSearch, setAdminCostSearch] = useState('');
   const debouncedAdminCostSearch = useDebounce(adminCostSearch, 300);
   const [adminCostMonthFilter, setAdminCostMonthFilter] = useState(getMarketingMonth(new Date()));
@@ -1595,14 +1619,17 @@ export default function App() {
   const latestCostsList = useMemo(() => Object.values(latestCostsByBudget), [latestCostsByBudget]);
 
   const resolveTeamName = useCallback((id: string | undefined, name: string | undefined) => {
-    if (id && teamMap[id]) return teamMap[id];
-    if (id && dataDrivenTeamMap[id]) return dataDrivenTeamMap[id];
-    if (name) {
+    let res = 'N/A';
+    if (id && teamMap[id]) res = teamMap[id];
+    else if (id && dataDrivenTeamMap[id]) res = dataDrivenTeamMap[id];
+    else if (name) {
       const isIdLike = name.length > 10 && !name.includes(' ') && /^[a-zA-Z0-9]+$/.test(name);
-      if (isIdLike && dataDrivenTeamMap[name]) return dataDrivenTeamMap[name];
-      return name;
+      if (isIdLike && dataDrivenTeamMap[name]) res = dataDrivenTeamMap[name];
+      else res = name;
+    } else {
+      res = id || 'N/A';
     }
-    return id || 'N/A';
+    return convertMhToMay(res);
   }, [teamMap, dataDrivenTeamMap]);
 
   const resolveProjectName = useCallback((id: string | undefined, name: string | undefined) => {
@@ -2746,7 +2773,33 @@ export default function App() {
   }, [hasPermission, pendingSupportCount]);
 
   const adminFilteredBudgets = useMemo(() => {
-    return budgets.filter(b => {
+    const getTime = (item: any) => {
+      if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
+      if (item.createdAt?.toMillis) return item.createdAt.toMillis();
+      if (item.createdAt) return new Date(item.createdAt).getTime();
+      if (item.updatedAt?.toDate) return item.updatedAt.toDate().getTime();
+      if (item.updatedAt?.toMillis) return item.updatedAt.toMillis();
+      if (item.updatedAt) return new Date(item.updatedAt).getTime();
+      return 0;
+    };
+
+    // Group budgets by (projectId, teamId, month) to pick only the latest record
+    const latestBudgetsMap = new Map<string, any>();
+    budgets.forEach(b => {
+      const pKey = b.projectId || b.projectName || '';
+      const tKey = b.teamId || b.teamName || '';
+      const mKey = b.month || '';
+      const key = `${pKey}_${tKey}_${mKey}`;
+
+      const existing = latestBudgetsMap.get(key);
+      if (!existing || getTime(b) > getTime(existing)) {
+        latestBudgetsMap.set(key, b);
+      }
+    });
+
+    const uniqueBudgets = Array.from(latestBudgetsMap.values());
+
+    const filtered = uniqueBudgets.filter(b => {
       const bTeamName = teamMap[b.teamId] || b.teamName || '';
       const matchesSearch = 
         (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
@@ -2754,12 +2807,68 @@ export default function App() {
         (b.implementerName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase());
       const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
       return matchesSearch && matchesMonth;
-    }).sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-      return dateB - dateA;
     });
-  }, [budgets, debouncedAdminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap]);
+
+    return filtered.sort((a, b) => {
+      const factor = adminBudgetSort.direction === 'asc' ? 1 : -1;
+
+      switch (adminBudgetSort.key) {
+        case 'project': {
+          const pA = (projectMap[a.projectId] || a.projectName || '').toLowerCase();
+          const pB = (projectMap[b.projectId] || b.projectName || '').toLowerCase();
+          return pA.localeCompare(pB, 'vi') * factor;
+        }
+        case 'team': {
+          const tA = (teamMap[a.teamId] || a.teamName || '').toLowerCase();
+          const tB = (teamMap[b.teamId] || b.teamName || '').toLowerCase();
+          return tA.localeCompare(tB, 'vi') * factor;
+        }
+        case 'teamCode': {
+          const tcA = (teams.find((t: any) => t.id === a.teamId || t.name === (teamMap[a.teamId] || a.teamName))?.teamCode || '').toLowerCase();
+          const tcB = (teams.find((t: any) => t.id === b.teamId || t.name === (teamMap[b.teamId] || b.teamName))?.teamCode || '').toLowerCase();
+          return tcA.localeCompare(tcB, 'vi') * factor;
+        }
+        case 'gdkd': {
+          const gA = extractGDKD(teamMap[a.teamId] || a.teamName || '').toLowerCase();
+          const gB = extractGDKD(teamMap[b.teamId] || b.teamName || '').toLowerCase();
+          return gA.localeCompare(gB, 'vi') * factor;
+        }
+        case 'implementer': {
+          const iA = (a.implementerName || '').toLowerCase();
+          const iB = (b.implementerName || '').toLowerCase();
+          return iA.localeCompare(iB, 'vi') * factor;
+        }
+        case 'month': {
+          const mA = `${a.month || ''}-W${a.weekNumber || 0}`;
+          const mB = `${b.month || ''}-W${b.weekNumber || 0}`;
+          return mA.localeCompare(mB) * factor;
+        }
+        case 'amount': {
+          return ((a.amount || 0) - (b.amount || 0)) * factor;
+        }
+        case 'baoCaoNT': {
+          const valA = baoCaoNTMap[a.id] || 0;
+          const valB = baoCaoNTMap[b.id] || 0;
+          return (valA - valB) * factor;
+        }
+        case 'rate': {
+          const rateA = a.amount > 0 ? ((baoCaoNTMap[a.id] || 0) / a.amount) : 0;
+          const rateB = b.amount > 0 ? ((baoCaoNTMap[b.id] || 0) / b.amount) : 0;
+          return (rateA - rateB) * factor;
+        }
+        case 'createdAt':
+        default: {
+          const getTime = (item: any) => {
+            if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
+            if (item.createdAt?.toMillis) return item.createdAt.toMillis();
+            if (item.createdAt) return new Date(item.createdAt).getTime();
+            return 0;
+          };
+          return (getTime(a) - getTime(b)) * factor;
+        }
+      }
+    });
+  }, [budgets, debouncedAdminBudgetSearch, adminBudgetMonthFilter, projectMap, teamMap, teams, baoCaoNTMap, adminBudgetSort]);
 
   const paginatedAdminFilteredBudgets = useMemo(() => {
     const start = (budgetPage - 1) * 20;
@@ -3273,6 +3382,22 @@ export default function App() {
   const debouncedBudgetSearch = useDebounce(budgetSearch, 300);
   const [isConfirmBudgetOpen, setIsConfirmBudgetOpen] = useState(false);
   const [isConfirmingMulti, setIsConfirmingMulti] = useState(false);
+
+  const registeredProjectIdsInPeriod = useMemo(() => {
+    if (!selectedTeamId || !budgetMonth) return new Set<string>();
+    const set = new Set<string>();
+    budgets.forEach(b => {
+      if (b.teamId === selectedTeamId && b.month === budgetMonth) {
+        set.add(b.projectId);
+      }
+    });
+    multiBudgetItems.forEach(item => {
+      if (item.teamId === selectedTeamId && item.month === budgetMonth) {
+        set.add(item.projectId);
+      }
+    });
+    return set;
+  }, [budgets, multiBudgetItems, selectedTeamId, budgetMonth]);
   
   // Delete confirmation states
   const [isDeleteProjectDialogOpen, setIsDeleteProjectDialogOpen] = useState(false);
@@ -3633,7 +3758,7 @@ export default function App() {
           }
           
           let role: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' = 'user';
-          if (firebaseUser.email === 'thienvu1108@gmail.com') {
+          if (firebaseUser.email?.toLowerCase() === 'thienvu1108@gmail.com') {
             role = 'super_admin';
           }
 
@@ -3656,12 +3781,15 @@ export default function App() {
           unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
+              if (data && data.teamName) {
+                data.teamName = convertMhToMay(data.teamName);
+              }
               setUserProfile(data || null);
               
               const rawRole = String(data?.role || 'user').toLowerCase().trim();
               let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' = 'user';
               
-              if (firebaseUser.email === 'thienvu1108@gmail.com') synchronizedRole = 'super_admin';
+              if (firebaseUser.email?.toLowerCase() === 'thienvu1108@gmail.com') synchronizedRole = 'super_admin';
               else if (rawRole === 'super_admin') synchronizedRole = 'super_admin';
               else if (rawRole === 'admin') synchronizedRole = 'admin';
               else if (rawRole === 'mod' || rawRole === 'moderator' || rawRole === 'điều phối') synchronizedRole = 'mod';
@@ -3751,13 +3879,24 @@ export default function App() {
     // Listen to teams - load all teams to ensure mapping and search work perfectly
     const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'));
     const unsubTeams = onSnapshot(qTeams, (snapshot) => {
-      setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      const sanitized = raw.map(t => ({
+        ...t,
+        name: convertMhToMay(t.name),
+        teamCode: convertMhToMay(t.teamCode) || extractTeamCode(convertMhToMay(t.name))
+      }));
+      setTeams(sanitized);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
 
     // Listen to blocks
     const qBlocks = query(collection(db, 'blocks'), orderBy('name', 'asc'));
     const unsubBlocks = onSnapshot(qBlocks, (snapshot) => {
-      setBlocks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      const sanitized = raw.map(b => ({
+        ...b,
+        teamPrefix: String(b.teamPrefix || '').toUpperCase().trim() === 'MH' ? 'MAY' : convertMhToMay(b.teamPrefix)
+      }));
+      setBlocks(sanitized);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'blocks'));
 
     // Listen to regions
@@ -3791,7 +3930,14 @@ export default function App() {
     }
 
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map(doc => {
+        const d = { id: doc.id, ...doc.data() as any };
+        return {
+          ...d,
+          teamName: convertMhToMay(d.teamName),
+          teamCode: convertMhToMay(d.teamCode)
+        };
+      });
       if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -3820,7 +3966,14 @@ export default function App() {
     }
 
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map(doc => {
+        const d = { id: doc.id, ...doc.data() as any };
+        return {
+          ...d,
+          teamName: convertMhToMay(d.teamName),
+          teamCode: convertMhToMay(d.teamCode)
+        };
+      });
       if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
         data.sort((a: any, b: any) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -3845,7 +3998,12 @@ export default function App() {
     if (isAdmin || isAccountant || isGDKhoi || isGDKD) {
       const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
       unsubUsers = onSnapshot(qUsers, (snapshot) => {
-        setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(u => ({
+          ...u,
+          teamName: convertMhToMay(u.teamName)
+        }));
+        setAllUsers(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
     }
 
@@ -3854,12 +4012,22 @@ export default function App() {
     if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
-        setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(e => ({
+          ...e,
+          teamName: convertMhToMay(e.teamName)
+        }));
+        setEfficiencyReports(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
-        setEfficiencyReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(e => ({
+          ...e,
+          teamName: convertMhToMay(e.teamName)
+        }));
+        setEfficiencyReports(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
     }
 
@@ -3868,12 +4036,24 @@ export default function App() {
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
-        setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(a => ({
+          ...a,
+          teamName: convertMhToMay(a.teamName),
+          teamCode: convertMhToMay(a.teamCode)
+        }));
+        setAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
-        setAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(a => ({
+          ...a,
+          teamName: convertMhToMay(a.teamName),
+          teamCode: convertMhToMay(a.teamCode)
+        }));
+        setAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     }
 
@@ -3883,22 +4063,44 @@ export default function App() {
     if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
       const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
-        setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(fa => ({
+          ...fa,
+          teamName: convertMhToMay(fa.teamName),
+          teamCode: convertMhToMay(fa.teamCode)
+        }));
+        setFinalAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
 
       const qDocProcessing = query(collection(db, 'docProcessing'));
       unsubDocProcessing = onSnapshot(qDocProcessing, (snapshot) => {
-        setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(dp => ({
+          ...dp,
+          teamName: convertMhToMay(dp.teamName)
+        }));
+        setDocProcessingStatus(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
       const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
-        setFinalAcceptances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(fa => ({
+          ...fa,
+          teamName: convertMhToMay(fa.teamName),
+          teamCode: convertMhToMay(fa.teamCode)
+        }));
+        setFinalAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
 
       const qDocProcessing = query(collection(db, 'docProcessing'), where('projectId', 'in', userProfile.assignedProjects));
       unsubDocProcessing = onSnapshot(qDocProcessing, (snapshot) => {
-        setDocProcessingStatus(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(dp => ({
+          ...dp,
+          teamName: convertMhToMay(dp.teamName)
+        }));
+        setDocProcessingStatus(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
     }
 
@@ -3907,12 +4109,24 @@ export default function App() {
     if (isAdmin || isMod || isAccountant) {
       const qSupport = query(collection(db, 'supportRequests'), orderBy('createdAt', 'desc'), limit(1000));
       unsubSupport = onSnapshot(qSupport, (snapshot) => {
-        setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(sr => ({
+          ...sr,
+          teamName: convertMhToMay(sr.teamName),
+          userTeam: convertMhToMay(sr.userTeam)
+        }));
+        setSupportRequests(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
     } else {
       const qSupport = query(collection(db, 'supportRequests'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(500));
       unsubSupport = onSnapshot(qSupport, (snapshot) => {
-        setSupportRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        const sanitized = raw.map(sr => ({
+          ...sr,
+          teamName: convertMhToMay(sr.teamName),
+          userTeam: convertMhToMay(sr.userTeam)
+        }));
+        setSupportRequests(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
     }
 
@@ -5760,6 +5974,14 @@ export default function App() {
     const selectedProject = projects.find(p => p.id === blockBudgetProject);
     const selectedTeam = teams.find(t => t.id === blockBudgetTeam);
     
+    const existsInDb = budgets.some(
+      b => b.teamId === blockBudgetTeam && b.projectId === blockBudgetProject && b.month === blockBudgetMonth
+    );
+    if (existsInDb) {
+      toast.error(`Team "${selectedTeam?.name || 'N/A'}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${blockBudgetMonth}. Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+      return;
+    }
+    
     try {
       const docRef = await addDoc(collection(db, 'budgets'), {
         projectId: blockBudgetProject,
@@ -6936,17 +7158,34 @@ export default function App() {
     e.preventDefault();
     if (!selectedProjectId || !budgetAmount || !selectedTeamId || !budgetMonth || !implementerName) {
       toast.error('Vui lòng nhập đầy đủ thông tin');
-      return;
+      return false;
     }
 
     const checkResult = checkBudgetActionAllowed(budgetMonth);
     if (!checkResult.allowed) {
       toast.error(checkResult.reason);
-      return;
+      return false;
     }
 
     const project = projects.find(p => p.id === selectedProjectId);
     const team = teams.find(t => t.id === selectedTeamId);
+
+    // Rule: Mỗi team chỉ đăng ký 1 ngân sách cho 1 dự án trong 1 kỳ
+    const existsInQueue = multiBudgetItems.some(
+      item => item.teamId === selectedTeamId && item.projectId === selectedProjectId && item.month === budgetMonth
+    );
+    if (existsInQueue) {
+      toast.error(`Dự án "${project?.name || 'N/A'}" đã có trong danh sách chờ đăng ký của kỳ ${budgetMonth}! Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+      return false;
+    }
+
+    const existsInDb = budgets.some(
+      b => b.teamId === selectedTeamId && b.projectId === selectedProjectId && b.month === budgetMonth
+    );
+    if (existsInDb) {
+      toast.error(`Team "${team?.name || selectedTeamName}" đã đăng ký ngân sách cho dự án "${project?.name || 'N/A'}" trong kỳ ${budgetMonth}. Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+      return false;
+    }
 
     const newItem = {
       projectId: selectedProjectId,
@@ -6962,7 +7201,6 @@ export default function App() {
     setMultiBudgetItems([...multiBudgetItems, newItem]);
     setBudgetAmount('');
     setSelectedProjectId('');
-    // Notice: Not calling toast.success here if we are about to show confirm dialog
     return true;
   };
 
@@ -7932,6 +8170,342 @@ export default function App() {
     }
   };
 
+  const [isMigratingMhToMay, setIsMigratingMhToMay] = useState(false);
+  const [migrationStats, setMigrationStats] = useState<{
+    teams: number;
+    users: number;
+    budgets: number;
+    costs: number;
+    blocks: number;
+    acceptances: number;
+    finalAcceptances: number;
+    docProcessing: number;
+    efficiencyReports: number;
+    hasRun: boolean;
+  }>({
+    teams: 0,
+    users: 0,
+    budgets: 0,
+    costs: 0,
+    blocks: 0,
+    acceptances: 0,
+    finalAcceptances: 0,
+    docProcessing: 0,
+    efficiencyReports: 0,
+    hasRun: false
+  });
+
+  const handleMigrateMhToMay = async (execute = false, silent = false) => {
+    if (!isAdmin && !isSuperAdmin && user?.email?.toLowerCase() !== 'thienvu1108@gmail.com') {
+      if (!silent) toast.error("Chỉ Admin mới có quyền thực hiện việc này");
+      return;
+    }
+
+    setIsMigratingMhToMay(true);
+    const toastId = silent ? null : toast.loading(execute ? "Đang tiến hành chuyển đổi MH ➔ MAY..." : "Đang quét hệ thống tìm kiếm mã MH...");
+
+    try {
+      // Helper function to query a whole collection safely
+      const fetchCollectionDocs = async (colName: string) => {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          return snap.docs.map(dDoc => ({ id: dDoc.id, ...dDoc.data() as any }));
+        } catch (err) {
+          console.error(`Error fetching collection ${colName}:`, err);
+          if (!silent) toast.error(`Cảnh báo: Không thể tải danh mục "${colName}" do giới hạn phân quyền.`, { duration: 4000 });
+          return [];
+        }
+      };
+
+      const convertValue = (val: any) => {
+        if (val === undefined || val === null) return '';
+        const strVal = String(val);
+        // 1. Replace MH followed by digits (e.g. MH01.1 -> MAY01.1)
+        // 2. Replace MH with separators like MH-01.1 -> MAY-01.1
+        // 3. Replace standalone MH (e.g. "MH" -> "MAY")
+        return strVal
+          .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
+          .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
+          .replace(/\bMH\b/gi, 'MAY');
+      };
+
+      // Let's retrieve all docs from the relevant collections safely and independently
+      const allDbTeams = await fetchCollectionDocs('teams');
+      const allDbUsers = await fetchCollectionDocs('users');
+      const allDbBudgets = await fetchCollectionDocs('budgets');
+      const allDbCosts = await fetchCollectionDocs('costs');
+      const allDbBlocks = await fetchCollectionDocs('blocks');
+      const allDbAcceptances = await fetchCollectionDocs('acceptances');
+      const allDbFinalAcceptances = await fetchCollectionDocs('finalAcceptances');
+      const allDbDocProcessing = await fetchCollectionDocs('docProcessing');
+      const allDbEfficiency = await fetchCollectionDocs('efficiencyReports');
+      const allDbSupport = await fetchCollectionDocs('supportRequests');
+
+      let teamsCount = 0;
+      let usersCount = 0;
+      let budgetsCount = 0;
+      let costsCount = 0;
+      let blocksCount = 0;
+      let acceptancesCount = 0;
+      let finalAcceptancesCount = 0;
+      let docProcessingCount = 0;
+      let efficiencyCount = 0;
+      let supportCount = 0;
+
+      // Prepare batches
+      const batchesToCommit: any[] = [];
+      let currentBatch = writeBatch(db);
+      let opCount = 0;
+
+      const addUpdateToBatch = (ref: any, updateData: any) => {
+        currentBatch.update(ref, updateData);
+        opCount++;
+        if (opCount >= 450) {
+          if (execute) {
+            batchesToCommit.push(currentBatch);
+          }
+          currentBatch = writeBatch(db);
+          opCount = 0;
+        }
+      };
+
+      // 1. Teams: update 'name' and 'teamCode' if they contain MH
+      allDbTeams.forEach(t => {
+        const originalName = t.name || '';
+        const originalCode = t.teamCode || '';
+        const newName = convertValue(originalName);
+        const newCode = convertValue(originalCode);
+
+        if (newName !== originalName || newCode !== originalCode) {
+          teamsCount++;
+          if (execute) {
+            addUpdateToBatch(doc(db, 'teams', t.id), {
+              name: newName,
+              teamCode: newCode
+            });
+          }
+        }
+      });
+
+      // 2. Users: update 'teamName' if it contains MH
+      allDbUsers.forEach(u => {
+        const originalTeam = u.teamName || '';
+        const newTeam = convertValue(originalTeam);
+
+        if (newTeam !== originalTeam) {
+          usersCount++;
+          if (execute) {
+            addUpdateToBatch(doc(db, 'users', u.id), {
+              teamName: newTeam
+            });
+          }
+        }
+      });
+
+      // 3. Budgets: update 'teamName' and 'teamCode' if they contain MH
+      allDbBudgets.forEach(b => {
+        const originalTeam = b.teamName || '';
+        const originalCode = b.teamCode || '';
+        const newTeam = convertValue(originalTeam);
+        const newCode = convertValue(originalCode);
+
+        if (newTeam !== originalTeam || (originalCode && newCode !== originalCode)) {
+          budgetsCount++;
+          if (execute) {
+            const up: any = { teamName: newTeam };
+            if (originalCode) up.teamCode = newCode;
+            addUpdateToBatch(doc(db, 'budgets', b.id), up);
+          }
+        }
+      });
+
+      // 4. Costs: update 'teamName' and 'teamCode' if they contain MH
+      allDbCosts.forEach(c => {
+        const originalTeam = c.teamName || '';
+        const originalCode = c.teamCode || '';
+        const newTeam = convertValue(originalTeam);
+        const newCode = convertValue(originalCode);
+
+        if (newTeam !== originalTeam || (originalCode && newCode !== originalCode)) {
+          costsCount++;
+          if (execute) {
+            const up: any = { teamName: newTeam };
+            if (originalCode) up.teamCode = newCode;
+            addUpdateToBatch(doc(db, 'costs', c.id), up);
+          }
+        }
+      });
+
+      // 5. Blocks: update 'teamPrefix' if it is "MH" or contains "MH"
+      allDbBlocks.forEach(bl => {
+        const originalPrefix = bl.teamPrefix || '';
+        let newPrefix = originalPrefix;
+        if (String(originalPrefix).toUpperCase().trim() === 'MH') {
+          newPrefix = 'MAY';
+        } else {
+          newPrefix = convertValue(originalPrefix);
+        }
+
+        if (newPrefix !== originalPrefix) {
+          blocksCount++;
+          if (execute) {
+            addUpdateToBatch(doc(db, 'blocks', bl.id), {
+              teamPrefix: newPrefix
+            });
+          }
+        }
+      });
+
+      // 6. Acceptances: update 'teamName' and 'teamCode' if they contain MH
+      allDbAcceptances.forEach(a => {
+        const originalTeam = a.teamName || '';
+        const originalCode = a.teamCode || '';
+        const newTeam = convertValue(originalTeam);
+        const newCode = convertValue(originalCode);
+
+        if (newTeam !== originalTeam || (originalCode && newCode !== originalCode)) {
+          acceptancesCount++;
+          if (execute) {
+            const up: any = { teamName: newTeam };
+            if (originalCode) up.teamCode = newCode;
+            addUpdateToBatch(doc(db, 'acceptances', a.id), up);
+          }
+        }
+      });
+
+      // 7. FinalAcceptances: update 'teamName' if it contains MH
+      allDbFinalAcceptances.forEach(fa => {
+        const originalTeam = fa.teamName || '';
+        const originalCode = fa.teamCode || '';
+        const newTeam = convertValue(originalTeam);
+        const newCode = convertValue(originalCode);
+
+        if (newTeam !== originalTeam || (originalCode && newCode !== originalCode)) {
+          finalAcceptancesCount++;
+          if (execute) {
+            const up: any = { teamName: newTeam };
+            if (originalCode) up.teamCode = newCode;
+            addUpdateToBatch(doc(db, 'finalAcceptances', fa.id), up);
+          }
+        }
+      });
+
+      // 8. DocProcessing: update 'teamName' if it contains MH
+      allDbDocProcessing.forEach(dp => {
+        const originalTeam = dp.teamName || '';
+        const newTeam = convertValue(originalTeam);
+
+        if (newTeam !== originalTeam) {
+          docProcessingCount++;
+          if (execute) {
+            addUpdateToBatch(doc(db, 'docProcessing', dp.id), {
+              teamName: newTeam
+            });
+          }
+        }
+      });
+
+      // 9. Efficiency: update 'teamName' if it contains MH
+      allDbEfficiency.forEach(e => {
+        const originalTeam = e.teamName || '';
+        const newTeam = convertValue(originalTeam);
+
+        if (newTeam !== originalTeam) {
+          efficiencyCount++;
+          if (execute) {
+            addUpdateToBatch(doc(db, 'efficiencyReports', e.id), {
+              teamName: newTeam
+            });
+          }
+        }
+      });
+
+      // 10. SupportRequests: update 'teamName' or 'userTeam' if they contain MH
+      allDbSupport.forEach(s => {
+        const originalTeam = s.teamName || s.userTeam || '';
+        const newTeam = convertValue(originalTeam);
+
+        if (newTeam !== originalTeam) {
+          supportCount++;
+          if (execute) {
+            const up: any = {};
+            if (s.teamName) up.teamName = newTeam;
+            if (s.userTeam) up.userTeam = newTeam;
+            addUpdateToBatch(doc(db, 'supportRequests', s.id), up);
+          }
+        }
+      });
+
+      // Final commit for remaining operations in the last batch
+      if (execute) {
+        if (opCount > 0) {
+          batchesToCommit.push(currentBatch);
+        }
+
+        // Commit all batches sequentially
+        for (const batchToCommit of batchesToCommit) {
+          await batchToCommit.commit();
+        }
+
+        await logAction('MIGRATE_MH_TO_MAY', 'multiple', 'bulk', {
+          teams: teamsCount,
+          users: usersCount,
+          budgets: budgetsCount,
+          costs: costsCount,
+          blocks: blocksCount,
+          acceptances: acceptancesCount,
+          finalAcceptances: finalAcceptancesCount,
+          docProcessing: docProcessingCount,
+          efficiencyReports: efficiencyCount,
+          supportRequests: supportCount,
+        });
+
+        const totalUpdated = teamsCount + usersCount + budgetsCount + costsCount + blocksCount + acceptancesCount + finalAcceptancesCount + docProcessingCount + efficiencyCount + supportCount;
+        if (!silent) {
+          toast.success(`Đã chuyển đổi thành công ${totalUpdated} tài liệu từ MH sang MAY!`, { id: toastId! });
+        } else if (totalUpdated > 0) {
+          toast.success(`Hệ thống đã tự động chuyển đổi ${totalUpdated} dữ liệu từ MH sang MAY trên toàn bộ database!`, { duration: 4000 });
+        }
+      } else {
+        const totalUpdated = teamsCount + usersCount + budgetsCount + costsCount + blocksCount + acceptancesCount + finalAcceptancesCount + docProcessingCount + efficiencyCount + supportCount;
+        if (!silent) {
+          toast.success(`Đã quét xong! Tìm thấy ${totalUpdated} bản ghi cần cập nhật.`, { id: toastId! });
+        }
+      }
+
+      setMigrationStats({
+        teams: teamsCount,
+        users: usersCount,
+        budgets: budgetsCount,
+        costs: costsCount,
+        blocks: blocksCount,
+        acceptances: acceptancesCount,
+        finalAcceptances: finalAcceptancesCount,
+        docProcessing: docProcessingCount,
+        efficiencyReports: efficiencyCount,
+        hasRun: true
+      });
+
+    } catch (error) {
+      console.error(error);
+      if (!silent && toastId) {
+        toast.error(`Lỗi trong quá trình ${execute ? 'chuyển đổi' : 'quét hệ thống'}: ${(error as Error).message}`, { id: toastId });
+      }
+    } finally {
+      setIsMigratingMhToMay(false);
+    }
+  };
+
+  const autoMigratedRef = useRef(false);
+  useEffect(() => {
+    if ((isAdmin || isSuperAdmin || user?.email?.toLowerCase() === 'thienvu1108@gmail.com') && !autoMigratedRef.current && user) {
+      autoMigratedRef.current = true;
+      setTimeout(() => {
+        handleMigrateMhToMay(true, true).catch(err => console.error("Auto background MH->MAY migration:", err));
+      }, 1500);
+    }
+  }, [isAdmin, isSuperAdmin, user]);
+
   const [isRestoreAllDialogOpen, setIsRestoreAllDialogOpen] = useState(false);
   const [logLimit, setLogLimit] = useState(50);
   const [logSearch, setLogSearch] = useState('');
@@ -8518,6 +9092,8 @@ export default function App() {
       const teamName = teamMap[b.teamId] || b.teamName || '';
       const teamObj = teams.find((t: any) => t.id === b.teamId || t.name === teamName);
       const mainTeamName = teamObj?.name || teamName;
+      const bcNT = baoCaoNTMap[b.id] || 0;
+      const rate = b.amount > 0 ? (bcNT / b.amount) * 100 : 0;
       return {
         'STT': idx + 1,
         'ID Dự án': b.projectId,
@@ -8528,7 +9104,8 @@ export default function App() {
         'Người triển khai': b.implementerName || 'N/A',
         'Kỳ (Tháng)': b.month || '',
         'Ngân sách đăng ký (VNĐ)': b.amount || 0,
-        'Thực nghiệm thu (VNĐ)': acceptanceMap[b.id] || 0,
+        'Báo cáo nghiệm thu (VNĐ)': bcNT,
+        'Tỉ lệ (%)': Number(rate.toFixed(1)),
         'Ngày đăng ký': safeFormat(b.createdAt, 'dd/MM/yyyy HH:mm:ss'),
         'Người đăng ký': b.userEmail || ''
       };
@@ -14662,124 +15239,219 @@ export default function App() {
                                     }}
                                   />
                                 </TableHead>
-                                <TableHead className="w-auto px-2 tracking-tighter">Dự án & ID</TableHead>
-                                <TableHead className="w-[100px] px-1 tracking-tighter">Team</TableHead>
-                                <TableHead className="w-[80px] px-1 tracking-tighter">Mã Team</TableHead>
-                                <TableHead className="w-[110px] px-1 tracking-tighter">GĐKD</TableHead>
-                                <TableHead className="w-[110px] px-1 tracking-tighter">N.Triển khai</TableHead>
-                                <TableHead className="w-[130px] px-1 text-center tracking-tighter">Hạn kỳ (Kỳ)</TableHead>
-                                <TableHead className="w-[85px] px-1 text-right tracking-tighter">Ngân sách</TableHead>
-                                <TableHead className="w-[85px] px-1 text-right tracking-tighter">Báo cáo NT</TableHead>
-                                <TableHead className="w-[80px] px-1 text-right tracking-tighter">Thực NT</TableHead>
-                                <TableHead className="w-[90px] px-1 text-center tracking-tighter">Ngày ĐK</TableHead>
+                                <TableHead 
+                                  className="w-auto px-2 tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('project')}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span>Dự án & ID</span>
+                                    {adminBudgetSort.key === 'project' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[100px] px-1 tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('team')}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span>Team</span>
+                                    {adminBudgetSort.key === 'team' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[80px] px-1 tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('teamCode')}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span>Mã Team</span>
+                                    {adminBudgetSort.key === 'teamCode' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[110px] px-1 tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('gdkd')}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span>GĐKD</span>
+                                    {adminBudgetSort.key === 'gdkd' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[110px] px-1 tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('implementer')}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span>N.Triển khai</span>
+                                    {adminBudgetSort.key === 'implementer' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[125px] px-1 text-center tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('month')}
+                                >
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span>Hạn kỳ (Kỳ)</span>
+                                    {adminBudgetSort.key === 'month' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[85px] px-1 text-right tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('amount')}
+                                >
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span>Ngân sách</span>
+                                    {adminBudgetSort.key === 'amount' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[85px] px-1 text-right tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('baoCaoNT')}
+                                >
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span>Báo cáo NT</span>
+                                    {adminBudgetSort.key === 'baoCaoNT' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[80px] px-1 text-right tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('rate')}
+                                  title="Tỉ lệ % = Báo cáo NT / Ngân sách"
+                                >
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span>Tỉ lệ</span>
+                                    {adminBudgetSort.key === 'rate' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
+                                <TableHead 
+                                  className="w-[90px] px-1 text-center tracking-tighter cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                                  onClick={() => handleAdminBudgetSort('createdAt')}
+                                >
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span>Ngày ĐK</span>
+                                    {adminBudgetSort.key === 'createdAt' ? (adminBudgetSort.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" /> : <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />) : <ArrowUpDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                                  </div>
+                                </TableHead>
                                 <TableHead className="w-[70px] px-2 text-right tracking-tighter">T.Tác</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {paginatedAdminFilteredBudgets.map(b => (
-                                <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
-                                  <TableCell className="px-1 text-center">
-                                    <input 
-                                      type="checkbox" 
-                                      className="rounded border-slate-300 h-3 w-3"
-                                      checked={selectedBudgetIds.includes(b.id)}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setSelectedBudgetIds(prev => [...prev, b.id]);
-                                        } else {
-                                          setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
-                                        }
-                                      }}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="px-2 py-1">
-                                    <div className="flex flex-col gap-0.5 max-w-[200px] overflow-hidden">
-                                      <span className="text-[10px] font-bold text-slate-800 leading-tight truncate" title={projectMap[b.projectId] || b.projectName}>{projectMap[b.projectId] || b.projectName}</span>
-                                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">ID: {b.projectId.substring(0,8)}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase" title={teamMap[b.teamId] || b.teamName}>{teamMap[b.teamId] || b.teamName}</TableCell>
-                                  <TableCell className="px-1 text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50/20 px-1.5 py-0.5 rounded truncate max-w-[80px]">
-                                    {teams.find(t => t.id === b.teamId || t.name === (teamMap[b.teamId] || b.teamName))?.teamCode || ''}
-                                  </TableCell>
-                                  <TableCell className="px-1 text-[10px] font-bold text-slate-700 truncate max-w-[110px]">
-                                    {extractGDKD(teamMap[b.teamId] || b.teamName || '')}
-                                  </TableCell>
-                                  <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
-                                  <TableCell className="px-1 py-1">
-                                    <div className="flex flex-col items-center justify-center gap-0.5">
-                                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
-                                        {getMarketingMonthDisplayRange(b.month)}
-                                      </span>
-                                      <Badge variant="outline" className="h-4 text-[8px] font-black px-1 border-slate-200 bg-white text-slate-600 rounded-md">W{b.weekNumber}</Badge>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px] tabular-nums">{b.amount.toLocaleString()}đ</TableCell>
-                                  <TableCell className="px-1 text-right font-mono font-black text-indigo-600 text-[10px] tabular-nums">{(baoCaoNTMap[b.id] || 0).toLocaleString()}đ</TableCell>
-                                  <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px] tabular-nums">{(acceptanceMap[b.id] || 0).toLocaleString()}đ</TableCell>
-                                  <TableCell className="px-1 text-center font-mono text-[8px] text-slate-400 leading-tight tabular-nums">
-                                    {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                                  </TableCell>
-                                  <TableCell className="px-2 text-right">
-                                    <div className="flex justify-end gap-0.5">
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-7 w-7 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50"
-                                        onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
-                                        title="Xem lịch sử thay đổi"
-                                      >
-                                        <History className="w-3.5 h-3.5" />
-                                      </Button>
-                                      {(isAdmin || isMod || isAccountant) && (
+                              {paginatedAdminFilteredBudgets.map(b => {
+                                const bcNT = baoCaoNTMap[b.id] || 0;
+                                const rate = b.amount > 0 ? (bcNT / b.amount) * 100 : 0;
+                                return (
+                                  <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/50" : ""} h-12 transition-colors border-slate-100 group hover:bg-slate-50/80`}>
+                                    <TableCell className="px-1 text-center">
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-300 h-3 w-3"
+                                        checked={selectedBudgetIds.includes(b.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedBudgetIds(prev => [...prev, b.id]);
+                                          } else {
+                                            setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                          }
+                                        }}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="px-2 py-1">
+                                      <div className="flex flex-col gap-0.5 max-w-[200px] overflow-hidden">
+                                        <span className="text-[10px] font-bold text-slate-800 leading-tight truncate" title={projectMap[b.projectId] || b.projectName}>{projectMap[b.projectId] || b.projectName}</span>
+                                        <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">ID: {b.projectId.substring(0,8)}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="px-1 text-[10px] font-bold text-indigo-600 truncate max-w-[100px] uppercase" title={teamMap[b.teamId] || b.teamName}>{teamMap[b.teamId] || b.teamName}</TableCell>
+                                    <TableCell className="px-1 text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50/20 px-1.5 py-0.5 rounded truncate max-w-[80px]">
+                                      {teams.find(t => t.id === b.teamId || t.name === (teamMap[b.teamId] || b.teamName))?.teamCode || ''}
+                                    </TableCell>
+                                    <TableCell className="px-1 text-[10px] font-bold text-slate-700 truncate max-w-[110px]">
+                                      {extractGDKD(teamMap[b.teamId] || b.teamName || '')}
+                                    </TableCell>
+                                    <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
+                                    <TableCell className="px-1 py-1">
+                                      <div className="flex flex-col items-center justify-center gap-0.5">
+                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                          {getMarketingMonthDisplayRange(b.month)}
+                                        </span>
+                                        <Badge variant="outline" className="h-4 text-[8px] font-black px-1 border-slate-200 bg-white text-slate-600 rounded-md">W{b.weekNumber}</Badge>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="px-1 text-right font-mono font-black text-slate-900 text-[10px] tabular-nums">{b.amount.toLocaleString()}đ</TableCell>
+                                    <TableCell className="px-1 text-right font-mono font-black text-indigo-600 text-[10px] tabular-nums">{bcNT.toLocaleString()}đ</TableCell>
+                                    <TableCell className="px-1 text-right font-mono font-black text-emerald-600 text-[10px] tabular-nums">{rate.toFixed(1)}%</TableCell>
+                                    <TableCell className="px-1 text-center font-mono text-[8px] text-slate-400 leading-tight tabular-nums">
+                                      {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                    </TableCell>
+                                    <TableCell className="px-2 text-right">
+                                      <div className="flex justify-end gap-0.5">
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
-                                          className="h-7 w-7 text-slate-300 hover:text-blue-600 hover:bg-blue-50"
-                                          onClick={() => handleOpenEditBudget(b)}
-                                          title="Điều chỉnh ngân sách"
+                                          className="h-7 w-7 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50"
+                                          onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
+                                          title="Xem lịch sử thay đổi"
                                         >
-                                          <Edit2 className="w-3.5 h-3.5" />
+                                          <History className="w-3.5 h-3.5" />
                                         </Button>
-                                      )}
-                                      {(isAdmin || isMod || isAccountant) && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-7 w-7 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
-                                          onClick={() => handleDeleteBudget(b.id, b.projectName)}
-                                          title="Xóa đăng ký"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                                        {(isAdmin || isMod || isAccountant) && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-slate-300 hover:text-blue-600 hover:bg-blue-50"
+                                            onClick={() => handleOpenEditBudget(b)}
+                                            title="Điều chỉnh ngân sách"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        )}
+                                        {(isAdmin || isMod || isAccountant) && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
+                                            onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                            title="Xóa đăng ký"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
                               {adminFilteredBudgets.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={10} className="h-32 text-center text-slate-400 text-xs italic font-medium">
+                                  <TableCell colSpan={12} className="h-32 text-center text-slate-400 text-xs italic font-medium">
                                     Không tìm thấy dữ liệu ngân sách nào phù hợp
                                   </TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
-                            {adminFilteredBudgets.length > 0 && (
-                              <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
+                            {adminFilteredBudgets.length > 0 && (() => {
+                              const totalBudget = adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                              const totalBaoCaoNT = adminFilteredBudgets.reduce((acc, curr) => acc + (baoCaoNTMap[curr.id] || 0), 0);
+                              const totalRate = totalBudget > 0 ? (totalBaoCaoNT / totalBudget) * 100 : 0;
+                              return (
+                                <TableFooter className="bg-slate-50 font-bold border-t-2 border-slate-200">
                                   <TableRow className="h-10 font-bold">
                                     <TableCell></TableCell>
-                                    <TableCell colSpan={5} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">Tổng cộng</TableCell>
+                                    <TableCell colSpan={6} className="px-2 text-slate-900 uppercase text-[9px] tracking-wider">
+                                      Tổng cộng ({adminFilteredBudgets.length} bản ghi)
+                                    </TableCell>
                                     <TableCell className="px-1 text-right font-mono text-slate-900 text-[10px]">
-                                      {adminFilteredBudgets.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()}đ
+                                      {totalBudget.toLocaleString()}đ
+                                    </TableCell>
+                                    <TableCell className="px-1 text-right font-mono text-indigo-700 text-[10px]">
+                                      {totalBaoCaoNT.toLocaleString()}đ
                                     </TableCell>
                                     <TableCell className="px-1 text-right font-mono text-emerald-700 text-[10px]">
-                                      {adminFilteredBudgets.reduce((acc, curr) => acc + (acceptanceMap[curr.id] || 0), 0).toLocaleString()}đ
+                                      {totalRate.toFixed(1)}%
                                     </TableCell>
                                     <TableCell colSpan={2}></TableCell>
                                   </TableRow>
-                              </TableFooter>
-                            )}
+                                </TableFooter>
+                              );
+                            })()}
                           </Table>
                         </div>
                         {/* Pagination Bar for Budgets */}
@@ -17012,6 +17684,60 @@ export default function App() {
                                </div>
                                <ArrowRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />
                              </Button>
+
+                             <div className="pt-4 mt-4 border-t border-slate-100 space-y-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                               <h5 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                                 <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                                 Công cụ Chuyển đổi mã Team (MH &rarr; MAY)
+                               </h5>
+                               <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                 Hỗ trợ rà soát toàn bộ hệ thống và tự động đổi tên/mã các team từ <strong>MH</strong> thành <strong>MAY</strong> (Ví dụ: <em>MH01.1 Đào Hương Thắm &rarr; MAY01.1 Đào Hương Thắm</em>) trên tất cả các danh mục lưu trữ.
+                               </p>
+                               
+                               {migrationStats.hasRun && (
+                                 <div className="bg-white p-3 rounded-xl border border-indigo-100 text-[10px] space-y-1.5 font-sans font-semibold text-slate-700">
+                                   <p className="text-indigo-900 font-bold border-b pb-1 mb-1 text-center">Kết quả quét hệ thống gần nhất:</p>
+                                   <div className="grid grid-cols-2 gap-2">
+                                     <div>Phòng (teams): <span className="font-bold text-indigo-600">{migrationStats.teams}</span></div>
+                                     <div>Tài khoản (users): <span className="font-bold text-indigo-600">{migrationStats.users}</span></div>
+                                     <div>Ngân sách (budgets): <span className="font-bold text-indigo-600">{migrationStats.budgets}</span></div>
+                                     <div>Thực chi (costs): <span className="font-bold text-indigo-600">{migrationStats.costs}</span></div>
+                                     <div>Khối (blocks): <span className="font-bold text-indigo-600">{migrationStats.blocks}</span></div>
+                                     <div>Đối soát (acceptances): <span className="font-bold text-indigo-600">{migrationStats.acceptances}</span></div>
+                                     <div>Ký duyệt (finalAcceptances): <span className="font-bold text-indigo-600">{migrationStats.finalAcceptances}</span></div>
+                                     <div>Đang xử lý (docProcessing): <span className="font-bold text-indigo-600">{migrationStats.docProcessing}</span></div>
+                                     <div>Báo cáo hiệu quả: <span className="font-bold text-indigo-600">{migrationStats.efficiencyReports}</span></div>
+                                   </div>
+                                   <p className="text-[9px] text-slate-400 italic text-center pt-1.5 border-t mt-1">
+                                     Tổng cộng {migrationStats.teams + migrationStats.users + migrationStats.budgets + migrationStats.costs + migrationStats.blocks + migrationStats.acceptances + migrationStats.finalAcceptances + migrationStats.docProcessing + migrationStats.efficiencyReports} tài liệu cần cập nhật.
+                                   </p>
+                                 </div>
+                               )}
+
+                               <div className="flex gap-2 pt-1">
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   className="flex-1 text-[11px] font-bold h-9 bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                   onClick={() => handleMigrateMhToMay(false)}
+                                   disabled={isMigratingMhToMay}
+                                 >
+                                   Quét hệ thống (Dry Run)
+                                 </Button>
+                                 <Button
+                                   size="sm"
+                                   className="flex-1 text-[11px] font-bold h-9 bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-100"
+                                   onClick={async () => {
+                                     if (window.confirm("Cảnh báo: Hành động này sẽ thay đổi hàng loạt dữ liệu từ MH sang MAY trên toàn bộ database. Bạn chắc chắn muốn tiếp tục?")) {
+                                       await handleMigrateMhToMay(true);
+                                     }
+                                   }}
+                                   disabled={isMigratingMhToMay}
+                                 >
+                                   Chuyển đổi sang MAY
+                                 </Button>
+                               </div>
+                             </div>
                            </div>
                         </div>
 
@@ -17544,16 +18270,28 @@ export default function App() {
                           <SelectGroup>
                             {projects
                               .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
-                              .map(p => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  <div className="flex items-center justify-between w-full gap-4">
-                                    <span className="font-medium">{p.name} ({p.projectCode})</span>
-                                    <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100 shrink-0">
-                                      {p.region}
-                                    </Badge>
-                                  </div>
-                                </SelectItem>
-                              ))
+                              .map(p => {
+                                const isAlreadyRegistered = registeredProjectIdsInPeriod.has(p.id);
+                                return (
+                                  <SelectItem key={p.id} value={p.id} disabled={isAlreadyRegistered}>
+                                    <div className="flex items-center justify-between w-full gap-4">
+                                      <span className={`font-medium ${isAlreadyRegistered ? 'line-through text-slate-400' : ''}`}>
+                                        {p.name} ({p.projectCode})
+                                      </span>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {isAlreadyRegistered && (
+                                          <Badge variant="outline" className="text-[9px] py-0 h-4 bg-amber-50 text-amber-700 border-amber-200 font-bold">
+                                            Đã đăng ký
+                                          </Badge>
+                                        )}
+                                        <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100">
+                                          {p.region}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })
                             }
                           </SelectGroup>
                         </SelectContent>
@@ -22846,7 +23584,7 @@ const DocProcessingManager = React.memo(({
     }
 
     const exportData = sortedData.map((item: any, index: number) => {
-      // Extract Team Code: "MH06.18 Nguyễn Thị Thủy" -> "MH06.18"
+      // Extract Team Code: "MAY06.18 Nguyễn Thị Thủy" -> "MAY06.18"
       const teamParts = (item.teamName || '').split(' ');
       const teamCode = teamParts[0] || '';
       

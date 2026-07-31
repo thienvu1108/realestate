@@ -57,7 +57,7 @@
       "type": "object",
       "properties": {
         "name": { "type": "string", "description": "Team name" },
-        "teamCode": { "type": "string", "description": "Team unique code (e.g., MH01.1)" },
+        "teamCode": { "type": "string", "description": "Team unique code (e.g., MAY01.1)" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },

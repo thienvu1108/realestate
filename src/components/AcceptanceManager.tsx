@@ -214,7 +214,7 @@ const SortableHeader = ({ sortKey, currentSort, onSort, align = 'left', classNam
 };
 
 export const AcceptanceManager = React.memo(({ 
-  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
+  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], regions = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
   isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,
   handleImportAcceptancesCSV, uniqueTeams = [], blocks = []
@@ -227,7 +227,32 @@ export const AcceptanceManager = React.memo(({
   const [acceptanceTeamFilter, setAcceptanceTeamFilter] = useState('all');
   const [acceptanceCategoryFilter, setAcceptanceCategoryFilter] = useState('all');
   const [acceptanceBlockFilter, setAcceptanceBlockFilter] = useState('all');
+  const [acceptanceRegionFilter, setAcceptanceRegionFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<any>({ key: null, direction: null });
+
+  const uniqueRegions = useMemo(() => {
+    const set = new Set<string>();
+    if (Array.isArray(regions)) {
+      regions.forEach((r: any) => {
+        const name = typeof r === 'string' ? r : r?.name;
+        if (name) set.add(name);
+      });
+    }
+    if (Array.isArray(projects)) {
+      projects.forEach((p: any) => {
+        if (p.region) set.add(p.region);
+      });
+    }
+    return Array.from(set).sort();
+  }, [regions, projects]);
+
+  const filteredProjectsForSelect = useMemo(() => {
+    if (acceptanceRegionFilter === 'all') return projects;
+    return projects.filter((p: any) => {
+      const reg = p.region || 'Khác';
+      return reg === acceptanceRegionFilter;
+    });
+  }, [projects, acceptanceRegionFilter]);
 
   const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const processingFinalizeRef = useRef<Record<string, boolean>>({});
@@ -542,9 +567,18 @@ export const AcceptanceManager = React.memo(({
                            (a.blockCode && String(a.blockCode).trim().toLowerCase() === String(acceptanceBlockFilter).trim().toLowerCase()) ||
                            (a.blockName && String(a.blockName).trim().toLowerCase() === String(acceptanceBlockFilter).trim().toLowerCase()) ||
                            (a.blockName && String(a.blockName).trim() === String(acceptanceBlockFilter).trim());
-                             
+
+      const projObj = projects.find((p: any) => 
+        (a.projectId && String(p.id).trim() === String(a.projectId).trim()) ||
+        (a.projectName && String(p.name).toLowerCase().trim() === String(a.projectName).toLowerCase().trim())
+      );
+      const projRegion = a.region || projObj?.region || 'Khác';
+      const matchesRegion = acceptanceRegionFilter === 'all' ||
+                            projRegion.toLowerCase().trim() === acceptanceRegionFilter.toLowerCase().trim() ||
+                            (acceptanceRegionFilter === 'Khác' && (!projRegion || projRegion === 'Khác'));
+                              
       const isPending = true;
-      return matchesSearch && matchesMonth && matchesProject && matchesTeam && matchesCategory && matchesBlock && isPending;
+      return matchesSearch && matchesMonth && matchesProject && matchesTeam && matchesCategory && matchesBlock && matchesRegion && isPending;
     });
 
     if (!sortConfig.key || !sortConfig.direction) return filtered;
@@ -564,7 +598,7 @@ export const AcceptanceManager = React.memo(({
       if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, acceptanceBlockFilter, sortConfig, teams, blocks]);
+  }, [acceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, acceptanceBlockFilter, acceptanceRegionFilter, sortConfig, teams, blocks, projects]);
 
   const filteredFinalAcceptances = useMemo(() => {
     const filtered = (finalAcceptances || []).filter((a: any) => {
@@ -592,7 +626,22 @@ export const AcceptanceManager = React.memo(({
                              (acceptanceCategoryFilter === 'visa' && (a.visaCost > 0)) ||
                              (acceptanceCategoryFilter === 'crm' && (a.crmCost > 0));
 
-      return matchesSearch && matchesMonth && matchesProject && matchesTeam && matchesCategory;
+      const matchesBlock = acceptanceBlockFilter === 'all' || 
+                           (a.blockId && String(a.blockId).trim() === String(acceptanceBlockFilter).trim()) ||
+                           (a.blockCode && String(a.blockCode).trim().toLowerCase() === String(acceptanceBlockFilter).trim().toLowerCase()) ||
+                           (a.blockName && String(a.blockName).trim().toLowerCase() === String(acceptanceBlockFilter).trim().toLowerCase()) ||
+                           (a.blockName && String(a.blockName).trim() === String(acceptanceBlockFilter).trim());
+
+      const projObj = projects.find((p: any) => 
+        (a.projectId && String(p.id).trim() === String(a.projectId).trim()) ||
+        (a.projectName && String(p.name).toLowerCase().trim() === String(a.projectName).toLowerCase().trim())
+      );
+      const projRegion = a.region || projObj?.region || 'Khác';
+      const matchesRegion = acceptanceRegionFilter === 'all' ||
+                            projRegion.toLowerCase().trim() === acceptanceRegionFilter.toLowerCase().trim() ||
+                            (acceptanceRegionFilter === 'Khác' && (!projRegion || projRegion === 'Khác'));
+
+      return matchesSearch && matchesMonth && matchesBlock && matchesProject && matchesTeam && matchesCategory && matchesRegion;
     });
 
     if (!sortConfig.key || !sortConfig.direction) return filtered;
@@ -612,7 +661,7 @@ export const AcceptanceManager = React.memo(({
       if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, sortConfig, teams, blocks]);
+  }, [finalAcceptances, debouncedAcceptanceSearch, acceptanceMonthFilter, acceptanceProjectFilter, acceptanceTeamFilter, acceptanceCategoryFilter, acceptanceBlockFilter, acceptanceRegionFilter, sortConfig, teams, blocks, projects]);
 
   // Aggregate stats calculations of column totals
   const calculatedPendingTotals = useMemo(() => {
@@ -1382,7 +1431,7 @@ export const AcceptanceManager = React.memo(({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
             <div className="space-y-1">
               <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Lọc Tháng</Label>
               <Select value={acceptanceMonthFilter} onValueChange={setAcceptanceMonthFilter}>
@@ -1416,13 +1465,28 @@ export const AcceptanceManager = React.memo(({
             </div>
 
             <div className="space-y-1">
+              <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Lọc Miền / Vùng</Label>
+              <Select value={acceptanceRegionFilter} onValueChange={setAcceptanceRegionFilter}>
+                <SelectTrigger className="h-9 bg-white border-slate-200 rounded-xl text-xs font-bold">
+                  <SelectValue placeholder="Tất cả Miền/Vùng" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả Miền/Vùng</SelectItem>
+                  {uniqueRegions.map((reg: string) => (
+                    <SelectItem key={reg} value={reg}>{reg}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
               <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Lọc Dự án</Label>
               <InlineSearchableSelect
                 value={acceptanceProjectFilter}
                 onValueChange={setAcceptanceProjectFilter}
                 items={[
                   { value: 'all', label: 'Tất cả dự án' },
-                  ...projects.map((p: any) => ({ value: p.id, label: p.name }))
+                  ...filteredProjectsForSelect.map((p: any) => ({ value: p.id, label: p.name }))
                 ]}
                 placeholder="Chọn dự án..."
                 searchPlaceholder="Tìm kiếm dự án..."

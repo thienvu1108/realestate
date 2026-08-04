@@ -731,25 +731,50 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-export const convertMhToMay = (val: any): string => {
-  if (val === undefined || val === null) return '';
-  const strVal = String(val);
-  return strVal
+export const normalizeTeamCode = (code: any): string => {
+  if (code === undefined || code === null) return '';
+  let str = String(code).trim();
+  // 1. Convert MH to MAY
+  str = str
     .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
     .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
     .replace(/\bMH\b/gi, 'MAY');
+
+  // 2. Ensure MAY prefix is uppercase
+  str = str.replace(/\bmay/gi, 'MAY');
+
+  // 3. Format MAY codes with single digit after dot: MAY36.1 -> MAY36.01, MAY79.56 -> MAY79.56, MAY14 -> MAY14
+  str = str.replace(/\bMAY(\d+)\.(\d)(?!\d)/gi, (_, g1, g2) => `MAY${g1}.0${g2}`);
+
+  return str;
+};
+
+export const normalizeTeamName = (name: any): string => {
+  if (name === undefined || name === null) return '';
+  let str = String(name);
+  // 1. Convert MH to MAY
+  str = str
+    .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
+    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
+    .replace(/\bMH\b/gi, 'MAY');
+
+  // 2. Format MAY codes with single digit after dot inside name: MAY36.1 -> MAY36.01
+  str = str.replace(/\bMAY(\d+)\.(\d)(?!\d)/gi, (_, g1, g2) => `MAY${g1}.0${g2}`);
+
+  return str;
+};
+
+export const convertMhToMay = (val: any): string => {
+  return normalizeTeamName(val);
 };
 
 const extractTeamCode = (name: string) => {
   if (!name) return '';
-  // Pattern MAY or MH or any letters followed by digits and dots (e.g., MAY04.1, MH17)
-  const match = name.match(/(?:MAY|MH|[A-Z]+)[0-9.]+/i);
+  const normalized = normalizeTeamName(name);
+  const match = normalized.match(/(?:MAY|MH|[A-Z]+)[0-9.]+/i);
   if (match) {
     let code = match[0].toUpperCase().replace(/\.+$/, '');
-    if (code.startsWith('MH')) {
-      code = 'MAY' + code.slice(2);
-    }
-    return code;
+    return normalizeTeamCode(code);
   }
   return '';
 };
@@ -3882,10 +3907,38 @@ export default function App() {
       const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       const sanitized = raw.map(t => ({
         ...t,
-        name: convertMhToMay(t.name),
-        teamCode: convertMhToMay(t.teamCode) || extractTeamCode(convertMhToMay(t.name))
+        name: normalizeTeamName(t.name),
+        teamCode: normalizeTeamCode(t.teamCode || extractTeamCode(t.name))
       }));
       setTeams(sanitized);
+
+      // Auto-update Firestore team documents if stored team name or team code needs normalization (MAY36.1 -> MAY36.01)
+      if (isAdmin || userRole === 'super_admin') {
+        const docsToUpdate: any[] = [];
+        raw.forEach(docData => {
+          const normName = normalizeTeamName(docData.name);
+          const normCode = normalizeTeamCode(docData.teamCode || extractTeamCode(docData.name));
+          if ((docData.name && docData.name !== normName) || (docData.teamCode && docData.teamCode !== normCode)) {
+            docsToUpdate.push({
+              ref: doc(db, 'teams', docData.id),
+              data: { name: normName, teamCode: normCode, updatedAt: serverTimestamp() }
+            });
+          }
+        });
+        if (docsToUpdate.length > 0) {
+          (async () => {
+            try {
+              for (let i = 0; i < docsToUpdate.length; i += 450) {
+                const batch = writeBatch(db);
+                docsToUpdate.slice(i, i + 450).forEach(item => batch.update(item.ref, item.data));
+                await batch.commit();
+              }
+            } catch (err) {
+              console.error("Auto-sync teams error:", err);
+            }
+          })();
+        }
+      }
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
 
     // Listen to blocks
@@ -6264,13 +6317,14 @@ export default function App() {
     let duplicateCount = 0;
     const existingNames = new Set(teams.map(t => t.name.toLowerCase()));
 
-    for (const name of names) {
+    for (const rawName of names) {
+      const name = normalizeTeamName(rawName);
       if (existingNames.has(name.toLowerCase())) {
         duplicateCount++;
         continue;
       }
 
-      const teamCode = extractTeamCode(name);
+      const teamCode = normalizeTeamCode(extractTeamCode(name));
 
       try {
         const docRef = await addDoc(collection(db, 'teams'), {
@@ -6358,9 +6412,17 @@ export default function App() {
       let count = 0;
       const ops: any[] = [];
       teams.forEach(t => {
-        const accurateCode = extractTeamCode(t.name);
-        if (accurateCode && t.teamCode !== accurateCode) {
-          ops.push({ ref: doc(db, 'teams', t.id), data: { teamCode: accurateCode, updatedAt: serverTimestamp() } });
+        const normName = normalizeTeamName(t.name);
+        const normCode = normalizeTeamCode(t.teamCode || extractTeamCode(t.name));
+        if ((normCode && t.teamCode !== normCode) || (normName && t.name !== normName)) {
+          ops.push({ 
+            ref: doc(db, 'teams', t.id), 
+            data: { 
+              name: normName,
+              teamCode: normCode, 
+              updatedAt: serverTimestamp() 
+            } 
+          });
           count++;
         }
       });
@@ -6372,9 +6434,9 @@ export default function App() {
           await batch.commit();
         }
         await logAction('SYNC_TEAM_CODES', 'teams', 'all', { count });
-        toast.success(`Đã chuẩn hóa mã cho ${count} team`);
+        toast.success(`Đã chuẩn hóa và đồng bộ tên/mã cho ${count} team (quy tắc MAYxx.xx)`);
       } else {
-        toast.info('Tất cả mã team đã được chuẩn hóa hoặc không tìm thấy mã hợp lệ');
+        toast.info('Tất cả mã và tên team đã chuẩn hóa theo đúng quy tắc (ví dụ MAY14, MAY79.56, MAY36.01)');
       }
     } catch (error) {
       console.error('Error syncing team codes:', error);
@@ -19718,6 +19780,7 @@ export default function App() {
                     teams={teams}
                     uniqueTeams={uniqueTeams}
                     projects={projects}
+                    regions={regions}
                     acceptances={acceptances}
                     finalAcceptances={finalAcceptances}
                     teamMap={teamMap}

@@ -1252,7 +1252,7 @@ export const AcceptanceManager = React.memo(({
             ref={tableContainerRef}
             className="overflow-x-auto max-h-[72vh] cursor-grab border-b border-slate-200 select-none scrollbar-thin scrollbar-thumb-slate-300"
           >
-            <Table className="w-full text-left border-collapse min-w-[2400px]">
+            <table className="w-full text-left border-collapse min-w-[2400px] caption-bottom text-sm">
               <AcceptanceTableHeader
                 sortConfig={sortConfig}
                 onSort={handleSort}
@@ -1350,7 +1350,7 @@ export const AcceptanceManager = React.memo(({
                 records={displayedRecords}
                 formatCurrency={formatCurrency}
               />
-            </Table>
+            </table>
           </div>
         </CardContent>
       </Card>

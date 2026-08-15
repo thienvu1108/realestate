@@ -8,7 +8,15 @@ import {
   ShieldCheck, 
   FileSpreadsheet, 
   Calculator,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  MoveHorizontal,
+  Smartphone,
+  CreditCard,
+  Newspaper,
+  User,
+  CheckCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -868,55 +876,88 @@ export const AcceptanceManager = React.memo(({
     }
   };
 
-  // Mouse drag horizontal scrolling for table
+  // Mouse drag horizontal scrolling for table & navigation helpers
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [isDraggingTable, setIsDraggingTable] = useState(false);
+
+  // Scroll navigation helpers
+  const handleScrollBy = (amount: number) => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
+
+  const handleScrollToColumnGroup = (group: 'info' | 'digital' | 'visa' | 'posting' | 'personal' | 'total' | 'status') => {
+    if (!tableContainerRef.current) return;
+    const positions: Record<string, number> = {
+      info: 0,
+      digital: 520,
+      visa: 1060,
+      posting: 1600,
+      personal: 1850,
+      total: 2400,
+      status: 2550
+    };
+    tableContainerRef.current.scrollTo({ left: positions[group] ?? 0, behavior: 'smooth' });
+  };
+
   useEffect(() => {
     const slider = tableContainerRef.current;
     if (!slider) return;
+
     let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
+    let startX = 0;
+    let startScrollLeft = 0;
 
     const handleMouseDown = (e: MouseEvent) => {
+      // Don't drag if clicking inside form controls or buttons
       const target = e.target as HTMLElement;
-      if (target.closest('input, select, button, a, [role="button"], label, svg')) return;
+      if (target.closest('input, select, textarea, button, a, [role="button"], label, svg, .no-drag')) {
+        return;
+      }
+      // Only drag on primary mouse button (left click)
+      if (e.button !== 0) return;
+
       isDown = true;
+      startX = e.clientX;
+      startScrollLeft = slider.scrollLeft;
+
       slider.classList.add('cursor-grabbing');
       slider.classList.remove('cursor-grab');
-      startX = e.pageX - slider.offsetLeft;
-      scrollLeft = slider.scrollLeft;
-    };
-
-    const handleMouseLeave = () => {
-      isDown = false;
-      slider.classList.remove('cursor-grabbing');
-      slider.classList.add('cursor-grab');
-    };
-
-    const handleMouseUp = () => {
-      isDown = false;
-      slider.classList.remove('cursor-grabbing');
-      slider.classList.add('cursor-grab');
+      document.body.style.userSelect = 'none';
+      setIsDraggingTable(true);
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - slider.offsetLeft;
-      const walk = (x - startX) * 1.5;
-      slider.scrollLeft = scrollLeft - walk;
+      const dx = e.clientX - startX;
+      // Prevent browser default text selection if actively moving
+      if (Math.abs(dx) > 3) {
+        e.preventDefault();
+      }
+      slider.scrollLeft = startScrollLeft - dx;
     };
 
+    const handleMouseUp = () => {
+      if (!isDown) return;
+      isDown = false;
+      setIsDraggingTable(false);
+      slider.classList.remove('cursor-grabbing');
+      slider.classList.add('cursor-grab');
+      document.body.style.userSelect = '';
+    };
+
+    // Attach mousedown to the table container
     slider.addEventListener('mousedown', handleMouseDown);
-    slider.addEventListener('mouseleave', handleMouseLeave);
-    slider.addEventListener('mouseup', handleMouseUp);
-    slider.addEventListener('mousemove', handleMouseMove);
+    // Attach mousemove and mouseup to window so dragging never gets dropped outside bounds
+    window.addEventListener('mousemove', handleMouseMove, { passive: false });
+    window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       slider.removeEventListener('mousedown', handleMouseDown);
-      slider.removeEventListener('mouseleave', handleMouseLeave);
-      slider.removeEventListener('mouseup', handleMouseUp);
-      slider.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
     };
   }, []);
 
@@ -1114,8 +1155,99 @@ export const AcceptanceManager = React.memo(({
           )}
         </CardHeader>
 
+        {/* 🧭 Horizontal Navigation & Column Jump Toolbar */}
+        <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+              <MoveHorizontal className="w-3.5 h-3.5 text-indigo-600" /> Nhảy tới cột:
+            </span>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('info')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              📌 Team / Dự án
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('digital')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              <Smartphone className="w-3 h-3 text-sky-600" /> Digital (Cột F-K)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('visa')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              <CreditCard className="w-3 h-3 text-emerald-600" /> Visa Cty (Cột L-Q)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('posting')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              <Newspaper className="w-3 h-3 text-indigo-600" /> Đăng tin Cty (Cột R-S)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('personal')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              <User className="w-3 h-3 text-amber-600" /> Cá nhân (Cột T-Y)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('total')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-black bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              💰 TỔNG (Cột Z)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleScrollToColumnGroup('status')}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-50 text-cyan-800 hover:bg-cyan-100 border border-cyan-200 shadow-2xs transition-colors flex items-center gap-1"
+            >
+              <CheckCheck className="w-3 h-3 text-cyan-600" /> Nộp tiền / Trạng thái
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-[10px] font-medium text-slate-400 hidden lg:inline mr-1">
+              🖐 Nhấn giữ chuột & kéo sang ngang
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleScrollBy(-350)}
+              className="h-7 px-2 text-[11px] font-bold bg-white text-slate-700 hover:bg-slate-100 rounded-lg border-slate-200"
+              title="Cuộn sang trái 350px"
+            >
+              <ChevronLeft className="w-3.5 h-3.5 mr-0.5" /> Trái
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleScrollBy(350)}
+              className="h-7 px-2 text-[11px] font-bold bg-white text-slate-700 hover:bg-slate-100 rounded-lg border-slate-200"
+              title="Cuộn sang phải 350px"
+            >
+              Phải <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+            </Button>
+          </div>
+        </div>
+
         {/* 📊 Main Data Table */}
-        <CardContent className="p-0">
+        <CardContent className="p-0 relative">
           <div
             ref={tableContainerRef}
             className="overflow-x-auto max-h-[72vh] cursor-grab border-b border-slate-200 select-none scrollbar-thin scrollbar-thumb-slate-300"

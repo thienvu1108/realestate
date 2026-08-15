@@ -113,7 +113,8 @@ import {
   Building2,
   FileCheck,
   Trash,
-  Sliders
+  Sliders,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -734,16 +735,17 @@ function useDebounce<T>(value: T, delay: number): T {
 export const normalizeTeamCode = (code: any): string => {
   if (code === undefined || code === null) return '';
   let str = String(code).trim();
-  // 1. Convert MH to MAY
+  // 1. Convert MH to MAY and normalize space/hyphen separators (e.g., MH 02.08 -> MAY02.08, MH-36.01 -> MAY36.01)
   str = str
     .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
-    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
+    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY$1')
     .replace(/\bMH\b/gi, 'MAY');
 
-  // 2. Ensure MAY prefix is uppercase
+  // 2. Ensure MAY prefix is uppercase and normalize any spaces/hyphens after MAY (e.g. MAY 02.08 -> MAY02.08)
+  str = str.replace(/\bMAY[-_\s]+([0-9.]+)/gi, 'MAY$1');
   str = str.replace(/\bmay/gi, 'MAY');
 
-  // 3. Format MAY codes with single digit after dot: MAY36.1 -> MAY36.01, MAY79.56 -> MAY79.56, MAY14 -> MAY14
+  // 3. Format MAY codes with single digit after dot: MAY36.1 -> MAY36.01, MAY02.8 -> MAY02.08
   str = str.replace(/\bMAY(\d+)\.(\d)(?!\d)/gi, (_, g1, g2) => `MAY${g1}.0${g2}`);
 
   return str;
@@ -752,13 +754,16 @@ export const normalizeTeamCode = (code: any): string => {
 export const normalizeTeamName = (name: any): string => {
   if (name === undefined || name === null) return '';
   let str = String(name);
-  // 1. Convert MH to MAY
+  // 1. Convert MH to MAY and normalize space/hyphen separators (e.g., MH 02.08 -> MAY02.08, MH-36.01 -> MAY36.01)
   str = str
     .replace(/\bMH([0-9.]+)/gi, 'MAY$1')
-    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY-$1')
+    .replace(/\bMH[-_\s]+([0-9.]+)/gi, 'MAY$1')
     .replace(/\bMH\b/gi, 'MAY');
 
-  // 2. Format MAY codes with single digit after dot inside name: MAY36.1 -> MAY36.01
+  // 2. Normalize spaces/hyphens after MAY inside name: "MAY - 36.01" -> "MAY36.01", "MAY 02.08" -> "MAY02.08"
+  str = str.replace(/\bMAY[-_\s]+([0-9.]+)/gi, 'MAY$1');
+
+  // 3. Format MAY codes with single digit after dot inside name: MAY36.1 -> MAY36.01, MAY02.8 -> MAY02.08
   str = str.replace(/\bMAY(\d+)\.(\d)(?!\d)/gi, (_, g1, g2) => `MAY${g1}.0${g2}`);
 
   return str;
@@ -1150,6 +1155,7 @@ export default function App() {
   const [projectPage, setProjectPage] = useState(1);
   const [teamPage, setTeamPage] = useState(1);
   const [budgetPage, setBudgetPage] = useState(1);
+  const [unbudgetedPage, setUnbudgetedPage] = useState(1);
   const [costPage, setCostPage] = useState(1);
   const [efficiencyPage, setEfficiencyPage] = useState(1);
   const [acceptancePage, setAcceptancePage] = useState(1);
@@ -1668,62 +1674,78 @@ export default function App() {
     return id || 'N/A';
   }, [projectMap, dataDrivenProjectMap]);
 
+  const getAcceptanceCostValue = useCallback((a: any): number => {
+    if (!a) return 0;
+    if (a.afterAcceptanceCost !== undefined && a.afterAcceptanceCost !== null && Number(a.afterAcceptanceCost) > 0) {
+      return Number(a.afterAcceptanceCost);
+    }
+    if (a.totalActualCost !== undefined && a.totalActualCost !== null && Number(a.totalActualCost) > 0) {
+      return Number(a.totalActualCost);
+    }
+    return Number(a.totalCost || 0);
+  }, []);
+
   const acceptanceMap = useMemo(() => {
     const map: Record<string, number> = {};
-    
-    // Group acceptances by Team + Project + Month to allow quick lookup
     const groupedAcceptances: Record<string, number> = {};
-    acceptances.forEach(a => {
-      const aProjectName = resolveProjectName(a.projectId, a.projectName);
-      const aTeamName = resolveTeamName(a.teamId, a.teamName);
-      const aMonth = normalizeMonth(a.month);
-      const key = `${aTeamName.toLowerCase()}|${aProjectName.toLowerCase()}|${aMonth}`;
-      
-      const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : 0;
-      groupedAcceptances[key] = (groupedAcceptances[key] || 0) + costValue;
+
+    // Combine acceptances and finalAcceptances cleanly without duplicate IDs
+    const allAcceptancesMap = new Map<string, any>();
+    (acceptances || []).forEach(a => {
+      if (a && a.id) allAcceptancesMap.set(a.id, a);
+    });
+    (finalAcceptances || []).forEach(fa => {
+      if (fa && fa.id && !allAcceptancesMap.has(fa.id)) {
+        allAcceptancesMap.set(fa.id, fa);
+      }
+    });
+
+    allAcceptancesMap.forEach(a => {
+      const aTeamName = resolveTeamName(a.teamId, a.teamName) || teamMap[a.teamId] || a.teamName || '';
+      const aProjName = resolveProjectName(a.projectId, a.projectName) || projectMap[a.projectId] || a.projectName || '';
+      const tKey = normalizeTeamName(aTeamName).trim().toLowerCase();
+      const pKey = aProjName.trim().toLowerCase();
+      const mKey = normalizeMonth(a.month || '');
+
+      const costValue = getAcceptanceCostValue(a);
+
+      if (mKey && costValue >= 0) {
+        if (tKey && pKey) {
+          const key1 = `${tKey}|${pKey}|${mKey}`;
+          groupedAcceptances[key1] = (groupedAcceptances[key1] || 0) + costValue;
+        }
+        if (a.teamId && a.projectId) {
+          const key2 = `${String(a.teamId).trim().toLowerCase()}|${String(a.projectId).trim().toLowerCase()}|${mKey}`;
+          if (key2 !== `${tKey}|${pKey}|${mKey}`) {
+            groupedAcceptances[key2] = (groupedAcceptances[key2] || 0) + costValue;
+          }
+        }
+      }
     });
 
     budgets.forEach(b => {
-      const bTeamName = resolveTeamName(b.teamId, b.teamName);
-      const bProjectName = resolveProjectName(b.projectId, b.projectName);
-      const bMonth = b.month;
-      const key = `${bTeamName.toLowerCase()}|${bProjectName.toLowerCase()}|${bMonth}`;
-      
-      if (groupedAcceptances[key] !== undefined) {
-        map[b.id] = groupedAcceptances[key];
+      const bTeamName = resolveTeamName(b.teamId, b.teamName) || teamMap[b.teamId] || b.teamName || '';
+      const bProjName = resolveProjectName(b.projectId, b.projectName) || projectMap[b.projectId] || b.projectName || '';
+      const tKey = normalizeTeamName(bTeamName).trim().toLowerCase();
+      const pKey = bProjName.trim().toLowerCase();
+      const mKey = normalizeMonth(b.month || '');
+
+      const key1 = `${tKey}|${pKey}|${mKey}`;
+      const key2 = `${String(b.teamId).trim().toLowerCase()}|${String(b.projectId).trim().toLowerCase()}|${mKey}`;
+
+      if (groupedAcceptances[key1] !== undefined) {
+        map[b.id] = groupedAcceptances[key1];
+      } else if (groupedAcceptances[key2] !== undefined) {
+        map[b.id] = groupedAcceptances[key2];
       } else {
         map[b.id] = 0;
       }
     });
-    
-    return map;
-  }, [budgets, acceptances, resolveTeamName, resolveProjectName]);
-
-  const baoCaoNTMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    const grouped: Record<string, number> = {};
-    
-    acceptances.forEach(a => {
-      if (!a.teamId || !a.projectId) return;
-      const aMonth = normalizeMonth(a.month);
-      const key = `${String(a.teamId).trim()}|${String(a.projectId).trim()}|${aMonth}`;
-      
-      const costValue = a.totalCost || a.afterAcceptanceCost || 0;
-      grouped[key] = (grouped[key] || 0) + costValue;
-    });
-
-    budgets.forEach(b => {
-      if (!b.teamId || !b.projectId) {
-        map[b.id] = 0;
-        return;
-      }
-      const bMonth = normalizeMonth(b.month);
-      const key = `${String(b.teamId).trim()}|${String(b.projectId).trim()}|${bMonth}`;
-      map[b.id] = grouped[key] || 0;
-    });
 
     return map;
-  }, [acceptances, budgets]);
+  }, [budgets, acceptances, finalAcceptances, resolveTeamName, resolveProjectName, teamMap, projectMap, getAcceptanceCostValue]);
+
+  const baoCaoNTMap = acceptanceMap;
 
   const normalizedReportMonths = useMemo(() => reportMonths.map(m => normalizeMonth(m)), [reportMonths]);
 
@@ -2808,29 +2830,74 @@ export default function App() {
       return 0;
     };
 
-    // Group budgets by (projectId, teamId, month) to pick only the latest record
+    // Helper to get or synthesize initial history for a budget record
+    const getBudgetHistory = (b: any) => {
+      if (b.editHistory && Array.isArray(b.editHistory) && b.editHistory.length > 0) {
+        return b.editHistory;
+      }
+      const bAmt = Number(b.amount || 0);
+      const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
+      const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+      return [{
+        action: 'REGISTER',
+        editorName: editor,
+        editorEmail: b.userEmail || b.createdByEmail || '',
+        timestamp: timeStr,
+        amount: bAmt,
+        note: `Đăng ký ngân sách ban đầu: ${bAmt.toLocaleString()}đ`
+      }];
+    };
+
+    // Group budgets by (projectId, teamId, month) and sum amounts for duplicate project entries of a team
     const latestBudgetsMap = new Map<string, any>();
     budgets.forEach(b => {
-      const pKey = b.projectId || b.projectName || '';
-      const tKey = b.teamId || b.teamName || '';
-      const mKey = b.month || '';
+      const projName = resolveProjectName(b.projectId, b.projectName) || projectMap[b.projectId] || b.projectName || b.projectId || '';
+      const teamNameStr = resolveTeamName(b.teamId, b.teamName) || teamMap[b.teamId] || b.teamName || b.teamId || '';
+      const pKey = projName.trim().toLowerCase();
+      const tKey = normalizeTeamName(teamNameStr).trim().toLowerCase();
+      const mKey = normalizeMonth(b.month || '');
       const key = `${pKey}_${tKey}_${mKey}`;
 
       const existing = latestBudgetsMap.get(key);
-      if (!existing || getTime(b) > getTime(existing)) {
-        latestBudgetsMap.set(key, b);
+      const bAmount = Number(b.amount || 0);
+      const bHist = getBudgetHistory(b);
+
+      if (!existing) {
+        latestBudgetsMap.set(key, { 
+          ...b, 
+          amount: bAmount,
+          projectName: projName,
+          teamName: teamNameStr,
+          month: mKey,
+          editHistory: bHist
+        });
+      } else {
+        // Keep the latest item metadata, but SUM amounts & COMBINE history of duplicate records for the same team + project + month
+        const baseItem = getTime(b) > getTime(existing) ? { ...b } : { ...existing };
+        const combinedHist = [...(existing.editHistory || []), ...bHist];
+        combinedHist.sort((x: any, y: any) => new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime());
+
+        latestBudgetsMap.set(key, {
+          ...baseItem,
+          amount: Number(existing.amount || 0) + bAmount,
+          projectName: projName,
+          teamName: teamNameStr,
+          month: mKey,
+          editHistory: combinedHist
+        });
       }
     });
 
     const uniqueBudgets = Array.from(latestBudgetsMap.values());
 
     const filtered = uniqueBudgets.filter(b => {
-      const bTeamName = teamMap[b.teamId] || b.teamName || '';
+      const bTeamName = resolveTeamName(b.teamId, b.teamName) || teamMap[b.teamId] || b.teamName || '';
+      const bProjName = resolveProjectName(b.projectId, b.projectName) || projectMap[b.projectId] || b.projectName || '';
       const matchesSearch = 
-        (projectMap[b.projectId] || b.projectName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        bProjName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
         bTeamName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
         (b.implementerName || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase());
-      const matchesMonth = !adminBudgetMonthFilter || b.month === adminBudgetMonthFilter;
+      const matchesMonth = !adminBudgetMonthFilter || normalizeMonth(b.month) === normalizeMonth(adminBudgetMonthFilter);
       return matchesSearch && matchesMonth;
     });
 
@@ -2899,6 +2966,137 @@ export default function App() {
     const start = (budgetPage - 1) * 20;
     return (adminFilteredBudgets || []).slice(start, start + 20);
   }, [adminFilteredBudgets, budgetPage]);
+
+  const unbudgetedAcceptances = useMemo(() => {
+    // 1. Map registered budget amounts by (teamKey, projectKey, monthKey)
+    const budgetAmountsMap: Record<string, number> = {};
+
+    budgets.forEach(b => {
+      const bTeamName = resolveTeamName(b.teamId, b.teamName) || teamMap[b.teamId] || b.teamName || '';
+      const bProjName = resolveProjectName(b.projectId, b.projectName) || projectMap[b.projectId] || b.projectName || '';
+      const tKey = normalizeTeamName(bTeamName).trim().toLowerCase();
+      const pKey = bProjName.trim().toLowerCase();
+      const mKey = normalizeMonth(b.month || '');
+
+      if (tKey && pKey && mKey) {
+        const key = `${tKey}|${pKey}|${mKey}`;
+        budgetAmountsMap[key] = (budgetAmountsMap[key] || 0) + (Number(b.amount) || 0);
+      }
+    });
+
+    // 2. Group acceptances by (teamKey, projectKey, monthKey)
+    const acceptanceGroups: Record<string, {
+      teamId?: string;
+      teamName: string;
+      teamCode?: string;
+      projectId?: string;
+      projectName: string;
+      month: string;
+      acceptanceCost: number;
+      count: number;
+    }> = {};
+
+    // Combine acceptances and finalAcceptances cleanly without duplicate IDs
+    const allAcceptancesList: any[] = [];
+    const seenIds = new Set<string>();
+    (acceptances || []).forEach(a => {
+      if (a && a.id && !seenIds.has(a.id)) {
+        seenIds.add(a.id);
+        allAcceptancesList.push(a);
+      }
+    });
+    (finalAcceptances || []).forEach(fa => {
+      if (fa && fa.id && !seenIds.has(fa.id)) {
+        seenIds.add(fa.id);
+        allAcceptancesList.push(fa);
+      }
+    });
+
+    allAcceptancesList.forEach(a => {
+      const aTeamName = resolveTeamName(a.teamId, a.teamName) || teamMap[a.teamId] || a.teamName || '';
+      const aProjName = resolveProjectName(a.projectId, a.projectName) || projectMap[a.projectId] || a.projectName || '';
+      const tKey = normalizeTeamName(aTeamName).trim().toLowerCase();
+      const pKey = aProjName.trim().toLowerCase();
+      const mKey = normalizeMonth(a.month || '');
+
+      const costValue = getAcceptanceCostValue(a);
+
+      if (tKey && pKey && mKey && costValue > 0) {
+        const key = `${tKey}|${pKey}|${mKey}`;
+        const teamObj = teams.find((t: any) => t.id === a.teamId || normalizeTeamName(t.name).toLowerCase() === tKey);
+        const resolvedTeamName = teamObj?.name || aTeamName || tKey.toUpperCase();
+        const resolvedTeamCode = teamObj?.teamCode || a.teamCode || normalizeTeamCode(extractTeamCode(resolvedTeamName));
+
+        if (!acceptanceGroups[key]) {
+          acceptanceGroups[key] = {
+            teamId: a.teamId,
+            teamName: resolvedTeamName,
+            teamCode: resolvedTeamCode,
+            projectId: a.projectId,
+            projectName: aProjName || pKey.toUpperCase(),
+            month: mKey,
+            acceptanceCost: 0,
+            count: 0
+          };
+        }
+        acceptanceGroups[key].acceptanceCost += costValue;
+        acceptanceGroups[key].count += 1;
+      }
+    });
+
+    // 3. Filter groups where acceptanceCost > 0 but registered budget <= 0
+    const result: Array<{
+      id: string;
+      teamId?: string;
+      teamName: string;
+      teamCode?: string;
+      projectId?: string;
+      projectName: string;
+      month: string;
+      acceptanceCost: number;
+      budgetAmount: number;
+      count: number;
+    }> = [];
+
+    Object.entries(acceptanceGroups).forEach(([key, item]) => {
+      const budgetAmt = budgetAmountsMap[key] || 0;
+      if (budgetAmt <= 0) {
+        result.push({
+          id: key,
+          ...item,
+          budgetAmount: budgetAmt
+        });
+      }
+    });
+
+    // Sort by month desc, then projectName asc, then teamName asc
+    result.sort((a, b) => {
+      if (b.month !== a.month) return b.month.localeCompare(a.month);
+      if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName, 'vi');
+      return a.teamName.localeCompare(b.teamName, 'vi');
+    });
+
+    return result;
+  }, [acceptances, budgets, resolveTeamName, resolveProjectName, teamMap, projectMap, teams]);
+
+  const filteredUnbudgetedAcceptances = useMemo(() => {
+    return unbudgetedAcceptances.filter(item => {
+      const matchesSearch = 
+        !debouncedAdminBudgetSearch ||
+        item.projectName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        item.teamName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        (item.teamCode || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
+        extractGDKD(item.teamName).toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase());
+      
+      const matchesMonth = !adminBudgetMonthFilter || normalizeMonth(item.month) === normalizeMonth(adminBudgetMonthFilter);
+      return matchesSearch && matchesMonth;
+    });
+  }, [unbudgetedAcceptances, debouncedAdminBudgetSearch, adminBudgetMonthFilter]);
+
+  const paginatedUnbudgetedAcceptances = useMemo(() => {
+    const start = (unbudgetedPage - 1) * 20;
+    return (filteredUnbudgetedAcceptances || []).slice(start, start + 20);
+  }, [filteredUnbudgetedAcceptances, unbudgetedPage]);
 
   const adminFilteredCosts = useMemo(() => {
     return costs
@@ -3534,6 +3732,7 @@ export default function App() {
   const [historyToView, setHistoryToView] = useState<any[]>([]);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [historyTargetName, setHistoryTargetName] = useState('');
+  const [historyTargetRecord, setHistoryTargetRecord] = useState<any>(null);
   const [editingCostForm, setEditingCostForm] = useState({
     fbAds: '',
     posting: '',
@@ -3575,19 +3774,30 @@ export default function App() {
   const [isDeletingProjects, setIsDeletingProjects] = useState(false);
   const [isMergingBudgets, setIsMergingBudgets] = useState(false);
 
-  const handleMergeDuplicateBudgets = async () => {
+  const handleMergeDuplicateBudgets = async (targetMonthFilter?: string) => {
     if (!isAdmin && !isMod && !isAccountant) return;
     
     setIsMergingBudgets(true);
-    const toastId = toast.loading('Đang xử lý gộp ngân sách trùng lặp...');
+    const filterLabel = targetMonthFilter ? `kỳ ${targetMonthFilter}` : 'tất cả các kỳ';
+    const toastId = toast.loading(`Đang xử lý rà soát & gộp ngân sách (${filterLabel})...`);
     
     try {
       const groups: Record<string, any[]> = {};
+      
       budgets.forEach(b => {
-        // ONLY group and merge if we have valid IDs
-        if (!b.projectId || !b.teamId || !b.month) return;
+        const projName = resolveProjectName(b.projectId, b.projectName) || b.projectId || '';
+        const teamNameStr = resolveTeamName(b.teamId, b.teamName) || b.teamId || '';
+        const pKey = projName.trim().toLowerCase();
+        const tKey = normalizeTeamName(teamNameStr).trim().toLowerCase();
+        const mKey = normalizeMonth(b.month || '');
+        if (!pKey || !tKey || !mKey) return;
         
-        const key = `${b.projectId}_${b.teamId}_${b.month}`;
+        // If filter month is specified, only include matching month
+        if (targetMonthFilter && normalizeMonth(targetMonthFilter) !== mKey) {
+          return;
+        }
+
+        const key = `${pKey}_${tKey}_${mKey}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(b);
       });
@@ -3595,78 +3805,188 @@ export default function App() {
       let mergedCount = 0;
       let deletedCount = 0;
       let costUpdatedCount = 0;
+      let subBudgetsUpdatedCount = 0;
       
       for (const key in groups) {
         const group = groups[key];
+        const target = group[0];
+        const others = group.slice(1);
+        
+        const totalAmount = group.reduce((sum, b) => sum + Number(b.amount || 0), 0);
+        
+        // Collect & construct subBudgets breakdown for individual user contributions
+        let combinedSubBudgets: any[] = [];
+        group.forEach(b => {
+          if (b.subBudgets && Array.isArray(b.subBudgets) && b.subBudgets.length > 0) {
+            combinedSubBudgets = [...combinedSubBudgets, ...b.subBudgets];
+          } else {
+            const bAmt = Number(b.amount || 0);
+            const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
+            const email = (b.userEmail || b.createdByEmail || '').toLowerCase();
+            const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+            combinedSubBudgets.push({
+              id: b.id || `sub-${Math.random().toString(36).substring(2, 9)}`,
+              userId: b.createdBy || b.userId || '',
+              userName: editor,
+              userEmail: email,
+              amount: bAmt,
+              note: b.note || b.description || `Đăng ký ngân sách ${getMarketingMonthDisplayRange(b.month)}`,
+              createdAt: timeStr
+            });
+          }
+        });
+
+        // Ensure subBudgets are chronologically sorted
+        combinedSubBudgets.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+
+        // Collect all edit histories (synthesize initial registration entry if missing)
+        let combinedHistory: any[] = [];
+        group.forEach(b => {
+          if (b.editHistory && Array.isArray(b.editHistory) && b.editHistory.length > 0) {
+            combinedHistory = [...combinedHistory, ...b.editHistory];
+          } else {
+            const bAmt = Number(b.amount || 0);
+            const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Hệ thống';
+            const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+            combinedHistory.push({
+              action: 'REGISTER',
+              editorName: editor,
+              editorEmail: b.userEmail || b.createdByEmail || '',
+              timestamp: timeStr,
+              amount: bAmt,
+              note: `Đăng ký ngân sách ban đầu: ${bAmt.toLocaleString()}đ (${resolveProjectName(b.projectId, b.projectName)} - ${resolveTeamName(b.teamId, b.teamName)})`
+            });
+          }
+        });
+
         if (group.length > 1) {
-          // Keep the first one
-          const target = group[0];
-          const others = group.slice(1);
-          
-          const totalAmount = group.reduce((sum, b) => sum + b.amount, 0);
-          
-          // Collect all edit histories
-          let combinedHistory: any[] = [];
-          group.forEach(b => {
-            if (b.editHistory && Array.isArray(b.editHistory)) {
-              combinedHistory = [...combinedHistory, ...b.editHistory];
-            }
-          });
-          
           // Add a merge entry
           combinedHistory.push({
-            action: 'MERGE_CLEANUP',
-            editorName: 'SYSTEM',
-            editorEmail: 'system@ais.dev',
+            action: 'MERGE_CONSOLIDATE',
+            editorName: userProfile?.fullName || user?.displayName || 'SYSTEM',
+            editorEmail: user?.email || 'system@ais.dev',
             timestamp: new Date().toISOString(),
+            mergedCount: group.length,
+            userCount: combinedSubBudgets.length,
             mergedIds: others.map(o => o.id),
-            previousTotal: target.amount,
-            newTotal: totalAmount
+            previousTotal: target.amount || 0,
+            addedAmount: totalAmount - (target.amount || 0),
+            newTotal: totalAmount,
+            note: `Gộp ${group.length} bản ghi đăng ký của các thành viên thành 1 ngân sách tổng cho Đội (${resolveTeamName(target.teamId, target.teamName)} - ${resolveProjectName(target.projectId, target.projectName)})`
           });
-          
-          // Sort history by timestamp
-          combinedHistory.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-          
+        }
+        
+        // Sort history by timestamp
+        combinedHistory.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+        
+        if (group.length > 1 || !target.subBudgets || target.subBudgets.length === 0) {
           const batch = writeBatch(db);
           
           // Update target
           batch.update(doc(db, 'budgets', target.id), {
             amount: totalAmount,
+            subBudgets: combinedSubBudgets,
             editHistory: combinedHistory,
             updatedAt: serverTimestamp()
           });
+          subBudgetsUpdatedCount++;
           
-          // Update costs pointing to others
-          const otherIds = others.map(o => o.id);
-          const costsToUpdate = costs.filter(c => otherIds.includes(c.budgetId));
-          
-          costsToUpdate.forEach(c => {
-            batch.update(doc(db, 'costs', c.id), {
-              budgetId: target.id
+          if (group.length > 1) {
+            // Update costs pointing to others
+            const otherIds = others.map(o => o.id);
+            const costsToUpdate = costs.filter(c => otherIds.includes(c.budgetId));
+            
+            costsToUpdate.forEach(c => {
+              batch.update(doc(db, 'costs', c.id), {
+                budgetId: target.id
+              });
+              costUpdatedCount++;
             });
-            costUpdatedCount++;
-          });
-          
-          // Delete others
-          others.forEach(o => {
-            batch.delete(doc(db, 'budgets', o.id));
-            deletedCount++;
-          });
+            
+            // Delete others
+            others.forEach(o => {
+              batch.delete(doc(db, 'budgets', o.id));
+              deletedCount++;
+            });
+            mergedCount++;
+          }
           
           await batch.commit();
-          mergedCount++;
         }
       }
       
-      if (mergedCount > 0) {
-        toast.success(`Đã gộp ${mergedCount} nhóm ngân sách. Xóa ${deletedCount} bản trùng. Cập nhật ${costUpdatedCount} chi phí.`, { id: toastId });
-        await logAction('SYSTEM', 'budgets', 'all', { mergedCount, deletedCount, costUpdatedCount });
+      if (mergedCount > 0 || subBudgetsUpdatedCount > 0) {
+        toast.success(`Đã rà soát & gộp thành công ${filterLabel}: Đã gộp ${mergedCount} nhóm ngân sách trùng, chuẩn hóa chi tiết cho ${subBudgetsUpdatedCount} bản ghi Đội, cập nhật ${costUpdatedCount} chi phí liên quan.`, { id: toastId, duration: 6000 });
+        await logAction('SYSTEM', 'budgets', 'audit_merge', { filterLabel, mergedCount, deletedCount, costUpdatedCount, subBudgetsUpdatedCount });
       } else {
-        toast.success('Không có ngân sách trùng lặp nào cần gộp.', { id: toastId });
+        toast.success(`Ngân sách (${filterLabel}) đã chuẩn hóa, không có bản ghi trùng lặp nào cần gộp.`, { id: toastId });
       }
     } catch (error) {
       console.error("Merge error:", error);
-      toast.error('Lỗi khi gộp ngân sách: ' + (error instanceof Error ? error.message : String(error)), { id: toastId });
+      toast.error('Lỗi khi rà soát & gộp ngân sách: ' + (error instanceof Error ? error.message : String(error)), { id: toastId });
+    } finally {
+      setIsMergingBudgets(false);
+    }
+  };
+
+  const handleAuditAndMerge082026Budgets = async () => {
+    await handleMergeDuplicateBudgets('08-2026');
+  };
+
+  const handleAuditAndUpdateBudgetHistories = async () => {
+    if (!isAdmin && !isMod && !isAccountant) return;
+    
+    setIsMergingBudgets(true);
+    const toastId = toast.loading('Đang rà soát & cập nhật lịch sử đăng ký ngân sách...');
+    
+    try {
+      let updatedHistoriesCount = 0;
+      const batchSize = 400;
+      let batch = writeBatch(db);
+      let opCount = 0;
+
+      // 1. Audit single budget records lacking editHistory and populate initial REGISTER entry
+      for (const b of budgets) {
+        if (!b.editHistory || !Array.isArray(b.editHistory) || b.editHistory.length === 0) {
+          const bAmt = Number(b.amount || 0);
+          const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
+          const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+          const initialHist = [{
+            action: 'REGISTER',
+            editorName: editor,
+            editorEmail: b.userEmail || b.createdByEmail || '',
+            timestamp: timeStr,
+            amount: bAmt,
+            note: `Đăng ký ngân sách ban đầu: ${bAmt.toLocaleString()}đ (${resolveProjectName(b.projectId, b.projectName)} - ${resolveTeamName(b.teamId, b.teamName)})`
+          }];
+
+          const bRef = doc(db, 'budgets', b.id);
+          batch.update(bRef, {
+            editHistory: initialHist,
+            updatedAt: serverTimestamp()
+          });
+          opCount++;
+          updatedHistoriesCount++;
+
+          if (opCount >= batchSize) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+
+      // 2. Perform merge cleanup for duplicate records while preserving complete combined history
+      await handleMergeDuplicateBudgets();
+
+      toast.success(`Đã hoàn tất rà soát và cập nhật lịch sử cho ${updatedHistoriesCount} bản ghi ngân sách!`, { id: toastId });
+    } catch (error) {
+      console.error("Audit budget history error:", error);
+      toast.error('Lỗi khi rà soát lịch sử ngân sách: ' + (error instanceof Error ? error.message : String(error)), { id: toastId });
     } finally {
       setIsMergingBudgets(false);
     }
@@ -7237,7 +7557,7 @@ export default function App() {
       item => item.teamId === selectedTeamId && item.projectId === selectedProjectId && item.month === budgetMonth
     );
     if (existsInQueue) {
-      toast.error(`Dự án "${project?.name || 'N/A'}" đã có trong danh sách chờ đăng ký của kỳ ${budgetMonth}! Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+      toast.error('Đội đã có đăng ký ngân sách cho dự án này trong danh sách chờ!');
       return false;
     }
 
@@ -7245,7 +7565,7 @@ export default function App() {
       b => b.teamId === selectedTeamId && b.projectId === selectedProjectId && b.month === budgetMonth
     );
     if (existsInDb) {
-      toast.error(`Team "${team?.name || selectedTeamName}" đã đăng ký ngân sách cho dự án "${project?.name || 'N/A'}" trong kỳ ${budgetMonth}. Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+      toast.error('Đội đã có đăng ký ngân sách cho dự án này trong kỳ này!');
       return false;
     }
 
@@ -7324,12 +7644,11 @@ export default function App() {
         const existingBudgetsForMatch = budgets.filter(b => 
           b.projectId && b.projectId === item.projectId && 
           b.teamId && b.teamId === item.teamId && 
-          b.month === item.month &&
-          (b.createdBy === user?.uid || (b.userEmail?.toLowerCase() === user?.email?.toLowerCase()))
+          normalizeMonth(b.month) === normalizeMonth(item.month)
         );
 
         if (existingBudgetsForMatch.length > 0) {
-          // Merge everything into the FIRST one
+          // Merge into the FIRST team master budget record
           const targetBudget = existingBudgetsForMatch[0];
           const targetRef = doc(db, 'budgets', targetBudget.id);
           const duplicates = existingBudgetsForMatch.slice(1);
@@ -7339,58 +7658,116 @@ export default function App() {
           let totalToMergeFromDuplicates = 0;
           const duplicateIdsRemoved: string[] = [];
 
-          // If duplicates existed, prepare them for merge
           if (duplicates.length > 0) {
             for (const dup of duplicates) {
-              totalToMergeFromDuplicates += dup.amount;
+              totalToMergeFromDuplicates += Number(dup.amount || 0);
               duplicateIdsRemoved.push(dup.id);
               
-              // Update costs pointing to duplicate to point to target
               const affectedCosts = costs.filter(c => c.budgetId === dup.id);
               affectedCosts.forEach(c => {
                 batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
               });
               
-              // Delete duplicate
               batch.delete(doc(db, 'budgets', dup.id));
             }
           }
-          
-          // Single update for target with combined amount
+
+          // Build/Update subBudgets for targetBudget
+          let currentSubBudgets = Array.isArray(targetBudget.subBudgets) ? [...targetBudget.subBudgets] : [];
+          if (currentSubBudgets.length === 0) {
+            currentSubBudgets.push({
+              id: `sub-init-${targetBudget.id}`,
+              userId: targetBudget.createdBy || '',
+              userName: targetBudget.implementerName || targetBudget.userEmail || 'Chưa rõ',
+              userEmail: (targetBudget.userEmail || '').toLowerCase(),
+              amount: Number(targetBudget.amount || 0),
+              note: `Đăng ký ban đầu`,
+              createdAt: targetBudget.createdAt?.toDate ? targetBudget.createdAt.toDate().toISOString() : new Date().toISOString()
+            });
+          }
+
+          // Check if this user already has an entry in subBudgets
+          const userSubIndex = currentSubBudgets.findIndex(s => 
+            (s.userEmail && s.userEmail.toLowerCase() === user?.email?.toLowerCase()) || 
+            (s.userId && s.userId === user?.uid)
+          );
+
+          if (userSubIndex > -1) {
+            currentSubBudgets[userSubIndex] = {
+              ...currentSubBudgets[userSubIndex],
+              amount: currentSubBudgets[userSubIndex].amount + item.amount,
+              note: item.note || currentSubBudgets[userSubIndex].note || `Cập nhật đăng ký bổ sung`,
+              updatedAt: new Date().toISOString()
+            };
+          } else {
+            currentSubBudgets.push({
+              id: `sub-${Math.random().toString(36).substring(2, 9)}`,
+              userId: user?.uid || '',
+              userName: item.implementerName || userProfile?.fullName || user?.displayName || user?.email || 'Chưa rõ',
+              userEmail: (user?.email || '').toLowerCase(),
+              amount: item.amount,
+              note: item.note || `Đăng ký ngân sách cá nhân cho Đội`,
+              createdAt: new Date().toISOString()
+            });
+          }
+
+          const newTotalAmount = currentSubBudgets.reduce((sum, s) => sum + Number(s.amount || 0), 0) + totalToMergeFromDuplicates;
+
           batch.update(targetRef, {
-            amount: increment(item.amount + totalToMergeFromDuplicates),
+            amount: newTotalAmount,
+            subBudgets: currentSubBudgets,
             updatedAt: serverTimestamp(),
             editHistory: arrayUnion({
-              action: 'MERGE_ADD_CLEANUP',
-              editorName: implementerName,
+              action: 'REGISTER_ADD',
+              editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Unknown',
               editorEmail: user?.email,
               timestamp: new Date().toISOString(),
               addedAmount: item.amount,
-              mergedFromDuplicates: totalToMergeFromDuplicates,
-              prevAmount: targetBudget.amount,
-              duplicatesFixed: duplicateIdsRemoved.length > 0 ? duplicateIdsRemoved : null
+              newTotalAmount: newTotalAmount,
+              note: item.note || `Thành viên đăng ký thêm ngân sách cho Đội`
             })
           });
 
           await batch.commit();
           await logAction('UPDATE', 'budgets', targetBudget.id, { 
-            mergedAmount: item.amount,
-            duplicatesRemoved: duplicateIdsRemoved.length 
+            addedAmount: item.amount,
+            newTotalAmount,
+            userEmail: user?.email
           });
         } else {
-          // Create new
+          // Create new team master budget doc
+          const initialSubBudget = {
+            id: `sub-1`,
+            userId: user?.uid || '',
+            userName: item.implementerName || userProfile?.fullName || user?.displayName || user?.email || 'Chưa rõ',
+            userEmail: (user?.email || '').toLowerCase(),
+            amount: item.amount,
+            note: item.note || `Đăng ký ngân sách ban đầu`,
+            createdAt: new Date().toISOString()
+          };
+
+          const initialHistory = {
+            action: 'REGISTER',
+            editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Unknown',
+            editorEmail: user?.email,
+            timestamp: new Date().toISOString(),
+            amount: item.amount,
+            note: `Đăng ký ngân sách ban đầu cho Đội`
+          };
+
           const docRef = await addDoc(collection(db, 'budgets'), {
             projectId: item.projectId,
             projectName: item.projectName,
             teamId: item.teamId,
             teamName: item.teamName,
-            implementerName: item.implementerName,
+            implementerName: item.implementerName || userProfile?.fullName || user?.displayName || 'Chưa rõ',
             month: item.month,
             amount: item.amount,
+            subBudgets: [initialSubBudget],
+            editHistory: [initialHistory],
             createdAt: serverTimestamp(),
             createdBy: user?.uid,
-            userEmail: user?.email?.toLowerCase(),
-            editHistory: []
+            userEmail: user?.email?.toLowerCase()
           });
           await logAction('CREATE', 'budgets', docRef.id, { ...item });
         }
@@ -7423,8 +7800,23 @@ export default function App() {
   };
 
   const handleOpenHistory = (target: any, name: string) => {
-    setHistoryToView(target.editHistory || []);
+    setHistoryTargetRecord(target);
     setHistoryTargetName(name);
+    let hist = target?.editHistory || [];
+    if (!Array.isArray(hist) || hist.length === 0) {
+      const amt = Number(target?.amount || target?.actualCost || 0);
+      const editor = target?.implementerName || target?.userEmail || target?.createdByEmail || 'Chưa rõ';
+      const timeStr = target?.createdAt?.toDate ? target.createdAt.toDate().toISOString() : (target?.createdAt ? new Date(target.createdAt).toISOString() : new Date().toISOString());
+      hist = [{
+        action: 'REGISTER',
+        editorName: editor,
+        editorEmail: target?.userEmail || target?.createdByEmail || '',
+        timestamp: timeStr,
+        amount: amt,
+        note: `Đăng ký ban đầu: ${amt.toLocaleString()}đ`
+      }];
+    }
+    setHistoryToView(hist);
     setIsHistoryDialogOpen(true);
   };
 
@@ -9195,6 +9587,47 @@ export default function App() {
     const monthStr = adminBudgetMonthFilter || 'tat_ca';
     XLSX.writeFile(workbook, `admin_ngan_sach_loc_${monthStr}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
     toast.success('Đã xuất danh sách ngân sách Admin đã lọc thành công');
+  };
+
+  const handleExportUnbudgetedAcceptances = () => {
+    if (filteredUnbudgetedAcceptances.length === 0) {
+      toast.error('Không có dữ liệu đội phát sinh chi phí MKT chưa đăng ký ngân sách để xuất');
+      return;
+    }
+
+    const data = filteredUnbudgetedAcceptances.map((item, idx) => {
+      return {
+        'STT': idx + 1,
+        'Dự án': item.projectName,
+        'Tên Team': item.teamName,
+        'Mã Team': item.teamCode || extractTeamCode(item.teamName),
+        'GĐKD': extractGDKD(item.teamName),
+        'Tháng (Kỳ)': item.month,
+        'Chi phí Nghiệm thu MKT (VNĐ)': item.acceptanceCost,
+        'Ngân sách Đăng ký (VNĐ)': 0,
+        'Trạng thái': 'Chưa đăng ký Ngân sách'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Phat sinh MKT Khong NS");
+    
+    worksheet['!cols'] = [
+      { wch: 6 },  // STT
+      { wch: 25 }, // Dự án
+      { wch: 20 }, // Tên Team
+      { wch: 15 }, // Mã Team
+      { wch: 20 }, // GĐKD
+      { wch: 12 }, // Tháng
+      { wch: 25 }, // CP Nghiệm thu MKT
+      { wch: 22 }, // Ngân sách Đăng ký
+      { wch: 25 }  // Trạng thái
+    ];
+
+    const monthsStr = adminBudgetMonthFilter ? adminBudgetMonthFilter : 'all';
+    XLSX.writeFile(workbook, `doi_phat_sinh_mkt_khong_ngan_sach_${monthsStr}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    toast.success('Đã xuất danh sách đội phát sinh MKT không ngân sách (Excel) thành công');
   };
 
   const handleSyncReportNT = async () => {
@@ -15200,8 +15633,17 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
+                            className="h-8 text-[10px] bg-indigo-50 font-bold text-indigo-700 border-indigo-300 hover:bg-indigo-100 shadow-sm"
+                            onClick={handleAuditAndMerge082026Budgets}
+                            disabled={isMergingBudgets}
+                          >
+                            <Sparkles className={`w-3 h-3 mr-1 text-indigo-600 ${isMergingBudgets ? 'animate-spin' : ''}`} /> Rà soát & Gộp 08-2026
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
                             className="h-8 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                            onClick={handleMergeDuplicateBudgets}
+                            onClick={() => handleMergeDuplicateBudgets()}
                             disabled={isMergingBudgets}
                           >
                             <RefreshCw className={`w-3 h-3 mr-1 ${isMergingBudgets ? 'animate-spin' : ''}`} /> Gộp ngân sách trùng
@@ -15428,7 +15870,21 @@ export default function App() {
                                     <TableCell className="px-1 text-[10px] font-bold text-slate-700 truncate max-w-[110px]">
                                       {extractGDKD(teamMap[b.teamId] || b.teamName || '')}
                                     </TableCell>
-                                    <TableCell className="px-1 text-[10px] font-medium text-slate-500 truncate max-w-[110px]">{b.implementerName}</TableCell>
+                                    <TableCell className="px-1 text-[10px] font-medium text-slate-700 truncate max-w-[120px]">
+                                      {b.subBudgets && b.subBudgets.length > 1 ? (
+                                        <Badge 
+                                          variant="secondary" 
+                                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[9px] font-bold px-1.5 py-0.5 cursor-pointer flex items-center gap-1 w-fit"
+                                          onClick={() => handleOpenHistory(b, `${resolveProjectName(b.projectId, b.projectName)} - ${resolveTeamName(b.teamId, b.teamName)}`)}
+                                          title="Xem chi tiết ngân sách nhỏ từng người"
+                                        >
+                                          <Users className="w-2.5 h-2.5 text-indigo-600" />
+                                          <span>👥 {b.subBudgets.length} người</span>
+                                        </Badge>
+                                      ) : (
+                                        b.implementerName || 'Chưa rõ'
+                                      )}
+                                    </TableCell>
                                     <TableCell className="px-1 py-1">
                                       <div className="flex flex-col items-center justify-center gap-0.5">
                                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
@@ -15542,6 +15998,159 @@ export default function App() {
                             </Button>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Unbudgeted Acceptance Teams Card */}
+                    <Card className="border-amber-200 bg-amber-50/20 shadow-sm">
+                      <CardHeader className="flex flex-row items-center justify-between pb-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-base font-bold text-amber-900 flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                              Các Đội phát sinh Chi phí MKT nhưng Không có Ngân sách đăng ký
+                            </CardTitle>
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-xs px-2.5 py-0.5 rounded-full">
+                              {filteredUnbudgetedAcceptances.length} đội/dự án
+                            </Badge>
+                          </div>
+                          <CardDescription className="text-xs text-amber-700/80">
+                            Danh sách các team theo từng dự án có phát sinh chi phí nghiệm thu Marketing trong tháng nhưng chưa thực hiện đăng ký ngân sách.
+                          </CardDescription>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 text-[11px] font-bold text-amber-800 border-amber-300 hover:bg-amber-100/80 bg-white shadow-xs"
+                          onClick={handleExportUnbudgetedAcceptances}
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-amber-600" /> Xuất Excel chưa ĐK
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="rounded-xl border border-amber-200/80 bg-white overflow-hidden shadow-xs">
+                          <Table className="table-fixed w-full">
+                            <TableHeader className="bg-amber-100/50 backdrop-blur-sm sticky top-0 z-10 border-b border-amber-200">
+                              <TableRow className="h-9 text-[9px] font-black uppercase text-amber-900">
+                                <TableHead className="w-[45px] px-2 text-center">STT</TableHead>
+                                <TableHead className="w-auto px-2">Dự án & ID</TableHead>
+                                <TableHead className="w-[140px] px-2">Team / Đội</TableHead>
+                                <TableHead className="w-[90px] px-2">Mã Team</TableHead>
+                                <TableHead className="w-[110px] px-2">GĐKD</TableHead>
+                                <TableHead className="w-[100px] px-2 text-center">Hạn kỳ (Kỳ)</TableHead>
+                                <TableHead className="w-[130px] px-2 text-right">CP Nghiệm thu MKT</TableHead>
+                                <TableHead className="w-[110px] px-2 text-right">Ngân sách ĐK</TableHead>
+                                <TableHead className="w-[120px] px-2 text-center">Cảnh báo / T.Thái</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {paginatedUnbudgetedAcceptances.map((item, idx) => {
+                                const realIdx = (unbudgetedPage - 1) * 20 + idx + 1;
+                                return (
+                                  <TableRow key={item.id} className="h-11 transition-colors border-amber-100/60 hover:bg-amber-50/50">
+                                    <TableCell className="px-2 text-center text-[10px] font-bold text-amber-900/60">
+                                      {realIdx}
+                                    </TableCell>
+                                    <TableCell className="px-2 py-1">
+                                      <div className="flex flex-col gap-0.5 max-w-[220px] overflow-hidden">
+                                        <span className="text-[10px] font-bold text-slate-900 leading-tight truncate" title={item.projectName}>
+                                          {item.projectName}
+                                        </span>
+                                        {item.projectId && (
+                                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter tabular-nums">
+                                            ID: {item.projectId.substring(0,8)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="px-2 text-[10px] font-bold text-indigo-700 truncate max-w-[140px] uppercase" title={item.teamName}>
+                                      {item.teamName}
+                                    </TableCell>
+                                    <TableCell className="px-2">
+                                      <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 inline-block truncate max-w-[85px]">
+                                        {item.teamCode || extractTeamCode(item.teamName) || '-'}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="px-2 text-[10px] font-bold text-slate-700 truncate max-w-[110px]">
+                                      {extractGDKD(item.teamName) || '-'}
+                                    </TableCell>
+                                    <TableCell className="px-2 text-center">
+                                      <Badge variant="outline" className="text-[9px] font-mono font-bold bg-amber-50 text-amber-800 border-amber-200 px-2 py-0.5">
+                                        Tháng {item.month}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="px-2 text-right font-mono font-black text-rose-600 text-[11px]">
+                                      {formatCurrency(item.acceptanceCost)}
+                                    </TableCell>
+                                    <TableCell className="px-2 text-right font-mono font-bold text-slate-400 text-[10px]">
+                                      0 đ
+                                    </TableCell>
+                                    <TableCell className="px-2 text-center">
+                                      <Badge className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 border-rose-200 border shadow-xs">
+                                        Chưa đăng ký NS
+                                      </Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              {filteredUnbudgetedAcceptances.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={9} className="h-24 text-center text-amber-800/60 text-xs italic font-medium">
+                                    Không có đội nào phát sinh chi phí MKT mà chưa đăng ký ngân sách trong kỳ này.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                            {filteredUnbudgetedAcceptances.length > 0 && (() => {
+                              const totalUnbudgetedCost = filteredUnbudgetedAcceptances.reduce((acc, curr) => acc + curr.acceptanceCost, 0);
+                              return (
+                                <TableFooter className="bg-amber-100/40 font-bold border-t-2 border-amber-200">
+                                  <TableRow className="h-10 font-bold">
+                                    <TableCell></TableCell>
+                                    <TableCell colSpan={5} className="px-2 text-amber-950 uppercase text-[9px] tracking-wider font-extrabold">
+                                      Tổng phát sinh chưa đăng ký ({filteredUnbudgetedAcceptances.length} đội/dự án)
+                                    </TableCell>
+                                    <TableCell className="px-2 text-right font-mono text-rose-700 text-[11px] font-black">
+                                      {formatCurrency(totalUnbudgetedCost)}
+                                    </TableCell>
+                                    <TableCell className="px-2 text-right font-mono text-slate-500 text-[10px]">
+                                      0 đ
+                                    </TableCell>
+                                    <TableCell></TableCell>
+                                  </TableRow>
+                                </TableFooter>
+                              );
+                            })()}
+                          </Table>
+                        </div>
+                        {/* Pagination Bar for Unbudgeted Table */}
+                        {filteredUnbudgetedAcceptances.length > 20 && (
+                          <div className="flex items-center justify-between pt-2 px-2">
+                            <div className="text-xs text-amber-800 font-medium">
+                              Trang {unbudgetedPage} / {Math.ceil(filteredUnbudgetedAcceptances.length / 20)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900"
+                                disabled={unbudgetedPage === 1}
+                                onClick={() => setUnbudgetedPage(p => Math.max(1, p - 1))}
+                              >
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900"
+                                disabled={filteredUnbudgetedAcceptances.length <= unbudgetedPage * 20}
+                                onClick={() => setUnbudgetedPage(p => p + 1)}
+                              >
+                                Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
@@ -21491,24 +22100,66 @@ export default function App() {
 
       {/* Edit History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-base">
               <History className="w-5 h-5 text-indigo-500" />
-              Lịch sử chỉnh sửa
+              Chi tiết Ngân sách & Lịch sử chỉnh sửa
             </DialogTitle>
-            <DialogDescription>
-              Chi tiết các thay đổi của: <strong>{historyTargetName}</strong>
+            <DialogDescription className="text-xs">
+              Đội/Dự án: <strong className="text-slate-800">{historyTargetName}</strong>
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="py-2 space-y-4 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+            {/* Sub-budgets breakdown if present */}
+            {historyTargetRecord?.subBudgets && Array.isArray(historyTargetRecord.subBudgets) && historyTargetRecord.subBudgets.length > 0 && (
+              <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    Đăng ký của thành viên ({historyTargetRecord.subBudgets.length} lượt)
+                  </span>
+                  <span className="text-xs font-extrabold text-indigo-700">
+                    Tổng: {Number(historyTargetRecord.amount || 0).toLocaleString()}đ
+                  </span>
+                </div>
+                <div className="divide-y divide-indigo-100/80 bg-white rounded-lg border border-indigo-100 overflow-hidden text-xs">
+                  {historyTargetRecord.subBudgets.map((sub: any, sIdx: number) => (
+                    <div key={sub.id || sIdx} className="p-2 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-800 text-[11px]">{sub.userName || sub.userEmail || 'Thành viên'}</p>
+                        {sub.note && <p className="text-[10px] text-slate-500 italic">{sub.note}</p>}
+                        {sub.createdAt && (
+                          <p className="text-[9px] text-slate-400">
+                            {format(new Date(sub.createdAt), 'dd/MM/yyyy HH:mm')}
+                          </p>
+                        )}
+                      </div>
+                      <span className="font-bold text-indigo-600 text-xs tabular-nums">
+                        {Number(sub.amount || 0).toLocaleString()}đ
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Edit History Timeline */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-slate-400" /> Nhật ký thay đổi
+              </p>
               {historyToView && historyToView.length > 0 ? (
                 historyToView.slice().reverse().map((entry, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border-indigo-100">
-                        {entry.action === 'UPDATE' ? 'CHỈNH SỬA' : entry.action === 'MERGE_ADD' ? 'GỘP THÊM' : entry.action}
+                        {entry.action === 'UPDATE' ? 'CHỈNH SỬA' : 
+                         entry.action === 'MERGE_ADD' ? 'GỘP THÊM' : 
+                         entry.action === 'REGISTER' ? 'ĐĂNG KÝ BAN ĐẦU' :
+                         entry.action === 'REGISTER_ADD' ? 'ĐĂNG KÝ BỔ SUNG' :
+                         entry.action === 'MERGE_CONSOLIDATE' ? 'GỘP BẢN GHI ĐỘI' :
+                         entry.action}
                       </Badge>
                       <span className="text-[10px] text-slate-400 font-medium">
                         {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm') : '-'}
@@ -21516,9 +22167,13 @@ export default function App() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-bold text-slate-700">{entry.editorName || entry.editorEmail}</p>
-                      {entry.action === 'MERGE_ADD' ? (
+                      {entry.action === 'MERGE_ADD' || entry.action === 'REGISTER_ADD' ? (
                         <p className="text-[11px] text-slate-600">
-                          Gộp thêm <span className="font-bold text-emerald-600">{entry.addedAmount?.toLocaleString()}đ</span> vào tổng <span className="font-bold">{entry.prevAmount?.toLocaleString()}đ</span>
+                          Thêm <span className="font-bold text-emerald-600">+{Number(entry.addedAmount || 0).toLocaleString()}đ</span>. Tổng mới: <span className="font-bold text-indigo-700">{Number(entry.newTotalAmount || entry.newTotal || 0).toLocaleString()}đ</span>
+                        </p>
+                      ) : entry.action === 'MERGE_CONSOLIDATE' ? (
+                        <p className="text-[11px] text-slate-600">
+                          Gộp <span className="font-bold text-indigo-600">{entry.mergedCount} bản ghi</span> thành 1 ngân sách chung cho Đội. Tổng mới: <span className="font-bold text-emerald-600">{Number(entry.newTotal || 0).toLocaleString()}đ</span>
                         </p>
                       ) : (
                         <div className="space-y-1">
@@ -21532,6 +22187,9 @@ export default function App() {
                           ))}
                         </div>
                       )}
+                      {entry.note && (
+                        <p className="text-[10px] text-slate-500 italic mt-0.5">{entry.note}</p>
+                      )}
                       {entry.reason && (
                         <div className="mt-1.5 p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px] text-amber-800 font-sans">
                           <span className="font-bold">Lý do sửa:</span> {entry.reason}
@@ -21541,8 +22199,8 @@ export default function App() {
                   </div>
                 ))
               ) : (
-                <div className="py-8 text-center text-slate-400 italic text-sm">
-                  Chưa có lịch sử chỉnh sửa cho bản ghi này
+                <div className="py-6 text-center text-slate-400 italic text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  Chưa có nhật ký thay đổi cho bản ghi này
                 </div>
               )}
             </div>

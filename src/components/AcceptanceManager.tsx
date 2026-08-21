@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -11,6 +11,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   MoveHorizontal,
   Smartphone,
   CreditCard,
@@ -136,9 +138,52 @@ export const AcceptanceManager = React.memo(({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedAcceptanceSearch(acceptanceSearch);
-    }, 250);
+    }, 200);
     return () => clearTimeout(handler);
   }, [acceptanceSearch]);
+
+  // 🚀 Fast O(1) Lookups for Teams, Projects & Blocks to eliminate N^2 render/filter lag
+  const teamLookup = useMemo(() => {
+    const byId = new Map<string, any>();
+    const byCode = new Map<string, any>();
+    const byName = new Map<string, any>();
+
+    (teams || []).forEach((t: any) => {
+      if (t.id) byId.set(String(t.id), t);
+      if (t.teamCode) byCode.set(String(t.teamCode).toLowerCase(), t);
+      if (t.name) byName.set(String(t.name).toLowerCase(), t);
+    });
+
+    const findTeam = (ref: string) => {
+      if (!ref) return null;
+      const str = String(ref);
+      const lower = str.toLowerCase();
+      return byId.get(str) || byCode.get(lower) || byName.get(lower) || null;
+    };
+
+    return { findTeam, byId, byCode, byName };
+  }, [teams]);
+
+  const projectLookup = useMemo(() => {
+    const byId = new Map<string, any>();
+    const byCode = new Map<string, any>();
+    const byName = new Map<string, any>();
+
+    (projects || []).forEach((p: any) => {
+      if (p.id) byId.set(String(p.id), p);
+      if (p.projectCode) byCode.set(String(p.projectCode).toLowerCase(), p);
+      if (p.name) byName.set(String(p.name).toLowerCase(), p);
+    });
+
+    const findProject = (ref: string) => {
+      if (!ref) return null;
+      const str = String(ref);
+      const lower = str.toLowerCase();
+      return byId.get(str) || byCode.get(lower) || byName.get(lower) || null;
+    };
+
+    return { findProject, byId, byCode, byName };
+  }, [projects]);
 
   // Unique months list with "Kì 1 - Tháng 8" & "Kì 2 - Tháng 8"
   const uniqueMonths = useMemo(() => {
@@ -156,38 +201,45 @@ export const AcceptanceManager = React.memo(({
     });
   }, [acceptances]);
 
-  // Filtered acceptances
+  // Filtered acceptances (Optimized with O(1) lookups)
   const filteredAcceptances = useMemo(() => {
+    const query = debouncedAcceptanceSearch ? debouncedAcceptanceSearch.toLowerCase().trim() : '';
+    const selectedTeam = acceptanceTeamFilter !== 'all' ? teamLookup.byId.get(acceptanceTeamFilter) : null;
+    const selectedProj = acceptanceProjectFilter !== 'all' ? projectLookup.byId.get(acceptanceProjectFilter) : null;
+
     return (acceptances || []).filter((a: any) => {
       // Month match
-      let matchesMonth = true;
       if (acceptanceMonthFilter !== 'all') {
         if (acceptanceMonthFilter === 'Kì 1 - Tháng 8') {
-          matchesMonth = a.month === 'Kì 1 - Tháng 8' || a.month === 'Kỳ 1 - Tháng 8' || (a.month?.includes('8') && (a.month?.includes('1') || a.month?.includes('K1')));
+          const m = a.month || '';
+          if (m !== 'Kì 1 - Tháng 8' && m !== 'Kỳ 1 - Tháng 8' && !(m.includes('8') && (m.includes('1') || m.includes('K1')))) {
+            return false;
+          }
         } else if (acceptanceMonthFilter === 'Kì 2 - Tháng 8') {
-          matchesMonth = a.month === 'Kì 2 - Tháng 8' || a.month === 'Kỳ 2 - Tháng 8' || (a.month?.includes('8') && (a.month?.includes('2') || a.month?.includes('K2')));
-        } else {
-          matchesMonth = a.month === acceptanceMonthFilter;
+          const m = a.month || '';
+          if (m !== 'Kì 2 - Tháng 8' && m !== 'Kỳ 2 - Tháng 8' && !(m.includes('8') && (m.includes('2') || m.includes('K2')))) {
+            return false;
+          }
+        } else if (a.month !== acceptanceMonthFilter) {
+          return false;
         }
       }
 
+      // Fast team resolve
+      const tm = teamLookup.findTeam(a.teamId) || teamLookup.findTeam(a.teamCode) || teamLookup.findTeam(a.teamName);
+
       // Block match
-      const tm = (teams || []).find((t: any) => 
-        (t.id && (t.id === a.teamId || t.id === a.teamCode)) || 
-        (t.teamCode && (t.teamCode === a.teamCode || t.teamCode === a.teamName)) ||
-        (t.name && (t.name === a.teamName || t.name === a.teamCode))
-      );
-      const matchesBlock = acceptanceBlockFilter === 'all' || 
-        a.blockId === acceptanceBlockFilter || 
-        a.blockCode === acceptanceBlockFilter ||
-        tm?.blockId === acceptanceBlockFilter ||
-        tm?.blockCode === acceptanceBlockFilter;
+      if (acceptanceBlockFilter !== 'all') {
+        const matchesBlock = a.blockId === acceptanceBlockFilter || 
+          a.blockCode === acceptanceBlockFilter ||
+          tm?.blockId === acceptanceBlockFilter ||
+          tm?.blockCode === acceptanceBlockFilter;
+        if (!matchesBlock) return false;
+      }
 
       // Team match
-      let matchesTeam = true;
       if (acceptanceTeamFilter !== 'all') {
-        const selectedTeam = (teams || []).find((t: any) => t.id === acceptanceTeamFilter);
-        matchesTeam = a.teamId === acceptanceTeamFilter || 
+        const matchesTeam = a.teamId === acceptanceTeamFilter || 
           a.teamCode === acceptanceTeamFilter || 
           a.teamName === acceptanceTeamFilter ||
           (selectedTeam && (
@@ -196,18 +248,13 @@ export const AcceptanceManager = React.memo(({
             a.teamName === selectedTeam.name ||
             tm?.id === selectedTeam.id
           ));
+        if (!matchesTeam) return false;
       }
 
       // Project match
-      let matchesProject = true;
       if (acceptanceProjectFilter !== 'all') {
-        const selectedProj = (projects || []).find((p: any) => p.id === acceptanceProjectFilter);
-        const pr = (projects || []).find((p: any) => 
-          (p.id && (p.id === a.projectId || p.id === a.projectName)) ||
-          (p.name && (p.name === a.projectName || p.name === a.projectId)) ||
-          (p.projectCode && (p.projectCode === a.projectCode || p.projectCode === a.projectName))
-        );
-        matchesProject = a.projectId === acceptanceProjectFilter || 
+        const pr = projectLookup.findProject(a.projectId) || projectLookup.findProject(a.projectName) || projectLookup.findProject(a.projectCode);
+        const matchesProject = a.projectId === acceptanceProjectFilter || 
           a.projectName === acceptanceProjectFilter || 
           a.projectCode === acceptanceProjectFilter ||
           (selectedProj && (
@@ -216,13 +263,12 @@ export const AcceptanceManager = React.memo(({
             a.projectCode === selectedProj.projectCode ||
             pr?.id === selectedProj.id
           ));
+        if (!matchesProject) return false;
       }
 
       // Search term
-      let matchesSearch = true;
-      if (debouncedAcceptanceSearch) {
-        const query = debouncedAcceptanceSearch.toLowerCase().trim();
-        matchesSearch = (a.projectName || '').toLowerCase().includes(query) ||
+      if (query) {
+        const matchesSearch = (a.projectName || '').toLowerCase().includes(query) ||
           (a.teamName || '').toLowerCase().includes(query) ||
           (a.teamCode || '').toLowerCase().includes(query) ||
           (a.gdkdName || '').toLowerCase().includes(query) ||
@@ -231,9 +277,10 @@ export const AcceptanceManager = React.memo(({
           (a.notes || '').toLowerCase().includes(query) ||
           (tm?.name || '').toLowerCase().includes(query) ||
           (tm?.teamCode || '').toLowerCase().includes(query);
+        if (!matchesSearch) return false;
       }
 
-      return matchesMonth && matchesBlock && matchesTeam && matchesProject && matchesSearch;
+      return true;
     }).sort((a: any, b: any) => {
       if (!sortConfig.key) return 0;
       const valA = getSortValue(a, sortConfig.key, teams, blocks);
@@ -245,12 +292,29 @@ export const AcceptanceManager = React.memo(({
         ? String(valA).localeCompare(String(valB))
         : String(valB).localeCompare(String(valA));
     });
-  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks, projects]);
+  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks, teamLookup, projectLookup]);
 
   const displayedRecords = filteredAcceptances;
 
+  // 📄 Pagination state for ultra-fast rendering of large records sets
+  const [pageSize, setPageSize] = useState<number | 'all'>(50);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset page to 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch]);
+
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(filteredAcceptances.length / (pageSize as number)));
+
+  const paginatedRecords = useMemo(() => {
+    if (pageSize === 'all') return filteredAcceptances;
+    const start = (currentPage - 1) * (pageSize as number);
+    return filteredAcceptances.slice(start, start + (pageSize as number));
+  }, [filteredAcceptances, currentPage, pageSize]);
+
   // Sorting handler
-  const handleSort = (key: string) => {
+  const handleSort = useCallback((key: string) => {
     setSortConfig((prev: any) => {
       if (prev.key === key) {
         if (prev.direction === 'asc') return { key, direction: 'desc' };
@@ -258,7 +322,7 @@ export const AcceptanceManager = React.memo(({
       }
       return { key, direction: 'asc' };
     });
-  };
+  }, []);
 
   // Add empty draft row
   const handleAddDraftRow = () => {
@@ -403,7 +467,7 @@ export const AcceptanceManager = React.memo(({
   };
 
   // Start Edit
-  const handleStartEdit = (item: any) => {
+  const handleStartEdit = useCallback((item: any) => {
     setEditingRowId(item.id);
     setEditingRowState({
       ...item,
@@ -425,24 +489,14 @@ export const AcceptanceManager = React.memo(({
       status: item.status || 'Đã nghiệm thu',
       notes: item.notes || ''
     });
-  };
+  }, []);
 
   // Save Edit
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = useCallback(async () => {
     if (!editingRowId || !editingRowState) return;
     const comp = getRowComputed(editingRowState);
-    const tm = (teams || []).find((t: any) => 
-      t.id === editingRowState.teamId || 
-      t.teamCode === editingRowState.teamCode || 
-      t.name === editingRowState.teamName ||
-      t.id === editingRowState.teamCode
-    );
-    const pr = (projects || []).find((p: any) => 
-      p.id === editingRowState.projectId || 
-      p.name === editingRowState.projectName || 
-      p.projectCode === editingRowState.projectName ||
-      p.id === editingRowState.projectName
-    );
+    const tm = teamLookup.findTeam(editingRowState.teamId) || teamLookup.findTeam(editingRowState.teamCode) || teamLookup.findTeam(editingRowState.teamName);
+    const pr = projectLookup.findProject(editingRowState.projectId) || projectLookup.findProject(editingRowState.projectName) || projectLookup.findProject(editingRowState.projectCode);
 
     try {
       const oldItem = acceptances.find((a: any) => a.id === editingRowId);
@@ -539,7 +593,7 @@ export const AcceptanceManager = React.memo(({
       console.error('Error updating acceptance:', err);
       toast.error('Lỗi khi cập nhật bản ghi');
     }
-  };
+  }, [editingRowId, editingRowState, acceptances, user, teamLookup, projectLookup]);
 
   // Delete single
   const handleConfirmDelete = async () => {
@@ -577,7 +631,7 @@ export const AcceptanceManager = React.memo(({
   };
 
   // Open Calculator
-  const handleOpenCalculator = (
+  const handleOpenCalculator = useCallback((
     fieldKey: string,
     fieldVNName: string,
     currentVal: string,
@@ -588,10 +642,10 @@ export const AcceptanceManager = React.memo(({
     setCalculatorInput(currentVal || '');
     setCalculatorUpdateFn(() => onUpdate);
     setIsCalculatorOpen(true);
-  };
+  }, []);
 
   // Multi-value breakdown tooltip helper
-  const renderBreakdownTooltip = (amount: number, breakdown: any, label: string) => {
+  const renderBreakdownTooltip = useCallback((amount: number, breakdown: any, label: string) => {
     const formattedAmount = formatCurrency(amount).replace(' đ', '');
     const items = breakdown?.items || [];
     if (items.length <= 1) {
@@ -623,7 +677,7 @@ export const AcceptanceManager = React.memo(({
         </span>
       </span>
     );
-  };
+  }, [formatCurrency]);
 
   // Excel Export with exact screenshot columns
   const handleExportExcel = () => {
@@ -1264,6 +1318,39 @@ export const AcceptanceManager = React.memo(({
 
         {/* 📊 Main Data Table */}
         <CardContent className="p-0 relative">
+          <div className="py-2 px-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700">Hiển thị mỗi trang:</span>
+              <Select 
+                value={String(pageSize)} 
+                onValueChange={(val) => {
+                  setPageSize(val === 'all' ? 'all' : Number(val));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs w-[110px] bg-white border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25" className="text-xs">25 dòng</SelectItem>
+                  <SelectItem value="50" className="text-xs">50 dòng</SelectItem>
+                  <SelectItem value="100" className="text-xs">100 dòng</SelectItem>
+                  <SelectItem value="200" className="text-xs">200 dòng</SelectItem>
+                  <SelectItem value="all" className="text-xs">Tất cả ({displayedRecords.length})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">
+                Tổng cộng: <strong className="text-slate-900">{displayedRecords.length}</strong> bản ghi
+                {pageSize !== 'all' && totalPages > 1 && (
+                  <> (Trang <strong className="text-indigo-600">{currentPage}</strong>/{totalPages})</>
+                )}
+              </span>
+            </div>
+          </div>
+
           <div
             ref={tableContainerRef}
             className="overflow-x-auto max-h-[72vh] cursor-grab border-b border-slate-200 select-none scrollbar-thin scrollbar-thumb-slate-300"
@@ -1294,6 +1381,8 @@ export const AcceptanceManager = React.memo(({
                     projects={projects}
                     blocks={blocks}
                     monthsList={uniqueMonths}
+                    findTeam={teamLookup.findTeam}
+                    findProject={projectLookup.findProject}
                     formatCurrency={formatCurrency}
                     onUpdateField={(field, val) => handleUpdateDraftField(idx, field, val)}
                     onSaveDraft={handleSaveDraft}
@@ -1302,7 +1391,7 @@ export const AcceptanceManager = React.memo(({
                   />
                 ))}
 
-                {/* 2. Main Data Records */}
+                {/* 2. Main Data Records (Paginated) */}
                 {displayedRecords.length === 0 && draftRows.length === 0 ? (
                   <tr>
                     <td colSpan={27} className="text-center py-16 text-slate-400 font-semibold text-xs bg-slate-50/50">
@@ -1310,46 +1399,51 @@ export const AcceptanceManager = React.memo(({
                     </td>
                   </tr>
                 ) : (
-                  displayedRecords.map((item: any, idx: number) => (
-                    <AcceptanceRow
-                      key={item.id}
-                      item={item}
-                      index={idx}
-                      isFinalizedView={false}
-                      isSelected={selectedAcceptanceIds.includes(item.id)}
-                      isEditing={editingRowId === item.id}
-                      editingState={editingRowState}
-                      teams={teams}
-                      projects={projects}
-                      blocks={blocks}
-                      monthsList={uniqueMonths}
-                      formatCurrency={formatCurrency}
-                      onSelectRow={(id, checked) => {
-                        setSelectedAcceptanceIds(prev => 
-                          checked ? [...prev, id] : prev.filter(x => x !== id)
-                        );
-                      }}
-                      onStartEdit={handleStartEdit}
-                      onCancelEdit={() => {
-                        setEditingRowId(null);
-                        setEditingRowState(null);
-                      }}
-                      onSaveEdit={handleSaveEdit}
-                      onUpdateEditingField={(field, val) => {
-                        setEditingRowState((prev: any) => ({ ...prev, [field]: val }));
-                      }}
-                      onOpenCalculator={handleOpenCalculator}
-                      onDelete={(id) => {
-                        setItemToDeleteId(id);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                      onOpenHistory={(acc) => {
-                        setHistoryTargetRecord(acc);
-                        setIsHistoryDialogOpen(true);
-                      }}
-                      renderBreakdownTooltip={renderBreakdownTooltip}
-                    />
-                  ))
+                  paginatedRecords.map((item: any, idx: number) => {
+                    const globalIdx = (pageSize === 'all' ? 0 : (currentPage - 1) * pageSize) + idx;
+                    return (
+                      <AcceptanceRow
+                        key={item.id}
+                        item={item}
+                        index={globalIdx}
+                        isFinalizedView={false}
+                        isSelected={selectedAcceptanceIds.includes(item.id)}
+                        isEditing={editingRowId === item.id}
+                        editingState={editingRowState}
+                        teams={teams}
+                        projects={projects}
+                        blocks={blocks}
+                        monthsList={uniqueMonths}
+                        findTeam={teamLookup.findTeam}
+                        findProject={projectLookup.findProject}
+                        formatCurrency={formatCurrency}
+                        onSelectRow={(id, checked) => {
+                          setSelectedAcceptanceIds(prev => 
+                            checked ? [...prev, id] : prev.filter(x => x !== id)
+                          );
+                        }}
+                        onStartEdit={handleStartEdit}
+                        onCancelEdit={() => {
+                          setEditingRowId(null);
+                          setEditingRowState(null);
+                        }}
+                        onSaveEdit={handleSaveEdit}
+                        onUpdateEditingField={(field, val) => {
+                          setEditingRowState((prev: any) => ({ ...prev, [field]: val }));
+                        }}
+                        onOpenCalculator={handleOpenCalculator}
+                        onDelete={(id) => {
+                          setItemToDeleteId(id);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                        onOpenHistory={(acc) => {
+                          setHistoryTargetRecord(acc);
+                          setIsHistoryDialogOpen(true);
+                        }}
+                        renderBreakdownTooltip={renderBreakdownTooltip}
+                      />
+                    );
+                  })
                 )}
               </TableBody>
 
@@ -1359,6 +1453,67 @@ export const AcceptanceManager = React.memo(({
               />
             </table>
           </div>
+
+          {/* 📄 Pagination Bar */}
+          {pageSize !== 'all' && totalPages > 1 && (
+            <div className="py-2.5 px-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <span>
+                  Hiển thị <span className="font-semibold text-slate-900">{(currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-slate-900">{Math.min(currentPage * pageSize, displayedRecords.length)}</span> trên <span className="font-semibold text-slate-900">{displayedRecords.length}</span> bản ghi
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="h-7 w-7 p-0 bg-white"
+                  title="Trang đầu"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-7 px-2.5 gap-1 bg-white"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Trước</span>
+                </Button>
+
+                <span className="px-2 font-medium text-slate-700">
+                  Trang <span className="font-bold text-indigo-600">{currentPage}</span> / {totalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-7 px-2.5 gap-1 bg-white"
+                >
+                  <span className="hidden sm:inline">Sau</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="h-7 w-7 p-0 bg-white"
+                  title="Trang cuối"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -2,33 +2,48 @@ import { ComputedRowValues } from './acceptanceTypes';
 
 // --- EXCEL-STYLE MATH MULTI-VALUE PARSER & CHANNELS AUDITOR ENGINE ---
 export const parseCurrencyFormula = (input: string | number | undefined | null): { total: number; items: { amount: number; label: string }[]; displayString: string } => {
-  if (input === undefined || input === null) return { total: 0, items: [], displayString: '' };
+  if (input === undefined || input === null || input === '' || input === 0) {
+    return { total: 0, items: [], displayString: '' };
+  }
+  
   if (typeof input === 'number') {
+    if (isNaN(input) || input === 0) return { total: 0, items: [], displayString: '' };
     return {
       total: input,
       items: [{ amount: input, label: 'Khoản chi' }],
       displayString: input.toLocaleString('vi-VN') + ' đ'
     };
   }
+
   const str = String(input).trim();
-  if (!str) return { total: 0, items: [], displayString: '' };
+  if (!str || str === '0') return { total: 0, items: [], displayString: '' };
+
+  // Fast path for simple numeric strings without formula characters
+  if (/^-?[\d.,\s]+$/.test(str)) {
+    const num = parseFloat(str.replace(/[.,\s]/g, '')) || 0;
+    return {
+      total: num,
+      items: [{ amount: num, label: 'Khoản chi' }],
+      displayString: num ? num.toLocaleString('vi-VN') + ' đ' : ''
+    };
+  }
 
   const parts = str.split(/[+\n;]/);
   const items: { amount: number; label: string }[] = [];
   let total = 0;
 
-  for (const part of parts) {
-    const trimmed = part.trim();
+  for (let i = 0; i < parts.length; i++) {
+    const trimmed = parts[i].trim();
     if (!trimmed) continue;
 
     const numRegex = /(-?[0-9.,]+)\s*([kKmM]?)/;
     const match = trimmed.match(numRegex);
 
     if (match) {
-      let numStr = match[1].replace(/[.,]/g, '');
+      const numStr = match[1].replace(/[.,]/g, '');
       let val = parseFloat(numStr) || 0;
 
-      const unit = match[2].toLowerCase();
+      const unit = (match[2] || '').toLowerCase();
       if (unit === 'k') {
         val *= 1000;
       } else if (unit === 'm') {

@@ -28,6 +28,8 @@ interface RowProps {
   monthsList: string[];
   teamMap?: Record<string, string>;
   projectMap?: Record<string, string>;
+  findTeam?: (idOrCodeOrName: string) => any;
+  findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
   onSelectRow: (id: string, checked: boolean) => void;
   onStartEdit: (item: any) => void;
@@ -41,7 +43,7 @@ interface RowProps {
   renderBreakdownTooltip: (amount: number, breakdown: any, label: string) => React.ReactNode;
 }
 
-export const AcceptanceRow: React.FC<RowProps> = ({
+export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   item,
   index,
   isFinalizedView = false,
@@ -54,6 +56,8 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   monthsList,
   teamMap = {},
   projectMap = {},
+  findTeam,
+  findProject,
   formatCurrency,
   onSelectRow,
   onStartEdit,
@@ -70,12 +74,16 @@ export const AcceptanceRow: React.FC<RowProps> = ({
     const editComp = getRowComputed(editingState);
 
     // Resolve matching team for editingState
-    const currentEditTeamId = editingState.teamId || 
-      (teams || []).find((t: any) => t.id === editingState.teamCode || t.teamCode === editingState.teamCode || t.name === editingState.teamName || t.id === editingState.teamName)?.id || '';
+    const currentEditTeam = findTeam 
+      ? (findTeam(editingState.teamId) || findTeam(editingState.teamCode) || findTeam(editingState.teamName))
+      : (teams || []).find((t: any) => t.id === editingState.teamCode || t.teamCode === editingState.teamCode || t.name === editingState.teamName || t.id === editingState.teamName);
+    const currentEditTeamId = editingState.teamId || currentEditTeam?.id || '';
 
     // Resolve matching project for editingState
-    const currentEditProjId = editingState.projectId || 
-      (projects || []).find((p: any) => p.id === editingState.projectName || p.name === editingState.projectName || p.projectCode === editingState.projectName || p.id === editingState.projectCode)?.id || '';
+    const currentEditProj = findProject
+      ? (findProject(editingState.projectId) || findProject(editingState.projectName) || findProject(editingState.projectCode))
+      : (projects || []).find((p: any) => p.id === editingState.projectName || p.name === editingState.projectName || p.projectCode === editingState.projectName || p.id === editingState.projectCode);
+    const currentEditProjId = editingState.projectId || currentEditProj?.id || '';
 
     const renderEditInput = (
       fieldKey: string,
@@ -313,11 +321,13 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   const comp = getRowComputed(item);
 
   // Exact resolution of team name and team code to avoid showing raw IDs
-  const matchedTeam = (teams || []).find((t: any) => 
-    (t.id && (t.id === item.teamId || t.id === item.teamCode || t.id === item.teamName)) ||
-    (t.teamCode && (t.teamCode === item.teamCode || t.teamCode === item.teamName || t.teamCode === item.teamId)) ||
-    (t.name && (t.name === item.teamName || t.name === item.teamCode || t.name === item.teamId))
-  );
+  const matchedTeam = findTeam 
+    ? (findTeam(item.teamId) || findTeam(item.teamCode) || findTeam(item.teamName))
+    : (teams || []).find((t: any) => 
+        (t.id && (t.id === item.teamId || t.id === item.teamCode || t.id === item.teamName)) ||
+        (t.teamCode && (t.teamCode === item.teamCode || t.teamCode === item.teamName || t.teamCode === item.teamId)) ||
+        (t.name && (t.name === item.teamName || t.name === item.teamCode || t.name === item.teamId))
+      );
 
   const displayTeamCode = matchedTeam?.teamCode || 
     (item.teamCode && !item.teamCode.startsWith('draft-') && item.teamCode.length < 20 ? item.teamCode : matchedTeam?.name) || 
@@ -328,11 +338,13 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   const displayTeamName = matchedTeam?.name || teamMap[item.teamId] || teamMap[item.teamName] || item.teamName || matchedTeam?.teamCode || item.teamCode || '';
 
   // Exact resolution of project name to avoid showing raw IDs
-  const matchedProject = (projects || []).find((p: any) => 
-    (p.id && (p.id === item.projectId || p.id === item.projectName)) ||
-    (p.name && (p.name === item.projectName || p.name === item.projectId)) ||
-    (p.projectCode && (p.projectCode === item.projectCode || p.projectCode === item.projectName))
-  );
+  const matchedProject = findProject
+    ? (findProject(item.projectId) || findProject(item.projectName) || findProject(item.projectCode))
+    : (projects || []).find((p: any) => 
+        (p.id && (p.id === item.projectId || p.id === item.projectName)) ||
+        (p.name && (p.name === item.projectName || p.name === item.projectId)) ||
+        (p.projectCode && (p.projectCode === item.projectCode || p.projectCode === item.projectName))
+      );
 
   const displayProjectName = matchedProject?.name || 
     projectMap[item.projectId] || 
@@ -531,4 +543,4 @@ export const AcceptanceRow: React.FC<RowProps> = ({
       </TableCell>
     </TableRow>
   );
-};
+});

@@ -7,7 +7,7 @@ interface FooterProps {
   formatCurrency: (amount: number) => string;
 }
 
-export const AcceptanceFooter: React.FC<FooterProps> = ({ records, formatCurrency }) => {
+export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, formatCurrency }) => {
   const totals = React.useMemo(() => {
     return (records || []).reduce((acc, item) => {
       const comp = getRowComputed(item);
@@ -102,4 +102,4 @@ export const AcceptanceFooter: React.FC<FooterProps> = ({ records, formatCurrenc
       </TableRow>
     </TableFooter>
   );
-};
+});

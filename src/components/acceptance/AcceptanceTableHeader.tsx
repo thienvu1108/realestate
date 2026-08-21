@@ -10,7 +10,7 @@ interface HeaderProps {
   isAllSelected: boolean;
 }
 
-export const AcceptanceTableHeader: React.FC<HeaderProps> = ({
+export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
   sortConfig,
   onSort,
   selectedAcceptanceIds,
@@ -173,4 +173,4 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = ({
       </TableRow>
     </TableHeader>
   );
-};
+});

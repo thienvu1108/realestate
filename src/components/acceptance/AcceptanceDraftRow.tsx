@@ -13,6 +13,8 @@ interface DraftRowProps {
   projects: any[];
   blocks: any[];
   monthsList: string[];
+  findTeam?: (idOrCodeOrName: string) => any;
+  findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
   onUpdateField: (field: string, value: any) => void;
   onSaveDraft: (draftRow: any) => void;
@@ -20,13 +22,15 @@ interface DraftRowProps {
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
 }
 
-export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
+export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
   draftRow,
   index,
   teams,
   projects,
   blocks,
   monthsList,
+  findTeam,
+  findProject,
   formatCurrency,
   onUpdateField,
   onSaveDraft,
@@ -35,20 +39,24 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
 }) => {
   const comp = getRowComputed(draftRow);
 
-  const selectedTeam = (teams || []).find((t: any) => 
-    t.id === draftRow.teamId || 
-    (draftRow.teamCode && t.teamCode === draftRow.teamCode) || 
-    (draftRow.teamName && t.name === draftRow.teamName) ||
-    t.id === draftRow.teamCode
-  );
+  const selectedTeam = findTeam
+    ? (findTeam(draftRow.teamId) || findTeam(draftRow.teamCode) || findTeam(draftRow.teamName))
+    : (teams || []).find((t: any) => 
+        t.id === draftRow.teamId || 
+        (draftRow.teamCode && t.teamCode === draftRow.teamCode) || 
+        (draftRow.teamName && t.name === draftRow.teamName) ||
+        t.id === draftRow.teamCode
+      );
   const currentDraftTeamId = draftRow.teamId || selectedTeam?.id || '';
 
-  const selectedProj = (projects || []).find((p: any) => 
-    p.id === draftRow.projectId || 
-    (draftRow.projectName && p.name === draftRow.projectName) || 
-    (draftRow.projectName && p.projectCode === draftRow.projectName) ||
-    p.id === draftRow.projectName
-  );
+  const selectedProj = findProject
+    ? (findProject(draftRow.projectId) || findProject(draftRow.projectName) || findProject(draftRow.projectCode))
+    : (projects || []).find((p: any) => 
+        p.id === draftRow.projectId || 
+        (draftRow.projectName && p.name === draftRow.projectName) || 
+        (draftRow.projectName && p.projectCode === draftRow.projectName) ||
+        p.id === draftRow.projectName
+      );
   const currentDraftProjId = draftRow.projectId || selectedProj?.id || '';
 
   const renderCalcInput = (
@@ -324,4 +332,4 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
       </TableCell>
     </TableRow>
   );
-};
+});

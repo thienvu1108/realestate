@@ -28,23 +28,23 @@ interface DialogsProps {
   // Calculator
   isCalculatorOpen: boolean;
   setIsCalculatorOpen: (open: boolean) => void;
-  activeCalculatorField: string | null;
+  activeCalculatorField?: string | null;
   calculatorFieldNameVN: string;
   calculatorInput: string;
   setCalculatorInput: (val: string) => void;
   calculatorUpdateFn: ((val: string) => void) | null;
   formatCurrency: (amount: number) => string;
 
-  // Finalize
-  isFinalizeDialogOpen: boolean;
-  setIsFinalizeDialogOpen: (open: boolean) => void;
-  itemToFinalize: any;
-  onConfirmFinalize: () => void;
+  // Finalize (optional / deprecated)
+  isFinalizeDialogOpen?: boolean;
+  setIsFinalizeDialogOpen?: (open: boolean) => void;
+  itemToFinalize?: any;
+  onConfirmFinalize?: () => void;
 
   // Delete
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
-  itemToDeleteId: string | null;
+  itemToDeleteId?: string | null;
   onConfirmDelete: () => void;
 
   // Bulk Delete
@@ -53,11 +53,11 @@ interface DialogsProps {
   selectedCount: number;
   onConfirmBulkDelete: () => void;
 
-  // Final Delete
-  isDeleteFinalDialogOpen: boolean;
-  setIsDeleteFinalDialogOpen: (open: boolean) => void;
-  itemFinalToDeleteId: string | null;
-  onConfirmDeleteFinal: () => void;
+  // Final Delete (optional)
+  isDeleteFinalDialogOpen?: boolean;
+  setIsDeleteFinalDialogOpen?: (open: boolean) => void;
+  itemFinalToDeleteId?: string | null;
+  onConfirmDeleteFinal?: () => void;
 
   // History
   isHistoryDialogOpen: boolean;
@@ -80,10 +80,10 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
   calculatorUpdateFn,
   formatCurrency,
 
-  isFinalizeDialogOpen,
-  setIsFinalizeDialogOpen,
-  itemToFinalize,
-  onConfirmFinalize,
+  isFinalizeDialogOpen = false,
+  setIsFinalizeDialogOpen = (_open?: boolean) => {},
+  itemToFinalize = null,
+  onConfirmFinalize = () => {},
 
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
@@ -94,9 +94,9 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
   selectedCount,
   onConfirmBulkDelete,
 
-  isDeleteFinalDialogOpen,
-  setIsDeleteFinalDialogOpen,
-  onConfirmDeleteFinal,
+  isDeleteFinalDialogOpen = false,
+  setIsDeleteFinalDialogOpen = (_open?: boolean) => {},
+  onConfirmDeleteFinal = () => {},
 
   isHistoryDialogOpen,
   setIsHistoryDialogOpen,

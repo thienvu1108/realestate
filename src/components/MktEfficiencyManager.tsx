@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DraggableTableContainer } from './DraggableTableContainer';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
@@ -918,7 +919,7 @@ export function MktEfficiencyManager({
                           Chưa ghi nhận khoản chi cụ thể nào liên kết với ngân sách này.
                         </div>
                       ) : (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                        <DraggableTableContainer className="rounded-2xl border border-slate-100 bg-white">
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="bg-slate-50/80 border-b border-slate-100 text-[9.5px] font-black text-slate-500 uppercase tracking-wider">
@@ -1022,7 +1023,7 @@ export function MktEfficiencyManager({
                               ))}
                             </tbody>
                           </table>
-                        </div>
+                        </DraggableTableContainer>
                       )}
 
                     </div>

@@ -35,7 +35,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
 }) => {
   const comp = getRowComputed(draftRow);
 
-  const selectedTeam = (teams || []).find((t: any) => t.id === draftRow.teamId || t.teamCode === draftRow.teamCode);
+  const selectedTeam = (teams || []).find((t: any) => 
+    t.id === draftRow.teamId || 
+    (draftRow.teamCode && t.teamCode === draftRow.teamCode) || 
+    (draftRow.teamName && t.name === draftRow.teamName) ||
+    t.id === draftRow.teamCode
+  );
+  const currentDraftTeamId = draftRow.teamId || selectedTeam?.id || '';
+
+  const selectedProj = (projects || []).find((p: any) => 
+    p.id === draftRow.projectId || 
+    (draftRow.projectName && p.name === draftRow.projectName) || 
+    (draftRow.projectName && p.projectCode === draftRow.projectName) ||
+    p.id === draftRow.projectName
+  );
+  const currentDraftProjId = draftRow.projectId || selectedProj?.id || '';
 
   const renderCalcInput = (
     fieldKey: string,
@@ -66,9 +80,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
   };
 
   return (
-    <TableRow className="bg-amber-50/40 hover:bg-amber-50/70 border-b border-amber-200 transition-colors">
+    <TableRow className="bg-amber-50/50 hover:bg-amber-50/80 border-b-2 border-amber-300 transition-colors">
       {/* STT */}
-      <TableCell className="text-center font-bold text-xs text-amber-700 bg-amber-100/50 sticky left-0 z-10">
+      <TableCell className="text-center font-bold text-xs text-amber-700 bg-amber-100/60 sticky left-0 z-10">
         <div className="flex items-center justify-center gap-1">
           <span className="text-[10px] font-mono font-black">+{index + 1}</span>
         </div>
@@ -96,15 +110,15 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
       </TableCell>
 
       {/* Col B: MÃ TEAM */}
-      <TableCell className="p-1 min-w-[100px]">
+      <TableCell className="p-1 min-w-[130px]">
         <Select
-          value={draftRow.teamId || ''}
+          value={currentDraftTeamId}
           onValueChange={(teamId) => {
             const tm = (teams || []).find((t: any) => t.id === teamId);
             onUpdateField('teamId', teamId);
             if (tm) {
-              onUpdateField('teamCode', tm.teamCode || '');
-              onUpdateField('teamName', tm.name || '');
+              onUpdateField('teamCode', tm.teamCode || tm.name || '');
+              onUpdateField('teamName', tm.name || tm.teamCode || '');
               onUpdateField('blockId', tm.blockId || '');
               onUpdateField('blockCode', tm.blockCode || '');
               // Auto-fill GĐKD
@@ -152,9 +166,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = ({
       </TableCell>
 
       {/* Col E: DỰ ÁN */}
-      <TableCell className="p-1 min-w-[160px]">
+      <TableCell className="p-1 min-w-[170px]">
         <Select
-          value={draftRow.projectId || ''}
+          value={currentDraftProjId}
           onValueChange={(projectId) => {
             const p = (projects || []).find((pr: any) => pr.id === projectId);
             onUpdateField('projectId', projectId);

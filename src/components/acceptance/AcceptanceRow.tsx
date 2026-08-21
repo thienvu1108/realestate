@@ -18,7 +18,7 @@ import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
 interface RowProps {
   item: any;
   index: number;
-  isFinalizedView: boolean;
+  isFinalizedView?: boolean;
   isSelected: boolean;
   isEditing: boolean;
   editingState: any;
@@ -26,6 +26,8 @@ interface RowProps {
   projects: any[];
   blocks: any[];
   monthsList: string[];
+  teamMap?: Record<string, string>;
+  projectMap?: Record<string, string>;
   formatCurrency: (amount: number) => string;
   onSelectRow: (id: string, checked: boolean) => void;
   onStartEdit: (item: any) => void;
@@ -33,7 +35,7 @@ interface RowProps {
   onSaveEdit: () => void;
   onUpdateEditingField: (field: string, value: any) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
-  onFinalize: (item: any) => void;
+  onFinalize?: (item: any) => void;
   onDelete: (id: string) => void;
   onOpenHistory: (item: any) => void;
   renderBreakdownTooltip: (amount: number, breakdown: any, label: string) => React.ReactNode;
@@ -42,7 +44,7 @@ interface RowProps {
 export const AcceptanceRow: React.FC<RowProps> = ({
   item,
   index,
-  isFinalizedView,
+  isFinalizedView = false,
   isSelected,
   isEditing,
   editingState,
@@ -50,6 +52,8 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   projects,
   blocks,
   monthsList,
+  teamMap = {},
+  projectMap = {},
   formatCurrency,
   onSelectRow,
   onStartEdit,
@@ -57,7 +61,6 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   onSaveEdit,
   onUpdateEditingField,
   onOpenCalculator,
-  onFinalize,
   onDelete,
   onOpenHistory,
   renderBreakdownTooltip
@@ -65,6 +68,14 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   // If in editing mode, compute from editingState
   if (isEditing && editingState) {
     const editComp = getRowComputed(editingState);
+
+    // Resolve matching team for editingState
+    const currentEditTeamId = editingState.teamId || 
+      (teams || []).find((t: any) => t.id === editingState.teamCode || t.teamCode === editingState.teamCode || t.name === editingState.teamName || t.id === editingState.teamName)?.id || '';
+
+    // Resolve matching project for editingState
+    const currentEditProjId = editingState.projectId || 
+      (projects || []).find((p: any) => p.id === editingState.projectName || p.name === editingState.projectName || p.projectCode === editingState.projectName || p.id === editingState.projectCode)?.id || '';
 
     const renderEditInput = (
       fieldKey: string,
@@ -120,27 +131,35 @@ export const AcceptanceRow: React.FC<RowProps> = ({
         </TableCell>
 
         {/* Col B: MÃ TEAM */}
-        <TableCell className="p-1 min-w-[100px]">
+        <TableCell className="p-1 min-w-[130px]">
           <Select
-            value={editingState.teamId || ''}
+            value={currentEditTeamId}
             onValueChange={(teamId) => {
               const tm = (teams || []).find((t: any) => t.id === teamId);
               onUpdateEditingField('teamId', teamId);
               if (tm) {
-                onUpdateEditingField('teamCode', tm.teamCode || '');
-                onUpdateEditingField('teamName', tm.name || '');
+                onUpdateEditingField('teamCode', tm.teamCode || tm.name || '');
+                onUpdateEditingField('teamName', tm.name || tm.teamCode || '');
                 onUpdateEditingField('blockId', tm.blockId || '');
                 onUpdateEditingField('blockCode', tm.blockCode || '');
+                if (tm.name && !editingState.gdkdName) {
+                  const code = tm.teamCode || '';
+                  let gdkd = tm.name;
+                  if (code && tm.name.startsWith(code)) {
+                    gdkd = tm.name.substring(code.length).trim();
+                  }
+                  onUpdateEditingField('gdkdName', gdkd);
+                }
               }
             }}
           >
             <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Team" />
+              <SelectValue placeholder="Chọn Team" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-56">
               {(teams || []).map((t: any) => (
                 <SelectItem key={t.id} value={t.id}>
-                  {t.teamCode || t.name}
+                  {t.teamCode ? `${t.teamCode} - ${t.name}` : t.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -166,9 +185,9 @@ export const AcceptanceRow: React.FC<RowProps> = ({
         </TableCell>
 
         {/* Col E: DỰ ÁN */}
-        <TableCell className="p-1 min-w-[160px]">
+        <TableCell className="p-1 min-w-[170px]">
           <Select
-            value={editingState.projectId || ''}
+            value={currentEditProjId}
             onValueChange={(projectId) => {
               const p = (projects || []).find((pr: any) => pr.id === projectId);
               onUpdateEditingField('projectId', projectId);
@@ -179,12 +198,12 @@ export const AcceptanceRow: React.FC<RowProps> = ({
             }}
           >
             <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Dự án" />
+              <SelectValue placeholder="Chọn Dự án" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-56">
               {(projects || []).map((p: any) => (
                 <SelectItem key={p.id} value={p.id}>
-                  {p.name}
+                  {p.projectCode ? `[${p.projectCode}] ${p.name}` : p.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -293,6 +312,36 @@ export const AcceptanceRow: React.FC<RowProps> = ({
   // Normal Read-only Row
   const comp = getRowComputed(item);
 
+  // Exact resolution of team name and team code to avoid showing raw IDs
+  const matchedTeam = (teams || []).find((t: any) => 
+    (t.id && (t.id === item.teamId || t.id === item.teamCode || t.id === item.teamName)) ||
+    (t.teamCode && (t.teamCode === item.teamCode || t.teamCode === item.teamName || t.teamCode === item.teamId)) ||
+    (t.name && (t.name === item.teamName || t.name === item.teamCode || t.name === item.teamId))
+  );
+
+  const displayTeamCode = matchedTeam?.teamCode || 
+    (item.teamCode && !item.teamCode.startsWith('draft-') && item.teamCode.length < 20 ? item.teamCode : matchedTeam?.name) || 
+    item.teamName || 
+    teamMap[item.teamId] || 
+    '-';
+
+  const displayTeamName = matchedTeam?.name || teamMap[item.teamId] || teamMap[item.teamName] || item.teamName || matchedTeam?.teamCode || item.teamCode || '';
+
+  // Exact resolution of project name to avoid showing raw IDs
+  const matchedProject = (projects || []).find((p: any) => 
+    (p.id && (p.id === item.projectId || p.id === item.projectName)) ||
+    (p.name && (p.name === item.projectName || p.name === item.projectId)) ||
+    (p.projectCode && (p.projectCode === item.projectCode || p.projectCode === item.projectName))
+  );
+
+  const displayProjectName = matchedProject?.name || 
+    projectMap[item.projectId] || 
+    projectMap[item.projectName] || 
+    (item.projectName && item.projectName.length < 25 && !item.projectName.startsWith('draft-') ? item.projectName : '') || 
+    (matchedProject?.projectCode ? `[${matchedProject.projectCode}]` : '-');
+
+  const displayProjectCode = matchedProject?.projectCode || item.projectCode || '';
+
   return (
     <TableRow className="hover:bg-slate-50/80 transition-colors group border-b border-slate-200">
       {/* STT & Checkbox */}
@@ -316,13 +365,15 @@ export const AcceptanceRow: React.FC<RowProps> = ({
       </TableCell>
 
       {/* Col B: MÃ TEAM */}
-      <TableCell className="text-center font-mono font-bold text-xs text-slate-700 whitespace-nowrap">
-        {item.teamCode || '-'}
+      <TableCell className="text-center font-mono font-bold text-xs text-slate-700 whitespace-nowrap" title={displayTeamName ? `${displayTeamCode} - ${displayTeamName}` : displayTeamCode}>
+        <Badge variant="outline" className="bg-slate-50 border-slate-200 text-slate-700 font-mono font-bold text-[11px] px-2 py-0.5 shadow-2xs">
+          {displayTeamCode}
+        </Badge>
       </TableCell>
 
       {/* Col C: GĐKD */}
       <TableCell className="font-semibold text-xs text-slate-700 whitespace-nowrap">
-        {item.gdkdName || '-'}
+        {item.gdkdName || displayTeamName || '-'}
       </TableCell>
 
       {/* Col D: NGƯỜI PHỤ TRÁCH */}
@@ -331,8 +382,15 @@ export const AcceptanceRow: React.FC<RowProps> = ({
       </TableCell>
 
       {/* Col E: DỰ ÁN */}
-      <TableCell className="font-black text-xs text-slate-800 min-w-[170px]" title={item.projectName}>
-        {item.projectName || '-'}
+      <TableCell className="font-bold text-xs text-slate-800 min-w-[170px]" title={displayProjectName}>
+        <div className="flex items-center gap-1.5">
+          {displayProjectCode && (
+            <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0 font-bold">
+              {displayProjectCode}
+            </Badge>
+          )}
+          <span className="truncate">{displayProjectName}</span>
+        </div>
       </TableCell>
 
       {/* Group 1: DIGITAL CHẠY (Chưa VAT) */}
@@ -423,12 +481,12 @@ export const AcceptanceRow: React.FC<RowProps> = ({
       <TableCell className="text-center bg-yellow-50/30">
         <Badge
           className={`text-[10px] font-bold border-none ${
-            item.status === 'Đã nghiệm thu' || isFinalizedView
+            item.status === 'Đã nghiệm thu'
               ? 'bg-emerald-100 text-emerald-800'
               : 'bg-amber-100 text-amber-800'
           }`}
         >
-          {item.status || (isFinalizedView ? 'Đã nghiệm thu' : 'Trước nghiệm thu')}
+          {item.status || 'Đã nghiệm thu'}
         </Badge>
       </TableCell>
 
@@ -440,19 +498,6 @@ export const AcceptanceRow: React.FC<RowProps> = ({
       {/* THAO TÁC */}
       <TableCell className="text-center sticky right-0 z-20 bg-white/95 backdrop-blur group-hover:bg-slate-50/95 shadow-l">
         <div className="flex items-center justify-center gap-1">
-          {!isFinalizedView && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onFinalize(item)}
-              className="h-6 px-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200 text-[10px] font-bold rounded flex items-center gap-0.5"
-              title="Chốt số liệu nghiệm thu"
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span>Chốt</span>
-            </Button>
-          )}
-
           <Button
             size="sm"
             variant="ghost"

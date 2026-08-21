@@ -869,6 +869,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view',
     'admin.projects.view', 'admin.teams.view',
     'admin.budgets.view', 'admin.costs.view',
+    'block.view',
+    'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
@@ -898,6 +900,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   gdda: [
     'home.view',
     'admin.projects.view',
+    'block.view',
+    'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
@@ -910,6 +914,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   gd_khoi: [
     'home.view',
     'block.view', 'block.approve',
+    'team_mgmt.view',
     'register.view',
     'actual.view',
     'history.view',
@@ -921,6 +926,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   gdkd: [
     'home.view',
+    'block.view',
     'team_mgmt.view', 'team_mgmt.approve',
     'register.view',
     'actual.view',
@@ -933,6 +939,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   assistant: [
     'home.view', 'home.export',
+    'block.view',
+    'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view', 'history.export',
@@ -944,6 +952,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   user: [
     'home.view',
+    'block.view',
+    'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
@@ -1072,7 +1082,7 @@ export const PERMISSION_GROUPS = [
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' | null>(null);
+  const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'gd_khoi' | 'gdkd' | 'assistant' | 'user' | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [rolePermissionsList, setRolePermissionsList] = useState<any[]>([]);
   const [selectedRolePermission, setSelectedRolePermission] = useState<string>('admin');
@@ -1161,57 +1171,57 @@ export default function App() {
   const [acceptancePage, setAcceptancePage] = useState(1);
 
   // Report states moved up
-  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[] } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[], assignedBlock?: string } | null>(null);
   const [budgetWarningThreshold, setBudgetWarningThreshold] = useState(80);
   const [budgetCriticalThreshold, setBudgetCriticalThreshold] = useState(100);
 
   const isAdmin = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'admin' || role === 'super_admin' || role === 'quản trị' || user?.email?.toLowerCase() === 'thienvu1108@gmail.com';
-  }, [userRole, user]);
+  }, [userRole, userProfile, user]);
 
   const isSuperAdmin = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'super_admin' || user?.email?.toLowerCase() === 'thienvu1108@gmail.com';
-  }, [userRole, user]);
+  }, [userRole, userProfile, user]);
 
   const isMod = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'mod' || role === 'moderator' || role === 'điều phối';
-  }, [userRole]);
+  }, [userRole, userProfile]);
 
   const isAccountant = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'accountant' || role === 'kế toán' || role === 'accounting';
-  }, [userRole]);
+  }, [userRole, userProfile]);
 
   const isGDDA = useMemo(() => {
-    const role = userProfile?.role?.toUpperCase() || '';
-    return role === 'GDDA';
-  }, [userProfile]);
+    const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
+    return role === 'gdda' || role === 'gđda' || role === 'giám đốc dự án';
+  }, [userProfile, userRole]);
 
   const isGDKhoi = useMemo(() => {
-    const role = userProfile?.role?.toLowerCase()?.trim() || '';
+    const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
     return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk';
-  }, [userProfile]);
+  }, [userProfile, userRole]);
 
   const isGDKD = useMemo(() => {
-    const role = userProfile?.role?.toLowerCase()?.trim() || '';
-    return role === 'gdkd' || role === 'giám đốc kinh doanh';
-  }, [userProfile]);
+    const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
+    return role === 'gdkd' || role === 'gđkd' || role === 'giám đốc kinh doanh' || role === 'gđ kinh doanh';
+  }, [userProfile, userRole]);
 
   const isAssistant = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'assistant' || role === 'trợ lý' || role === 'tro ly';
-  }, [userRole]);
+  }, [userRole, userProfile]);
 
   const isUser = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim();
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return !role || role === 'user' || role === 'người dùng';
-  }, [userRole]);
+  }, [userRole, userProfile]);
 
   const isInternalStaff = useMemo(() => {
-    const role = userRole?.toLowerCase()?.trim() || '';
+    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     const email = user?.email?.toLowerCase() || '';
     const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'gdkd', 'giám đốc kinh doanh', 'assistant', 'trợ lý', 'tro ly', 'moderator', 'kế toán', 'điều phối', 'accounting'];
     return internalRoles.includes(role) || 
@@ -1284,9 +1294,16 @@ export default function App() {
   const [editBlockSelectedTeamToAssign, setEditBlockSelectedTeamToAssign] = useState('');
 
   const myBlock = useMemo(() => {
-    if (!userProfile?.assignedBlock) return null;
-    return blocks.find(b => b.id === userProfile.assignedBlock || b.blockCode === userProfile.assignedBlock);
-  }, [userProfile?.assignedBlock, blocks]);
+    if (userProfile?.assignedBlock) {
+      const found = blocks.find(b => b.id === userProfile.assignedBlock || b.blockCode === userProfile.assignedBlock);
+      if (found) return found;
+    }
+    if (user?.uid) {
+      const found = blocks.find(b => b.directorUid === user.uid || b.directorUid === user.email);
+      if (found) return found;
+    }
+    return null;
+  }, [userProfile?.assignedBlock, blocks, user]);
 
   const currentActiveBlock = useMemo(() => {
     if (isGDKhoi) return myBlock;
@@ -1880,6 +1897,11 @@ export default function App() {
 
     // 2. Map acceptances and merge into grouped data
     const userEmail = user?.email?.toLowerCase();
+    const blockTeams = teams.filter(t => isTeamInBlock(t, currentActiveBlock));
+    const blockTeamIds = new Set(blockTeams.map(t => t.id));
+    const blockTeamNames = new Set(blockTeams.map(t => (t.name || '').toLowerCase().trim()));
+    const blockTeamCodes = new Set(blockTeams.map(t => (t.teamCode || '').toLowerCase().trim()));
+
     acceptances.forEach(a => {
       const aProjectName = resolveProjectName(a.projectId, a.projectName);
       const aTeamName = resolveTeamName(a.teamId, a.teamName);
@@ -1889,7 +1911,19 @@ export default function App() {
       // Access logic
       const aEmail = a.userEmail?.toLowerCase() || a.createdBy?.toLowerCase();
       const isOwner = (aEmail && userEmail && aEmail === userEmail) || (a.createdByUid === user?.uid);
-      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isOwner;
+      
+      const isInMyBlock = isGDKhoi && (
+        (a.teamId && blockTeamIds.has(a.teamId)) ||
+        (a.teamName && blockTeamNames.has(a.teamName.toLowerCase().trim())) ||
+        (a.teamCode && blockTeamCodes.has(a.teamCode.toLowerCase().trim()))
+      );
+
+      const isInMyTeam = isGDKD && userProfile?.teamName && (
+        (a.teamName && a.teamName.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim()) ||
+        (a.teamId && teams.find(t => t.id === a.teamId)?.name?.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim())
+      );
+
+      const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isInMyBlock || isInMyTeam || isOwner;
       if (!hasAccess) return;
 
       // Filter logic
@@ -3732,6 +3766,8 @@ export default function App() {
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [historyTargetName, setHistoryTargetName] = useState('');
   const [historyTargetRecord, setHistoryTargetRecord] = useState<any>(null);
+  const [teamNotifications, setTeamNotifications] = useState<any[]>([]);
+  const [isTeamNotificationDialogOpen, setIsTeamNotificationDialogOpen] = useState(false);
   const [editingCostForm, setEditingCostForm] = useState({
     fbAds: '',
     posting: '',
@@ -4131,14 +4167,16 @@ export default function App() {
               setUserProfile(data || null);
               
               const rawRole = String(data?.role || 'user').toLowerCase().trim();
-              let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'assistant' | 'user' = 'user';
+              let synchronizedRole: 'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'gd_khoi' | 'gdkd' | 'assistant' | 'user' = 'user';
               
               if (firebaseUser.email?.toLowerCase() === 'thienvu1108@gmail.com') synchronizedRole = 'super_admin';
               else if (rawRole === 'super_admin') synchronizedRole = 'super_admin';
               else if (rawRole === 'admin') synchronizedRole = 'admin';
               else if (rawRole === 'mod' || rawRole === 'moderator' || rawRole === 'điều phối') synchronizedRole = 'mod';
               else if (rawRole === 'accountant' || rawRole === 'kế toán') synchronizedRole = 'accountant';
-              else if (rawRole === 'gdda') synchronizedRole = 'gdda';
+              else if (rawRole === 'gdda' || rawRole === 'gđda' || rawRole === 'giám đốc dự án') synchronizedRole = 'gdda';
+              else if (rawRole === 'gd_khoi' || rawRole === 'gdkhoi' || rawRole === 'gđ khối' || rawRole === 'giám đốc khối' || rawRole === 'giám đốc liên khối' || rawRole === 'gdk') synchronizedRole = 'gd_khoi';
+              else if (rawRole === 'gdkd' || rawRole === 'gđkd' || rawRole === 'giám đốc kinh doanh' || rawRole === 'gđ kinh doanh') synchronizedRole = 'gdkd';
               else if (rawRole === 'assistant' || rawRole === 'trợ lý' || rawRole === 'tro ly') synchronizedRole = 'assistant';
               else synchronizedRole = 'user';
               
@@ -4165,9 +4203,13 @@ export default function App() {
           
           // Initial tab redirection logic (based on initial fetch)
           const initialData = userDoc.data();
-          const initialRawRole = (initialData?.role || 'user').toLowerCase();
+          const initialRawRole = (initialData?.role || 'user').toLowerCase().trim();
           if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'assistant', 'trợ lý', 'tro ly'].includes(initialRawRole)) {
             setActiveTab('admin');
+          } else if (['gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'giám đốc liên khối', 'gdk'].includes(initialRawRole)) {
+            setActiveTab('block-mgmt');
+          } else if (['gdkd', 'gđkd', 'giám đốc kinh doanh', 'gđ kinh doanh'].includes(initialRawRole)) {
+            setActiveTab('team-mgmt');
           } else {
             setActiveTab('register');
           }
@@ -4283,24 +4325,8 @@ export default function App() {
       setTypes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
-    // Listen to budgets - load all relevant budgets to ensure mapping and search work perfectly
-    const hasMktEffView = currentRolePermissions.includes('mkt_efficiency.view') || user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin';
-    let qBudgets;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qBudgets = query(collection(db, 'budgets'), where('projectId', 'in', userProfile.assignedProjects));
-    } else {
-      qBudgets = query(
-        collection(db, 'budgets'), 
-        or(
-          where('createdBy', '==', user.uid),
-          where('userEmail', '==', user.email?.toLowerCase()),
-          where('assignedUserEmail', '==', user.email?.toLowerCase())
-        )
-      );
-    }
-
+    // Listen to budgets - load all relevant budgets to ensure mapping and team visibility work perfectly
+    const qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const d = { id: doc.id, ...doc.data() as any };
@@ -4310,33 +4336,11 @@ export default function App() {
           teamCode: convertMhToMay(d.teamCode)
         };
       });
-      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
-        data.sort((a: any, b: any) => {
-          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return timeB - timeA;
-        });
-      }
       setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
-    // Listen to costs - load all relevant costs to ensure mapping and search work perfectly
-    let qCosts;
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || hasMktEffView || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qCosts = query(collection(db, 'costs'), where('projectId', 'in', userProfile.assignedProjects));
-    } else {
-      qCosts = query(
-        collection(db, 'costs'), 
-        or(
-          where('createdBy', '==', user.uid),
-          where('userEmail', '==', user.email?.toLowerCase()),
-          where('assignedUserEmail', '==', user.email?.toLowerCase())
-        )
-      );
-    }
-
+    // Listen to costs - load all relevant costs to ensure mapping, team visibility, and actual costs work perfectly
+    const qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const d = { id: doc.id, ...doc.data() as any };
@@ -4346,15 +4350,17 @@ export default function App() {
           teamCode: convertMhToMay(d.teamCode)
         };
       });
-      if (!(isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || isGDDA)) {
-        data.sort((a: any, b: any) => {
-          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return timeB - timeA;
-        });
-      }
       setCosts(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'costs'));
+
+    // Listen to team notifications for budget changes
+    const qTeamNotifs = query(collection(db, 'teamNotifications'), orderBy('createdAt', 'desc'), limit(100));
+    const unsubTeamNotifs = onSnapshot(qTeamNotifs, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      setTeamNotifications(data);
+    }, (error) => {
+      console.warn("teamNotifications listener error:", error);
+    });
 
     // Listen to audit logs
     let unsubLogs = () => {};
@@ -4365,19 +4371,16 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
     }
 
-    // Listen to all users (for Admin, Accountant, GDKhoi, and GDKD)
-    let unsubUsers = () => {};
-    if (isAdmin || isAccountant || isGDKhoi || isGDKD) {
-      const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
-      unsubUsers = onSnapshot(qUsers, (snapshot) => {
-        const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-        const sanitized = raw.map(u => ({
-          ...u,
-          teamName: convertMhToMay(u.teamName)
-        }));
-        setAllUsers(sanitized);
-      }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
-    }
+    // Listen to all users (for Admin, Accountant, GDKhoi, GDKD, and Team Management)
+    const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(500));
+    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+      const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      const sanitized = raw.map(u => ({
+        ...u,
+        teamName: convertMhToMay(u.teamName)
+      }));
+      setAllUsers(sanitized);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
     // Listen to efficiency reports - load all relevant efficiency reports to ensure mapping and search work perfectly
     let unsubEfficiency = () => {};
@@ -4542,6 +4545,7 @@ export default function App() {
       unsubSupport();
       unsubSettings();
       unsubReportNT();
+      unsubTeamNotifs();
     };
   }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions)]);
 
@@ -4574,50 +4578,120 @@ export default function App() {
     if (!slider) return;
 
     let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
+    let startX = 0;
+    let startScrollLeft = 0;
+    let hasMoved = false;
+    let lastClientX = 0;
+    let lastTime = 0;
+    let velocityX = 0;
+    let inertiaRaf: number | null = null;
+
+    const handleDragStart = (e: DragEvent) => e.preventDefault();
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      if (inertiaRaf) {
+        cancelAnimationFrame(inertiaRaf);
+        inertiaRaf = null;
+      }
+
       const target = e.target as HTMLElement;
-      // Skip dragging on interactive tags
-      if (target.closest('input, select, button, a, [role="button"], label, svg')) return;
+      if (target.closest('input:not([type="checkbox"]), select, textarea, button, a, [role="button"], label, .no-drag')) {
+        return;
+      }
+
       isDown = true;
+      hasMoved = false;
+      startX = e.clientX;
+      lastClientX = e.clientX;
+      lastTime = performance.now();
+      velocityX = 0;
+      startScrollLeft = slider.scrollLeft;
+      e.preventDefault();
+
       slider.classList.add('cursor-grabbing');
       slider.classList.remove('cursor-grab');
-      startX = e.pageX - slider.offsetLeft;
-      scrollLeft = slider.scrollLeft;
-    };
-
-    const handleMouseLeave = () => {
-      isDown = false;
-      slider.classList.remove('cursor-grabbing');
-      slider.classList.add('cursor-grab');
-    };
-
-    const handleMouseUp = () => {
-      isDown = false;
-      slider.classList.remove('cursor-grabbing');
-      slider.classList.add('cursor-grab');
+      document.body.style.userSelect = 'none';
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - slider.offsetLeft;
-      const walk = (x - startX) * 1.5; // Scroll speed multiplier
-      slider.scrollLeft = scrollLeft - walk;
+      const currentX = e.clientX;
+      const dx = currentX - startX;
+
+      const now = performance.now();
+      const dt = now - lastTime;
+      if (dt > 0) {
+        const instantVelocity = (lastClientX - currentX) / dt;
+        velocityX = 0.7 * instantVelocity + 0.3 * velocityX;
+        lastClientX = currentX;
+        lastTime = now;
+      }
+
+      if (Math.abs(dx) > 3) {
+        hasMoved = true;
+        e.preventDefault();
+      }
+      slider.scrollLeft = startScrollLeft - dx;
     };
 
+    const handleMouseUp = () => {
+      if (!isDown) return;
+      isDown = false;
+      slider.classList.remove('cursor-grabbing');
+      slider.classList.add('cursor-grab');
+      document.body.style.userSelect = '';
+
+      if (hasMoved && Math.abs(velocityX) > 0.12) {
+        let currentVelocity = velocityX * 16;
+        const friction = 0.93;
+
+        const glide = () => {
+          if (Math.abs(currentVelocity) < 0.3) {
+            inertiaRaf = null;
+            return;
+          }
+          slider.scrollLeft += currentVelocity;
+          currentVelocity *= friction;
+          inertiaRaf = requestAnimationFrame(glide);
+        };
+        inertiaRaf = requestAnimationFrame(glide);
+      }
+    };
+
+    const handleClickCapture = (e: MouseEvent) => {
+      if (hasMoved) {
+        e.stopPropagation();
+        e.preventDefault();
+        hasMoved = false;
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        slider.scrollLeft += e.deltaY * 1.2;
+      }
+    };
+
+    slider.addEventListener('dragstart', handleDragStart);
     slider.addEventListener('mousedown', handleMouseDown);
-    slider.addEventListener('mouseleave', handleMouseLeave);
-    slider.addEventListener('mouseup', handleMouseUp);
-    slider.addEventListener('mousemove', handleMouseMove);
+    slider.addEventListener('click', handleClickCapture, true);
+    slider.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('mousemove', handleMouseMove, { passive: false });
+    window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
+      if (inertiaRaf) {
+        cancelAnimationFrame(inertiaRaf);
+      }
+      slider.removeEventListener('dragstart', handleDragStart);
       slider.removeEventListener('mousedown', handleMouseDown);
-      slider.removeEventListener('mouseleave', handleMouseLeave);
-      slider.removeEventListener('mouseup', handleMouseUp);
-      slider.removeEventListener('mousemove', handleMouseMove);
+      slider.removeEventListener('click', handleClickCapture, true);
+      slider.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
     };
   }, []);
 
@@ -6097,6 +6171,95 @@ export default function App() {
 
     return Object.values(data);
   }, [budgets, costs, userProfile?.teamName]);
+
+  const isBudgetVisibleToUser = useCallback((b: any) => {
+    if (isAdmin || isMod || isAccountant) return true;
+    const userEmail = user?.email?.toLowerCase() || '';
+    const budgetEmail = (b.userEmail || b.createdByEmail || '').toLowerCase();
+    const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
+    const isAssigned = (b.assignedUserEmail || '').toLowerCase() === userEmail;
+    const isAssignedGDDA = isGDDA && (
+      !userProfile?.assignedProjects || 
+      userProfile.assignedProjects.length === 0 || 
+      userProfile.assignedProjects.includes(b.projectId)
+    );
+
+    // Check same team for all team members (and GDKD)
+    const myTeamName = (userProfile?.teamName || '').toLowerCase().trim();
+    const bTeamName = (b.teamName || '').toLowerCase().trim();
+    const activeTeam = currentActiveTeam;
+    const activeTeamName = (activeTeam?.name || '').toLowerCase().trim();
+    const activeTeamCode = (activeTeam?.teamCode || '').toLowerCase().trim();
+    const bTeamCode = (b.teamCode || '').toLowerCase().trim();
+    
+    const isSameTeam = Boolean(
+      (myTeamName && bTeamName && myTeamName === bTeamName) ||
+      (activeTeamName && bTeamName && activeTeamName === bTeamName) ||
+      (activeTeam?.id && b.teamId === activeTeam.id) ||
+      (activeTeamCode && (bTeamName === activeTeamCode || bTeamCode === activeTeamCode))
+    );
+
+    // Check same block for GDKhoi
+    const isSameBlock = isGDKhoi && (
+      (currentActiveBlock && isTeamInBlock(b.teamId || b.teamName, currentActiveBlock)) ||
+      (myBlockTeams && myBlockTeams.some((t: any) => t.id === b.teamId || t.name.toLowerCase().trim() === bTeamName))
+    );
+
+    return Boolean(isOwner || isAssigned || isAssignedGDDA || isSameTeam || isSameBlock);
+  }, [isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, user?.uid, user?.email, userProfile?.teamName, userProfile?.assignedProjects, currentActiveTeam, currentActiveBlock, myBlockTeams]);
+
+  const myTeamNotifications = useMemo(() => {
+    const activeTeam = currentActiveTeam;
+    if (!activeTeam) return teamNotifications;
+    const targetName = activeTeam.name.toLowerCase().trim();
+    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
+    const targetId = activeTeam.id;
+
+    return teamNotifications.filter(n => {
+      if (isAdmin || isSuperAdmin || isMod || isAccountant) return true;
+      if (n.teamId && targetId && n.teamId === targetId) return true;
+      const nTeam = (n.teamName || '').toLowerCase().trim();
+      return nTeam === targetName || (targetCode && nTeam === targetCode);
+    });
+  }, [teamNotifications, currentActiveTeam, isAdmin, isSuperAdmin, isMod, isAccountant]);
+
+  const unreadTeamNotifCount = useMemo(() => {
+    const userEmail = user?.email?.toLowerCase() || '';
+    if (!userEmail) return 0;
+    return myTeamNotifications.filter(n => !n.readBy || !n.readBy.map((e: string) => e.toLowerCase()).includes(userEmail)).length;
+  }, [myTeamNotifications, user?.email]);
+
+  const markTeamNotifAsRead = async (notifId: string) => {
+    const userEmail = user?.email?.toLowerCase() || '';
+    if (!userEmail) return;
+    try {
+      const notifRef = doc(db, 'teamNotifications', notifId);
+      await updateDoc(notifRef, {
+        readBy: arrayUnion(userEmail)
+      });
+    } catch (e) {
+      console.warn('Failed to mark notification as read', e);
+    }
+  };
+
+  const markAllTeamNotifsAsRead = async () => {
+    const userEmail = user?.email?.toLowerCase() || '';
+    if (!userEmail) return;
+    try {
+      const unread = myTeamNotifications.filter(n => !n.readBy || !n.readBy.map((e: string) => e.toLowerCase()).includes(userEmail));
+      if (unread.length === 0) return;
+      const batch = writeBatch(db);
+      unread.forEach(n => {
+        batch.update(doc(db, 'teamNotifications', n.id), {
+          readBy: arrayUnion(userEmail)
+        });
+      });
+      await batch.commit();
+      toast.success('Đã đánh dấu đã đọc tất cả thông báo của team');
+    } catch (e) {
+      console.warn('Failed to mark all as read', e);
+    }
+  };
 
   const handleCreateBlock = async () => {
     if (!blockNameInput.trim() || !blockCodeInput.trim()) {
@@ -17877,7 +18040,9 @@ export default function App() {
                                       <SelectItem value="admin">Admin</SelectItem>
                                       <SelectItem value="mod">Mod</SelectItem>
                                       <SelectItem value="accountant">Kế toán</SelectItem>
-                                      <SelectItem value="gdda">GDDA</SelectItem>
+                                      <SelectItem value="gdda">GDDA (Giám đốc Dự án)</SelectItem>
+                                      <SelectItem value="gd_khoi">GĐ Khối (Giám đốc Khối)</SelectItem>
+                                      <SelectItem value="gdkd">GĐKD (Giám đốc Kinh doanh)</SelectItem>
                                       <SelectItem value="assistant">Trợ lý</SelectItem>
                                       <SelectItem value="user">User</SelectItem>
                                     </SelectContent>
@@ -17891,7 +18056,7 @@ export default function App() {
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda' || u.role === 'assistant') ? (
+                                  {(u.role === 'mod' || u.role === 'accountant' || u.role === 'gdda' || u.role === 'assistant' || u.role === 'gd_khoi' || u.role === 'gdkd') ? (
                                     <div className="flex flex-wrap gap-1 max-w-[300px]">
                                       <Dialog>
                                         <DialogTrigger nativeButton={true} render={<Button variant="outline" size="sm" className="h-7 text-[10px] px-2" />}>
@@ -17905,6 +18070,8 @@ export default function App() {
                                                 ? 'Chọn các dự án mà Mod/Kế toán này có quyền xem.' 
                                                 : u.role === 'assistant'
                                                 ? 'Chọn các dự án mà Trợ lý này có quyền xem.'
+                                                : (u.role === 'gd_khoi' || u.role === 'gdkd')
+                                                ? 'Chọn các dự án được phân bổ ưu tiên quản lý.'
                                                 : 'Chọn các dự án mà GDDA này có quyền xem báo cáo.'}
                                             </DialogDescription>
                                           </DialogHeader>

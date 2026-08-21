@@ -52,13 +52,12 @@ import {
 } from './acceptance/acceptanceUtils';
 
 export const AcceptanceManager = React.memo(({ 
-  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], regions = [], acceptances = [], finalAcceptances = [], teamMap = {}, projectMap = {}, 
+  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], regions = [], acceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
   isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,
   handleImportAcceptancesCSV, uniqueTeams = [], blocks = []
 }: any) => {
 
-  const [acceptanceListView, setAcceptanceListView] = useState<'pending' | 'finalized'>('pending');
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const [debouncedAcceptanceSearch, setDebouncedAcceptanceSearch] = useState('');
   const [acceptanceMonthFilter, setAcceptanceMonthFilter] = useState('all');
@@ -71,8 +70,48 @@ export const AcceptanceManager = React.memo(({
   // Multi-select state
   const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
 
-  // Draft rows for inline addition
-  const [draftRows, setDraftRows] = useState<any[]>([]);
+  // Helper to create a fresh draft row
+  const createNewDraftRow = (month?: string) => ({
+    id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    month: (month && month !== 'all') ? month : (acceptanceMonthFilter !== 'all' ? acceptanceMonthFilter : 'Kì 1 - Tháng 8'),
+    teamId: '',
+    teamCode: '',
+    teamName: '',
+    gdkdName: '',
+    implementerName: '',
+    projectId: '',
+    projectName: '',
+    projectCode: '',
+    digitalFb: '',
+    digitalZalo: '',
+    digitalTiktok: '',
+    digitalKhac: '',
+    visaFb: '',
+    visaZalo: '',
+    visaTiktok: '',
+    visaDangTin: '',
+    dangTinCtyChuaVat: '',
+    caNhanFb: '',
+    caNhanDangTin: '',
+    caNhanZalo: '',
+    caNhanGoogle: '',
+    caNhanTiktok: '',
+    caNhanNopTien: '',
+    status: 'Đã nghiệm thu',
+    notes: ''
+  });
+
+  // Draft rows for inline addition - always initialized with at least 1 draft row
+  const [draftRows, setDraftRows] = useState<any[]>([
+    createNewDraftRow()
+  ]);
+
+  // Always keep at least 1 draft row ready in the table
+  useEffect(() => {
+    if (draftRows.length === 0) {
+      setDraftRows([createNewDraftRow(acceptanceMonthFilter)]);
+    }
+  }, [draftRows.length, acceptanceMonthFilter]);
 
   // Editing row state
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -85,17 +124,10 @@ export const AcceptanceManager = React.memo(({
   const [calculatorInput, setCalculatorInput] = useState('');
   const [calculatorUpdateFn, setCalculatorUpdateFn] = useState<((val: string) => void) | null>(null);
 
-  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [itemToFinalize, setItemToFinalize] = useState<any>(null);
-  const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
-
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [itemToDeleteId, setItemToDeleteId] = useState<string | null>(null);
 
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
-
-  const [isDeleteFinalDialogOpen, setIsDeleteFinalDialogOpen] = useState(false);
-  const [itemFinalToDeleteId, setItemFinalToDeleteId] = useState<string | null>(null);
 
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [historyTargetRecord, setHistoryTargetRecord] = useState<any>(null);
@@ -114,7 +146,6 @@ export const AcceptanceManager = React.memo(({
     set.add('Kì 1 - Tháng 8');
     set.add('Kì 2 - Tháng 8');
     (acceptances || []).forEach((a: any) => { if (a.month) set.add(a.month); });
-    (finalAcceptances || []).forEach((a: any) => { if (a.month) set.add(a.month); });
 
     return Array.from(set).sort((a, b) => {
       if (a === 'Kì 1 - Tháng 8') return -1;
@@ -123,9 +154,9 @@ export const AcceptanceManager = React.memo(({
       if (b === 'Kì 2 - Tháng 8') return 1;
       return b.localeCompare(a);
     });
-  }, [acceptances, finalAcceptances]);
+  }, [acceptances]);
 
-  // Filtered acceptances (pending)
+  // Filtered acceptances
   const filteredAcceptances = useMemo(() => {
     return (acceptances || []).filter((a: any) => {
       // Month match
@@ -141,7 +172,11 @@ export const AcceptanceManager = React.memo(({
       }
 
       // Block match
-      const tm = (teams || []).find((t: any) => t.id === a.teamId || t.teamCode === a.teamCode);
+      const tm = (teams || []).find((t: any) => 
+        (t.id && (t.id === a.teamId || t.id === a.teamCode)) || 
+        (t.teamCode && (t.teamCode === a.teamCode || t.teamCode === a.teamName)) ||
+        (t.name && (t.name === a.teamName || t.name === a.teamCode))
+      );
       const matchesBlock = acceptanceBlockFilter === 'all' || 
         a.blockId === acceptanceBlockFilter || 
         a.blockCode === acceptanceBlockFilter ||
@@ -149,10 +184,39 @@ export const AcceptanceManager = React.memo(({
         tm?.blockCode === acceptanceBlockFilter;
 
       // Team match
-      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter || a.teamCode === acceptanceTeamFilter;
+      let matchesTeam = true;
+      if (acceptanceTeamFilter !== 'all') {
+        const selectedTeam = (teams || []).find((t: any) => t.id === acceptanceTeamFilter);
+        matchesTeam = a.teamId === acceptanceTeamFilter || 
+          a.teamCode === acceptanceTeamFilter || 
+          a.teamName === acceptanceTeamFilter ||
+          (selectedTeam && (
+            a.teamId === selectedTeam.id ||
+            a.teamCode === selectedTeam.teamCode ||
+            a.teamName === selectedTeam.name ||
+            tm?.id === selectedTeam.id
+          ));
+      }
 
       // Project match
-      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter || a.projectName === acceptanceProjectFilter;
+      let matchesProject = true;
+      if (acceptanceProjectFilter !== 'all') {
+        const selectedProj = (projects || []).find((p: any) => p.id === acceptanceProjectFilter);
+        const pr = (projects || []).find((p: any) => 
+          (p.id && (p.id === a.projectId || p.id === a.projectName)) ||
+          (p.name && (p.name === a.projectName || p.name === a.projectId)) ||
+          (p.projectCode && (p.projectCode === a.projectCode || p.projectCode === a.projectName))
+        );
+        matchesProject = a.projectId === acceptanceProjectFilter || 
+          a.projectName === acceptanceProjectFilter || 
+          a.projectCode === acceptanceProjectFilter ||
+          (selectedProj && (
+            a.projectId === selectedProj.id ||
+            a.projectName === selectedProj.name ||
+            a.projectCode === selectedProj.projectCode ||
+            pr?.id === selectedProj.id
+          ));
+      }
 
       // Search term
       let matchesSearch = true;
@@ -164,7 +228,9 @@ export const AcceptanceManager = React.memo(({
           (a.gdkdName || '').toLowerCase().includes(query) ||
           (a.implementerName || '').toLowerCase().includes(query) ||
           (a.month || '').toLowerCase().includes(query) ||
-          (a.notes || '').toLowerCase().includes(query);
+          (a.notes || '').toLowerCase().includes(query) ||
+          (tm?.name || '').toLowerCase().includes(query) ||
+          (tm?.teamCode || '').toLowerCase().includes(query);
       }
 
       return matchesMonth && matchesBlock && matchesTeam && matchesProject && matchesSearch;
@@ -179,59 +245,9 @@ export const AcceptanceManager = React.memo(({
         ? String(valA).localeCompare(String(valB))
         : String(valB).localeCompare(String(valA));
     });
-  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks]);
+  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks, projects]);
 
-  // Filtered final acceptances (finalized)
-  const filteredFinalAcceptances = useMemo(() => {
-    return (finalAcceptances || []).filter((a: any) => {
-      let matchesMonth = true;
-      if (acceptanceMonthFilter !== 'all') {
-        if (acceptanceMonthFilter === 'Kì 1 - Tháng 8') {
-          matchesMonth = a.month === 'Kì 1 - Tháng 8' || a.month === 'Kỳ 1 - Tháng 8' || (a.month?.includes('8') && (a.month?.includes('1') || a.month?.includes('K1')));
-        } else if (acceptanceMonthFilter === 'Kì 2 - Tháng 8') {
-          matchesMonth = a.month === 'Kì 2 - Tháng 8' || a.month === 'Kỳ 2 - Tháng 8' || (a.month?.includes('8') && (a.month?.includes('2') || a.month?.includes('K2')));
-        } else {
-          matchesMonth = a.month === acceptanceMonthFilter;
-        }
-      }
-
-      const tm = (teams || []).find((t: any) => t.id === a.teamId || t.teamCode === a.teamCode);
-      const matchesBlock = acceptanceBlockFilter === 'all' || 
-        a.blockId === acceptanceBlockFilter || 
-        a.blockCode === acceptanceBlockFilter ||
-        tm?.blockId === acceptanceBlockFilter ||
-        tm?.blockCode === acceptanceBlockFilter;
-
-      const matchesTeam = acceptanceTeamFilter === 'all' || a.teamId === acceptanceTeamFilter || a.teamCode === acceptanceTeamFilter;
-      const matchesProject = acceptanceProjectFilter === 'all' || a.projectId === acceptanceProjectFilter || a.projectName === acceptanceProjectFilter;
-
-      let matchesSearch = true;
-      if (debouncedAcceptanceSearch) {
-        const query = debouncedAcceptanceSearch.toLowerCase().trim();
-        matchesSearch = (a.projectName || '').toLowerCase().includes(query) ||
-          (a.teamName || '').toLowerCase().includes(query) ||
-          (a.teamCode || '').toLowerCase().includes(query) ||
-          (a.gdkdName || '').toLowerCase().includes(query) ||
-          (a.implementerName || '').toLowerCase().includes(query) ||
-          (a.month || '').toLowerCase().includes(query) ||
-          (a.notes || '').toLowerCase().includes(query);
-      }
-
-      return matchesMonth && matchesBlock && matchesTeam && matchesProject && matchesSearch;
-    }).sort((a: any, b: any) => {
-      if (!sortConfig.key) return 0;
-      const valA = getSortValue(a, sortConfig.key, teams, blocks);
-      const valB = getSortValue(b, sortConfig.key, teams, blocks);
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
-      }
-      return sortConfig.direction === 'asc' 
-        ? String(valA).localeCompare(String(valB))
-        : String(valB).localeCompare(String(valA));
-    });
-  }, [finalAcceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks]);
-
-  const displayedRecords = acceptanceListView === 'pending' ? filteredAcceptances : filteredFinalAcceptances;
+  const displayedRecords = filteredAcceptances;
 
   // Sorting handler
   const handleSort = (key: string) => {
@@ -246,34 +262,7 @@ export const AcceptanceManager = React.memo(({
 
   // Add empty draft row
   const handleAddDraftRow = () => {
-    const newDraft = {
-      id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      month: acceptanceMonthFilter !== 'all' ? acceptanceMonthFilter : 'Kì 1 - Tháng 8',
-      teamId: '',
-      teamCode: '',
-      gdkdName: '',
-      implementerName: '',
-      projectId: '',
-      projectName: '',
-      digitalFb: '',
-      digitalZalo: '',
-      digitalTiktok: '',
-      digitalKhac: '',
-      visaFb: '',
-      visaZalo: '',
-      visaTiktok: '',
-      visaDangTin: '',
-      dangTinCtyChuaVat: '',
-      caNhanFb: '',
-      caNhanDangTin: '',
-      caNhanZalo: '',
-      caNhanGoogle: '',
-      caNhanTiktok: '',
-      caNhanNopTien: '',
-      status: 'Đã nghiệm thu',
-      notes: ''
-    };
-    setDraftRows((prev) => [newDraft, ...prev]);
+    setDraftRows((prev) => [createNewDraftRow(acceptanceMonthFilter), ...prev]);
   };
 
   const handleUpdateDraftField = (index: number, field: string, value: any) => {
@@ -285,7 +274,10 @@ export const AcceptanceManager = React.memo(({
   };
 
   const handleRemoveDraft = (id: string) => {
-    setDraftRows((prev) => prev.filter((d) => d.id !== id));
+    setDraftRows((prev) => {
+      const remaining = prev.filter((d) => d.id !== id);
+      return remaining.length > 0 ? remaining : [createNewDraftRow(acceptanceMonthFilter)];
+    });
   };
 
   // Save Draft to Firestore
@@ -300,8 +292,18 @@ export const AcceptanceManager = React.memo(({
     }
 
     const comp = getRowComputed(draftRow);
-    const tm = (teams || []).find((t: any) => t.id === draftRow.teamId || t.teamCode === draftRow.teamCode);
-    const pr = (projects || []).find((p: any) => p.id === draftRow.projectId || p.name === draftRow.projectName);
+    const tm = (teams || []).find((t: any) => 
+      t.id === draftRow.teamId || 
+      t.teamCode === draftRow.teamCode || 
+      t.name === draftRow.teamName ||
+      t.id === draftRow.teamCode
+    );
+    const pr = (projects || []).find((p: any) => 
+      p.id === draftRow.projectId || 
+      p.name === draftRow.projectName || 
+      p.projectCode === draftRow.projectName ||
+      p.id === draftRow.projectName
+    );
 
     try {
       const payload: any = {
@@ -312,7 +314,7 @@ export const AcceptanceManager = React.memo(({
         blockId: tm?.blockId || draftRow.blockId || '',
         blockCode: tm?.blockCode || draftRow.blockCode || '',
         blockName: tm?.blockName || draftRow.blockName || '',
-        gdkdName: draftRow.gdkdName || '',
+        gdkdName: draftRow.gdkdName || tm?.name || '',
         implementerName: draftRow.implementerName || '',
         projectId: pr?.id || draftRow.projectId || '',
         projectName: pr?.name || draftRow.projectName || '',
@@ -388,7 +390,12 @@ export const AcceptanceManager = React.memo(({
 
       await addDoc(collection(db, 'acceptances'), payload);
       toast.success('Đã lưu bản ghi nghiệm thu thành công!');
-      handleRemoveDraft(draftRow.id);
+      
+      // Remove the saved draft and ensure a fresh empty draft row is always available
+      setDraftRows((prev) => {
+        const remaining = prev.filter((d) => d.id !== draftRow.id);
+        return remaining.length > 0 ? remaining : [createNewDraftRow(acceptanceMonthFilter)];
+      });
     } catch (err) {
       console.error('Error saving draft:', err);
       toast.error('Lỗi khi lưu bản ghi nghiệm thu');
@@ -424,11 +431,21 @@ export const AcceptanceManager = React.memo(({
   const handleSaveEdit = async () => {
     if (!editingRowId || !editingRowState) return;
     const comp = getRowComputed(editingRowState);
-    const tm = (teams || []).find((t: any) => t.id === editingRowState.teamId || t.teamCode === editingRowState.teamCode);
-    const pr = (projects || []).find((p: any) => p.id === editingRowState.projectId || p.name === editingRowState.projectName);
+    const tm = (teams || []).find((t: any) => 
+      t.id === editingRowState.teamId || 
+      t.teamCode === editingRowState.teamCode || 
+      t.name === editingRowState.teamName ||
+      t.id === editingRowState.teamCode
+    );
+    const pr = (projects || []).find((p: any) => 
+      p.id === editingRowState.projectId || 
+      p.name === editingRowState.projectName || 
+      p.projectCode === editingRowState.projectName ||
+      p.id === editingRowState.projectName
+    );
 
     try {
-      const oldItem = (acceptanceListView === 'pending' ? acceptances : finalAcceptances).find((a: any) => a.id === editingRowId);
+      const oldItem = acceptances.find((a: any) => a.id === editingRowId);
       const oldHistory = Array.isArray(oldItem?.editHistory) ? oldItem.editHistory : [];
 
       const changesObj: any = {};
@@ -449,7 +466,7 @@ export const AcceptanceManager = React.memo(({
         teamCode: tm?.teamCode || editingRowState.teamCode || oldItem?.teamCode || '',
         blockId: tm?.blockId || editingRowState.blockId || oldItem?.blockId || '',
         blockCode: tm?.blockCode || editingRowState.blockCode || oldItem?.blockCode || '',
-        gdkdName: editingRowState.gdkdName || oldItem?.gdkdName || '',
+        gdkdName: editingRowState.gdkdName || tm?.name || oldItem?.gdkdName || '',
         implementerName: editingRowState.implementerName || oldItem?.implementerName || '',
         projectId: pr?.id || editingRowState.projectId || oldItem?.projectId || '',
         projectName: pr?.name || editingRowState.projectName || oldItem?.projectName || '',
@@ -514,44 +531,13 @@ export const AcceptanceManager = React.memo(({
         editHistory: [...oldHistory, newHistoryEntry]
       };
 
-      const coll = acceptanceListView === 'pending' ? 'acceptances' : 'finalAcceptances';
-      await updateDoc(doc(db, coll, editingRowId), payload);
+      await updateDoc(doc(db, 'acceptances', editingRowId), payload);
       toast.success('Đã cập nhật bản ghi nghiệm thu!');
       setEditingRowId(null);
       setEditingRowState(null);
     } catch (err) {
       console.error('Error updating acceptance:', err);
       toast.error('Lỗi khi cập nhật bản ghi');
-    }
-  };
-
-  // Finalize
-  const handleConfirmFinalize = async () => {
-    if (!itemToFinalize) return;
-    const toastId = toast.loading('Đang chốt số liệu nghiệm thu...');
-    try {
-      const comp = getRowComputed(itemToFinalize);
-      const finalPayload = {
-        ...itemToFinalize,
-        originalAcceptanceId: itemToFinalize.id,
-        status: 'Đã nghiệm thu',
-        finalizedAt: serverTimestamp(),
-        finalizedBy: user?.email || '',
-        updatedAt: serverTimestamp()
-      };
-      delete finalPayload.id;
-
-      await addDoc(collection(db, 'finalAcceptances'), finalPayload);
-      await deleteDoc(doc(db, 'acceptances', itemToFinalize.id));
-
-      toast.dismiss(toastId);
-      toast.success('Đã chốt số liệu nghiệm thu thành công!');
-      setIsFinalizeDialogOpen(false);
-      setItemToFinalize(null);
-    } catch (err) {
-      toast.dismiss(toastId);
-      console.error('Error finalizing:', err);
-      toast.error('Lỗi khi chốt số liệu');
     }
   };
 
@@ -575,9 +561,8 @@ export const AcceptanceManager = React.memo(({
     const toastId = toast.loading(`Đang xóa ${selectedAcceptanceIds.length} bản ghi...`);
     try {
       const batch = writeBatch(db);
-      const collName = acceptanceListView === 'pending' ? 'acceptances' : 'finalAcceptances';
       selectedAcceptanceIds.forEach((id) => {
-        batch.delete(doc(db, collName, id));
+        batch.delete(doc(db, 'acceptances', id));
       });
       await batch.commit();
       toast.dismiss(toastId);
@@ -588,20 +573,6 @@ export const AcceptanceManager = React.memo(({
       toast.dismiss(toastId);
       console.error('Error bulk deleting:', err);
       toast.error('Lỗi khi xóa đồng loạt bản ghi');
-    }
-  };
-
-  // Delete finalized
-  const handleConfirmDeleteFinal = async () => {
-    if (!itemFinalToDeleteId) return;
-    try {
-      await deleteDoc(doc(db, 'finalAcceptances', itemFinalToDeleteId));
-      toast.success('Đã xóa bản ghi đã chốt');
-      setIsDeleteFinalDialogOpen(false);
-      setItemFinalToDeleteId(null);
-    } catch (err) {
-      console.error('Error deleting final acceptance:', err);
-      toast.error('Lỗi khi xóa bản ghi');
     }
   };
 
@@ -691,7 +662,7 @@ export const AcceptanceManager = React.memo(({
         'CÁ NHÂN - TỔNG': comp.cnTotal,
         'TỔNG CỘNG': comp.grandTotal,
         'CÁ NHÂN NỘP TIỀN QUA CÔNG TY': comp.cnNopTien,
-        'TRẠNG THÁI': a.status || (acceptanceListView === 'pending' ? 'Trước nghiệm thu' : 'Đã nghiệm thu'),
+        'TRẠNG THÁI': a.status || 'Đã nghiệm thu',
         'GHI CHÚ': a.notes || ''
       };
     });
@@ -699,7 +670,7 @@ export const AcceptanceManager = React.memo(({
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Nghiệm thu MKT');
-    XLSX.writeFile(workbook, `Bao_cao_Nghiem_thu_MKT_${acceptanceListView === 'pending' ? 'Chua_chot' : 'Da_chot'}_${format(new Date(), 'dd_MM_yyyy')}.xlsx`);
+    XLSX.writeFile(workbook, `Bao_cao_Nghiem_thu_MKT_${format(new Date(), 'dd_MM_yyyy')}.xlsx`);
     toast.success('Đã xuất file Excel thành công');
   };
 
@@ -908,19 +879,42 @@ export const AcceptanceManager = React.memo(({
     let isDown = false;
     let startX = 0;
     let startScrollLeft = 0;
+    let hasMoved = false;
+    let lastClientX = 0;
+    let lastTime = 0;
+    let velocityX = 0; // px/ms
+    let inertiaRaf: number | null = null;
+
+    // Prevent default HTML5 drag-and-drop ghosting
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
 
     const handleMouseDown = (e: MouseEvent) => {
-      // Don't drag if clicking inside form controls or buttons
-      const target = e.target as HTMLElement;
-      if (target.closest('input, select, textarea, button, a, [role="button"], label, svg, .no-drag')) {
-        return;
-      }
       // Only drag on primary mouse button (left click)
       if (e.button !== 0) return;
 
+      if (inertiaRaf) {
+        cancelAnimationFrame(inertiaRaf);
+        inertiaRaf = null;
+      }
+
+      const target = e.target as HTMLElement;
+      // Don't drag if clicking inside editable text inputs, dropdown selects, textarea, or button controls
+      if (target.closest('input:not([type="checkbox"]), select, textarea, button, a, [role="button"], .no-drag, [data-no-drag]')) {
+        return;
+      }
+
       isDown = true;
+      hasMoved = false;
       startX = e.clientX;
+      lastClientX = e.clientX;
+      lastTime = performance.now();
+      velocityX = 0;
       startScrollLeft = slider.scrollLeft;
+
+      // Prevent native text selection highlight from interfering with drag
+      e.preventDefault();
 
       slider.classList.add('cursor-grabbing');
       slider.classList.remove('cursor-grab');
@@ -930,11 +924,23 @@ export const AcceptanceManager = React.memo(({
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDown) return;
-      const dx = e.clientX - startX;
-      // Prevent browser default text selection if actively moving
+      const currentX = e.clientX;
+      const dx = currentX - startX;
+
+      const now = performance.now();
+      const dt = now - lastTime;
+      if (dt > 0) {
+        const instantVelocity = (lastClientX - currentX) / dt;
+        velocityX = 0.7 * instantVelocity + 0.3 * velocityX;
+        lastClientX = currentX;
+        lastTime = now;
+      }
+
       if (Math.abs(dx) > 3) {
+        hasMoved = true;
         e.preventDefault();
       }
+
       slider.scrollLeft = startScrollLeft - dx;
     };
 
@@ -945,16 +951,56 @@ export const AcceptanceManager = React.memo(({
       slider.classList.remove('cursor-grabbing');
       slider.classList.add('cursor-grab');
       document.body.style.userSelect = '';
+
+      // Smooth kinetic momentum scroll on release if dragged with speed
+      if (hasMoved && Math.abs(velocityX) > 0.12) {
+        let currentVelocity = velocityX * 16;
+        const friction = 0.93;
+
+        const glide = () => {
+          if (Math.abs(currentVelocity) < 0.3) {
+            inertiaRaf = null;
+            return;
+          }
+          slider.scrollLeft += currentVelocity;
+          currentVelocity *= friction;
+          inertiaRaf = requestAnimationFrame(glide);
+        };
+        inertiaRaf = requestAnimationFrame(glide);
+      }
     };
 
-    // Attach mousedown to the table container
+    // Prevent accidental click actions when user finishes a drag gesture
+    const handleClickCapture = (e: MouseEvent) => {
+      if (hasMoved) {
+        e.stopPropagation();
+        e.preventDefault();
+        hasMoved = false;
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        slider.scrollLeft += e.deltaY * 1.2;
+      }
+    };
+
+    slider.addEventListener('dragstart', handleDragStart);
     slider.addEventListener('mousedown', handleMouseDown);
-    // Attach mousemove and mouseup to window so dragging never gets dropped outside bounds
+    slider.addEventListener('click', handleClickCapture, true);
+    slider.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mousemove', handleMouseMove, { passive: false });
     window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
+      if (inertiaRaf) {
+        cancelAnimationFrame(inertiaRaf);
+      }
+      slider.removeEventListener('dragstart', handleDragStart);
       slider.removeEventListener('mousedown', handleMouseDown);
+      slider.removeEventListener('click', handleClickCapture, true);
+      slider.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       document.body.style.userSelect = '';
@@ -983,36 +1029,6 @@ export const AcceptanceManager = React.memo(({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* View Tab Switcher */}
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60">
-            <button
-              onClick={() => {
-                setAcceptanceListView('pending');
-                setSelectedAcceptanceIds([]);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                acceptanceListView === 'pending'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Chưa chốt ({filteredAcceptances.length})
-            </button>
-            <button
-              onClick={() => {
-                setAcceptanceListView('finalized');
-                setSelectedAcceptanceIds([]);
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                acceptanceListView === 'finalized'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Đã chốt ({filteredFinalAcceptances.length})
-            </button>
-          </div>
-
           <Button
             onClick={handleAddDraftRow}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs h-9 px-3.5 rounded-2xl shadow-md shadow-indigo-100 flex items-center gap-1.5"
@@ -1119,7 +1135,7 @@ export const AcceptanceManager = React.memo(({
                   <SelectItem value="all">Tất cả Dự án</SelectItem>
                   {(projects || []).map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name}
+                      {p.projectCode ? `[${p.projectCode}] ${p.name}` : p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1299,7 +1315,7 @@ export const AcceptanceManager = React.memo(({
                       key={item.id}
                       item={item}
                       index={idx}
-                      isFinalizedView={acceptanceListView === 'finalized'}
+                      isFinalizedView={false}
                       isSelected={selectedAcceptanceIds.includes(item.id)}
                       isEditing={editingRowId === item.id}
                       editingState={editingRowState}
@@ -1323,18 +1339,9 @@ export const AcceptanceManager = React.memo(({
                         setEditingRowState((prev: any) => ({ ...prev, [field]: val }));
                       }}
                       onOpenCalculator={handleOpenCalculator}
-                      onFinalize={(acc) => {
-                        setItemToFinalize(acc);
-                        setIsFinalizeDialogOpen(true);
-                      }}
                       onDelete={(id) => {
-                        if (acceptanceListView === 'pending') {
-                          setItemToDeleteId(id);
-                          setIsDeleteDialogOpen(true);
-                        } else {
-                          setItemFinalToDeleteId(id);
-                          setIsDeleteFinalDialogOpen(true);
-                        }
+                        setItemToDeleteId(id);
+                        setIsDeleteDialogOpen(true);
                       }}
                       onOpenHistory={(acc) => {
                         setHistoryTargetRecord(acc);
@@ -1355,7 +1362,7 @@ export const AcceptanceManager = React.memo(({
         </CardContent>
       </Card>
 
-      {/* 💬 Dialogs (Calculator, Finalize, Delete, History, Import) */}
+      {/* 💬 Dialogs (Calculator, Delete, History, Import) */}
       <AcceptanceDialogs
         isCalculatorOpen={isCalculatorOpen}
         setIsCalculatorOpen={setIsCalculatorOpen}
@@ -1366,11 +1373,6 @@ export const AcceptanceManager = React.memo(({
         calculatorUpdateFn={calculatorUpdateFn}
         formatCurrency={formatCurrency}
 
-        isFinalizeDialogOpen={isFinalizeDialogOpen}
-        setIsFinalizeDialogOpen={setIsFinalizeDialogOpen}
-        itemToFinalize={itemToFinalize}
-        onConfirmFinalize={handleConfirmFinalize}
-
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         itemToDeleteId={itemToDeleteId}
@@ -1380,11 +1382,6 @@ export const AcceptanceManager = React.memo(({
         setIsBulkDeleteDialogOpen={setIsBulkDeleteDialogOpen}
         selectedCount={selectedAcceptanceIds.length}
         onConfirmBulkDelete={handleConfirmBulkDelete}
-
-        isDeleteFinalDialogOpen={isDeleteFinalDialogOpen}
-        setIsDeleteFinalDialogOpen={setIsDeleteFinalDialogOpen}
-        itemFinalToDeleteId={itemFinalToDeleteId}
-        onConfirmDeleteFinal={handleConfirmDeleteFinal}
 
         isHistoryDialogOpen={isHistoryDialogOpen}
         setIsHistoryDialogOpen={setIsHistoryDialogOpen}

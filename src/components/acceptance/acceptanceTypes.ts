@@ -47,7 +47,7 @@ export interface AcceptanceRecord {
   grandTotal?: number; // Cột Z (K + Q + S + Y)
 
   // Group 6:
-  caNhanNopTien?: number; // Cột AA
+  caNhanNopTien?: number; // Cột AA: Số Lead
   status?: string; // Cột AB
   notes?: string; // Cột AC
 

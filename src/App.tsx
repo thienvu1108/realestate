@@ -7659,8 +7659,28 @@ export default function App() {
     }
   };
 
+  const firebaseUserEmail = user?.email?.toLowerCase() || '';
+
   const checkBudgetActionAllowed = (bMonth: string) => {
-    if (isAdmin || isAccountant || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com') {
+    const roleStr = (userRole || userProfile?.role || '').toLowerCase().trim();
+    const isSpecialAdmin = 
+      isAdmin || 
+      isSuperAdmin || 
+      isAccountant || 
+      isMod || 
+      isGDDA || 
+      isGDKhoi || 
+      isGDKD ||
+      roleStr === 'admin' || 
+      roleStr === 'super_admin' || 
+      roleStr === 'quản trị' || 
+      roleStr === 'quản trị viên' || 
+      roleStr === 'administrator' || 
+      roleStr === 'accountant' || 
+      roleStr === 'kế toán' || 
+      firebaseUserEmail === 'thienvu1108@gmail.com';
+
+    if (isSpecialAdmin) {
       return { allowed: true };
     }
     
@@ -7695,8 +7715,6 @@ export default function App() {
     
     return { allowed: true };
   };
-
-  const firebaseUserEmail = user?.email?.toLowerCase() || '';
 
   const handleAddBudget = (e: React.FormEvent) => {
     e.preventDefault();
@@ -8153,13 +8171,16 @@ export default function App() {
       return;
     }
 
+    const matchedTeam = teams.find(t => t.id === budget.teamId || t.name === budget.teamName || t.teamCode === budget.teamCode);
+    const resolvedTeamId = matchedTeam ? matchedTeam.id : (budget.teamId || budget.teamName);
+
     setEditingBudgetId(budget.id);
-    setEditingBudgetAmount(budget.amount.toString());
+    setEditingBudgetAmount(budget.amount !== undefined && budget.amount !== null ? budget.amount.toString() : '0');
     setEditingBudgetVerifiedAmount((budget.verifiedAmount || 0).toString());
     setEditingBudgetMonth(budget.month);
-    setEditingBudgetTeam(budget.teamName);
+    setEditingBudgetTeam(resolvedTeamId);
     setEditingBudgetProject(budget.projectId);
-    setEditingBudgetImplementer(budget.implementerName);
+    setEditingBudgetImplementer(budget.implementerName || '');
     setEditingBudgetReason('');
     setIsEditBudgetDialogOpen(true);
   };
@@ -8167,11 +8188,6 @@ export default function App() {
   const confirmEditBudget = async () => {
     if (!editingBudgetId || !editingBudgetAmount || !editingBudgetTeam || !editingBudgetMonth || !editingBudgetProject || !editingBudgetImplementer) {
       toast.error('Vui lòng nhập đầy đủ thông tin');
-      return;
-    }
-
-    if (!editingBudgetReason || !editingBudgetReason.trim()) {
-      toast.error('Vui lòng nhập Lý do sửa');
       return;
     }
 
@@ -8184,28 +8200,89 @@ export default function App() {
     try {
       const budgetRef = doc(db, 'budgets', editingBudgetId);
       const originalBudget = budgets.find(b => b.id === editingBudgetId);
+      const newAmountNum = Number(editingBudgetAmount);
+
+      const selectedTeam = teams.find(t => t.id === editingBudgetTeam || t.name === editingBudgetTeam);
+      const selectedProject = projects.find(p => p.id === editingBudgetProject || p.name === editingBudgetProject);
+
+      const targetTeamName = selectedTeam?.name || teamMap[editingBudgetTeam] || editingBudgetTeam;
+      const targetTeamId = selectedTeam?.id || editingBudgetTeam;
+      const targetTeamCode = selectedTeam?.teamCode || extractTeamCode(targetTeamName);
+      const targetProjectName = selectedProject?.name || projectMap[editingBudgetProject] || originalBudget?.projectName || 'N/A';
+      const targetProjectId = selectedProject?.id || editingBudgetProject;
+
+      const reasonText = editingBudgetReason.trim() || 'Admin cập nhật thông tin ngân sách';
+
+      // Update or synchronize subBudgets to prevent rollback by subsequent auto-merge or registration routines
+      let updatedSubBudgets: any[] = [];
+      if (originalBudget?.subBudgets && Array.isArray(originalBudget.subBudgets) && originalBudget.subBudgets.length > 0) {
+        if (originalBudget.subBudgets.length === 1) {
+          updatedSubBudgets = [{
+            ...originalBudget.subBudgets[0],
+            userName: editingBudgetImplementer || originalBudget.subBudgets[0].userName || 'Thành viên',
+            amount: newAmountNum,
+            note: reasonText,
+            updatedAt: new Date().toISOString()
+          }];
+        } else {
+          const oldTotal = originalBudget.subBudgets.reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0);
+          if (oldTotal > 0) {
+            updatedSubBudgets = originalBudget.subBudgets.map((s: any) => ({
+              ...s,
+              amount: Math.round((Number(s.amount || 0) / oldTotal) * newAmountNum),
+              updatedAt: new Date().toISOString()
+            }));
+            const sumScaled = updatedSubBudgets.reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0);
+            if (sumScaled !== newAmountNum && updatedSubBudgets.length > 0) {
+              updatedSubBudgets[0].amount += (newAmountNum - sumScaled);
+            }
+          } else {
+            updatedSubBudgets = [{
+              id: `sub-${Date.now()}`,
+              userId: user?.uid || '',
+              userName: editingBudgetImplementer || userProfile?.fullName || user?.displayName || 'Admin',
+              amount: newAmountNum,
+              note: reasonText,
+              createdAt: new Date().toISOString()
+            }];
+          }
+        }
+      } else {
+        updatedSubBudgets = [{
+          id: `sub-${Date.now()}`,
+          userId: user?.uid || '',
+          userName: editingBudgetImplementer || userProfile?.fullName || user?.displayName || 'Admin',
+          amount: newAmountNum,
+          note: reasonText,
+          createdAt: new Date().toISOString()
+        }];
+      }
+
       const updateData: any = {
-        amount: Number(editingBudgetAmount),
-        verifiedAmount: Number(editingBudgetVerifiedAmount),
+        amount: newAmountNum,
+        verifiedAmount: Number(editingBudgetVerifiedAmount || 0),
         month: editingBudgetMonth,
-        teamName: editingBudgetTeam,
-        projectId: editingBudgetProject,
-        projectName: projectMap[editingBudgetProject] || 'N/A',
+        teamId: targetTeamId,
+        teamName: targetTeamName,
+        teamCode: targetTeamCode,
+        projectId: targetProjectId,
+        projectName: targetProjectName,
         implementerName: editingBudgetImplementer,
+        subBudgets: updatedSubBudgets,
         updatedAt: serverTimestamp(),
         updatedBy: user?.uid,
         editHistory: arrayUnion({
           action: 'UPDATE',
-          editorName: userProfile?.fullName || user?.displayName || 'Unknown',
+          editorName: userProfile?.fullName || user?.displayName || 'Admin',
           editorEmail: user?.email,
           timestamp: new Date().toISOString(),
-          reason: editingBudgetReason.trim(),
+          reason: reasonText,
           changes: {
-            amount: { old: originalBudget?.amount, new: Number(editingBudgetAmount) },
-            verifiedAmount: { old: originalBudget?.verifiedAmount || 0, new: Number(editingBudgetVerifiedAmount) },
+            amount: { old: originalBudget?.amount, new: newAmountNum },
+            verifiedAmount: { old: originalBudget?.verifiedAmount || 0, new: Number(editingBudgetVerifiedAmount || 0) },
             month: { old: originalBudget?.month, new: editingBudgetMonth },
-            team: { old: originalBudget?.teamName, new: editingBudgetTeam },
-            project: { old: originalBudget?.projectName, new: projectMap[editingBudgetProject] || 'N/A' },
+            team: { old: originalBudget?.teamName, new: targetTeamName },
+            project: { old: originalBudget?.projectName, new: targetProjectName },
             implementer: { old: originalBudget?.implementerName, new: editingBudgetImplementer }
           }
         })
@@ -8219,14 +8296,17 @@ export default function App() {
         relatedCosts.forEach(cost => {
           const costRef = doc(db, 'costs', cost.id);
           batch.update(costRef, {
-            projectId: editingBudgetProject,
-            projectName: projectMap[editingBudgetProject] || 'N/A'
+            projectId: targetProjectId,
+            projectName: targetProjectName,
+            teamId: targetTeamId,
+            teamName: targetTeamName,
+            teamCode: targetTeamCode
           });
         });
         await batch.commit();
       }
 
-      await logAction('UPDATE', 'budgets', editingBudgetId, { ...updateData, reason: editingBudgetReason.trim() });
+      await logAction('UPDATE', 'budgets', editingBudgetId, { ...updateData, reason: reasonText });
       setEditingBudgetId(null);
       setEditingBudgetReason('');
       setIsEditBudgetDialogOpen(false);
@@ -8244,7 +8324,7 @@ export default function App() {
     }
 
     setAdjustingBudgetId(budget.id);
-    setAdjustingBudgetAmount(budget.amount.toString());
+    setAdjustingBudgetAmount(budget.amount ? budget.amount.toString() : '0');
     setAdjustingBudgetReason('');
     setIsAdjustBudgetDialogOpen(true);
   };
@@ -8252,11 +8332,6 @@ export default function App() {
   const confirmAdjustBudget = async () => {
     if (!adjustingBudgetId || !adjustingBudgetAmount) {
       toast.error('Vui lòng nhập số tiền ngân sách mới');
-      return;
-    }
-
-    if (!adjustingBudgetReason || !adjustingBudgetReason.trim()) {
-      toast.error('Vui lòng nhập Lý do điều chỉnh');
       return;
     }
 
@@ -8276,13 +8351,60 @@ export default function App() {
       const budgetRef = doc(db, 'budgets', adjustingBudgetId);
       const newAmount = Number(adjustingBudgetAmount);
       
-      if (isNaN(newAmount) || newAmount <= 0) {
+      if (isNaN(newAmount) || newAmount < 0) {
         toast.error('Số tiền ngân sách mới không hợp lệ');
         return;
       }
 
+      const reasonText = adjustingBudgetReason.trim() || 'Admin điều chỉnh ngân sách';
+
+      // Update subBudgets proportionally
+      let updatedSubBudgets: any[] = [];
+      if (originalBudget.subBudgets && Array.isArray(originalBudget.subBudgets) && originalBudget.subBudgets.length > 0) {
+        if (originalBudget.subBudgets.length === 1) {
+          updatedSubBudgets = [{
+            ...originalBudget.subBudgets[0],
+            amount: newAmount,
+            note: reasonText,
+            updatedAt: new Date().toISOString()
+          }];
+        } else {
+          const oldTotal = originalBudget.subBudgets.reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0);
+          if (oldTotal > 0) {
+            updatedSubBudgets = originalBudget.subBudgets.map((s: any) => ({
+              ...s,
+              amount: Math.round((Number(s.amount || 0) / oldTotal) * newAmount),
+              updatedAt: new Date().toISOString()
+            }));
+            const sumScaled = updatedSubBudgets.reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0);
+            if (sumScaled !== newAmount && updatedSubBudgets.length > 0) {
+              updatedSubBudgets[0].amount += (newAmount - sumScaled);
+            }
+          } else {
+            updatedSubBudgets = [{
+              id: `sub-${Date.now()}`,
+              userId: user?.uid || '',
+              userName: userProfile?.fullName || user?.displayName || 'Admin',
+              amount: newAmount,
+              note: reasonText,
+              createdAt: new Date().toISOString()
+            }];
+          }
+        }
+      } else {
+        updatedSubBudgets = [{
+          id: `sub-${Date.now()}`,
+          userId: user?.uid || '',
+          userName: originalBudget.implementerName || userProfile?.fullName || user?.displayName || 'Admin',
+          amount: newAmount,
+          note: reasonText,
+          createdAt: new Date().toISOString()
+        }];
+      }
+
       await updateDoc(budgetRef, {
         amount: newAmount,
+        subBudgets: updatedSubBudgets,
         updatedAt: serverTimestamp(),
         updatedBy: user?.uid,
         editHistory: arrayUnion({
@@ -8290,7 +8412,7 @@ export default function App() {
           editorName: userProfile?.fullName || user?.displayName || 'Unknown',
           editorEmail: user?.email,
           timestamp: new Date().toISOString(),
-          reason: adjustingBudgetReason.trim(),
+          reason: reasonText,
           changes: {
             amount: { old: originalBudget.amount, new: newAmount }
           }
@@ -8303,7 +8425,7 @@ export default function App() {
         month: originalBudget.month,
         oldAmount: originalBudget.amount, 
         newAmount,
-        reason: adjustingBudgetReason.trim() 
+        reason: reasonText
       });
 
       setAdjustingBudgetId(null);
@@ -19534,15 +19656,7 @@ export default function App() {
                                   variant="outline" 
                                   size="sm" 
                                   className="h-8 text-[11px] font-bold text-blue-600 hover:bg-blue-50/50 hover:text-blue-700 border-blue-200 rounded-lg touch-manipulation px-2"
-                                  onClick={() => {
-                                    setEditingBudgetId(b.id);
-                                    setEditingBudgetProject(b.projectId);
-                                    setEditingBudgetTeam(b.teamId);
-                                    setEditingBudgetAmount(b.amount.toString());
-                                    setEditingBudgetMonth(b.month);
-                                    setEditingBudgetImplementer(b.implementerName);
-                                    setIsEditBudgetDialogOpen(true);
-                                  }}
+                                  onClick={() => handleOpenEditBudget(b)}
                                 >
                                   <Edit2 className="h-3.5 w-3.5 mr-1" /> Sửa
                                 </Button>
@@ -19701,15 +19815,7 @@ export default function App() {
                                         variant="ghost" 
                                         size="icon" 
                                         className="h-8 w-8 text-slate-400 hover:text-blue-600"
-                                        onClick={() => {
-                                          setEditingBudgetId(b.id);
-                                          setEditingBudgetProject(b.projectId);
-                                          setEditingBudgetTeam(b.teamId);
-                                          setEditingBudgetAmount(b.amount.toString());
-                                          setEditingBudgetMonth(b.month);
-                                          setEditingBudgetImplementer(b.implementerName);
-                                          setIsEditBudgetDialogOpen(true);
-                                        }}
+                                        onClick={() => handleOpenEditBudget(b)}
                                         title="Chỉnh sửa thông tin"
                                       >
                                         <Edit2 className="h-3.5 w-3.5" />
@@ -21747,14 +21853,19 @@ export default function App() {
               <Select value={editingBudgetTeam} onValueChange={setEditingBudgetTeam}>
                 <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-xs">
                   <SelectValue placeholder="Chọn team">
-                    {editingBudgetTeam ? `${teamMap[editingBudgetTeam] || editingBudgetTeam} (${teams.find(t => (t.id === editingBudgetTeam || t.name === editingBudgetTeam))?.teamCode || ''})` : "Chọn team"}
+                    {editingBudgetTeam ? `${teamMap[editingBudgetTeam] || teams.find(t => t.id === editingBudgetTeam || t.name === editingBudgetTeam)?.name || editingBudgetTeam} (${teams.find(t => (t.id === editingBudgetTeam || t.name === editingBudgetTeam))?.teamCode || ''})` : "Chọn team"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectGroup>
+                  <SelectGroup className="max-h-[250px] overflow-y-auto">
                     {teams.map(t => (
                       <SelectItem key={t.id} value={t.id} className="text-xs">{t.name} ({t.teamCode})</SelectItem>
                     ))}
+                    {editingBudgetTeam && !teams.some(t => t.id === editingBudgetTeam) && (
+                      <SelectItem value={editingBudgetTeam} className="text-xs">
+                        {teamMap[editingBudgetTeam] || editingBudgetTeam}
+                      </SelectItem>
+                    )}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -21777,7 +21888,16 @@ export default function App() {
                     <SelectValue placeholder="Chọn tháng" />
                   </SelectTrigger>
                   <SelectContent>
-                    {getMonthOptions().map(opt => (
+                    {(() => {
+                      const opts = getMonthOptions();
+                      if (editingBudgetMonth && !opts.find(o => o.value === editingBudgetMonth)) {
+                        return [
+                          { value: editingBudgetMonth, label: getMarketingMonthDisplayRange(editingBudgetMonth) || `Kỳ ${editingBudgetMonth}` },
+                          ...opts
+                        ];
+                      }
+                      return opts;
+                    })().map(opt => (
                       <SelectItem key={opt.value} value={opt.value} className="text-xs">
                         {opt.label}
                       </SelectItem>

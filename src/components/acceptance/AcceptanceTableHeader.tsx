@@ -132,8 +132,8 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
           </div>
         </TableHead>
 
-        {/* Col AA: CÁ NHÂN NỘP TIỀN QUA CÔNG TY */}
-        {renderSortableCell('caNhanNopTien', 'CÁ NHÂN NỘP TIỀN QUA CÔNG TY', 'bg-cyan-100/90 text-cyan-950 border-cyan-300 min-w-[125px] text-[10px]')}
+        {/* Col AA: SỐ LEAD */}
+        {renderSortableCell('caNhanNopTien', 'SỐ LEAD', 'bg-cyan-100/90 text-cyan-950 border-cyan-300 min-w-[95px] text-[10px]')}
 
         {/* Col AB: TRẠNG THÁI */}
         {renderSortableCell('status', 'TRẠNG THÁI', 'bg-yellow-100/90 text-yellow-950 border-yellow-300 min-w-[105px] text-[10px]')}

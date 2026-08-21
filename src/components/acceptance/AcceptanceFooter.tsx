@@ -93,8 +93,8 @@ export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, fo
         {/* Col Z: TỔNG (K + Q + S + Y) */}
         <TableCell className="text-right font-mono text-xs font-black text-rose-900 bg-rose-100">{fmt(totals.grandTotal)}</TableCell>
 
-        {/* Col AA: CÁ NHÂN NỘP TIỀN */}
-        <TableCell className="text-right font-mono text-xs font-black text-cyan-950 bg-cyan-100/70">{fmt(totals.cnNopTien)}</TableCell>
+        {/* Col AA: SỐ LEAD */}
+        <TableCell className="text-right font-mono text-xs font-black text-cyan-950 bg-cyan-100/70">{(totals.cnNopTien || 0).toLocaleString('vi-VN')}</TableCell>
 
         {/* Col AB, AC, Actions */}
         <TableCell colSpan={2} className="bg-slate-100"></TableCell>

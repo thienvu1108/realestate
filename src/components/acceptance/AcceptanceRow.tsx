@@ -36,6 +36,7 @@ interface RowProps {
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onUpdateEditingField: (field: string, value: any) => void;
+  onUpdateEditingFields?: (fields: Record<string, any>) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
   onFinalize?: (item: any) => void;
   onDelete: (id: string) => void;
@@ -64,26 +65,50 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   onCancelEdit,
   onSaveEdit,
   onUpdateEditingField,
+  onUpdateEditingFields,
   onOpenCalculator,
   onDelete,
   onOpenHistory,
   renderBreakdownTooltip
 }) => {
+  // Helper to identify raw database IDs / hashes to prevent displaying IDs
+  const isRawId = (val: string | undefined | null) => {
+    if (!val) return false;
+    const str = String(val).trim();
+    if (str.startsWith('draft-')) return true;
+    if ((teams || []).some((t: any) => t.id === str)) return true;
+    if ((projects || []).some((p: any) => p.id === str)) return true;
+    if (str.length >= 16 && /^[a-zA-Z0-9_-]+$/.test(str) && !str.includes(' ') && !str.includes('.')) return true;
+    return false;
+  };
+
   // If in editing mode, compute from editingState
   if (isEditing && editingState) {
     const editComp = getRowComputed(editingState);
 
     // Resolve matching team for editingState
-    const currentEditTeam = findTeam 
+    const currentEditTeam = (findTeam 
       ? (findTeam(editingState.teamId) || findTeam(editingState.teamCode) || findTeam(editingState.teamName))
-      : (teams || []).find((t: any) => t.id === editingState.teamCode || t.teamCode === editingState.teamCode || t.name === editingState.teamName || t.id === editingState.teamName);
-    const currentEditTeamId = editingState.teamId || currentEditTeam?.id || '';
+      : null) || (teams || []).find((t: any) => 
+          t.id === editingState.teamId || 
+          t.id === editingState.teamCode || 
+          t.id === editingState.teamName ||
+          (editingState.teamCode && t.teamCode === editingState.teamCode) || 
+          (editingState.teamName && t.name === editingState.teamName)
+        );
+    const currentEditTeamId = currentEditTeam?.id || editingState.teamId || '';
 
     // Resolve matching project for editingState
-    const currentEditProj = findProject
+    const currentEditProj = (findProject
       ? (findProject(editingState.projectId) || findProject(editingState.projectName) || findProject(editingState.projectCode))
-      : (projects || []).find((p: any) => p.id === editingState.projectName || p.name === editingState.projectName || p.projectCode === editingState.projectName || p.id === editingState.projectCode);
-    const currentEditProjId = editingState.projectId || currentEditProj?.id || '';
+      : null) || (projects || []).find((p: any) => 
+          p.id === editingState.projectId || 
+          p.id === editingState.projectName || 
+          p.id === editingState.projectCode ||
+          (editingState.projectName && p.name === editingState.projectName) || 
+          (editingState.projectCode && p.projectCode === editingState.projectCode)
+        );
+    const currentEditProjId = currentEditProj?.id || editingState.projectId || '';
 
     const renderEditInput = (
       fieldKey: string,
@@ -143,26 +168,44 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           <Select
             value={currentEditTeamId}
             onValueChange={(teamId) => {
-              const tm = (teams || []).find((t: any) => t.id === teamId);
-              onUpdateEditingField('teamId', teamId);
+              const tm = (teams || []).find((t: any) => t.id === teamId) || (findTeam ? findTeam(teamId) : null);
               if (tm) {
-                onUpdateEditingField('teamCode', tm.teamCode || tm.name || '');
-                onUpdateEditingField('teamName', tm.name || tm.teamCode || '');
-                onUpdateEditingField('blockId', tm.blockId || '');
-                onUpdateEditingField('blockCode', tm.blockCode || '');
-                if (tm.name && !editingState.gdkdName) {
-                  const code = tm.teamCode || '';
-                  let gdkd = tm.name;
-                  if (code && tm.name.startsWith(code)) {
-                    gdkd = tm.name.substring(code.length).trim();
-                  }
-                  onUpdateEditingField('gdkdName', gdkd);
+                const tmName = tm.name || '';
+                const code = tm.teamCode || '';
+                let gdkd = tmName;
+                if (code && tmName.startsWith(code)) {
+                  gdkd = tmName.substring(code.length).trim();
                 }
+                if (onUpdateEditingFields) {
+                  onUpdateEditingFields({
+                    teamId: tm.id,
+                    teamCode: tm.teamCode || tm.name || '',
+                    teamName: tm.name || tm.teamCode || '',
+                    blockId: tm.blockId || '',
+                    blockCode: tm.blockCode || '',
+                    gdkdName: (!editingState.gdkdName || editingState.gdkdName === '-') ? gdkd : editingState.gdkdName
+                  });
+                } else {
+                  onUpdateEditingField('teamId', tm.id);
+                  onUpdateEditingField('teamCode', tm.teamCode || tm.name || '');
+                  onUpdateEditingField('teamName', tm.name || tm.teamCode || '');
+                  onUpdateEditingField('blockId', tm.blockId || '');
+                  onUpdateEditingField('blockCode', tm.blockCode || '');
+                  if (!editingState.gdkdName || editingState.gdkdName === '-') {
+                    onUpdateEditingField('gdkdName', gdkd);
+                  }
+                }
+              } else {
+                onUpdateEditingField('teamId', teamId);
               }
             }}
           >
             <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Chọn Team" />
+              <SelectValue placeholder="Chọn Team">
+                {currentEditTeam 
+                  ? (currentEditTeam.teamCode ? `${currentEditTeam.teamCode} - ${currentEditTeam.name}` : currentEditTeam.name)
+                  : (editingState.teamName || editingState.teamCode || undefined)}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-56">
               {(teams || []).map((t: any) => (
@@ -197,16 +240,30 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           <Select
             value={currentEditProjId}
             onValueChange={(projectId) => {
-              const p = (projects || []).find((pr: any) => pr.id === projectId);
-              onUpdateEditingField('projectId', projectId);
+              const p = (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
               if (p) {
-                onUpdateEditingField('projectName', p.name || '');
-                onUpdateEditingField('projectCode', p.projectCode || '');
+                if (onUpdateEditingFields) {
+                  onUpdateEditingFields({
+                    projectId: p.id,
+                    projectName: p.name || '',
+                    projectCode: p.projectCode || ''
+                  });
+                } else {
+                  onUpdateEditingField('projectId', p.id);
+                  onUpdateEditingField('projectName', p.name || '');
+                  onUpdateEditingField('projectCode', p.projectCode || '');
+                }
+              } else {
+                onUpdateEditingField('projectId', projectId);
               }
             }}
           >
             <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Chọn Dự án" />
+              <SelectValue placeholder="Chọn Dự án">
+                {currentEditProj 
+                  ? (currentEditProj.projectCode ? `[${currentEditProj.projectCode}] ${currentEditProj.name}` : currentEditProj.name)
+                  : (editingState.projectName || undefined)}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-56">
               {(projects || []).map((p: any) => (
@@ -263,8 +320,8 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           {formatCurrency(editComp.grandTotal).replace(' đ', '')}
         </TableCell>
 
-        {/* Col AA: CÁ NHÂN NỘP TIỀN */}
-        <TableCell className="p-1 bg-cyan-50/40">{renderEditInput('caNhanNopTien', 'Cá nhân nộp CTY', editingState.caNhanNopTien)}</TableCell>
+        {/* Col AA: SỐ LEAD */}
+        <TableCell className="p-1 bg-cyan-50/40">{renderEditInput('caNhanNopTien', 'Số Lead', editingState.caNhanNopTien)}</TableCell>
 
         {/* Col AB: TRẠNG THÁI */}
         <TableCell className="p-1 min-w-[100px]">
@@ -321,38 +378,47 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   const comp = getRowComputed(item);
 
   // Exact resolution of team name and team code to avoid showing raw IDs
-  const matchedTeam = findTeam 
+  const matchedTeam = (findTeam 
     ? (findTeam(item.teamId) || findTeam(item.teamCode) || findTeam(item.teamName))
-    : (teams || []).find((t: any) => 
+    : null) || (teams || []).find((t: any) => 
         (t.id && (t.id === item.teamId || t.id === item.teamCode || t.id === item.teamName)) ||
         (t.teamCode && (t.teamCode === item.teamCode || t.teamCode === item.teamName || t.teamCode === item.teamId)) ||
         (t.name && (t.name === item.teamName || t.name === item.teamCode || t.name === item.teamId))
       );
 
+  const rawTeamCode = item.teamCode || '';
+  const rawTeamName = item.teamName || teamMap[item.teamId] || teamMap[item.teamCode] || '';
+
   const displayTeamCode = matchedTeam?.teamCode || 
-    (item.teamCode && !item.teamCode.startsWith('draft-') && item.teamCode.length < 20 ? item.teamCode : matchedTeam?.name) || 
-    item.teamName || 
-    teamMap[item.teamId] || 
+    (!isRawId(rawTeamCode) && rawTeamCode ? rawTeamCode : '') || 
+    matchedTeam?.name || 
+    (!isRawId(rawTeamName) && rawTeamName ? rawTeamName : '') || 
     '-';
 
-  const displayTeamName = matchedTeam?.name || teamMap[item.teamId] || teamMap[item.teamName] || item.teamName || matchedTeam?.teamCode || item.teamCode || '';
+  const displayTeamName = matchedTeam?.name || 
+    (!isRawId(rawTeamName) && rawTeamName ? rawTeamName : '') || 
+    matchedTeam?.teamCode || 
+    (displayTeamCode !== '-' ? displayTeamCode : '');
 
   // Exact resolution of project name to avoid showing raw IDs
-  const matchedProject = findProject
+  const matchedProject = (findProject
     ? (findProject(item.projectId) || findProject(item.projectName) || findProject(item.projectCode))
-    : (projects || []).find((p: any) => 
-        (p.id && (p.id === item.projectId || p.id === item.projectName)) ||
+    : null) || (projects || []).find((p: any) => 
+        (p.id && (p.id === item.projectId || p.id === item.projectName || p.id === item.projectCode)) ||
         (p.name && (p.name === item.projectName || p.name === item.projectId)) ||
         (p.projectCode && (p.projectCode === item.projectCode || p.projectCode === item.projectName))
       );
 
-  const displayProjectName = matchedProject?.name || 
-    projectMap[item.projectId] || 
-    projectMap[item.projectName] || 
-    (item.projectName && item.projectName.length < 25 && !item.projectName.startsWith('draft-') ? item.projectName : '') || 
-    (matchedProject?.projectCode ? `[${matchedProject.projectCode}]` : '-');
+  const rawProjectName = item.projectName || projectMap[item.projectId] || projectMap[item.projectName] || '';
+  const rawProjectCode = item.projectCode || '';
 
-  const displayProjectCode = matchedProject?.projectCode || item.projectCode || '';
+  const displayProjectName = matchedProject?.name || 
+    (!isRawId(rawProjectName) && rawProjectName ? rawProjectName : '') || 
+    (matchedProject?.projectCode ? `[${matchedProject.projectCode}]` : '') || 
+    '-';
+
+  const displayProjectCode = matchedProject?.projectCode || 
+    (!isRawId(rawProjectCode) && rawProjectCode ? rawProjectCode : '');
 
   return (
     <TableRow className="hover:bg-slate-50/80 transition-colors group border-b border-slate-200">
@@ -484,9 +550,9 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {formatCurrency(comp.grandTotal).replace(' đ', '')}
       </TableCell>
 
-      {/* Col AA: CÁ NHÂN NỘP TIỀN */}
+      {/* Col AA: SỐ LEAD */}
       <TableCell className="text-right font-mono text-xs font-bold text-cyan-950 bg-cyan-50/30">
-        {renderBreakdownTooltip(comp.cnNopTien, item.costBreakdowns?.caNhanNopTien, 'Cá nhân nộp')}
+        {renderBreakdownTooltip(comp.cnNopTien, item.costBreakdowns?.caNhanNopTien, 'Số Lead')}
       </TableCell>
 
       {/* Col AB: TRẠNG THÁI */}

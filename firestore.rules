@@ -198,8 +198,9 @@ service cloud.firestore {
       
       allow update: if (
         isAdmin() || isAccountant() || 
-        resource.data.createdBy == request.auth.uid || 
-        (resource.data.assignedUserEmail.lower() == request.auth.token.email.lower()) ||
+        resource.data.get('createdBy', '') == request.auth.uid || 
+        (resource.data.get('assignedUserEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
+        (resource.data.get('userEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
         (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
         (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
       ) && isValidBudget(incoming());

@@ -130,7 +130,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   // Cột Z: TỔNG = K + Q + S + Y
   const grandTotal = dTotalSauVat + vTotalSauVat + dtCtySauVat + cnTotal;
 
-  // Cá nhân nộp tiền qua công ty
+  // Cột AA: Số Lead
   const cnNopTien = parseCurrencyFormula(row.caNhanNopTien ?? row.personalPaidToCompany).total;
 
   return {

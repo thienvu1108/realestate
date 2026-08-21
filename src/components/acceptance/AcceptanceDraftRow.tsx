@@ -17,6 +17,7 @@ interface DraftRowProps {
   findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
   onUpdateField: (field: string, value: any) => void;
+  onUpdateFields?: (fields: Record<string, any>) => void;
   onSaveDraft: (draftRow: any) => void;
   onRemoveDraft: (id: string) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
@@ -33,31 +34,32 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
   findProject,
   formatCurrency,
   onUpdateField,
+  onUpdateFields,
   onSaveDraft,
   onRemoveDraft,
   onOpenCalculator
 }) => {
   const comp = getRowComputed(draftRow);
 
-  const selectedTeam = findTeam
+  const selectedTeam = (findTeam
     ? (findTeam(draftRow.teamId) || findTeam(draftRow.teamCode) || findTeam(draftRow.teamName))
-    : (teams || []).find((t: any) => 
+    : null) || (teams || []).find((t: any) => 
         t.id === draftRow.teamId || 
         (draftRow.teamCode && t.teamCode === draftRow.teamCode) || 
         (draftRow.teamName && t.name === draftRow.teamName) ||
         t.id === draftRow.teamCode
       );
-  const currentDraftTeamId = draftRow.teamId || selectedTeam?.id || '';
+  const currentDraftTeamId = selectedTeam?.id || draftRow.teamId || '';
 
-  const selectedProj = findProject
+  const selectedProj = (findProject
     ? (findProject(draftRow.projectId) || findProject(draftRow.projectName) || findProject(draftRow.projectCode))
-    : (projects || []).find((p: any) => 
+    : null) || (projects || []).find((p: any) => 
         p.id === draftRow.projectId || 
         (draftRow.projectName && p.name === draftRow.projectName) || 
         (draftRow.projectName && p.projectCode === draftRow.projectName) ||
         p.id === draftRow.projectName
       );
-  const currentDraftProjId = draftRow.projectId || selectedProj?.id || '';
+  const currentDraftProjId = selectedProj?.id || draftRow.projectId || '';
 
   const renderCalcInput = (
     fieldKey: string,
@@ -122,26 +124,42 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         <Select
           value={currentDraftTeamId}
           onValueChange={(teamId) => {
-            const tm = (teams || []).find((t: any) => t.id === teamId);
-            onUpdateField('teamId', teamId);
+            const tm = (teams || []).find((t: any) => t.id === teamId) || (findTeam ? findTeam(teamId) : null);
             if (tm) {
-              onUpdateField('teamCode', tm.teamCode || tm.name || '');
-              onUpdateField('teamName', tm.name || tm.teamCode || '');
-              onUpdateField('blockId', tm.blockId || '');
-              onUpdateField('blockCode', tm.blockCode || '');
-              // Auto-fill GĐKD
               const tmName = tm.name || '';
               const code = tm.teamCode || '';
               let gdkd = tmName;
               if (code && tmName.startsWith(code)) {
                 gdkd = tmName.substring(code.length).trim();
               }
-              onUpdateField('gdkdName', gdkd);
+              if (onUpdateFields) {
+                onUpdateFields({
+                  teamId: tm.id,
+                  teamCode: tm.teamCode || tm.name || '',
+                  teamName: tm.name || tm.teamCode || '',
+                  blockId: tm.blockId || '',
+                  blockCode: tm.blockCode || '',
+                  gdkdName: gdkd
+                });
+              } else {
+                onUpdateField('teamId', tm.id);
+                onUpdateField('teamCode', tm.teamCode || tm.name || '');
+                onUpdateField('teamName', tm.name || tm.teamCode || '');
+                onUpdateField('blockId', tm.blockId || '');
+                onUpdateField('blockCode', tm.blockCode || '');
+                onUpdateField('gdkdName', gdkd);
+              }
+            } else {
+              onUpdateField('teamId', teamId);
             }
           }}
         >
           <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
-            <SelectValue placeholder="Chọn Team" />
+            <SelectValue placeholder="Chọn Team">
+              {selectedTeam 
+                ? (selectedTeam.teamCode ? `${selectedTeam.teamCode} - ${selectedTeam.name}` : selectedTeam.name)
+                : (draftRow.teamName || draftRow.teamCode || undefined)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-56">
             {(teams || []).map((t: any) => (
@@ -178,16 +196,30 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         <Select
           value={currentDraftProjId}
           onValueChange={(projectId) => {
-            const p = (projects || []).find((pr: any) => pr.id === projectId);
-            onUpdateField('projectId', projectId);
+            const p = (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
             if (p) {
-              onUpdateField('projectName', p.name || '');
-              onUpdateField('projectCode', p.projectCode || '');
+              if (onUpdateFields) {
+                onUpdateFields({
+                  projectId: p.id,
+                  projectName: p.name || '',
+                  projectCode: p.projectCode || ''
+                });
+              } else {
+                onUpdateField('projectId', p.id);
+                onUpdateField('projectName', p.name || '');
+                onUpdateField('projectCode', p.projectCode || '');
+              }
+            } else {
+              onUpdateField('projectId', projectId);
             }
           }}
         >
           <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
-            <SelectValue placeholder="Chọn Dự án" />
+            <SelectValue placeholder="Chọn Dự án">
+              {selectedProj 
+                ? (selectedProj.projectCode ? `[${selectedProj.projectCode}] ${selectedProj.name}` : selectedProj.name)
+                : (draftRow.projectName || undefined)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-56">
             {(projects || []).map((p: any) => (
@@ -278,9 +310,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         {formatCurrency(comp.grandTotal).replace(' đ', '')}
       </TableCell>
 
-      {/* Col AA: CÁ NHÂN NỘP TIỀN QUA CÔNG TY */}
+      {/* Col AA: SỐ LEAD */}
       <TableCell className="p-1 bg-cyan-50/40">
-        {renderCalcInput('caNhanNopTien', 'Cá nhân nộp CTY', draftRow.caNhanNopTien)}
+        {renderCalcInput('caNhanNopTien', 'Số Lead', draftRow.caNhanNopTien)}
       </TableCell>
 
       {/* Col AB: TRẠNG THÁI */}

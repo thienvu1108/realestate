@@ -337,6 +337,14 @@ export const AcceptanceManager = React.memo(({
     });
   };
 
+  const handleUpdateDraftFields = (index: number, fields: Record<string, any>) => {
+    setDraftRows((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], ...fields };
+      return copy;
+    });
+  };
+
   const handleRemoveDraft = (id: string) => {
     setDraftRows((prev) => {
       const remaining = prev.filter((d) => d.id !== id);
@@ -346,43 +354,52 @@ export const AcceptanceManager = React.memo(({
 
   // Save Draft to Firestore
   const handleSaveDraft = async (draftRow: any) => {
-    if (!draftRow.teamId && !draftRow.teamCode) {
+    if (!draftRow.teamId && !draftRow.teamCode && !draftRow.teamName) {
       toast.error('Vui lòng chọn Team cho dòng nghiệm thu!');
       return;
     }
-    if (!draftRow.projectId && !draftRow.projectName) {
+    if (!draftRow.projectId && !draftRow.projectName && !draftRow.projectCode) {
       toast.error('Vui lòng chọn Dự án cho dòng nghiệm thu!');
       return;
     }
 
     const comp = getRowComputed(draftRow);
-    const tm = (teams || []).find((t: any) => 
-      t.id === draftRow.teamId || 
-      t.teamCode === draftRow.teamCode || 
-      t.name === draftRow.teamName ||
-      t.id === draftRow.teamCode
-    );
-    const pr = (projects || []).find((p: any) => 
-      p.id === draftRow.projectId || 
-      p.name === draftRow.projectName || 
-      p.projectCode === draftRow.projectName ||
-      p.id === draftRow.projectName
-    );
+    const tm = (teamLookup.findTeam 
+      ? (teamLookup.findTeam(draftRow.teamId) || teamLookup.findTeam(draftRow.teamCode) || teamLookup.findTeam(draftRow.teamName))
+      : null) || (teams || []).find((t: any) => 
+        t.id === draftRow.teamId || 
+        t.teamCode === draftRow.teamCode || 
+        t.name === draftRow.teamName ||
+        t.id === draftRow.teamCode
+      );
+    const pr = (projectLookup.findProject
+      ? (projectLookup.findProject(draftRow.projectId) || projectLookup.findProject(draftRow.projectName) || projectLookup.findProject(draftRow.projectCode))
+      : null) || (projects || []).find((p: any) => 
+        p.id === draftRow.projectId || 
+        p.name === draftRow.projectName || 
+        p.projectCode === draftRow.projectName ||
+        p.id === draftRow.projectName
+      );
 
     try {
+      const resolvedTeamName = tm?.name || (draftRow.teamName && !draftRow.teamName.startsWith('draft-') ? draftRow.teamName : tm?.teamCode || '');
+      const resolvedTeamCode = tm?.teamCode || (draftRow.teamCode && !draftRow.teamCode.startsWith('draft-') ? draftRow.teamCode : tm?.name || '');
+      const resolvedProjectName = pr?.name || (draftRow.projectName && !draftRow.projectName.startsWith('draft-') ? draftRow.projectName : pr?.projectCode || '');
+      const resolvedProjectCode = pr?.projectCode || (draftRow.projectCode && !draftRow.projectCode.startsWith('draft-') ? draftRow.projectCode : '');
+
       const payload: any = {
         month: draftRow.month || 'Kì 1 - Tháng 8',
         teamId: tm?.id || draftRow.teamId || '',
-        teamName: tm?.name || draftRow.teamName || '',
-        teamCode: tm?.teamCode || draftRow.teamCode || '',
+        teamName: resolvedTeamName,
+        teamCode: resolvedTeamCode,
         blockId: tm?.blockId || draftRow.blockId || '',
         blockCode: tm?.blockCode || draftRow.blockCode || '',
         blockName: tm?.blockName || draftRow.blockName || '',
         gdkdName: draftRow.gdkdName || tm?.name || '',
         implementerName: draftRow.implementerName || '',
         projectId: pr?.id || draftRow.projectId || '',
-        projectName: pr?.name || draftRow.projectName || '',
-        projectCode: pr?.projectCode || draftRow.projectCode || '',
+        projectName: resolvedProjectName,
+        projectCode: resolvedProjectCode,
 
         // Group 1: DIGITAL CHẠY (Chưa VAT)
         digitalFb: comp.dFb,
@@ -513,18 +530,23 @@ export const AcceptanceManager = React.memo(({
         changes: changesObj
       };
 
+      const resolvedTeamName = tm?.name || (editingRowState.teamName && !editingRowState.teamName.startsWith('draft-') ? editingRowState.teamName : oldItem?.teamName || tm?.teamCode || '');
+      const resolvedTeamCode = tm?.teamCode || (editingRowState.teamCode && !editingRowState.teamCode.startsWith('draft-') ? editingRowState.teamCode : oldItem?.teamCode || tm?.name || '');
+      const resolvedProjectName = pr?.name || (editingRowState.projectName && !editingRowState.projectName.startsWith('draft-') ? editingRowState.projectName : oldItem?.projectName || pr?.projectCode || '');
+      const resolvedProjectCode = pr?.projectCode || (editingRowState.projectCode && !editingRowState.projectCode.startsWith('draft-') ? editingRowState.projectCode : oldItem?.projectCode || '');
+
       const payload: any = {
         month: editingRowState.month || oldItem?.month || 'Kì 1 - Tháng 8',
         teamId: tm?.id || editingRowState.teamId || oldItem?.teamId || '',
-        teamName: tm?.name || editingRowState.teamName || oldItem?.teamName || '',
-        teamCode: tm?.teamCode || editingRowState.teamCode || oldItem?.teamCode || '',
+        teamName: resolvedTeamName,
+        teamCode: resolvedTeamCode,
         blockId: tm?.blockId || editingRowState.blockId || oldItem?.blockId || '',
         blockCode: tm?.blockCode || editingRowState.blockCode || oldItem?.blockCode || '',
         gdkdName: editingRowState.gdkdName || tm?.name || oldItem?.gdkdName || '',
         implementerName: editingRowState.implementerName || oldItem?.implementerName || '',
         projectId: pr?.id || editingRowState.projectId || oldItem?.projectId || '',
-        projectName: pr?.name || editingRowState.projectName || oldItem?.projectName || '',
-        projectCode: pr?.projectCode || editingRowState.projectCode || oldItem?.projectCode || '',
+        projectName: resolvedProjectName,
+        projectCode: resolvedProjectCode,
 
         // Group 1
         digitalFb: comp.dFb,
@@ -715,7 +737,7 @@ export const AcceptanceManager = React.memo(({
         'CÁ NHÂN - TIKTOK': comp.cnTiktok,
         'CÁ NHÂN - TỔNG': comp.cnTotal,
         'TỔNG CỘNG': comp.grandTotal,
-        'CÁ NHÂN NỘP TIỀN QUA CÔNG TY': comp.cnNopTien,
+        'SỐ LEAD': comp.cnNopTien,
         'TRẠNG THÁI': a.status || 'Đã nghiệm thu',
         'GHI CHÚ': a.notes || ''
       };
@@ -806,7 +828,7 @@ export const AcceptanceManager = React.memo(({
         const cnGoogle = parseCurrencyFormula(getCol(['cá nhân - google', 'cá nhân google'])).total;
         const cnTiktok = parseCurrencyFormula(getCol(['cá nhân - tiktok', 'cá nhân tiktok'])).total;
 
-        const cnNopTien = parseCurrencyFormula(getCol(['nộp tiền', 'nộp qua công ty'])).total;
+        const cnNopTien = parseCurrencyFormula(getCol(['số lead', 'lead', 'số leads', 'leads', 'cá nhân nộp tiền qua công ty', 'nộp tiền', 'nộp qua công ty'])).total;
         const notes = String(getCol(['ghi chú', 'notes']) || '').trim();
 
         const tm = (teams || []).find((t: any) => t.teamCode === teamCode || t.name === teamCode);
@@ -1385,6 +1407,7 @@ export const AcceptanceManager = React.memo(({
                     findProject={projectLookup.findProject}
                     formatCurrency={formatCurrency}
                     onUpdateField={(field, val) => handleUpdateDraftField(idx, field, val)}
+                    onUpdateFields={(fields) => handleUpdateDraftFields(idx, fields)}
                     onSaveDraft={handleSaveDraft}
                     onRemoveDraft={handleRemoveDraft}
                     onOpenCalculator={handleOpenCalculator}
@@ -1430,6 +1453,9 @@ export const AcceptanceManager = React.memo(({
                         onSaveEdit={handleSaveEdit}
                         onUpdateEditingField={(field, val) => {
                           setEditingRowState((prev: any) => ({ ...prev, [field]: val }));
+                        }}
+                        onUpdateEditingFields={(fields) => {
+                          setEditingRowState((prev: any) => ({ ...prev, ...fields }));
                         }}
                         onOpenCalculator={handleOpenCalculator}
                         onDelete={(id) => {

@@ -114,7 +114,9 @@ import {
   FileCheck,
   Trash,
   Sliders,
-  Sparkles
+  Sparkles,
+  Bell,
+  BellRing
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -3643,17 +3645,70 @@ export default function App() {
     if (!selectedTeamId || !budgetMonth) return new Set<string>();
     const set = new Set<string>();
     budgets.forEach(b => {
-      if (b.teamId === selectedTeamId && b.month === budgetMonth) {
+      if ((b.teamId === selectedTeamId || b.teamName === selectedTeamName) && normalizeMonth(b.month) === normalizeMonth(budgetMonth)) {
         set.add(b.projectId);
       }
     });
     multiBudgetItems.forEach(item => {
-      if (item.teamId === selectedTeamId && item.month === budgetMonth) {
+      if ((item.teamId === selectedTeamId || item.teamName === selectedTeamName) && normalizeMonth(item.month) === normalizeMonth(budgetMonth)) {
         set.add(item.projectId);
       }
     });
     return set;
-  }, [budgets, multiBudgetItems, selectedTeamId, budgetMonth]);
+  }, [budgets, multiBudgetItems, selectedTeamId, selectedTeamName, budgetMonth]);
+
+  const existingBudgetForSelection = useMemo(() => {
+    if (!selectedProjectId || !selectedTeamId || !budgetMonth) return null;
+    return budgets.find(b => 
+      b.projectId === selectedProjectId && 
+      (b.teamId === selectedTeamId || b.teamName === selectedTeamName) && 
+      normalizeMonth(b.month) === normalizeMonth(budgetMonth)
+    ) || null;
+  }, [budgets, selectedProjectId, selectedTeamId, selectedTeamName, budgetMonth]);
+
+  const existingBudgetHistoryItems = useMemo(() => {
+    if (!existingBudgetForSelection) return [];
+    
+    let items: any[] = [];
+    
+    if (existingBudgetForSelection.editHistory && Array.isArray(existingBudgetForSelection.editHistory) && existingBudgetForSelection.editHistory.length > 0) {
+      items = existingBudgetForSelection.editHistory.map((h: any) => ({
+        action: h.action || 'UPDATE',
+        editorName: h.editorName || h.editorEmail || 'Thành viên',
+        editorEmail: h.editorEmail || '',
+        timestamp: h.timestamp || h.createdAt || existingBudgetForSelection.updatedAt || existingBudgetForSelection.createdAt,
+        amount: h.newAmount || h.newTotalAmount || h.amount || h.addedAmount || existingBudgetForSelection.amount,
+        oldAmount: h.oldAmount || h.previousTotal,
+        note: h.note || h.reason || (h.action === 'REGISTER' ? 'Đăng ký ngân sách ban đầu' : 'Cập nhật ngân sách')
+      }));
+    } else if (existingBudgetForSelection.subBudgets && Array.isArray(existingBudgetForSelection.subBudgets) && existingBudgetForSelection.subBudgets.length > 0) {
+      items = existingBudgetForSelection.subBudgets.map((s: any) => ({
+        action: 'SUB_BUDGET',
+        editorName: s.userName || s.userEmail || 'Thành viên',
+        editorEmail: s.userEmail || '',
+        timestamp: s.createdAt || s.updatedAt || existingBudgetForSelection.createdAt,
+        amount: s.amount,
+        note: s.note || 'Đăng ký ngân sách thành viên'
+      }));
+    } else {
+      const bAmt = Number(existingBudgetForSelection.amount || 0);
+      const editor = existingBudgetForSelection.implementerName || existingBudgetForSelection.userEmail || 'Thành viên';
+      items = [{
+        action: 'REGISTER',
+        editorName: editor,
+        editorEmail: existingBudgetForSelection.userEmail || '',
+        timestamp: existingBudgetForSelection.createdAt,
+        amount: bAmt,
+        note: 'Đăng ký ngân sách ban đầu'
+      }];
+    }
+    
+    return items.sort((a, b) => {
+      const tA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp || 0).getTime();
+      const tB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp || 0).getTime();
+      return tB - tA;
+    });
+  }, [existingBudgetForSelection]);
   
   // Delete confirmation states
   const [isDeleteProjectDialogOpen, setIsDeleteProjectDialogOpen] = useState(false);
@@ -7741,14 +7796,6 @@ export default function App() {
       return false;
     }
 
-    const existsInDb = budgets.some(
-      b => b.teamId === selectedTeamId && b.projectId === selectedProjectId && b.month === budgetMonth
-    );
-    if (existsInDb) {
-      toast.error('Đội đã có đăng ký ngân sách cho dự án này trong kỳ này!');
-      return false;
-    }
-
     const newItem = {
       projectId: selectedProjectId,
       projectName: project?.name || 'N/A',
@@ -7809,7 +7856,8 @@ export default function App() {
         );
         
         if (existingIndex > -1) {
-          acc[existingIndex].amount += current.amount;
+          // If multiple entries in the same submission, last one sets the amount or sums them
+          acc[existingIndex].amount = current.amount;
         } else {
           acc.push({ ...current });
         }
@@ -7828,19 +7876,16 @@ export default function App() {
         );
 
         if (existingBudgetsForMatch.length > 0) {
-          // Merge into the FIRST team master budget record
+          // Update the existing team master budget record
           const targetBudget = existingBudgetsForMatch[0];
           const targetRef = doc(db, 'budgets', targetBudget.id);
           const duplicates = existingBudgetsForMatch.slice(1);
           
           const batch = writeBatch(db);
-          
-          let totalToMergeFromDuplicates = 0;
           const duplicateIdsRemoved: string[] = [];
 
           if (duplicates.length > 0) {
             for (const dup of duplicates) {
-              totalToMergeFromDuplicates += Number(dup.amount || 0);
               duplicateIdsRemoved.push(dup.id);
               
               const affectedCosts = costs.filter(c => c.budgetId === dup.id);
@@ -7858,7 +7903,7 @@ export default function App() {
             currentSubBudgets.push({
               id: `sub-init-${targetBudget.id}`,
               userId: targetBudget.createdBy || '',
-              userName: targetBudget.implementerName || targetBudget.userEmail || 'Chưa rõ',
+              userName: targetBudget.implementerName || targetBudget.userEmail || 'Thành viên',
               userEmail: (targetBudget.userEmail || '').toLowerCase(),
               amount: Number(targetBudget.amount || 0),
               note: `Đăng ký ban đầu`,
@@ -7872,48 +7917,75 @@ export default function App() {
             (s.userId && s.userId === user?.uid)
           );
 
+          const newSubEntry = {
+            id: userSubIndex > -1 ? currentSubBudgets[userSubIndex].id : `sub-${Math.random().toString(36).substring(2, 9)}`,
+            userId: user?.uid || '',
+            userName: item.implementerName || userProfile?.fullName || user?.displayName || user?.email || 'Thành viên',
+            userEmail: (user?.email || '').toLowerCase(),
+            amount: item.amount,
+            note: item.note || `Cập nhật ngân sách tổng dự án`,
+            updatedAt: new Date().toISOString(),
+            createdAt: userSubIndex > -1 ? (currentSubBudgets[userSubIndex].createdAt || new Date().toISOString()) : new Date().toISOString()
+          };
+
           if (userSubIndex > -1) {
-            currentSubBudgets[userSubIndex] = {
-              ...currentSubBudgets[userSubIndex],
-              amount: currentSubBudgets[userSubIndex].amount + item.amount,
-              note: item.note || currentSubBudgets[userSubIndex].note || `Cập nhật đăng ký bổ sung`,
-              updatedAt: new Date().toISOString()
-            };
+            currentSubBudgets[userSubIndex] = newSubEntry;
           } else {
-            currentSubBudgets.push({
-              id: `sub-${Math.random().toString(36).substring(2, 9)}`,
-              userId: user?.uid || '',
-              userName: item.implementerName || userProfile?.fullName || user?.displayName || user?.email || 'Chưa rõ',
-              userEmail: (user?.email || '').toLowerCase(),
-              amount: item.amount,
-              note: item.note || `Đăng ký ngân sách cá nhân cho Đội`,
-              createdAt: new Date().toISOString()
-            });
+            currentSubBudgets.push(newSubEntry);
           }
 
-          const newTotalAmount = currentSubBudgets.reduce((sum, s) => sum + Number(s.amount || 0), 0) + totalToMergeFromDuplicates;
+          const newTotalAmount = item.amount;
 
           batch.update(targetRef, {
             amount: newTotalAmount,
+            implementerName: item.implementerName || targetBudget.implementerName,
             subBudgets: currentSubBudgets,
             updatedAt: serverTimestamp(),
             editHistory: arrayUnion({
-              action: 'REGISTER_ADD',
-              editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Unknown',
+              action: 'UPDATE_TOTAL',
+              editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Thành viên',
               editorEmail: user?.email,
               timestamp: new Date().toISOString(),
-              addedAmount: item.amount,
+              oldAmount: targetBudget.amount,
               newTotalAmount: newTotalAmount,
-              note: item.note || `Thành viên đăng ký thêm ngân sách cho Đội`
+              note: `Cập nhật lại ngân sách tổng dự án cho Đội`
             })
           });
 
           await batch.commit();
           await logAction('UPDATE', 'budgets', targetBudget.id, { 
-            addedAmount: item.amount,
+            oldAmount: targetBudget.amount,
             newTotalAmount,
             userEmail: user?.email
           });
+
+          // Send notification to team members and previous registrants
+          try {
+            const notifTitle = `Ngân sách dự án ${item.projectName} đã được thay đổi`;
+            const notifMessage = `Ngân sách đăng ký dự án ${item.projectName} (${item.month}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(item.amount)}`;
+            const prevUsers = currentSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
+
+            await addDoc(collection(db, 'teamNotifications'), {
+              type: 'BUDGET_CHANGED',
+              budgetId: targetBudget.id,
+              projectId: item.projectId,
+              projectName: item.projectName,
+              teamId: item.teamId,
+              teamName: item.teamName,
+              month: item.month,
+              oldAmount: targetBudget.amount || 0,
+              newAmount: item.amount,
+              editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Thành viên',
+              editorEmail: user?.email || '',
+              title: notifTitle,
+              message: notifMessage,
+              previousRegistrants: Array.from(new Set(prevUsers)),
+              createdAt: serverTimestamp(),
+              readBy: user?.email ? [user.email.toLowerCase()] : []
+            });
+          } catch (nErr) {
+            console.warn("Failed to create team notification:", nErr);
+          }
         } else {
           // Create new team master budget doc
           const initialSubBudget = {
@@ -8165,10 +8237,13 @@ export default function App() {
   };
 
   const handleOpenEditBudget = (budget: any) => {
-    const checkResult = checkBudgetActionAllowed(budget.month);
-    if (!checkResult.allowed) {
-      toast.error(checkResult.reason);
-      return;
+    // If not Super Admin, check regular time window rules
+    if (!isSuperAdmin) {
+      const checkResult = checkBudgetActionAllowed(budget.month);
+      if (!checkResult.allowed) {
+        toast.error(checkResult.reason);
+        return;
+      }
     }
 
     const matchedTeam = teams.find(t => t.id === budget.teamId || t.name === budget.teamName || t.teamCode === budget.teamCode);
@@ -8191,15 +8266,25 @@ export default function App() {
       return;
     }
 
-    const checkResult = checkBudgetActionAllowed(editingBudgetMonth);
-    if (!checkResult.allowed) {
-      toast.error(checkResult.reason);
+    const originalBudget = budgets.find(b => b.id === editingBudgetId);
+
+    // Permission check for modifying budget month: Only Super Admin is allowed
+    if (!isSuperAdmin && originalBudget && originalBudget.month !== editingBudgetMonth) {
+      toast.error('Chỉ Super Admin mới có quyền thay đổi Kỳ đăng ký (tháng) của ngân sách!');
       return;
+    }
+
+    // Check window restrictions if not Super Admin
+    if (!isSuperAdmin) {
+      const checkResult = checkBudgetActionAllowed(editingBudgetMonth);
+      if (!checkResult.allowed) {
+        toast.error(checkResult.reason);
+        return;
+      }
     }
 
     try {
       const budgetRef = doc(db, 'budgets', editingBudgetId);
-      const originalBudget = budgets.find(b => b.id === editingBudgetId);
       const newAmountNum = Number(editingBudgetAmount);
 
       const selectedTeam = teams.find(t => t.id === editingBudgetTeam || t.name === editingBudgetTeam);
@@ -8262,6 +8347,7 @@ export default function App() {
         amount: newAmountNum,
         verifiedAmount: Number(editingBudgetVerifiedAmount || 0),
         month: editingBudgetMonth,
+        year: editingBudgetMonth.split('-')[0],
         teamId: targetTeamId,
         teamName: targetTeamName,
         teamCode: targetTeamCode,
@@ -8273,7 +8359,7 @@ export default function App() {
         updatedBy: user?.uid,
         editHistory: arrayUnion({
           action: 'UPDATE',
-          editorName: userProfile?.fullName || user?.displayName || 'Admin',
+          editorName: userProfile?.fullName || user?.displayName || (isSuperAdmin ? 'Super Admin' : 'Admin'),
           editorEmail: user?.email,
           timestamp: new Date().toISOString(),
           reason: reasonText,
@@ -8300,13 +8386,44 @@ export default function App() {
             projectName: targetProjectName,
             teamId: targetTeamId,
             teamName: targetTeamName,
-            teamCode: targetTeamCode
+            teamCode: targetTeamCode,
+            month: editingBudgetMonth,
+            year: editingBudgetMonth.split('-')[0]
           });
         });
         await batch.commit();
       }
 
       await logAction('UPDATE', 'budgets', editingBudgetId, { ...updateData, reason: reasonText });
+
+      // Send notification to team members and previous registrants
+      try {
+        const notifTitle = `Ngân sách dự án ${targetProjectName} đã được thay đổi`;
+        const notifMessage = `Ngân sách đăng ký dự án ${targetProjectName} (${editingBudgetMonth}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(newAmountNum)}`;
+        const prevUsers = updatedSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
+
+        await addDoc(collection(db, 'teamNotifications'), {
+          type: 'BUDGET_CHANGED',
+          budgetId: editingBudgetId,
+          projectId: targetProjectId,
+          projectName: targetProjectName,
+          teamId: targetTeamId,
+          teamName: targetTeamName,
+          month: editingBudgetMonth,
+          oldAmount: originalBudget?.amount || 0,
+          newAmount: newAmountNum,
+          editorName: userProfile?.fullName || user?.displayName || 'Admin',
+          editorEmail: user?.email || '',
+          title: notifTitle,
+          message: notifMessage,
+          previousRegistrants: Array.from(new Set(prevUsers)),
+          createdAt: serverTimestamp(),
+          readBy: user?.email ? [user.email.toLowerCase()] : []
+        });
+      } catch (nErr) {
+        console.warn("Failed to create team notification on edit:", nErr);
+      }
+
       setEditingBudgetId(null);
       setEditingBudgetReason('');
       setIsEditBudgetDialogOpen(false);
@@ -8427,6 +8544,34 @@ export default function App() {
         newAmount,
         reason: reasonText
       });
+
+      // Send notification to team members and previous registrants
+      try {
+        const notifTitle = `Ngân sách dự án ${originalBudget.projectName} đã được thay đổi`;
+        const notifMessage = `Ngân sách đăng ký dự án ${originalBudget.projectName} (${originalBudget.month}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(newAmount)}`;
+        const prevUsers = updatedSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
+
+        await addDoc(collection(db, 'teamNotifications'), {
+          type: 'BUDGET_CHANGED',
+          budgetId: adjustingBudgetId,
+          projectId: originalBudget.projectId,
+          projectName: originalBudget.projectName,
+          teamId: originalBudget.teamId,
+          teamName: originalBudget.teamName,
+          month: originalBudget.month,
+          oldAmount: originalBudget.amount || 0,
+          newAmount,
+          editorName: userProfile?.fullName || user?.displayName || 'Admin',
+          editorEmail: user?.email || '',
+          title: notifTitle,
+          message: notifMessage,
+          previousRegistrants: Array.from(new Set(prevUsers)),
+          createdAt: serverTimestamp(),
+          readBy: user?.email ? [user.email.toLowerCase()] : []
+        });
+      } catch (nErr) {
+        console.warn("Failed to create team notification on adjust:", nErr);
+      }
 
       setAdjustingBudgetId(null);
       setAdjustingBudgetAmount('');
@@ -11521,6 +11666,17 @@ export default function App() {
                         </button>
 
                         <button
+                          onClick={() => { setAdminSubTab('acceptance'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'acceptance' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>Nghiệm thu MKT</span>
+                        </button>
+
+                        <button
                           onClick={() => { setAdminSubTab('budgets'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
@@ -11749,6 +11905,14 @@ export default function App() {
                         onClick={() => setAdminSubTab('teams')}
                       >
                         <Users className="mr-2 h-4 w-4" /> Quản lý Team
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'acceptance' ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'acceptance' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('acceptance')}
+                      >
+                        <FileCheck className="mr-2 h-4 w-4" /> Nghiệm thu MKT
                       </Button>
                       <Button 
                         variant={adminSubTab === 'budgets' ? 'secondary' : 'ghost'} 
@@ -15887,6 +16051,146 @@ export default function App() {
                   </div>
                 </TabsContent>
 
+                {/* Marketing Acceptance Tab */}
+                <TabsContent value="acceptance" className="space-y-6">
+                  {adminSubTab === 'acceptance' && (
+                    <div className="space-y-6">
+                      {/* Secondary navigation for NT styles */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <FileCheck className="w-6 h-6 text-emerald-600" />
+                          <div>
+                            <h3 className="text-base font-black text-slate-900 leading-none">Nghiệm thu Marketing (Nghiệm thu MKT)</h3>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Tách biệt Dữ liệu trực tiếp và dữ liệu Google Sheet</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
+                          <button
+                            type="button"
+                            onClick={() => setReportNtSubTab('direct')}
+                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                              reportNtSubTab === 'direct'
+                                ? 'bg-white text-emerald-700 shadow-sm font-black'
+                                : 'text-slate-500 hover:text-slate-800 font-bold'
+                            }`}
+                          >
+                            <CheckSquare className="w-3.5 h-3.5" />
+                            Nhập trực tiếp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReportNtSubTab('google-sheet')}
+                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                              reportNtSubTab === 'google-sheet'
+                                ? 'bg-white text-emerald-700 shadow-sm font-strong'
+                                : 'text-slate-500 hover:text-slate-800 font-bold'
+                            }`}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            Đồng bộ Google Sheet
+                          </button>
+                        </div>
+                      </div>
+
+                      {reportNtSubTab === 'direct' && (
+                        <AcceptanceManager 
+                          isAdmin={isAdmin}
+                          isSuperAdmin={isSuperAdmin}
+                          isMod={isMod}
+                          isAccountant={isAccountant}
+                          user={user}
+                          teams={teams}
+                          uniqueTeams={uniqueTeams}
+                          projects={projects}
+                          regions={regions}
+                          acceptances={acceptances}
+                          finalAcceptances={finalAcceptances}
+                          teamMap={teamMap}
+                          projectMap={projectMap}
+                          formatCurrency={formatCurrency}
+                          getMarketingMonth={getMarketingMonth}
+                          handleFirestoreError={handleFirestoreError}
+                          formatCurrencyInput={formatCurrencyInput}
+                          isImportingAcceptances={isImportingAcceptances}
+                          setIsImportingAcceptances={setIsImportingAcceptances}
+                          isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
+                          setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
+                          handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                          blocks={blocks}
+                        />
+                      )}
+
+                      {reportNtSubTab === 'google-sheet' && (
+                        <Card className="border-none shadow-sm overflow-hidden bg-white">
+                          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-emerald-100">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div>
+                                <h3 className="text-lg font-black text-emerald-950 flex items-center gap-2">
+                                  <FileCheck className="w-5 h-5 text-emerald-600 animate-pulse" />
+                                  Dữ liệu Nghiệm thu đồng bộ từ Google Sheet
+                                </h3>
+                                <p className="text-xs font-semibold text-emerald-700/80 mt-1 max-w-2xl">
+                                  Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
+                                </p>
+                              </div>
+                              
+                              {reportNTLastUpdated && (
+                                <div className="bg-white/80 backdrop-blur border border-emerald-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  </span>
+                                  <span className="text-[10px] font-black text-slate-600 tracking-tight">
+                                    Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <CardContent className="p-6 space-y-6">
+                            <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                  <Link className="w-3.5 h-3.5 text-slate-500" />
+                                  Liên kết Google Sheet nguồn
+                                </Label>
+                                <div className="flex flex-col sm:flex-row gap-2.5">
+                                  <Input
+                                    type="text"
+                                    placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
+                                    value={inputReportNTUrl}
+                                    onChange={(e) => setInputReportNTUrl(e.target.value)}
+                                    className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-emerald-500 text-xs sm:text-sm h-10"
+                                  />
+                                  <Button
+                                    onClick={handleSyncReportNT}
+                                    disabled={isSyncingReportNT}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-emerald-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
+                                  >
+                                    {isSyncingReportNT ? (
+                                      <>
+                                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                                        <span>Đang đồng bộ...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        <span>Đồng bộ ngay</span>
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+
                 {/* Budget Management Tab */}
                 <TabsContent value="budgets" className="space-y-6">
                   <div className="space-y-6">
@@ -19232,15 +19536,15 @@ export default function App() {
                               .map(p => {
                                 const isAlreadyRegistered = registeredProjectIdsInPeriod.has(p.id);
                                 return (
-                                  <SelectItem key={p.id} value={p.id} disabled={isAlreadyRegistered}>
+                                  <SelectItem key={p.id} value={p.id}>
                                     <div className="flex items-center justify-between w-full gap-4">
-                                      <span className={`font-medium ${isAlreadyRegistered ? 'line-through text-slate-400' : ''}`}>
+                                      <span className="font-medium">
                                         {p.name} ({p.projectCode})
                                       </span>
                                       <div className="flex items-center gap-1 shrink-0">
                                         {isAlreadyRegistered && (
                                           <Badge variant="outline" className="text-[9px] py-0 h-4 bg-amber-50 text-amber-700 border-amber-200 font-bold">
-                                            Đã đăng ký
+                                            Đã có ngân sách
                                           </Badge>
                                         )}
                                         <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 text-slate-500 border-slate-100">
@@ -19342,6 +19646,93 @@ export default function App() {
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">đ</span>
                       </div>
                     </div>
+
+                    {/* Existing Budget & History Banner */}
+                    {existingBudgetForSelection && (
+                      <div className="md:col-span-2 lg:col-span-3 bg-amber-50/80 border border-amber-200 rounded-2xl p-5 space-y-4 shadow-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-xs">
+                              <History className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                                  Ngân sách hiện tại của dự án:
+                                </h4>
+                                <span className="text-amber-800 font-mono text-base sm:text-lg font-black bg-amber-100/80 px-2.5 py-0.5 rounded-lg border border-amber-300/50">
+                                  {formatCurrency(existingBudgetForSelection.amount)}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                                Dự án <span className="font-bold text-slate-800">{projectMap[selectedProjectId] || selectedProjectId}</span> • Team <span className="font-bold text-slate-800">{teamMap[selectedTeamId] || selectedTeamName}</span> • Kỳ <span className="font-mono font-bold text-slate-800">{budgetMonth}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-3 py-1 self-start sm:self-auto shrink-0 shadow-xs">
+                            Đã có {existingBudgetHistoryItems.length} lần cập nhật
+                          </Badge>
+                        </div>
+
+                        {/* Detail History List */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            Lịch sử chi tiết từng bản ghi ngân sách trước đây:
+                          </p>
+                          
+                          <div className="max-h-48 overflow-y-auto rounded-xl border border-amber-200/80 bg-white divide-y divide-slate-100 shadow-2xs">
+                            {existingBudgetHistoryItems.map((hItem: any, idx: number) => {
+                              const timeStr = hItem.timestamp?.toDate
+                                ? safeFormat(hItem.timestamp.toDate(), 'HH:mm dd/MM/yyyy')
+                                : hItem.timestamp
+                                ? safeFormat(new Date(hItem.timestamp), 'HH:mm dd/MM/yyyy')
+                                : 'Mới đây';
+                              return (
+                                <div key={idx} className="p-3 flex items-start justify-between gap-3 text-xs hover:bg-amber-50/40 transition-colors">
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-bold text-slate-900">{hItem.editorName}</span>
+                                      {hItem.editorEmail && (
+                                        <span className="text-[11px] text-slate-400 font-mono">({hItem.editorEmail})</span>
+                                      )}
+                                      <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-50 border-slate-200 text-slate-700 font-medium">
+                                        {hItem.action === 'REGISTER' ? 'Đăng ký ban đầu' : hItem.action === 'UPDATE_TOTAL' ? 'Cập nhật ngân sách tổng' : 'Cập nhật'}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-slate-600">{hItem.note || 'Cập nhật ngân sách dự án'}</p>
+                                    <p className="text-[10px] text-slate-400 font-mono">{timeStr}</p>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="font-mono font-bold text-amber-900 text-xs sm:text-sm">
+                                      {formatCurrency(hItem.amount)}
+                                    </span>
+                                    {hItem.oldAmount !== undefined && (
+                                      <p className="text-[10px] text-slate-400 line-through">
+                                        Cũ: {formatCurrency(hItem.oldAmount)}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Notice Box */}
+                        <div className="p-3 bg-amber-100/80 border border-amber-300 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
+                          <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-amber-900">
+                              Lưu ý cập nhật ngân sách tổng:
+                            </p>
+                            <p className="text-slate-700 leading-relaxed">
+                              Khi bạn nhập số tiền mới và thực hiện đăng ký, hệ thống sẽ cập nhật số tiền này làm <strong>Ngân sách tổng của dự án</strong> và tự động gửi thông báo đến các thành viên đã đăng ký ngân sách dự án này trước đây.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-col md:flex-row items-stretch gap-4 md:col-span-2 lg:col-span-1">
                       <Button 
@@ -21880,31 +22271,90 @@ export default function App() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-500 uppercase">Tháng báo cáo</Label>
-              <div className="space-y-1">
-                <Select value={editingBudgetMonth} onValueChange={setEditingBudgetMonth}>
-                  <SelectTrigger className="bg-slate-50 border-slate-200 h-11 text-xs">
-                    <SelectValue placeholder="Chọn tháng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(() => {
-                      const opts = getMonthOptions();
-                      if (editingBudgetMonth && !opts.find(o => o.value === editingBudgetMonth)) {
-                        return [
-                          { value: editingBudgetMonth, label: getMarketingMonthDisplayRange(editingBudgetMonth) || `Kỳ ${editingBudgetMonth}` },
-                          ...opts
-                        ];
-                      }
-                      return opts;
-                    })().map(opt => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                  Kỳ đăng ký (Tháng)
+                </Label>
+                {isSuperAdmin ? (
+                  <Badge className="text-[9px] bg-amber-50 text-amber-800 border-amber-300 font-bold px-2 py-0.5 shadow-xs">
+                    Quyền Super Admin: Đổi kỳ tùy ý (Kỳ quá khứ & tương lai)
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[9px] text-slate-400 bg-slate-50 border-slate-200">
+                    Chỉ Super Admin mới có quyền đổi kỳ
+                  </Badge>
+                )}
               </div>
+
+              {isSuperAdmin ? (
+                <div className="space-y-2 bg-amber-50/40 p-3 rounded-xl border border-amber-200/60">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Năm</Label>
+                      <Select 
+                        value={editingBudgetMonth ? editingBudgetMonth.split('-')[0] : (new Date().getFullYear().toString())}
+                        onValueChange={(val) => {
+                          const currentM = editingBudgetMonth ? (editingBudgetMonth.split('-')[1] || '01') : '01';
+                          setEditingBudgetMonth(`${val}-${currentM}`);
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-amber-200 h-10 text-xs font-bold text-slate-800">
+                          <SelectValue placeholder="Năm" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[220px]">
+                          {Array.from({ length: 12 }, (_, i) => (new Date().getFullYear() - 5 + i).toString()).map(yr => (
+                            <SelectItem key={yr} value={yr} className="text-xs font-bold">
+                              Năm {yr}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tháng</Label>
+                      <Select 
+                        value={editingBudgetMonth ? editingBudgetMonth.split('-')[1] : '01'}
+                        onValueChange={(val) => {
+                          const currentY = editingBudgetMonth ? (editingBudgetMonth.split('-')[0] || new Date().getFullYear().toString()) : new Date().getFullYear().toString();
+                          setEditingBudgetMonth(`${currentY}-${val}`);
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-amber-200 h-10 text-xs font-bold text-slate-800">
+                          <SelectValue placeholder="Tháng" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[220px]">
+                          {Array.from({ length: 12 }, (_, i) => {
+                            const m = (i + 1).toString().padStart(2, '0');
+                            const currentY = editingBudgetMonth ? (editingBudgetMonth.split('-')[0] || new Date().getFullYear().toString()) : new Date().getFullYear().toString();
+                            const sampleMonth = `${currentY}-${m}`;
+                            return (
+                              <SelectItem key={m} value={m} className="text-xs">
+                                Tháng {m} {getMarketingMonthDisplayRange(sampleMonth) ? `- ${getMarketingMonthDisplayRange(sampleMonth).replace(/Tháng \d+ /, '')}` : ''}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-bold text-indigo-800 bg-white border border-amber-200/80 rounded-lg px-3 py-2 flex items-center justify-between shadow-xs">
+                    <span>Kỳ MKT đã chọn: <strong className="text-indigo-600 font-black">{getMarketingMonthDisplayRange(editingBudgetMonth) || `Kỳ ${editingBudgetMonth}`}</strong></span>
+                    <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-bold">Mã kỳ: {editingBudgetMonth}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-600 flex items-center justify-between cursor-not-allowed select-none">
+                    <span>{getMarketingMonthDisplayRange(editingBudgetMonth) || `Kỳ ${editingBudgetMonth}`}</span>
+                    <span className="text-[10px] font-mono text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200">Mã kỳ: {editingBudgetMonth}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 italic font-medium">* Bạn không có quyền đổi Kỳ đăng ký ngân sách (Chỉ Super Admin mới được thực hiện).</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

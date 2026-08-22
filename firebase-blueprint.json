@@ -257,7 +257,7 @@
     },
     "RolePermission": {
       "title": "Role Permission",
-      "description": "Custom action permissions allowed for each system role",
+      "description": "Role-based feature permissions mapping",
       "type": "object",
       "properties": {
         "role": { "type": "string" },
@@ -269,9 +269,42 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["role", "permissions"]
+    },
+    "TeamNotification": {
+      "title": "Team Notification",
+      "description": "Notification sent to team members on budget updates or important changes",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "month": { "type": "string" },
+        "oldAmount": { "type": "number" },
+        "newAmount": { "type": "number" },
+        "updatedByName": { "type": "string" },
+        "updatedByEmail": { "type": "string" },
+        "targetEmails": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "readBy": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message"]
     }
   },
   "firestore": {
+    "/teamNotifications/{notifId}": {
+      "schema": "TeamNotification",
+      "description": "Team notifications for budget updates"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles"

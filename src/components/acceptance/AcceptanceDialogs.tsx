@@ -74,6 +74,7 @@ interface DialogsProps {
 export const AcceptanceDialogs: React.FC<DialogsProps> = ({
   isCalculatorOpen,
   setIsCalculatorOpen,
+  activeCalculatorField,
   calculatorFieldNameVN,
   calculatorInput,
   setCalculatorInput,
@@ -107,6 +108,7 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
   isImporting,
   onFileImport
 }) => {
+  const isLeadField = activeCalculatorField === 'caNhanNopTien' || (calculatorFieldNameVN && calculatorFieldNameVN.toLowerCase().includes('lead'));
   const parsedCalc = parseCurrencyFormula(calculatorInput);
 
   return (
@@ -121,7 +123,7 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-800">
-                  Máy tính cộng dồn khoản chi
+                  {isLeadField ? 'Máy tính cộng dồn số lượng Lead' : 'Máy tính cộng dồn khoản chi'}
                 </h3>
                 <p className="text-xs font-semibold text-indigo-600">
                   {calculatorFieldNameVN || 'Trường dữ liệu'}
@@ -131,24 +133,27 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
 
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2">
               <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                Nhập công thức cộng dồn hoặc nhiều khoản chi
+                {isLeadField ? 'Nhập công thức cộng dồn số lượng lead' : 'Nhập công thức cộng dồn hoặc nhiều khoản chi'}
               </Label>
               <Input
                 value={calculatorInput}
                 onChange={(e) => setCalculatorInput(e.target.value)}
-                placeholder="Ví dụ: 10m + 5.5m + 200k hoặc 500.000 + 1.200.000"
+                placeholder={isLeadField ? "Ví dụ: 10 + 25 + 5 hoặc 50 + 120" : "Ví dụ: 10m + 5.5m + 200k hoặc 500.000 + 1.200.000"}
                 className="font-mono text-sm bg-white font-bold h-10 border-slate-200"
                 autoFocus
               />
               <p className="text-[10px] text-slate-400 font-medium">
-                Hỗ trợ viết tắt: <span className="font-bold text-slate-700">k</span> (nghìn), <span className="font-bold text-slate-700">m</span> (triệu), phân cách bằng dấu <span className="font-bold text-slate-700">+</span>
+                {isLeadField 
+                  ? <>Cộng dồn số lượng bằng dấu <span className="font-bold text-slate-700">+</span></>
+                  : <>Hỗ trợ viết tắt: <span className="font-bold text-slate-700">k</span> (nghìn), <span className="font-bold text-slate-700">m</span> (triệu), phân cách bằng dấu <span className="font-bold text-slate-700">+</span></>
+                }
               </p>
             </div>
 
             {parsedCalc.items.length > 0 && (
               <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-3 space-y-2">
                 <div className="text-[10px] font-black uppercase text-indigo-900 tracking-wider">
-                  Chi tiết các khoản phân rã ({parsedCalc.items.length} khoản):
+                  Chi tiết các mục phân rã ({parsedCalc.items.length} mục):
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                   {parsedCalc.items.map((it, idx) => (
@@ -157,7 +162,7 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
                         • {it.label}
                       </span>
                       <span className="font-mono font-bold text-indigo-700">
-                        {formatCurrency(it.amount)}
+                        {isLeadField ? (it.amount || 0).toLocaleString('vi-VN') : formatCurrency(it.amount)}
                       </span>
                     </div>
                   ))}
@@ -165,7 +170,7 @@ export const AcceptanceDialogs: React.FC<DialogsProps> = ({
                 <div className="pt-2 border-t border-indigo-100 flex justify-between items-center font-black">
                   <span className="text-xs text-indigo-950 uppercase">Tổng cộng:</span>
                   <span className="text-base font-mono text-indigo-700">
-                    {formatCurrency(parsedCalc.total)}
+                    {isLeadField ? (parsedCalc.total || 0).toLocaleString('vi-VN') : formatCurrency(parsedCalc.total)}
                   </span>
                 </div>
               </div>

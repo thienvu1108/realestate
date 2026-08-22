@@ -201,6 +201,8 @@ service cloud.firestore {
         resource.data.get('createdBy', '') == request.auth.uid || 
         (resource.data.get('assignedUserEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
         (resource.data.get('userEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
+        (hasUserData() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
+        (hasUserData() && resource.data.get('teamId', '') == getUserData().get('teamId', '_NONE_')) ||
         (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
         (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
       ) && isValidBudget(incoming());
@@ -322,6 +324,23 @@ service cloud.firestore {
     match /rolePermissions/{roleId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Team Notifications
+    // ===============================================================
+    match /teamNotifications/{notifId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin() || isAccountant();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin() || isAccountant();
     }
   }
 }

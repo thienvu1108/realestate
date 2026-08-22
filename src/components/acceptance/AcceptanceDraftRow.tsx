@@ -120,14 +120,14 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       </TableCell>
 
       {/* Col B: MÃ TEAM */}
-      <TableCell className="p-1 min-w-[130px]">
+      <TableCell className="p-1 min-w-[140px]">
         <Select
-          value={currentDraftTeamId}
+          value={currentDraftTeamId || ''}
           onValueChange={(teamId) => {
             const tm = (teams || []).find((t: any) => t.id === teamId) || (findTeam ? findTeam(teamId) : null);
             if (tm) {
               const tmName = tm.name || '';
-              const code = tm.teamCode || '';
+              const code = tm.teamCode || tm.name || '';
               let gdkd = tmName;
               if (code && tmName.startsWith(code)) {
                 gdkd = tmName.substring(code.length).trim();
@@ -154,12 +154,14 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
             }
           }}
         >
-          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
-            <SelectValue placeholder="Chọn Team">
-              {selectedTeam 
-                ? (selectedTeam.teamCode ? `${selectedTeam.teamCode} - ${selectedTeam.name}` : selectedTeam.name)
-                : (draftRow.teamName || draftRow.teamCode || undefined)}
-            </SelectValue>
+          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded truncate">
+            {selectedTeam ? (
+              <span className="truncate text-slate-800 font-bold">
+                {selectedTeam.teamCode ? `${selectedTeam.teamCode} - ${selectedTeam.name}` : selectedTeam.name}
+              </span>
+            ) : (
+              <SelectValue placeholder="Chọn Team" />
+            )}
           </SelectTrigger>
           <SelectContent className="max-h-56">
             {(teams || []).map((t: any) => (
@@ -192,9 +194,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       </TableCell>
 
       {/* Col E: DỰ ÁN */}
-      <TableCell className="p-1 min-w-[170px]">
+      <TableCell className="p-1 min-w-[180px]">
         <Select
-          value={currentDraftProjId}
+          value={currentDraftProjId || ''}
           onValueChange={(projectId) => {
             const p = (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
             if (p) {
@@ -214,12 +216,14 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
             }
           }}
         >
-          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
-            <SelectValue placeholder="Chọn Dự án">
-              {selectedProj 
-                ? (selectedProj.projectCode ? `[${selectedProj.projectCode}] ${selectedProj.name}` : selectedProj.name)
-                : (draftRow.projectName || undefined)}
-            </SelectValue>
+          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded truncate">
+            {selectedProj ? (
+              <span className="truncate text-slate-800 font-bold">
+                {selectedProj.projectCode ? `[${selectedProj.projectCode}] ${selectedProj.name}` : selectedProj.name}
+              </span>
+            ) : (
+              <SelectValue placeholder="Chọn Dự án" />
+            )}
           </SelectTrigger>
           <SelectContent className="max-h-56">
             {(projects || []).map((p: any) => (

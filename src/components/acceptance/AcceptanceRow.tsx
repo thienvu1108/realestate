@@ -200,12 +200,14 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
               }
             }}
           >
-            <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Chọn Team">
-                {currentEditTeam 
-                  ? (currentEditTeam.teamCode ? `${currentEditTeam.teamCode} - ${currentEditTeam.name}` : currentEditTeam.name)
-                  : (editingState.teamName || editingState.teamCode || undefined)}
-              </SelectValue>
+            <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded truncate">
+              {currentEditTeam ? (
+                <span className="truncate text-slate-800 font-bold">
+                  {currentEditTeam.teamCode ? `${currentEditTeam.teamCode} - ${currentEditTeam.name}` : currentEditTeam.name}
+                </span>
+              ) : (
+                <SelectValue placeholder="Chọn Team" />
+              )}
             </SelectTrigger>
             <SelectContent className="max-h-56">
               {(teams || []).map((t: any) => (
@@ -258,12 +260,14 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
               }
             }}
           >
-            <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
-              <SelectValue placeholder="Chọn Dự án">
-                {currentEditProj 
-                  ? (currentEditProj.projectCode ? `[${currentEditProj.projectCode}] ${currentEditProj.name}` : currentEditProj.name)
-                  : (editingState.projectName || undefined)}
-              </SelectValue>
+            <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded truncate">
+              {currentEditProj ? (
+                <span className="truncate text-slate-800 font-bold">
+                  {currentEditProj.projectCode ? `[${currentEditProj.projectCode}] ${currentEditProj.name}` : currentEditProj.name}
+                </span>
+              ) : (
+                <SelectValue placeholder="Chọn Dự án" />
+              )}
             </SelectTrigger>
             <SelectContent className="max-h-56">
               {(projects || []).map((p: any) => (
@@ -552,7 +556,7 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
 
       {/* Col AA: SỐ LEAD */}
       <TableCell className="text-right font-mono text-xs font-bold text-cyan-950 bg-cyan-50/30">
-        {renderBreakdownTooltip(comp.cnNopTien, item.costBreakdowns?.caNhanNopTien, 'Số Lead')}
+        {(comp.cnNopTien || 0).toLocaleString('vi-VN')}
       </TableCell>
 
       {/* Col AB: TRẠNG THÁI */}

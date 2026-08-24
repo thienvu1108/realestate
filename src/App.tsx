@@ -7881,22 +7881,6 @@ export default function App() {
           const targetRef = doc(db, 'budgets', targetBudget.id);
           const duplicates = existingBudgetsForMatch.slice(1);
           
-          const batch = writeBatch(db);
-          const duplicateIdsRemoved: string[] = [];
-
-          if (duplicates.length > 0) {
-            for (const dup of duplicates) {
-              duplicateIdsRemoved.push(dup.id);
-              
-              const affectedCosts = costs.filter(c => c.budgetId === dup.id);
-              affectedCosts.forEach(c => {
-                batch.update(doc(db, 'costs', c.id), { budgetId: targetBudget.id });
-              });
-              
-              batch.delete(doc(db, 'budgets', dup.id));
-            }
-          }
-
           // Build/Update subBudgets for targetBudget
           let currentSubBudgets = Array.isArray(targetBudget.subBudgets) ? [...targetBudget.subBudgets] : [];
           if (currentSubBudgets.length === 0) {
@@ -7936,7 +7920,7 @@ export default function App() {
 
           const newTotalAmount = item.amount;
 
-          batch.update(targetRef, {
+          await updateDoc(targetRef, {
             amount: newTotalAmount,
             implementerName: item.implementerName || targetBudget.implementerName,
             subBudgets: currentSubBudgets,
@@ -7952,7 +7936,17 @@ export default function App() {
             })
           });
 
-          await batch.commit();
+          // If there are legacy duplicates, clean them up safely
+          if (duplicates.length > 0) {
+            for (const dup of duplicates) {
+              const affectedCosts = costs.filter(c => c.budgetId === dup.id);
+              for (const c of affectedCosts) {
+                await updateDoc(doc(db, 'costs', c.id), { budgetId: targetBudget.id }).catch(() => {});
+              }
+              await deleteDoc(doc(db, 'budgets', dup.id)).catch(() => {});
+            }
+          }
+
           await logAction('UPDATE', 'budgets', targetBudget.id, { 
             oldAmount: targetBudget.amount,
             newTotalAmount,

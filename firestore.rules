@@ -184,32 +184,22 @@ service cloud.firestore {
     // Budgets
     // ===============================================================
     function isValidBudget(data) {
-      return data.projectId is string && data.month is string && data.amount is number;
+      return (!('projectId' in data) || data.projectId is string) &&
+             (!('month' in data) || data.month is string) &&
+             (!('amount' in data) || data.amount is number || data.amount is int || data.amount is float);
     }
 
     match /budgets/{budgetId} {
       allow read: if isSignedIn();
 
-      allow create: if isSignedIn() && isValidBudget(incoming()) && (
-        incoming().createdBy == request.auth.uid ||
-        (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-        (isGDKhoi() && isMatchBlockPrefix(incoming().get('teamId', '')))
-      );
+      allow create: if isSignedIn() && isValidBudget(incoming());
       
-      allow update: if (
-        isAdmin() || isAccountant() || 
-        resource.data.get('createdBy', '') == request.auth.uid || 
-        (resource.data.get('assignedUserEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
-        (resource.data.get('userEmail', '').lower() == request.auth.token.get('email', '').lower()) ||
-        (hasUserData() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-        (hasUserData() && resource.data.get('teamId', '') == getUserData().get('teamId', '_NONE_')) ||
-        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-        (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
-      ) && isValidBudget(incoming());
+      allow update: if isSignedIn() && isValidBudget(incoming());
       
       allow delete: if isAdmin() || isAccountant() || 
                        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')));
+                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', ''))) ||
+                       resource.data.get('createdBy', '') == request.auth.uid;
     }
 
     // ===============================================================
@@ -218,23 +208,14 @@ service cloud.firestore {
     match /costs/{costId} {
       allow read: if isSignedIn();
 
-      allow create: if isSignedIn() && (
-        incoming().createdBy == request.auth.uid ||
-        (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-        (isGDKhoi() && isMatchBlockPrefix(incoming().get('teamId', '')))
-      );
+      allow create: if isSignedIn();
       
-      allow update: if (
-        isAdmin() || isAccountant() || 
-        resource.data.createdBy == request.auth.uid || 
-        (resource.data.assignedUserEmail.lower() == request.auth.token.email.lower()) ||
-        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-        (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')))
-      );
+      allow update: if isSignedIn();
       
       allow delete: if isAdmin() || isAccountant() || 
                        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
-                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', '')));
+                       (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', ''))) ||
+                       resource.data.get('createdBy', '') == request.auth.uid;
     }
 
     // ===============================================================

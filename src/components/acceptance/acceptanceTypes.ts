@@ -43,8 +43,12 @@ export interface AcceptanceRecord {
   caNhanTiktok?: number;
   caNhanTotal?: number; // Cột Y
 
+  // Cột: Cá Nhân nạp tiền qua công ty
+  caNhanNapTienQuaCty?: number;
+  caNhanNapTienCty?: number;
+
   // Group 5: TỔNG
-  grandTotal?: number; // Cột Z (K + Q + S + Y)
+  grandTotal?: number; // Cột Z (K + Q + S + Y + Cá nhân nạp tiền qua công ty)
 
   // Group 6:
   caNhanNopTien?: number; // Cột AA: Số Lead
@@ -103,6 +107,8 @@ export interface ComputedRowValues {
   cnTiktok: number;
   cnTotal: number; // Y (Tổng cá nhân)
 
-  grandTotal: number; // Z (K + Q + S + Y)
+  cnNapTienCty: number; // Cá Nhân nạp tiền qua công ty
+
+  grandTotal: number; // Z (K + Q + S + Y + cnNapTienCty)
   cnNopTien: number; // AA
 }

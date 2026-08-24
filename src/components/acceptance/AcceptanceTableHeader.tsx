@@ -124,6 +124,9 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
           CÁ NHÂN CHẠY NGOÀI (TẤT CẢ LẤY SỐ TRƯỚC VAT)
         </TableHead>
 
+        {/* CỘT: CÁ NHÂN NẠP TIỀN QUA CÔNG TY (Bên trái cột TỔNG) */}
+        {renderSortableCell('caNhanNapTienQuaCty', 'CÁ NHÂN NẠP TIỀN QUA CÔNG TY', 'bg-violet-100/90 text-violet-950 border-violet-300 min-w-[130px] text-[10px]')}
+
         {/* Col Z: TỔNG (Pink / Light Red Highlight) */}
         <TableHead rowSpan={2} onClick={() => onSort('grandTotal')} className="cursor-pointer hover:bg-rose-200 text-center font-black uppercase bg-rose-100 text-rose-900 border-b border-r border-rose-300 px-3 py-1 min-w-[125px] text-xs">
           <div className="flex items-center justify-center gap-1 font-black">

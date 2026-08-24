@@ -309,7 +309,12 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         {formatCurrency(comp.cnTotal).replace(' đ', '')}
       </TableCell>
 
-      {/* Col Z: TỔNG (K + Q + S + Y) */}
+      {/* Cột: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
+      <TableCell className="p-1 bg-violet-50/30">
+        {renderCalcInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', draftRow.caNhanNapTienQuaCty)}
+      </TableCell>
+
+      {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
       <TableCell className="p-1 text-right font-mono text-xs font-black text-rose-900 bg-rose-100/70">
         {formatCurrency(comp.grandTotal).replace(' đ', '')}
       </TableCell>

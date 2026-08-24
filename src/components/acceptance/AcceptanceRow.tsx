@@ -319,7 +319,10 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           {formatCurrency(editComp.cnTotal).replace(' đ', '')}
         </TableCell>
 
-        {/* Col Z: TỔNG (K + Q + S + Y) */}
+        {/* Cột: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
+        <TableCell className="p-1 bg-violet-50/40">{renderEditInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', editingState.caNhanNapTienQuaCty)}</TableCell>
+
+        {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
         <TableCell className="p-1 text-right font-mono text-xs font-black text-rose-900 bg-rose-100/70">
           {formatCurrency(editComp.grandTotal).replace(' đ', '')}
         </TableCell>
@@ -549,7 +552,12 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {formatCurrency(comp.cnTotal).replace(' đ', '')}
       </TableCell>
 
-      {/* Col Z: TỔNG (K + Q + S + Y) */}
+      {/* Cột: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
+      <TableCell className="text-right font-mono text-xs font-bold text-violet-950 bg-violet-50/30">
+        {renderBreakdownTooltip(comp.cnNapTienCty, item.costBreakdowns?.caNhanNapTienQuaCty || item.costBreakdowns?.caNhanNapTienCty, 'Cá nhân nạp qua Cty')}
+      </TableCell>
+
+      {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
       <TableCell className="text-right font-mono text-xs font-black text-rose-900 bg-rose-100/60">
         {formatCurrency(comp.grandTotal).replace(' đ', '')}
       </TableCell>

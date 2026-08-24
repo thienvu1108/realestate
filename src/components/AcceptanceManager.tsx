@@ -98,6 +98,7 @@ export const AcceptanceManager = React.memo(({
     caNhanZalo: '',
     caNhanGoogle: '',
     caNhanTiktok: '',
+    caNhanNapTienQuaCty: '',
     caNhanNopTien: '',
     status: 'Đã nghiệm thu',
     notes: ''
@@ -429,7 +430,10 @@ export const AcceptanceManager = React.memo(({
         caNhanTiktok: comp.cnTiktok,
         caNhanTotal: comp.cnTotal, // Cột Y
 
-        // Group 5: TỔNG (Cột Z = K + Q + S + Y)
+        // Cột: Cá Nhân nạp tiền qua công ty
+        caNhanNapTienQuaCty: comp.cnNapTienCty,
+
+        // Group 5: TỔNG (Cột Z = K + Q + S + Y + Cá nhân nạp tiền qua công ty)
         grandTotal: comp.grandTotal,
         totalCost: comp.grandTotal,
         afterAcceptanceCost: comp.grandTotal,
@@ -502,6 +506,7 @@ export const AcceptanceManager = React.memo(({
       caNhanZalo: item.caNhanZalo ?? item.zaloCost ?? '',
       caNhanGoogle: item.caNhanGoogle ?? item.googleCost ?? '',
       caNhanTiktok: item.caNhanTiktok ?? item.tiktokCost ?? '',
+      caNhanNapTienQuaCty: item.caNhanNapTienQuaCty ?? item.caNhanNapTienCty ?? '',
       caNhanNopTien: item.caNhanNopTien ?? item.personalPaidToCompany ?? '',
       status: item.status || 'Đã nghiệm thu',
       notes: item.notes || ''
@@ -575,6 +580,9 @@ export const AcceptanceManager = React.memo(({
         caNhanGoogle: comp.cnGoogle,
         caNhanTiktok: comp.cnTiktok,
         caNhanTotal: comp.cnTotal, // Cột Y
+
+        // Cột: Cá Nhân nạp tiền qua công ty
+        caNhanNapTienQuaCty: comp.cnNapTienCty,
 
         // Group 5: Cột Z
         grandTotal: comp.grandTotal,
@@ -736,6 +744,7 @@ export const AcceptanceManager = React.memo(({
         'CÁ NHÂN - GOOGLE': comp.cnGoogle,
         'CÁ NHÂN - TIKTOK': comp.cnTiktok,
         'CÁ NHÂN - TỔNG': comp.cnTotal,
+        'CÁ NHÂN NẠP TIỀN QUA CÔNG TY': comp.cnNapTienCty,
         'TỔNG CỘNG': comp.grandTotal,
         'SỐ LEAD': comp.cnNopTien,
         'TRẠNG THÁI': a.status || 'Đã nghiệm thu',
@@ -828,6 +837,9 @@ export const AcceptanceManager = React.memo(({
         const cnGoogle = parseCurrencyFormula(getCol(['cá nhân - google', 'cá nhân google'])).total;
         const cnTiktok = parseCurrencyFormula(getCol(['cá nhân - tiktok', 'cá nhân tiktok'])).total;
 
+        // Cá nhân nạp tiền qua công ty
+        const cnNapTienQuaCty = parseCurrencyFormula(getCol(['cá nhân nạp tiền qua công ty', 'cá nhân nạp qua công ty', 'cá nhân nạp tiền qua cty', 'nạp tiền qua công ty', 'cá nhân nạp tiền', 'canhannaptienquacty', 'cá nhân nạp cty'])).total;
+
         const cnNopTien = parseCurrencyFormula(getCol(['số lead', 'lead', 'số leads', 'leads', 'cá nhân nộp tiền qua công ty', 'nộp tiền', 'nộp qua công ty'])).total;
         const notes = String(getCol(['ghi chú', 'notes']) || '').trim();
 
@@ -839,6 +851,7 @@ export const AcceptanceManager = React.memo(({
           visaFb: vFb, visaZalo: vZalo, visaTiktok: vTiktok, visaDangTin: vDangTin,
           dangTinCtyChuaVat: dtCtyChuaVat,
           caNhanFb: cnFb, caNhanDangTin: cnDangTin, caNhanZalo: cnZalo, caNhanGoogle: cnGoogle, caNhanTiktok: cnTiktok,
+          caNhanNapTienQuaCty: cnNapTienQuaCty,
           caNhanNopTien: cnNopTien
         };
         const comp = getRowComputed(compDraft);
@@ -880,6 +893,8 @@ export const AcceptanceManager = React.memo(({
           caNhanGoogle: comp.cnGoogle,
           caNhanTiktok: comp.cnTiktok,
           caNhanTotal: comp.cnTotal,
+
+          caNhanNapTienQuaCty: comp.cnNapTienCty,
 
           grandTotal: comp.grandTotal,
           totalCost: comp.grandTotal,

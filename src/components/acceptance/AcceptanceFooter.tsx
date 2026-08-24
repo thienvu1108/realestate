@@ -36,6 +36,8 @@ export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, fo
         cnTiktok: acc.cnTiktok + comp.cnTiktok,
         cnTotal: acc.cnTotal + comp.cnTotal,
 
+        cnNapTienCty: acc.cnNapTienCty + comp.cnNapTienCty,
+
         grandTotal: acc.grandTotal + comp.grandTotal,
         cnNopTien: acc.cnNopTien + comp.cnNopTien
       };
@@ -44,6 +46,7 @@ export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, fo
       vFb: 0, vZalo: 0, vTiktok: 0, vDangTin: 0, vTotalChuaVat: 0, vTotalSauVat: 0,
       dtCtyChuaVat: 0, dtCtySauVat: 0,
       cnFb: 0, cnDangTin: 0, cnZalo: 0, cnGoogle: 0, cnTiktok: 0, cnTotal: 0,
+      cnNapTienCty: 0,
       grandTotal: 0, cnNopTien: 0
     });
   }, [records]);
@@ -90,7 +93,10 @@ export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, fo
         {/* Col Y: CÁ NHÂN TỔNG */}
         <TableCell className="text-right font-mono text-xs font-black text-amber-950 bg-amber-100/80">{fmt(totals.cnTotal)}</TableCell>
 
-        {/* Col Z: TỔNG (K + Q + S + Y) */}
+        {/* CỘT: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
+        <TableCell className="text-right font-mono text-xs font-black text-violet-950 bg-violet-100/80">{fmt(totals.cnNapTienCty)}</TableCell>
+
+        {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
         <TableCell className="text-right font-mono text-xs font-black text-rose-900 bg-rose-100">{fmt(totals.grandTotal)}</TableCell>
 
         {/* Col AA: SỐ LEAD */}

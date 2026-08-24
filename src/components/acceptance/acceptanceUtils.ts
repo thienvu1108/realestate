@@ -91,6 +91,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
       vFb: 0, vZalo: 0, vTiktok: 0, vDangTin: 0, vTotalChuaVat: 0, vTotalSauVat: 0,
       dtCtyChuaVat: 0, dtCtySauVat: 0,
       cnFb: 0, cnDangTin: 0, cnZalo: 0, cnGoogle: 0, cnTiktok: 0, cnTotal: 0,
+      cnNapTienCty: 0,
       grandTotal: 0, cnNopTien: 0
     };
   }
@@ -127,8 +128,11 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   // Cột Y: Cá nhân chạy ngoài tổng
   const cnTotal = cnFb + cnDangTin + cnZalo + cnGoogle + cnTiktok;
 
-  // Cột Z: TỔNG = K + Q + S + Y
-  const grandTotal = dTotalSauVat + vTotalSauVat + dtCtySauVat + cnTotal;
+  // Cột: Cá Nhân nạp tiền qua công ty (vị trí bên trái cột TỔNG và được cộng vào TỔNG)
+  const cnNapTienCty = parseCurrencyFormula(row.caNhanNapTienQuaCty ?? row.caNhanNapTienCty ?? row.personalDepositViaCompany).total;
+
+  // Cột Z: TỔNG = K + Q + S + Y + Cá nhân nạp tiền qua công ty
+  const grandTotal = dTotalSauVat + vTotalSauVat + dtCtySauVat + cnTotal + cnNapTienCty;
 
   // Cột AA: Số Lead
   const cnNopTien = parseCurrencyFormula(row.caNhanNopTien ?? row.personalPaidToCompany).total;
@@ -138,6 +142,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
     vFb, vZalo, vTiktok, vDangTin, vTotalChuaVat, vTotalSauVat,
     dtCtyChuaVat, dtCtySauVat,
     cnFb, cnDangTin, cnZalo, cnGoogle, cnTiktok, cnTotal,
+    cnNapTienCty,
     grandTotal,
     cnNopTien
   };
@@ -190,6 +195,12 @@ export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: 
     case 'caNhanTiktok': return comp.cnTiktok;
     case 'caNhanTotal': return comp.cnTotal;
 
+    // Cột: Cá Nhân nạp tiền qua công ty
+    case 'caNhanNapTienQuaCty':
+    case 'caNhanNapTienCty':
+    case 'cnNapTienCty':
+      return comp.cnNapTienCty;
+
     // Group 5 & 6
     case 'grandTotal': return comp.grandTotal;
     case 'caNhanNopTien': return comp.cnNopTien;
@@ -205,6 +216,7 @@ export const buildCostBreakdownsOfRecord = (rowState: any) => {
     'visaFb', 'visaZalo', 'visaTiktok', 'visaDangTin',
     'dangTinCtyChuaVat',
     'caNhanFb', 'caNhanDangTin', 'caNhanZalo', 'caNhanGoogle', 'caNhanTiktok',
+    'caNhanNapTienQuaCty', 'caNhanNapTienCty',
     'caNhanNopTien'
   ];
   const breakdowns: any = {};

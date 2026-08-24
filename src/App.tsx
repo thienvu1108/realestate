@@ -116,7 +116,8 @@ import {
   Sliders,
   Sparkles,
   Bell,
-  BellRing
+  BellRing,
+  CheckCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -3823,6 +3824,7 @@ export default function App() {
   const [historyTargetRecord, setHistoryTargetRecord] = useState<any>(null);
   const [teamNotifications, setTeamNotifications] = useState<any[]>([]);
   const [isTeamNotificationDialogOpen, setIsTeamNotificationDialogOpen] = useState(false);
+  const [notifFilterTab, setNotifFilterTab] = useState<'all' | 'unread' | 'my_projects'>('all');
   const [editingCostForm, setEditingCostForm] = useState({
     fbAds: '',
     posting: '',
@@ -6263,29 +6265,77 @@ export default function App() {
     return Boolean(isOwner || isAssigned || isAssignedGDDA || isSameTeam || isSameBlock);
   }, [isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, user?.uid, user?.email, userProfile?.teamName, userProfile?.assignedProjects, currentActiveTeam, currentActiveBlock, myBlockTeams]);
 
+  const safeArrayOfStrings = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.filter(Boolean).map((x: any) => String(x).toLowerCase().trim());
+    if (typeof val === 'string') return [val.toLowerCase().trim()];
+    return [];
+  };
+
   const myTeamNotifications = useMemo(() => {
+    const userEmail = (user?.email || '').toLowerCase().trim();
+    const myTeamName = (userProfile?.teamName || '').toLowerCase().trim();
+    const myTeamId = userProfile?.teamId || '';
     const activeTeam = currentActiveTeam;
-    if (!activeTeam) return teamNotifications;
-    const targetName = activeTeam.name.toLowerCase().trim();
-    const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
-    const targetId = activeTeam.id;
+    const activeTeamName = (activeTeam?.name || '').toLowerCase().trim();
+    const activeTeamCode = (activeTeam?.teamCode || '').toLowerCase().trim();
+    const activeTeamId = activeTeam?.id || '';
 
     return teamNotifications.filter(n => {
+      // 1. Super Admin, Admin, Accountant, Mod can see all notifications
       if (isAdmin || isSuperAdmin || isMod || isAccountant) return true;
-      if (n.teamId && targetId && n.teamId === targetId) return true;
-      const nTeam = (n.teamName || '').toLowerCase().trim();
-      return nTeam === targetName || (targetCode && nTeam === targetCode);
+
+      // 2. Creator or any user who has registered/modified/contributed to this budget
+      const recipients = Array.from(new Set([
+        ...safeArrayOfStrings(n.recipients),
+        ...safeArrayOfStrings(n.previousRegistrants),
+        ...safeArrayOfStrings(n.targetEmails)
+      ]));
+      const creatorEmail = (n.creatorEmail || n.userEmail || n.createdByEmail || '').toLowerCase().trim();
+      const editorEmail = (n.editorEmail || '').toLowerCase().trim();
+
+      if (userEmail && (
+        recipients.includes(userEmail) ||
+        creatorEmail === userEmail ||
+        editorEmail === userEmail ||
+        (n.createdBy && n.createdBy === user?.uid)
+      )) {
+        return true;
+      }
+
+      // 3. Team match (active team or user's assigned team)
+      const nTeamId = n.teamId || '';
+      const nTeamName = (n.teamName || '').toLowerCase().trim();
+      const nTeamCode = (n.teamCode || '').toLowerCase().trim();
+
+      if (activeTeamId && nTeamId && nTeamId === activeTeamId) return true;
+      if (activeTeamName && nTeamName && (nTeamName === activeTeamName || nTeamName === activeTeamCode || (nTeamCode && nTeamCode === activeTeamCode))) return true;
+      if (myTeamId && nTeamId && nTeamId === myTeamId) return true;
+      if (myTeamName && nTeamName && (nTeamName === myTeamName || (nTeamCode && nTeamCode === myTeamName))) return true;
+
+      // 4. GDDA / GDKhoi check
+      if (isGDDA && n.projectId && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0 || userProfile.assignedProjects.includes(n.projectId))) {
+        return true;
+      }
+      if (isGDKhoi && isTeamInBlock(nTeamId || nTeamName, currentActiveBlock)) {
+        return true;
+      }
+
+      return false;
     });
-  }, [teamNotifications, currentActiveTeam, isAdmin, isSuperAdmin, isMod, isAccountant]);
+  }, [teamNotifications, user?.email, user?.uid, userProfile?.teamName, userProfile?.teamId, userProfile?.assignedProjects, currentActiveTeam, currentActiveBlock, isAdmin, isSuperAdmin, isMod, isAccountant, isGDDA, isGDKhoi]);
 
   const unreadTeamNotifCount = useMemo(() => {
-    const userEmail = user?.email?.toLowerCase() || '';
+    const userEmail = (user?.email || '').toLowerCase().trim();
     if (!userEmail) return 0;
-    return myTeamNotifications.filter(n => !n.readBy || !n.readBy.map((e: string) => e.toLowerCase()).includes(userEmail)).length;
+    return myTeamNotifications.filter(n => {
+      const readList = safeArrayOfStrings(n.readBy);
+      return !readList.includes(userEmail);
+    }).length;
   }, [myTeamNotifications, user?.email]);
 
   const markTeamNotifAsRead = async (notifId: string) => {
-    const userEmail = user?.email?.toLowerCase() || '';
+    const userEmail = (user?.email || '').toLowerCase().trim();
     if (!userEmail) return;
     try {
       const notifRef = doc(db, 'teamNotifications', notifId);
@@ -6298,10 +6348,13 @@ export default function App() {
   };
 
   const markAllTeamNotifsAsRead = async () => {
-    const userEmail = user?.email?.toLowerCase() || '';
+    const userEmail = (user?.email || '').toLowerCase().trim();
     if (!userEmail) return;
     try {
-      const unread = myTeamNotifications.filter(n => !n.readBy || !n.readBy.map((e: string) => e.toLowerCase()).includes(userEmail));
+      const unread = myTeamNotifications.filter(n => {
+        const readList = safeArrayOfStrings(n.readBy);
+        return !readList.includes(userEmail);
+      });
       if (unread.length === 0) return;
       const batch = writeBatch(db);
       unread.forEach(n => {
@@ -6310,9 +6363,92 @@ export default function App() {
         });
       });
       await batch.commit();
-      toast.success('Đã đánh dấu đã đọc tất cả thông báo của team');
+      toast.success('Đã đánh dấu đã đọc tất cả thông báo');
     } catch (e) {
       console.warn('Failed to mark all as read', e);
+    }
+  };
+
+  const sendBudgetChangeNotification = async ({
+    budgetId,
+    projectId,
+    projectName,
+    teamId,
+    teamName,
+    teamCode,
+    month,
+    oldAmount,
+    newAmount,
+    editorName,
+    editorEmail,
+    reason,
+    originalBudget,
+    subBudgetsList = []
+  }: {
+    budgetId: string;
+    projectId: string;
+    projectName: string;
+    teamId: string;
+    teamName: string;
+    teamCode?: string;
+    month: string;
+    oldAmount: number;
+    newAmount: number;
+    editorName: string;
+    editorEmail: string;
+    reason?: string;
+    originalBudget?: any;
+    subBudgetsList?: any[];
+  }) => {
+    try {
+      const creatorEmail = (originalBudget?.userEmail || originalBudget?.createdByEmail || '').toLowerCase().trim();
+      const assignedEmail = (originalBudget?.assignedUserEmail || '').toLowerCase().trim();
+      const origSubEmails = (originalBudget?.subBudgets || []).map((s: any) => (s.userEmail || s.email || '').toLowerCase().trim()).filter(Boolean);
+      const currSubEmails = subBudgetsList.map((s: any) => (s.userEmail || s.email || '').toLowerCase().trim()).filter(Boolean);
+      const historyEmails = (originalBudget?.editHistory || []).map((h: any) => (h.editorEmail || '').toLowerCase().trim()).filter(Boolean);
+
+      // Collect all affected user emails (creator, all users with subBudgets, previous editors)
+      const allRecipients = Array.from(new Set([
+        creatorEmail,
+        assignedEmail,
+        ...origSubEmails,
+        ...currSubEmails,
+        ...historyEmails
+      ])).filter(Boolean);
+
+      const diff = newAmount - (oldAmount || 0);
+      const diffStr = diff > 0 ? `+${formatCurrency(diff)}` : (diff < 0 ? `-${formatCurrency(Math.abs(diff))}` : '0đ');
+
+      const notifTitle = `Ngân sách dự án ${projectName} (${month}) đã được thay đổi`;
+      const notifMessage = `Ngân sách đăng ký dự án ${projectName} (${month}) đã được ${editorName} cập nhật: ${formatCurrency(oldAmount || 0)} ➜ ${formatCurrency(newAmount)} (${diffStr}).${reason ? ` Lý do: ${reason}` : ''}`;
+
+      await addDoc(collection(db, 'teamNotifications'), {
+        type: 'BUDGET_CHANGED',
+        budgetId,
+        projectId,
+        projectName,
+        teamId,
+        teamName,
+        teamCode: teamCode || originalBudget?.teamCode || extractTeamCode(teamName),
+        month,
+        oldAmount: oldAmount || 0,
+        newAmount,
+        difference: diff,
+        editorName,
+        editorEmail: (editorEmail || '').toLowerCase().trim(),
+        creatorEmail,
+        createdBy: originalBudget?.createdBy || '',
+        recipients: allRecipients,
+        previousRegistrants: allRecipients,
+        targetEmails: allRecipients,
+        title: notifTitle,
+        message: notifMessage,
+        reason: reason || '',
+        createdAt: serverTimestamp(),
+        readBy: editorEmail ? [editorEmail.toLowerCase().trim()] : []
+      });
+    } catch (err) {
+      console.warn('Failed to send budget change notification:', err);
     }
   };
 
@@ -7954,32 +8090,22 @@ export default function App() {
           });
 
           // Send notification to team members and previous registrants
-          try {
-            const notifTitle = `Ngân sách dự án ${item.projectName} đã được thay đổi`;
-            const notifMessage = `Ngân sách đăng ký dự án ${item.projectName} (${item.month}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(item.amount)}`;
-            const prevUsers = currentSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
-
-            await addDoc(collection(db, 'teamNotifications'), {
-              type: 'BUDGET_CHANGED',
-              budgetId: targetBudget.id,
-              projectId: item.projectId,
-              projectName: item.projectName,
-              teamId: item.teamId,
-              teamName: item.teamName,
-              month: item.month,
-              oldAmount: targetBudget.amount || 0,
-              newAmount: item.amount,
-              editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Thành viên',
-              editorEmail: user?.email || '',
-              title: notifTitle,
-              message: notifMessage,
-              previousRegistrants: Array.from(new Set(prevUsers)),
-              createdAt: serverTimestamp(),
-              readBy: user?.email ? [user.email.toLowerCase()] : []
-            });
-          } catch (nErr) {
-            console.warn("Failed to create team notification:", nErr);
-          }
+          await sendBudgetChangeNotification({
+            budgetId: targetBudget.id,
+            projectId: item.projectId,
+            projectName: item.projectName,
+            teamId: item.teamId,
+            teamName: item.teamName,
+            teamCode: item.teamCode,
+            month: item.month,
+            oldAmount: targetBudget.amount || 0,
+            newAmount: item.amount,
+            editorName: item.implementerName || userProfile?.fullName || user?.displayName || 'Thành viên',
+            editorEmail: user?.email || '',
+            reason: 'Cập nhật lại ngân sách dự án cho Đội',
+            originalBudget: targetBudget,
+            subBudgetsList: currentSubBudgets
+          });
         } else {
           // Create new team master budget doc
           const initialSubBudget = {
@@ -8047,21 +8173,54 @@ export default function App() {
 
   const handleOpenHistory = (target: any, name: string) => {
     setHistoryTargetRecord(target);
-    setHistoryTargetName(name);
-    let hist = target?.editHistory || [];
-    if (!Array.isArray(hist) || hist.length === 0) {
+    setHistoryTargetName(name || `${target?.projectName || 'Dự án'} - ${target?.teamName || 'Đội'}`);
+    
+    let rawHist = target?.editHistory || [];
+    let hist: any[] = [];
+    
+    if (Array.isArray(rawHist) && rawHist.length > 0) {
+      hist = rawHist.map((h: any, i: number) => ({
+        ...h,
+        id: h.id || `hist-${i}`
+      }));
+      
+      // Check if there is an initial registration/creation action
+      const hasInitial = hist.some(e => ['REGISTER', 'CREATE', 'URL_IMPORT_CREATE', 'IMPORT_CREATE'].includes(e.action));
+      if (!hasInitial) {
+        const earliestTime = target?.createdAt?.toDate 
+          ? target.createdAt.toDate().toISOString() 
+          : (target?.createdAt ? new Date(target.createdAt).toISOString() : (hist[0]?.timestamp || new Date().toISOString()));
+        
+        const firstEntry = hist[0];
+        const initialAmount = firstEntry?.oldAmount ?? firstEntry?.changes?.amount?.old ?? target?.amount ?? 0;
+        const initialEditor = target?.implementerName || target?.userEmail || target?.createdByEmail || 'Người đăng ký ban đầu';
+        
+        hist.unshift({
+          action: 'REGISTER',
+          editorName: initialEditor,
+          editorEmail: target?.userEmail || target?.createdByEmail || '',
+          timestamp: earliestTime,
+          amount: Number(initialAmount),
+          note: `Đăng ký ngân sách ban đầu: ${Number(initialAmount).toLocaleString()}đ`
+        });
+      }
+    } else {
       const amt = Number(target?.amount || target?.actualCost || 0);
       const editor = target?.implementerName || target?.userEmail || target?.createdByEmail || 'Chưa rõ';
-      const timeStr = target?.createdAt?.toDate ? target.createdAt.toDate().toISOString() : (target?.createdAt ? new Date(target.createdAt).toISOString() : new Date().toISOString());
+      const timeStr = target?.createdAt?.toDate 
+        ? target.createdAt.toDate().toISOString() 
+        : (target?.createdAt ? new Date(target.createdAt).toISOString() : new Date().toISOString());
+      
       hist = [{
         action: 'REGISTER',
         editorName: editor,
         editorEmail: target?.userEmail || target?.createdByEmail || '',
         timestamp: timeStr,
         amount: amt,
-        note: `Đăng ký ban đầu: ${amt.toLocaleString()}đ`
+        note: `Đăng ký ngân sách ban đầu: ${amt.toLocaleString()}đ`
       }];
     }
+    
     setHistoryToView(hist);
     setIsHistoryDialogOpen(true);
   };
@@ -8088,6 +8247,23 @@ export default function App() {
       });
       toast.success('Đã cập nhật ngân sách');
       await logAction('UPDATE', 'budgets', budget.id, { oldAmount: budget.amount, newAmount });
+
+      await sendBudgetChangeNotification({
+        budgetId: budget.id,
+        projectId: budget.projectId,
+        projectName: budget.projectName,
+        teamId: budget.teamId,
+        teamName: budget.teamName,
+        teamCode: budget.teamCode,
+        month: budget.month,
+        oldAmount: budget.amount || 0,
+        newAmount: newAmount,
+        editorName: userProfile?.fullName || user?.displayName || 'Thành viên',
+        editorEmail: user?.email || '',
+        reason: 'Chỉnh sửa ngân sách',
+        originalBudget: budget,
+        subBudgetsList: budget.subBudgets || []
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'budgets');
     }
@@ -8391,32 +8567,22 @@ export default function App() {
       await logAction('UPDATE', 'budgets', editingBudgetId, { ...updateData, reason: reasonText });
 
       // Send notification to team members and previous registrants
-      try {
-        const notifTitle = `Ngân sách dự án ${targetProjectName} đã được thay đổi`;
-        const notifMessage = `Ngân sách đăng ký dự án ${targetProjectName} (${editingBudgetMonth}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(newAmountNum)}`;
-        const prevUsers = updatedSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
-
-        await addDoc(collection(db, 'teamNotifications'), {
-          type: 'BUDGET_CHANGED',
-          budgetId: editingBudgetId,
-          projectId: targetProjectId,
-          projectName: targetProjectName,
-          teamId: targetTeamId,
-          teamName: targetTeamName,
-          month: editingBudgetMonth,
-          oldAmount: originalBudget?.amount || 0,
-          newAmount: newAmountNum,
-          editorName: userProfile?.fullName || user?.displayName || 'Admin',
-          editorEmail: user?.email || '',
-          title: notifTitle,
-          message: notifMessage,
-          previousRegistrants: Array.from(new Set(prevUsers)),
-          createdAt: serverTimestamp(),
-          readBy: user?.email ? [user.email.toLowerCase()] : []
-        });
-      } catch (nErr) {
-        console.warn("Failed to create team notification on edit:", nErr);
-      }
+      await sendBudgetChangeNotification({
+        budgetId: editingBudgetId,
+        projectId: targetProjectId,
+        projectName: targetProjectName,
+        teamId: targetTeamId,
+        teamName: targetTeamName,
+        teamCode: targetTeamCode,
+        month: editingBudgetMonth,
+        oldAmount: originalBudget?.amount || 0,
+        newAmount: newAmountNum,
+        editorName: userProfile?.fullName || user?.displayName || (isSuperAdmin ? 'Super Admin' : 'Admin'),
+        editorEmail: user?.email || '',
+        reason: reasonText,
+        originalBudget: originalBudget,
+        subBudgetsList: updatedSubBudgets
+      });
 
       setEditingBudgetId(null);
       setEditingBudgetReason('');
@@ -8540,32 +8706,22 @@ export default function App() {
       });
 
       // Send notification to team members and previous registrants
-      try {
-        const notifTitle = `Ngân sách dự án ${originalBudget.projectName} đã được thay đổi`;
-        const notifMessage = `Ngân sách đăng ký dự án ${originalBudget.projectName} (${originalBudget.month}) đã được thay đổi, số ngân sách hiện tại của dự án đấy là : ${formatCurrency(newAmount)}`;
-        const prevUsers = updatedSubBudgets.map((s: any) => s.userEmail).filter(Boolean);
-
-        await addDoc(collection(db, 'teamNotifications'), {
-          type: 'BUDGET_CHANGED',
-          budgetId: adjustingBudgetId,
-          projectId: originalBudget.projectId,
-          projectName: originalBudget.projectName,
-          teamId: originalBudget.teamId,
-          teamName: originalBudget.teamName,
-          month: originalBudget.month,
-          oldAmount: originalBudget.amount || 0,
-          newAmount,
-          editorName: userProfile?.fullName || user?.displayName || 'Admin',
-          editorEmail: user?.email || '',
-          title: notifTitle,
-          message: notifMessage,
-          previousRegistrants: Array.from(new Set(prevUsers)),
-          createdAt: serverTimestamp(),
-          readBy: user?.email ? [user.email.toLowerCase()] : []
-        });
-      } catch (nErr) {
-        console.warn("Failed to create team notification on adjust:", nErr);
-      }
+      await sendBudgetChangeNotification({
+        budgetId: adjustingBudgetId,
+        projectId: originalBudget.projectId,
+        projectName: originalBudget.projectName,
+        teamId: originalBudget.teamId,
+        teamName: originalBudget.teamName,
+        teamCode: originalBudget.teamCode,
+        month: originalBudget.month,
+        oldAmount: originalBudget.amount || 0,
+        newAmount,
+        editorName: userProfile?.fullName || user?.displayName || 'Admin',
+        editorEmail: user?.email || '',
+        reason: reasonText,
+        originalBudget: originalBudget,
+        subBudgetsList: updatedSubBudgets
+      });
 
       setAdjustingBudgetId(null);
       setAdjustingBudgetAmount('');
@@ -11520,8 +11676,38 @@ export default function App() {
             </a>
           </div>
 
-          {/* Right Side: User profile, logout */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          {/* Right Side: Notifications, User profile, logout */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Notification Bell Button */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsTeamNotificationDialogOpen(true);
+                }}
+                className={cn(
+                  "relative rounded-xl transition-all duration-300 touch-manipulation flex items-center justify-center cursor-pointer",
+                  unreadTeamNotifCount > 0
+                    ? "text-blue-600 bg-blue-50/80 hover:bg-blue-100 ring-1 ring-blue-200"
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
+                  isScrolled ? "h-8.5 w-8.5" : "h-10 w-10"
+                )}
+                title="Thông báo thay đổi ngân sách"
+              >
+                {unreadTeamNotifCount > 0 ? (
+                  <BellRing className={cn("transition-all duration-300 animate-bounce text-blue-600", isScrolled ? "h-4 w-4" : "h-5 w-5")} />
+                ) : (
+                  <Bell className={cn("transition-all duration-300", isScrolled ? "h-4 w-4" : "h-5 w-5")} />
+                )}
+                {unreadTeamNotifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4.5 min-w-[18px] px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
+                    {unreadTeamNotifCount > 99 ? '99+' : unreadTeamNotifCount}
+                  </span>
+                )}
+              </Button>
+            </div>
+
             <div className={cn(
               "transition-all duration-300 flex flex-col items-end",
               isScrolled ? "hidden sm:flex" : "hidden lg:flex"
@@ -11573,7 +11759,7 @@ export default function App() {
             {/* Scrollable menu content */}
             <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
               {/* Profile Info */}
-              <div className="px-3 py-3 bg-indigo-50/40 rounded-2xl border border-indigo-100/20 mb-3">
+              <div className="px-3 py-3 bg-indigo-50/40 rounded-2xl border border-indigo-100/20 mb-2">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-xs uppercase shrink-0">
                     {user.displayName?.charAt(0) || 'U'}
@@ -11584,6 +11770,30 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Mobile Notification Button */}
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsTeamNotificationDialogOpen(true);
+                }}
+                className={cn(
+                  "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black transition-all touch-manipulation mb-3 border",
+                  unreadTeamNotifCount > 0
+                    ? "bg-blue-50/80 border-blue-200 text-blue-800 shadow-sm"
+                    : "bg-slate-50/60 border-slate-200/60 text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <BellRing className={cn("w-4 h-4 shrink-0", unreadTeamNotifCount > 0 ? "text-blue-600 animate-bounce" : "text-slate-400")} />
+                  <span>Thông báo thay đổi ngân sách</span>
+                </div>
+                {unreadTeamNotifCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white">
+                    {unreadTeamNotifCount}
+                  </span>
+                )}
+              </button>
 
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC MENU</p>
               
@@ -19483,6 +19693,34 @@ export default function App() {
           <TabsContent value="register" className="space-y-8">
             {activeTab === 'register' && (
               <>
+            {unreadTeamNotifCount > 0 && (
+              <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-blue-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-200 shrink-0">
+                    <BellRing className="w-5 h-5 animate-bounce" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                      Thông báo thay đổi ngân sách
+                      <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
+                        {unreadTeamNotifCount} mới
+                      </span>
+                    </h4>
+                    <p className="text-xs text-blue-800 font-medium mt-0.5">
+                      Có <strong className="text-blue-950 font-bold">{unreadTeamNotifCount}</strong> thông báo thay đổi hạn mức ngân sách mới cho các dự án của đội.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setIsTeamNotificationDialogOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm cursor-pointer whitespace-nowrap self-end sm:self-center shrink-0"
+                >
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Xem thông báo
+                </Button>
+              </div>
+            )}
+
             <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
               <div className="h-2 bg-gradient-to-r from-indigo-500 to-blue-600 w-full" />
               <CardHeader className="pb-6">
@@ -22830,113 +23068,649 @@ export default function App() {
 
       {/* Edit History Dialog */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <History className="w-5 h-5 text-indigo-500" />
-              Chi tiết Ngân sách & Lịch sử chỉnh sửa
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Đội/Dự án: <strong className="text-slate-800">{historyTargetName}</strong>
-            </DialogDescription>
+        <DialogContent className="sm:max-w-[680px] max-h-[88vh] p-0 overflow-hidden flex flex-col rounded-2xl">
+          <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-indigo-50/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600 rounded-xl text-white shadow-sm shadow-indigo-200">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-black text-slate-900 tracking-tight">
+                    Chi tiết & Lịch sử cập nhật Ngân sách
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 font-medium mt-0.5">
+                    Theo dõi minh bạch toàn bộ các lần khởi tạo, điều chỉnh và cập nhật của bản ghi
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="py-2 space-y-4 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+
+          <div className="flex-1 p-5 space-y-4 overflow-y-auto custom-scrollbar">
+            {/* Overview Summary Box */}
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Dự án & Đội nhóm</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-slate-800">
+                      {historyTargetRecord ? (projectMap[historyTargetRecord.projectId] || historyTargetRecord.projectName) : historyTargetName}
+                    </span>
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold">
+                      {historyTargetRecord ? (teamMap[historyTargetRecord.teamId] || historyTargetRecord.teamName) : ''}
+                    </Badge>
+                    {historyTargetRecord?.teamCode && (
+                      <Badge variant="secondary" className="font-mono text-[9px] font-bold text-slate-500 bg-white border border-slate-200">
+                        {historyTargetRecord.teamCode}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Kỳ áp dụng</span>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <Badge className="bg-slate-800 text-white font-mono text-[10px] font-bold">
+                      {historyTargetRecord?.month || '-'}
+                    </Badge>
+                    <span className="text-[10px] text-blue-600 font-medium">
+                      {historyTargetRecord?.month ? getReportingPeriod(historyTargetRecord.month) : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs space-y-0.5">
+                  <span className="text-[9px] font-bold uppercase text-slate-400">Ngân sách hiện tại</span>
+                  <p className="text-xs sm:text-sm font-black text-indigo-600 font-mono tabular-nums">
+                    {Number(historyTargetRecord?.amount || 0).toLocaleString()}đ
+                  </p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs space-y-0.5">
+                  <span className="text-[9px] font-bold uppercase text-slate-400">Người phụ trách</span>
+                  <p className="text-[11px] font-bold text-slate-700 truncate" title={historyTargetRecord?.implementerName || 'Chưa rõ'}>
+                    {historyTargetRecord?.implementerName || 'Chưa rõ'}
+                  </p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs space-y-0.5">
+                  <span className="text-[9px] font-bold uppercase text-slate-400">Thời gian tạo</span>
+                  <p className="text-[10px] font-mono font-medium text-slate-600">
+                    {historyTargetRecord?.createdAt ? (safeFormat(historyTargetRecord.createdAt, 'dd/MM/yyyy HH:mm') || '-') : '-'}
+                  </p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs space-y-0.5">
+                  <span className="text-[9px] font-bold uppercase text-slate-400">Lần cập nhật</span>
+                  <p className="text-xs font-black text-emerald-600">
+                    {historyToView?.length || 0} lần ghi nhận
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Sub-budgets breakdown if present */}
             {historyTargetRecord?.subBudgets && Array.isArray(historyTargetRecord.subBudgets) && historyTargetRecord.subBudgets.length > 0 && (
-              <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2">
+              <div className="p-3.5 bg-indigo-50/50 border border-indigo-100/80 rounded-2xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-indigo-600" />
-                    Đăng ký của thành viên ({historyTargetRecord.subBudgets.length} lượt)
+                    Đăng ký của thành viên trong Đội ({historyTargetRecord.subBudgets.length} thành viên)
                   </span>
-                  <span className="text-xs font-extrabold text-indigo-700">
+                  <span className="text-xs font-black text-indigo-700 tabular-nums">
                     Tổng: {Number(historyTargetRecord.amount || 0).toLocaleString()}đ
                   </span>
                 </div>
-                <div className="divide-y divide-indigo-100/80 bg-white rounded-lg border border-indigo-100 overflow-hidden text-xs">
-                  {historyTargetRecord.subBudgets.map((sub: any, sIdx: number) => (
-                    <div key={sub.id || sIdx} className="p-2 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-slate-800 text-[11px]">{sub.userName || sub.userEmail || 'Thành viên'}</p>
-                        {sub.note && <p className="text-[10px] text-slate-500 italic">{sub.note}</p>}
-                        {sub.createdAt && (
-                          <p className="text-[9px] text-slate-400">
-                            {format(new Date(sub.createdAt), 'dd/MM/yyyy HH:mm')}
-                          </p>
-                        )}
+                <div className="divide-y divide-indigo-100/70 bg-white rounded-xl border border-indigo-100 overflow-hidden text-xs">
+                  {historyTargetRecord.subBudgets.map((sub: any, sIdx: number) => {
+                    const subAmt = Number(sub.amount || 0);
+                    const totalAmt = Number(historyTargetRecord.amount || 0);
+                    const pct = totalAmt > 0 ? ((subAmt / totalAmt) * 100).toFixed(1) : '0';
+                    return (
+                      <div key={sub.id || sIdx} className="p-2.5 flex items-center justify-between hover:bg-indigo-50/30 transition-colors">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-800 text-[11px]">{sub.userName || sub.userEmail || 'Thành viên'}</span>
+                            {sub.userEmail && <span className="text-[9px] text-slate-400">({sub.userEmail})</span>}
+                            <Badge variant="outline" className="text-[8px] h-4 px-1 bg-indigo-50 text-indigo-600 border-indigo-100 font-bold">
+                              {pct}%
+                            </Badge>
+                          </div>
+                          {sub.note && <p className="text-[10px] text-slate-500 italic">Ghi chú: {sub.note}</p>}
+                          {sub.createdAt && (
+                            <p className="text-[9px] text-slate-400 font-mono">
+                              Đăng ký: {format(new Date(sub.createdAt), 'dd/MM/yyyy HH:mm')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-indigo-600 text-xs tabular-nums">
+                            {subAmt.toLocaleString()}đ
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-bold text-indigo-600 text-xs tabular-nums">
-                        {Number(sub.amount || 0).toLocaleString()}đ
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Edit History Timeline */}
-            <div className="space-y-3">
-              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-400" /> Nhật ký thay đổi
-              </p>
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Nhật ký chi tiết các lần cập nhật ({historyToView?.length || 0})
+                </p>
+                <span className="text-[10px] text-slate-400 font-medium">Sắp xếp: Mới nhất ở trên</span>
+              </div>
+
               {historyToView && historyToView.length > 0 ? (
-                historyToView.slice().reverse().map((entry, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border-indigo-100">
-                        {entry.action === 'UPDATE' ? 'CHỈNH SỬA' : 
-                         entry.action === 'MERGE_ADD' ? 'GỘP THÊM' : 
-                         entry.action === 'REGISTER' ? 'ĐĂNG KÝ BAN ĐẦU' :
-                         entry.action === 'REGISTER_ADD' ? 'ĐĂNG KÝ BỔ SUNG' :
-                         entry.action === 'MERGE_CONSOLIDATE' ? 'GỘP BẢN GHI ĐỘI' :
-                         entry.action}
-                      </Badge>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm') : '-'}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-700">{entry.editorName || entry.editorEmail}</p>
-                      {entry.action === 'MERGE_ADD' || entry.action === 'REGISTER_ADD' ? (
-                        <p className="text-[11px] text-slate-600">
-                          Thêm <span className="font-bold text-emerald-600">+{Number(entry.addedAmount || 0).toLocaleString()}đ</span>. Tổng mới: <span className="font-bold text-indigo-700">{Number(entry.newTotalAmount || entry.newTotal || 0).toLocaleString()}đ</span>
-                        </p>
-                      ) : entry.action === 'MERGE_CONSOLIDATE' ? (
-                        <p className="text-[11px] text-slate-600">
-                          Gộp <span className="font-bold text-indigo-600">{entry.mergedCount} bản ghi</span> thành 1 ngân sách chung cho Đội. Tổng mới: <span className="font-bold text-emerald-600">{Number(entry.newTotal || 0).toLocaleString()}đ</span>
-                        </p>
-                      ) : (
-                        <div className="space-y-1">
-                          {entry.changes && Object.entries(entry.changes).map(([field, delta]: [string, any], cIdx) => (
-                            <p key={cIdx} className="text-[11px] text-slate-600 flex flex-wrap gap-1 items-center">
-                              <span className="font-medium text-slate-400">{field}:</span>
-                              <span className="line-through text-slate-300">{delta.old?.toLocaleString()}</span>
-                              <ArrowRight className="w-2.5 h-2.5 text-slate-300" />
-                              <span className="font-bold text-indigo-600">{delta.new?.toLocaleString()}</span>
+                <div className="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200">
+                  {historyToView.slice().reverse().map((entry, idx) => {
+                    const stepNumber = historyToView.length - idx;
+                    const isLatest = idx === 0;
+                    const isInitial = stepNumber === 1;
+
+                    // Determine action visual configuration
+                    let actionBadge = {
+                      label: 'CHỈNH SỬA',
+                      color: 'bg-blue-50 text-blue-700 border-blue-200',
+                      icon: Edit2
+                    };
+                    if (isInitial || entry.action === 'REGISTER' || entry.action === 'CREATE') {
+                      actionBadge = {
+                        label: 'ĐĂNG KÝ BAN ĐẦU',
+                        color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        icon: PlusCircle
+                      };
+                    } else if (entry.action === 'ADJUST') {
+                      actionBadge = {
+                        label: 'ADMIN ĐIỀU CHỈNH',
+                        color: 'bg-purple-50 text-purple-700 border-purple-200',
+                        icon: Sliders
+                      };
+                    } else if (entry.action === 'MERGE_ADD' || entry.action === 'REGISTER_ADD') {
+                      actionBadge = {
+                        label: 'ĐĂNG KÝ BỔ SUNG / GỘP',
+                        color: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                        icon: Plus
+                      };
+                    } else if (entry.action === 'UPDATE_TOTAL') {
+                      actionBadge = {
+                        label: 'CẬP NHẬT TỔNG',
+                        color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                        icon: RefreshCw
+                      };
+                    } else if (entry.action === 'MERGE_CONSOLIDATE') {
+                      actionBadge = {
+                        label: 'GỘP CÁC BẢN GHI ĐỘI',
+                        color: 'bg-amber-50 text-amber-700 border-amber-200',
+                        icon: GitMerge
+                      };
+                    } else if (entry.action?.includes('IMPORT')) {
+                      actionBadge = {
+                        label: 'NHẬP TỪ EXCEL / SHEET',
+                        color: 'bg-teal-50 text-teal-700 border-teal-200',
+                        icon: FileSpreadsheet
+                      };
+                    }
+
+                    const ActionIcon = actionBadge.icon;
+
+                    // Calculate amount difference if applicable
+                    let amountDiff: number | null = null;
+                    if (entry.changes?.amount?.old !== undefined && entry.changes?.amount?.new !== undefined) {
+                      amountDiff = Number(entry.changes.amount.new) - Number(entry.changes.amount.old);
+                    } else if (entry.oldAmount !== undefined && (entry.newAmount !== undefined || entry.newTotalAmount !== undefined)) {
+                      amountDiff = Number(entry.newAmount || entry.newTotalAmount) - Number(entry.oldAmount);
+                    } else if (entry.addedAmount !== undefined) {
+                      amountDiff = Number(entry.addedAmount);
+                    }
+
+                    return (
+                      <div key={idx} className="relative pl-8 group">
+                        {/* Timeline dot */}
+                        <div className={`absolute left-2 top-3 w-3.5 h-3.5 rounded-full border-2 bg-white -translate-x-1/2 flex items-center justify-center transition-all ${
+                          isLatest ? 'border-indigo-600 ring-4 ring-indigo-50' : 'border-slate-300'
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${isLatest ? 'bg-indigo-600' : 'bg-slate-400'}`} />
+                        </div>
+
+                        <div className={`p-4 rounded-2xl border transition-all ${
+                          isLatest 
+                            ? 'bg-white border-indigo-200/90 shadow-sm ring-1 ring-indigo-50' 
+                            : 'bg-slate-50/70 border-slate-200/70 hover:bg-white'
+                        }`}>
+                          {/* Card Header */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 border-slate-200 h-5 px-1.5">
+                                #{stepNumber}
+                              </Badge>
+                              <Badge variant="outline" className={`text-[10px] font-bold flex items-center gap-1 h-5 px-2 ${actionBadge.color}`}>
+                                <ActionIcon className="w-3 h-3" />
+                                {actionBadge.label}
+                              </Badge>
+                              {isLatest && (
+                                <Badge className="bg-emerald-600 text-white text-[8px] font-bold h-4 px-1.5">
+                                  Mới nhất
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 font-medium">
+                              {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm:ss') : '-'}
+                            </span>
+                          </div>
+
+                          {/* Editor Info */}
+                          <div className="py-2 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px]">
+                                {(entry.editorName || entry.editorEmail || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800 text-[11px] leading-tight">
+                                  {entry.editorName || 'Người thực hiện'}
+                                </p>
+                                {entry.editorEmail && (
+                                  <p className="text-[9px] text-slate-400 font-mono">{entry.editorEmail}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Amount Transition */}
+                          <div className="p-2.5 bg-slate-100/70 rounded-xl space-y-1 text-xs">
+                            {entry.action === 'MERGE_ADD' || entry.action === 'REGISTER_ADD' ? (
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="text-[11px] text-slate-600">
+                                  Đăng ký thêm: <strong className="text-emerald-600 font-mono">+{Number(entry.addedAmount || 0).toLocaleString()}đ</strong>
+                                </span>
+                                <span className="text-[11px] font-mono text-indigo-700 font-black">
+                                  Tổng mới: {Number(entry.newTotalAmount || entry.newTotal || 0).toLocaleString()}đ
+                                </span>
+                              </div>
+                            ) : entry.action === 'MERGE_CONSOLIDATE' ? (
+                              <div className="text-[11px] text-slate-700 space-y-0.5">
+                                <p>Gộp <strong className="text-indigo-600 font-bold">{entry.mergedCount} bản ghi</strong> của Đội thành 1 ngân sách duy nhất.</p>
+                                <p className="font-mono font-black text-emerald-700">Tổng ngân sách: {Number(entry.newTotal || 0).toLocaleString()}đ</p>
+                              </div>
+                            ) : isInitial || entry.action === 'REGISTER' || entry.action === 'CREATE' ? (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] text-slate-600 font-medium">Ngân sách đăng ký:</span>
+                                <span className="font-mono font-black text-emerald-700 text-xs">
+                                  {Number(entry.amount || historyTargetRecord?.amount || 0).toLocaleString()}đ
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {/* Amount before/after */}
+                                {((entry.changes?.amount) || (entry.oldAmount !== undefined && (entry.newAmount !== undefined || entry.newTotalAmount !== undefined))) && (
+                                  <div className="flex items-center justify-between flex-wrap gap-1">
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <span className="text-[11px] text-slate-500 font-medium">Số tiền:</span>
+                                      <span className="line-through text-slate-400 font-mono text-[11px]">
+                                        {Number(entry.changes?.amount?.old ?? entry.oldAmount ?? 0).toLocaleString()}đ
+                                      </span>
+                                      <ArrowRight className="w-3 h-3 text-slate-400" />
+                                      <span className="font-mono font-black text-indigo-700 text-xs">
+                                        {Number(entry.changes?.amount?.new ?? entry.newAmount ?? entry.newTotalAmount ?? 0).toLocaleString()}đ
+                                      </span>
+                                    </div>
+                                    {amountDiff !== null && (
+                                      <Badge variant="outline" className={`font-mono text-[9px] font-black ${
+                                        amountDiff > 0 
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                          : amountDiff < 0 
+                                            ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                                      }`}>
+                                        {amountDiff > 0 ? `+${amountDiff.toLocaleString()}đ` : `${amountDiff.toLocaleString()}đ`}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Other field changes */}
+                                {entry.changes && Object.entries(entry.changes).filter(([k]) => k !== 'amount').length > 0 && (
+                                  <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
+                                    {Object.entries(entry.changes).filter(([k]) => k !== 'amount').map(([field, delta]: [string, any], cIdx) => {
+                                      const fieldNames: Record<string, string> = {
+                                        month: 'Kỳ tháng',
+                                        project: 'Dự án',
+                                        team: 'Đội nhóm',
+                                        implementer: 'Người triển khai',
+                                        verifiedAmount: 'Ngân sách duyệt'
+                                      };
+                                      const fName = fieldNames[field] || field;
+                                      return (
+                                        <div key={cIdx} className="text-[10px] text-slate-600 flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-bold text-slate-500">{fName}:</span>
+                                          <span className="line-through text-slate-400">{String(delta.old || 'Trống')}</span>
+                                          <ArrowRight className="w-2.5 h-2.5 text-slate-300" />
+                                          <span className="font-bold text-slate-800">{String(delta.new || 'Trống')}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Reason */}
+                          {entry.reason && (
+                            <div className="mt-2 p-2 bg-amber-50/90 rounded-xl border border-amber-200/70 text-[11px] text-amber-900 flex items-start gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                              <div>
+                                <span className="font-bold">Lý do thay đổi:</span> {entry.reason}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Note */}
+                          {entry.note && (
+                            <p className="mt-1.5 text-[10px] text-slate-500 italic">
+                              Ghi chú: {entry.note}
                             </p>
-                          ))}
+                          )}
                         </div>
-                      )}
-                      {entry.note && (
-                        <p className="text-[10px] text-slate-500 italic mt-0.5">{entry.note}</p>
-                      )}
-                      {entry.reason && (
-                        <div className="mt-1.5 p-2 bg-amber-50 rounded-lg border border-amber-100 text-[11px] text-amber-800 font-sans">
-                          <span className="font-bold">Lý do sửa:</span> {entry.reason}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
-                <div className="py-6 text-center text-slate-400 italic text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <div className="py-8 text-center text-slate-400 italic text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   Chưa có nhật ký thay đổi cho bản ghi này
                 </div>
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button className="w-full" onClick={() => setIsHistoryDialogOpen(false)}>Đóng</Button>
+
+          <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between sm:justify-between w-full">
+            <span className="text-xs text-slate-500 font-medium">
+              Tổng cộng <strong className="text-slate-800">{historyToView?.length || 0}</strong> lần cập nhật
+            </span>
+            <Button onClick={() => setIsHistoryDialogOpen(false)} className="rounded-xl px-6">
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Team Notifications Dialog */}
+      <Dialog open={isTeamNotificationDialogOpen} onOpenChange={setIsTeamNotificationDialogOpen}>
+        <DialogContent className="sm:max-w-[640px] max-h-[85vh] p-0 overflow-hidden flex flex-col rounded-2xl">
+          <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-base font-black text-slate-900">
+                <div className="p-2 bg-blue-100/80 rounded-xl text-blue-600">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <span>Thông báo thay đổi ngân sách</span>
+                {unreadTeamNotifCount > 0 && (
+                  <Badge variant="outline" className="ml-1 bg-rose-50 border-rose-200 text-rose-600 text-[10px] font-black h-5 px-1.5">
+                    {unreadTeamNotifCount} chưa đọc
+                  </Badge>
+                )}
+              </DialogTitle>
+              {unreadTeamNotifCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={markAllTeamNotifsAsRead}
+                  className="text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-700 h-8 px-2.5 rounded-lg flex items-center gap-1.5"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" /> Đánh dấu đã đọc tất cả
+                </Button>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Thông báo cập nhật hạn mức ngân sách được gửi đến bạn và thành viên trong Đội khi có thay đổi.
+            </DialogDescription>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 pt-2">
+              <button
+                onClick={() => setNotifFilterTab('all')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  notifFilterTab === 'all'
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                )}
+              >
+                Tất cả ({myTeamNotifications.length})
+              </button>
+              <button
+                onClick={() => setNotifFilterTab('unread')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer",
+                  notifFilterTab === 'unread'
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                )}
+              >
+                <span>Chưa đọc</span>
+                {unreadTeamNotifCount > 0 && (
+                  <span className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[9px] font-black",
+                    notifFilterTab === 'unread' ? "bg-white/20 text-white" : "bg-rose-500 text-white"
+                  )}>
+                    {unreadTeamNotifCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setNotifFilterTab('my_projects')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  notifFilterTab === 'my_projects'
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                )}
+              >
+                Dự án của tôi ({myTeamNotifications.filter(n => {
+                  const uEmail = (user?.email || '').toLowerCase().trim();
+                  const recips = [
+                    ...safeArrayOfStrings(n.recipients),
+                    ...safeArrayOfStrings(n.previousRegistrants),
+                    ...safeArrayOfStrings(n.targetEmails)
+                  ];
+                  return recips.includes(uEmail) ||
+                         (n.creatorEmail && String(n.creatorEmail).toLowerCase().trim() === uEmail) ||
+                         (n.userEmail && String(n.userEmail).toLowerCase().trim() === uEmail) ||
+                         (n.createdBy && n.createdBy === user?.uid);
+                }).length})
+              </button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 p-4 space-y-3 overflow-y-auto custom-scrollbar max-h-[500px]">
+            {(() => {
+              const uEmail = (user?.email || '').toLowerCase().trim();
+              const filteredList = myTeamNotifications.filter(n => {
+                const readList = safeArrayOfStrings(n.readBy);
+                const isRead = readList.includes(uEmail);
+                if (notifFilterTab === 'unread') return !isRead;
+                if (notifFilterTab === 'my_projects') {
+                  const recips = [
+                    ...safeArrayOfStrings(n.recipients),
+                    ...safeArrayOfStrings(n.previousRegistrants),
+                    ...safeArrayOfStrings(n.targetEmails)
+                  ];
+                  const isRecipient = recips.includes(uEmail) ||
+                                     (n.creatorEmail && String(n.creatorEmail).toLowerCase().trim() === uEmail) ||
+                                     (n.userEmail && String(n.userEmail).toLowerCase().trim() === uEmail) ||
+                                     (n.createdBy && n.createdBy === user?.uid);
+                  return isRecipient;
+                }
+                return true;
+              });
+
+              if (filteredList.length === 0) {
+                return (
+                  <div className="py-12 text-center text-slate-400 space-y-2">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                      <Bell className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-600">Không có thông báo nào</p>
+                    <p className="text-[11px] text-slate-400">
+                      {notifFilterTab === 'unread' ? 'Bạn đã đọc tất cả thông báo.' : 'Chưa có thông báo thay đổi ngân sách nào được ghi nhận.'}
+                    </p>
+                  </div>
+                );
+              }
+
+              return filteredList.map((notif: any) => {
+                const readList = safeArrayOfStrings(notif.readBy);
+                const isRead = readList.includes(uEmail);
+                const recips = [
+                  ...safeArrayOfStrings(notif.recipients),
+                  ...safeArrayOfStrings(notif.previousRegistrants),
+                  ...safeArrayOfStrings(notif.targetEmails)
+                ];
+                const isCreatorOrContributor = recips.includes(uEmail) ||
+                                              (notif.creatorEmail && String(notif.creatorEmail).toLowerCase().trim() === uEmail) ||
+                                              (notif.userEmail && String(notif.userEmail).toLowerCase().trim() === uEmail) ||
+                                              (notif.createdBy && notif.createdBy === user?.uid);
+
+                const timeStr = notif.createdAt?.toDate 
+                  ? format(notif.createdAt.toDate(), 'dd/MM/yyyy HH:mm') 
+                  : (notif.createdAt?.toMillis 
+                      ? format(new Date(notif.createdAt.toMillis()), 'dd/MM/yyyy HH:mm')
+                      : (notif.createdAt ? format(new Date(notif.createdAt), 'dd/MM/yyyy HH:mm') : 'Vừa xong'));
+
+                const diff = (Number(notif.newAmount || 0) - Number(notif.oldAmount || 0));
+
+                return (
+                  <div 
+                    key={notif.id}
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all space-y-3 relative group",
+                      !isRead 
+                        ? "bg-blue-50/60 border-blue-200/90 shadow-sm ring-1 ring-blue-100" 
+                        : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/50"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={cn(
+                          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                          diff > 0 
+                            ? "bg-emerald-100 text-emerald-600" 
+                            : (diff < 0 ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600")
+                        )}>
+                          {diff > 0 ? <TrendingUp className="w-5 h-5" /> : (diff < 0 ? <TrendingUp className="w-5 h-5 rotate-180" /> : <Wallet className="w-5 h-5" />)}
+                        </div>
+
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-black text-slate-900 tracking-tight">
+                              {notif.projectName || 'Dự án'}
+                            </span>
+                            {notif.teamName && (
+                              <Badge variant="outline" className="text-[9px] font-bold bg-slate-100 text-slate-700 border-slate-200 h-4.5 px-1.5">
+                                {notif.teamName}
+                              </Badge>
+                            )}
+                            {notif.month && (
+                              <Badge variant="outline" className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border-indigo-100 h-4.5 px-1.5">
+                                {notif.month}
+                              </Badge>
+                            )}
+                            {isCreatorOrContributor && (
+                              <Badge variant="outline" className="text-[9px] font-bold bg-amber-50 text-amber-700 border-amber-200 h-4.5 px-1.5">
+                                Bản ghi của bạn
+                              </Badge>
+                            )}
+                            {!isRead && (
+                              <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse ml-0.5" title="Chưa đọc" />
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-600 font-medium leading-snug">
+                            {notif.message || `Ngân sách dự án ${notif.projectName} đã được cập nhật.`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
+                        {timeStr}
+                      </span>
+                    </div>
+
+                    {/* Amount Comparison Pill */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-150 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400 font-medium">Ngân sách:</span>
+                        <span className="line-through text-slate-400 font-medium">{formatCurrency(notif.oldAmount || 0)}</span>
+                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                        <span className="font-extrabold text-indigo-700">{formatCurrency(notif.newAmount || 0)}</span>
+                        {diff !== 0 && (
+                          <span className={cn(
+                            "text-[10px] font-black px-1.5 py-0.2 rounded-md",
+                            diff > 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                          )}>
+                            {diff > 0 ? `+${formatCurrency(diff)}` : `-${formatCurrency(Math.abs(diff))}`}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400">Người sửa:</span>
+                        <span className="text-[11px] font-bold text-slate-700">{notif.editorName || notif.editorEmail || 'Thành viên'}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-end gap-2 pt-0.5">
+                      {!isRead && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => markTeamNotifAsRead(notif.id)}
+                          className="text-[11px] font-bold text-slate-500 hover:text-blue-600 hover:bg-blue-50 h-7 px-2.5 rounded-lg"
+                        >
+                          <Check className="w-3 h-3 mr-1" /> Đã đọc
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (!isRead) markTeamNotifAsRead(notif.id);
+                          setIsTeamNotificationDialogOpen(false);
+                          setActiveTab('register');
+                          if (notif.projectId) setSelectedProjectId(notif.projectId);
+                          if (notif.month) setBudgetMonth(notif.month);
+                          toast.success(`Đã chuyển tới dự án ${notif.projectName}`);
+                        }}
+                        className="text-[11px] font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50 h-7 px-2.5 rounded-lg"
+                      >
+                        <Eye className="w-3 h-3 mr-1" /> Xem ngân sách
+                      </Button>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          <DialogFooter className="p-3 px-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center w-full">
+            <span className="text-[11px] text-slate-400">
+              Tổng cộng {myTeamNotifications.length} thông báo
+            </span>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => setIsTeamNotificationDialogOpen(false)} 
+              className="text-xs h-8 px-4 rounded-xl"
+            >
+              Đóng
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

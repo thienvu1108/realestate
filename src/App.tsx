@@ -383,6 +383,92 @@ const SearchableBlockDirectorSelect = memo(({ value, onValueChange, allUsers = [
   );
 });
 
+const SearchableBlockAssistantsSelect = memo(({ values = [], onValuesChange, allUsers = [] }: any) => {
+  const [search, setSearch] = useState('');
+  const filteredUsers = useMemo(() => {
+    const s = search.toLowerCase().trim();
+    return (allUsers || []).filter((u: any) => {
+      const name = (u.displayName || u.fullName || u.email || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return name.includes(s) || email.includes(s);
+    });
+  }, [allUsers, search]);
+
+  const handleToggle = (uid: string) => {
+    if (values.includes(uid)) {
+      onValuesChange(values.filter((v: string) => v !== uid));
+    } else {
+      onValuesChange([...values, uid]);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl min-h-[38px]">
+        {values.length === 0 ? (
+          <span className="text-xs text-slate-400 italic">Chưa có trợ lý nào được gán cho khối</span>
+        ) : (
+          values.map((uid: string) => {
+            const u = (allUsers || []).find((usr: any) => (usr.uid || usr.id) === uid);
+            const label = u ? (u.fullName || u.displayName || u.email) : uid;
+            return (
+              <Badge key={uid} variant="secondary" className="text-xs gap-1 bg-violet-100 text-violet-800 border-violet-200 py-0.5 px-2">
+                <span className="truncate max-w-[180px]">{label}</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggle(uid)}
+                  className="hover:bg-violet-200 text-violet-600 hover:text-violet-900 rounded-full p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            );
+          })
+        )}
+      </div>
+      <div className="border border-slate-200 rounded-xl bg-white p-2">
+        <div className="relative mb-2">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input 
+            placeholder="Tìm tài khoản hoặc email trợ lý khối..." 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+            className="pl-8 h-8 text-xs rounded-lg"
+            onKeyDown={e => e.stopPropagation()}
+          />
+        </div>
+        <div className="max-h-36 overflow-y-auto space-y-1">
+          {filteredUsers.map((u: any) => {
+            const uid = u.uid || u.id;
+            const isSelected = values.includes(uid);
+            return (
+              <div 
+                key={uid}
+                onClick={() => handleToggle(uid)}
+                className={`flex items-center justify-between p-1.5 rounded-lg text-xs cursor-pointer transition-colors ${isSelected ? 'bg-violet-50 text-violet-700 font-semibold' : 'hover:bg-slate-50 text-slate-700'}`}
+              >
+                <div className="truncate flex-1 pr-2">
+                  <span className="font-medium">{u.displayName || u.fullName || u.email}</span>
+                  <span className="text-[10px] text-slate-400 ml-1.5">({u.email})</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={isSelected} 
+                  onChange={() => {}} 
+                  className="rounded text-violet-600 focus:ring-violet-500 pointer-events-none h-3.5 w-3.5"
+                />
+              </div>
+            );
+          })}
+          {filteredUsers.length === 0 && (
+            <div className="text-center py-2 text-xs text-slate-400">Không tìm thấy tài khoản phù hợp</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const SearchableEfficiencyProjectSelect = memo(({ value, onValueChange, projects = [], projectMap = {} }: any) => {
   const items = useMemo(() => {
     const list = projects.map((p: any) => ({
@@ -927,6 +1013,19 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'process_doiung.create', 'process_doiung.approve',
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
+  tro_ly_khoi: [
+    'home.view',
+    'block.view', 'block.approve',
+    'team_mgmt.view',
+    'register.view',
+    'actual.view',
+    'history.view',
+    'report_nt.view',
+    'support.create',
+    'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.create', 'process_doiung.approve',
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+  ],
   gdkd: [
     'home.view',
     'block.view',
@@ -974,6 +1073,7 @@ export const ROLE_NAMES: Record<string, string> = {
   accountant: "Accountant (Kế toán)",
   gdda: "GDDA (Giám đốc Dự án)",
   gd_khoi: "GĐ Khối (Giám đốc Khối)",
+  tro_ly_khoi: "Trợ lý Khối (Trợ lý Giám đốc Khối)",
   gdkd: "GĐKD (Giám đốc Kinh doanh)",
   assistant: "Trợ lý (Trợ lý Ban Giám đốc)",
   user: "User (Người dùng thường)"
@@ -1205,7 +1305,12 @@ export default function App() {
 
   const isGDKhoi = useMemo(() => {
     const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
-    return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk';
+    return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk' || role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'tro_ly_gdkhoi' || role === 'assistant_block';
+  }, [userProfile, userRole]);
+
+  const isTroLyKhoi = useMemo(() => {
+    const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
+    return role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'tro_ly_gdkhoi' || role === 'assistant_block';
   }, [userProfile, userRole]);
 
   const isGDKD = useMemo(() => {
@@ -1226,12 +1331,12 @@ export default function App() {
   const isInternalStaff = useMemo(() => {
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     const email = user?.email?.toLowerCase() || '';
-    const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'gdkd', 'giám đốc kinh doanh', 'assistant', 'trợ lý', 'tro ly', 'moderator', 'kế toán', 'điều phối', 'accounting'];
+    const internalRoles = ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'tro_ly_khoi', 'trợ lý khối', 'gdkd', 'giám đốc kinh doanh', 'assistant', 'trợ lý', 'tro ly', 'moderator', 'kế toán', 'điều phối', 'accounting'];
     return internalRoles.includes(role) || 
            email === 'thienvu1108@gmail.com' || 
            email === 'tesscain2022@gmail.com' ||
-           isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isGDKD || isAssistant;
-  }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, isAssistant]);
+           isSuperAdmin || isAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isTroLyKhoi || isGDKD || isAssistant;
+  }, [userRole, user, isSuperAdmin, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isTroLyKhoi, isGDKD, isAssistant]);
   const [activeTab, setActiveTab] = useState('home');
   const [reportNtSubTab, setReportNtSubTab] = useState<'direct' | 'google-sheet'>('direct');
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
@@ -1277,6 +1382,8 @@ export default function App() {
   const [blockCodeInput, setBlockCodeInput] = useState('');
   const [blockPrefixInput, setBlockPrefixInput] = useState('');
   const [blockDirectorUid, setBlockDirectorUid] = useState('');
+  const [createBlockAssistantUids, setCreateBlockAssistantUids] = useState<string[]>([]);
+  const [createBlockTeamSearch, setCreateBlockTeamSearch] = useState('');
   const [selectedTeamToAddToBlock, setSelectedTeamToAddToBlock] = useState('');
   const [isCreateBlockDialogOpen, setIsCreateBlockDialogOpen] = useState(false);
   const [selectedTeamIdsForNewBlock, setSelectedTeamIdsForNewBlock] = useState<string[]>([]);
@@ -1293,16 +1400,34 @@ export default function App() {
   const [editBlockCodeInput, setEditBlockCodeInput] = useState('');
   const [editBlockPrefixInput, setEditBlockPrefixInput] = useState('');
   const [editBlockDirectorUid, setEditBlockDirectorUid] = useState('');
+  const [editBlockAssistantUids, setEditBlockAssistantUids] = useState<string[]>([]);
   const [editBlockTeamSearch, setEditBlockTeamSearch] = useState('');
   const [editBlockSelectedTeamToAssign, setEditBlockSelectedTeamToAssign] = useState('');
+
+  // States for Block Marketing Acceptance
+  const [blockAcceptanceMonthFilter, setBlockAcceptanceMonthFilter] = useState<string>('all');
+  const [blockAcceptanceTeamFilter, setBlockAcceptanceTeamFilter] = useState<string>('all');
+  const [blockAcceptanceProjectFilter, setBlockAcceptanceProjectFilter] = useState<string>('all');
+  const [blockAcceptanceStatusFilter, setBlockAcceptanceStatusFilter] = useState<string>('all');
+  const [blockAcceptanceSearch, setBlockAcceptanceSearch] = useState<string>('');
+  const [blockAcceptanceViewMode, setBlockAcceptanceViewMode] = useState<'direct' | 'google-sheet'>('direct');
 
   const myBlock = useMemo(() => {
     if (userProfile?.assignedBlock) {
       const found = blocks.find(b => b.id === userProfile.assignedBlock || b.blockCode === userProfile.assignedBlock);
       if (found) return found;
     }
-    if (user?.uid) {
-      const found = blocks.find(b => b.directorUid === user.uid || b.directorUid === user.email);
+    const uUid = user?.uid;
+    const uEmail = user?.email?.toLowerCase();
+    if (uUid || uEmail) {
+      const found = blocks.find(b => 
+        (uUid && b.directorUid === uUid) || 
+        (uEmail && b.directorUid?.toLowerCase() === uEmail) ||
+        (Array.isArray(b.assistantUids) && (
+          (uUid && b.assistantUids.includes(uUid)) || 
+          (uEmail && b.assistantUids.some((uid: string) => uid?.toLowerCase() === uEmail))
+        ))
+      );
       if (found) return found;
     }
     return null;
@@ -3641,6 +3766,156 @@ export default function App() {
   const debouncedBudgetSearch = useDebounce(budgetSearch, 300);
   const [isConfirmBudgetOpen, setIsConfirmBudgetOpen] = useState(false);
   const [isConfirmingMulti, setIsConfirmingMulti] = useState(false);
+  
+  // Recent Budget Registration List States
+  const [recentBudgetMonthFilter, setRecentBudgetMonthFilter] = useState('all');
+  const [recentBudgetRoleFilter, setRecentBudgetRoleFilter] = useState<'all' | 'created' | 'updated' | 'team'>('all');
+  const [recentBudgetSearch, setRecentBudgetSearch] = useState('');
+  const debouncedRecentBudgetSearch = useDebounce(recentBudgetSearch, 300);
+  const [recentBudgetLimit, setRecentBudgetLimit] = useState<number | 'all'>(25);
+
+  const userRelatedRecentBudgets = useMemo(() => {
+    const userEmail = (user?.email || '').toLowerCase().trim();
+    const currentUserId = user?.uid || '';
+    const currentFullName = (userProfile?.fullName || user?.displayName || '').toLowerCase().trim();
+    const currentTeamId = userProfile?.teamId || '';
+    const currentTeamName = (userProfile?.teamName || '').toLowerCase().trim();
+
+    return budgets
+      .map(b => {
+        const creatorEmail = (b.userEmail || b.createdByEmail || b.creatorEmail || '').toLowerCase().trim();
+        const isCreator = Boolean(
+          (creatorEmail && userEmail && creatorEmail === userEmail) ||
+          (b.createdBy && currentUserId && b.createdBy === currentUserId) ||
+          (b.assignedUserEmail && b.assignedUserEmail.toLowerCase().trim() === userEmail)
+        );
+
+        let isUpdater = Boolean(
+          (b.updatedBy && currentUserId && b.updatedBy === currentUserId) ||
+          (b.updatedByEmail && b.updatedByEmail.toLowerCase().trim() === userEmail) ||
+          (b.lastEditorEmail && b.lastEditorEmail.toLowerCase().trim() === userEmail)
+        );
+
+        let isSubContributor = false;
+        let mySubAmount = 0;
+        if (Array.isArray(b.subBudgets) && b.subBudgets.length > 0) {
+          b.subBudgets.forEach((s: any) => {
+            const sEmail = (s.userEmail || s.email || '').toLowerCase().trim();
+            const sName = (s.userName || '').toLowerCase().trim();
+            const sUid = s.userId || '';
+            const match = (sEmail && userEmail && sEmail === userEmail) ||
+                          (sUid && currentUserId && sUid === currentUserId) ||
+                          (sName && currentFullName && sName === currentFullName);
+            if (match) {
+              isSubContributor = true;
+              mySubAmount += Number(s.amount || 0);
+            }
+          });
+        }
+
+        let historyCount = 0;
+        let lastHistoryItem: any = null;
+        if (Array.isArray(b.editHistory) && b.editHistory.length > 0) {
+          historyCount = b.editHistory.length;
+          lastHistoryItem = b.editHistory[b.editHistory.length - 1];
+          const hasInHistory = b.editHistory.some((h: any) => {
+            const hEmail = (h.editorEmail || h.userEmail || '').toLowerCase().trim();
+            const hName = (h.editorName || '').toLowerCase().trim();
+            const hUid = h.userId || h.editorId || '';
+            return (hEmail && userEmail && hEmail === userEmail) ||
+                   (hUid && currentUserId && hUid === currentUserId) ||
+                   (hName && currentFullName && hName === currentFullName);
+          });
+          if (hasInHistory) {
+            isUpdater = true;
+          }
+        }
+
+        const isTeamMember = Boolean(
+          (currentTeamId && b.teamId && currentTeamId === b.teamId) ||
+          (currentTeamName && b.teamName && currentTeamName === b.teamName.toLowerCase().trim())
+        );
+
+        const isAssignedGDDA = isGDDA && (
+          !userProfile?.assignedProjects || 
+          userProfile.assignedProjects.length === 0 || 
+          userProfile.assignedProjects.includes(b.projectId)
+        );
+
+        const isVisible = isAdmin || isMod || isAccountant || isAssignedGDDA || isCreator || isUpdater || isSubContributor || isTeamMember;
+
+        // Effective activity timestamp for sorting
+        let effectiveTime = 0;
+        if (lastHistoryItem?.timestamp) {
+          effectiveTime = lastHistoryItem.timestamp.toDate ? lastHistoryItem.timestamp.toDate().getTime() : new Date(lastHistoryItem.timestamp).getTime();
+        } else if (b.updatedAt) {
+          effectiveTime = b.updatedAt.toDate ? b.updatedAt.toDate().getTime() : new Date(b.updatedAt).getTime();
+        } else if (b.createdAt) {
+          effectiveTime = b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+        }
+
+        return {
+          ...b,
+          _isCreator: isCreator,
+          _isUpdater: isUpdater,
+          _isSubContributor: isSubContributor,
+          _isTeamMember: isTeamMember,
+          _mySubAmount: mySubAmount,
+          _historyCount: historyCount,
+          _lastHistoryItem: lastHistoryItem,
+          _effectiveTime: effectiveTime,
+          _isVisible: isVisible
+        };
+      })
+      .filter(b => b._isVisible)
+      .sort((a, b) => b._effectiveTime - a._effectiveTime);
+  }, [budgets, user, userProfile, isAdmin, isMod, isAccountant, isGDDA]);
+
+  const filteredRecentBudgets = useMemo(() => {
+    return userRelatedRecentBudgets.filter(b => {
+      // 1. Month / Period Filter
+      if (recentBudgetMonthFilter !== 'all') {
+        if (normalizeMonth(b.month) !== normalizeMonth(recentBudgetMonthFilter)) {
+          return false;
+        }
+      }
+
+      // 2. Role Filter
+      if (recentBudgetRoleFilter === 'created' && !b._isCreator) return false;
+      if (recentBudgetRoleFilter === 'updated' && !b._isUpdater) return false;
+      if (recentBudgetRoleFilter === 'team' && !b._isTeamMember) return false;
+
+      // 3. Search Filter
+      if (debouncedRecentBudgetSearch.trim()) {
+        const query = debouncedRecentBudgetSearch.toLowerCase().trim();
+        const pName = (projectMap[b.projectId] || b.projectName || '').toLowerCase();
+        const pCode = (projects.find(p => p.id === b.projectId)?.projectCode || '').toLowerCase();
+        const tName = (b.teamName || teamMap[b.teamId] || '').toLowerCase();
+        const tCode = (teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || b.teamCode || '').toLowerCase();
+        const impName = (b.implementerName || '').toLowerCase();
+        const uEmail = (b.userEmail || '').toLowerCase();
+        const lastEditor = (b._lastHistoryItem?.editorName || b._lastHistoryItem?.editorEmail || '').toLowerCase();
+        
+        const match = pName.includes(query) || pCode.includes(query) || tName.includes(query) || 
+                      tCode.includes(query) || impName.includes(query) || uEmail.includes(query) || 
+                      lastEditor.includes(query) || (b.month || '').includes(query);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  }, [userRelatedRecentBudgets, recentBudgetMonthFilter, recentBudgetRoleFilter, debouncedRecentBudgetSearch, projectMap, teamMap, projects, teams]);
+
+  const recentAvailableBudgetMonths = useMemo(() => {
+    const set = new Set<string>();
+    budgets.forEach(b => {
+      if (b.month) set.add(normalizeMonth(b.month));
+    });
+    getMonthOptions().forEach(opt => {
+      if (opt.value) set.add(normalizeMonth(opt.value));
+    });
+    return Array.from(set).filter(Boolean).sort().reverse();
+  }, [budgets]);
 
   const registeredProjectIdsInPeriod = useMemo(() => {
     if (!selectedTeamId || !budgetMonth) return new Set<string>();
@@ -3763,6 +4038,7 @@ export default function App() {
   const [editingBudgetVerifiedAmount, setEditingBudgetVerifiedAmount] = useState('');
   const [editingBudgetMonth, setEditingBudgetMonth] = useState(getMarketingMonth(new Date()));
   const [editingBudgetTeam, setEditingBudgetTeam] = useState('');
+  const [editingBudgetTeamSearch, setEditingBudgetTeamSearch] = useState('');
   const [editingBudgetProject, setEditingBudgetProject] = useState('');
   const [editingBudgetImplementer, setEditingBudgetImplementer] = useState('');
   const [editingBudgetReason, setEditingBudgetReason] = useState('');
@@ -6471,6 +6747,7 @@ export default function App() {
         blockCode: blockCodeInput.trim().toUpperCase(),
         teamPrefix: finalPrefix.toUpperCase(),
         directorUid: blockDirectorUid || null,
+        assistantUids: createBlockAssistantUids || [],
         createdAt: serverTimestamp(),
         createdBy: user?.uid
       });
@@ -6486,6 +6763,19 @@ export default function App() {
         }
       }
 
+      // Update Trợ lý Khối users and their role
+      if (createBlockAssistantUids.length > 0) {
+        for (const astUid of createBlockAssistantUids) {
+          const targetUser = allUsers.find(u => u.uid === astUid || u.id === astUid);
+          if (targetUser && targetUser.role !== 'admin' && targetUser.role !== 'super_admin' && targetUser.role !== 'gd_khoi') {
+            await updateDoc(doc(db, 'users', targetUser.id), {
+              assignedBlock: blockCodeInput.trim().toUpperCase(),
+              role: 'tro_ly_khoi'
+            });
+          }
+        }
+      }
+
       // Assign selected teams to this new block
       if (selectedTeamIdsForNewBlock.length > 0) {
         for (const teamId of selectedTeamIdsForNewBlock) {
@@ -6497,7 +6787,7 @@ export default function App() {
         }
       }
 
-      await logAction('CREATE', 'blocks', blockRef.id, { name: blockNameInput, blockCode: blockCodeInput });
+      await logAction('CREATE', 'blocks', blockRef.id, { name: blockNameInput, blockCode: blockCodeInput, assistantUids: createBlockAssistantUids });
       toast.success("Tạo Khối mới thành công!");
       
       // Reset inputs & close dialog
@@ -6505,6 +6795,8 @@ export default function App() {
       setBlockCodeInput('');
       setBlockPrefixInput('');
       setBlockDirectorUid('');
+      setCreateBlockAssistantUids([]);
+      setCreateBlockTeamSearch('');
       setSelectedTeamIdsForNewBlock([]);
       setIsCreateBlockDialogOpen(false);
     } catch (err) {
@@ -6522,6 +6814,7 @@ export default function App() {
     setEditBlockCodeInput(block.blockCode || '');
     setEditBlockPrefixInput(block.teamPrefix || '');
     setEditBlockDirectorUid(block.directorUid || '');
+    setEditBlockAssistantUids(Array.isArray(block.assistantUids) ? block.assistantUids : []);
     setIsEditBlockDialogOpen(true);
   };
 
@@ -6557,9 +6850,10 @@ export default function App() {
         name: newName,
         blockCode: newCode,
         teamPrefix: newPrefix,
-        directorUid: newDirectorUid
+        directorUid: newDirectorUid,
+        assistantUids: editBlockAssistantUids || []
       });
-      await logAction('UPDATE', 'blocks', block.id, { name: newName, blockCode: newCode, teamPrefix: newPrefix, directorUid: newDirectorUid });
+      await logAction('UPDATE', 'blocks', block.id, { name: newName, blockCode: newCode, teamPrefix: newPrefix, directorUid: newDirectorUid, assistantUids: editBlockAssistantUids });
 
       // If blockCode changed, update all teams belonging to this block to matching blockCode
       if (newCode !== block.blockCode) {
@@ -6580,6 +6874,19 @@ export default function App() {
             assignedBlock: newCode,
             role: 'gd_khoi'
           });
+        }
+      }
+
+      // Update assistants user profiles
+      if (editBlockAssistantUids && editBlockAssistantUids.length > 0) {
+        for (const astUid of editBlockAssistantUids) {
+          const targetUser = allUsers.find(u => u.uid === astUid || u.id === astUid);
+          if (targetUser && targetUser.role !== 'admin' && targetUser.role !== 'super_admin' && targetUser.role !== 'gd_khoi') {
+            await updateDoc(doc(db, 'users', targetUser.id), {
+              assignedBlock: newCode,
+              role: 'tro_ly_khoi'
+            });
+          }
         }
       }
 
@@ -8424,6 +8731,8 @@ export default function App() {
     setEditingBudgetVerifiedAmount((budget.verifiedAmount || 0).toString());
     setEditingBudgetMonth(budget.month);
     setEditingBudgetTeam(resolvedTeamId);
+    setEditingBudgetTeamSearch('');
+    setProjectSearch('');
     setEditingBudgetProject(budget.projectId);
     setEditingBudgetImplementer(budget.implementerName || '');
     setEditingBudgetReason('');
@@ -12629,6 +12938,9 @@ export default function App() {
                   <TabsTrigger value="block-summary" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <BarChart3 className="w-4 h-4 mr-2" /> Tổng hợp Dữ liệu
                   </TabsTrigger>
+                  <TabsTrigger value="block-nt" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
+                    <FileCheck className="w-4 h-4 mr-2" /> Nghiệm thu Chi phí MKT
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* TAB 1: Teams (Thêm, Sửa, Xóa nhóm trong Khối) */}
@@ -12713,6 +13025,15 @@ export default function App() {
                                         allUsers={allUsers}
                                         emptyValue=""
                                         emptyLabel="-- Chưa gán / Chọn sau --"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label className="text-xs font-bold text-slate-700">Phân Quyền Trợ Lý Khối (Có thể chọn nhiều người)</Label>
+                                      <SearchableBlockAssistantsSelect
+                                        values={createBlockAssistantUids}
+                                        onValuesChange={setCreateBlockAssistantUids}
+                                        allUsers={allUsers}
                                       />
                                     </div>
 
@@ -12882,6 +13203,29 @@ export default function App() {
                                   })()}
                                 </p>
                               </div>
+                              <div className="space-y-1 pt-1 border-t border-slate-50">
+                                <span className="text-slate-400 font-bold">
+                                  Trợ lý Khối ({Array.isArray(currentActiveBlock.assistantUids) ? currentActiveBlock.assistantUids.length : 0})
+                                </span>
+                                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                  {Array.isArray(currentActiveBlock.assistantUids) && currentActiveBlock.assistantUids.length > 0 ? (
+                                    currentActiveBlock.assistantUids.map((uid: string) => {
+                                      const u = allUsers.find(usr => usr.uid === uid || usr.id === uid);
+                                      return (
+                                        <Badge 
+                                          key={uid} 
+                                          variant="secondary" 
+                                          className="bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold py-0.5 px-2 rounded-lg"
+                                        >
+                                          {u ? (u.displayName || u.fullName || u.email) : uid}
+                                        </Badge>
+                                      );
+                                    })
+                                  ) : (
+                                    <p className="text-slate-400 italic text-[11px]">Chưa gán trợ lý</p>
+                                  )}
+                                </div>
+                              </div>
                             </CardContent>
                           </Card>
 
@@ -12938,26 +13282,20 @@ export default function App() {
                               <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase text-slate-400">Gán Phòng KD Hệ Thống Hiện Có</Label>
                                 <div className="flex gap-2">
-                                  <Select value={assignExistingTeamId} onValueChange={setAssignExistingTeamId}>
-                                    <SelectTrigger className="flex-1 rounded-xl h-9 text-xs bg-slate-50 border-slate-200">
-                                      <SelectValue placeholder="Chọn phòng kinh doanh...">
-                                        <span className="truncate block text-left flex-1">
-                                          {teamsNotInBlock.find(t => t.id === assignExistingTeamId)?.name || "Chọn phòng..."}
-                                        </span>
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl">
-                                      {teamsNotInBlock.length === 0 ? (
-                                        <SelectItem value="_empty" disabled>Hệ thống không còn phòng lẻ nào</SelectItem>
-                                      ) : (
-                                        teamsNotInBlock.map(t => (
-                                          <SelectItem key={t.id} value={t.id} className="text-xs">
-                                            {t.name} ({t.teamCode || 'Chưa gán mã'})
-                                          </SelectItem>
-                                        ))
-                                      )}
-                                    </SelectContent>
-                                  </Select>
+                                  <div className="flex-1">
+                                    <SearchableSelectGeneric
+                                      items={teamsNotInBlock.map(t => ({
+                                        id: t.id,
+                                        name: `${t.name} (${t.teamCode || 'Chưa gán mã'})`,
+                                        code: t.teamCode
+                                      }))}
+                                      value={assignExistingTeamId}
+                                      onValueChange={setAssignExistingTeamId}
+                                      placeholder="Tìm & chọn phòng kinh doanh..."
+                                      searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
+                                      emptyMessage="Hệ thống không còn phòng lẻ nào"
+                                    />
+                                  </div>
                                   <Button
                                     disabled={!assignExistingTeamId || assignExistingTeamId === '_empty'}
                                     onClick={() => {
@@ -12965,7 +13303,7 @@ export default function App() {
                                       setAssignExistingTeamId('');
                                     }}
                                     size="sm"
-                                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold h-9 text-xs rounded-xl px-3"
+                                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold h-9 text-xs rounded-xl px-3 shrink-0"
                                   >
                                     Gán vào
                                   </Button>
@@ -13177,6 +13515,15 @@ export default function App() {
                                 />
                               </div>
                             </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-xs font-bold text-slate-700">Phân Quyền Trợ Lý Khối (Có thể chọn nhiều người)</Label>
+                              <SearchableBlockAssistantsSelect
+                                values={editBlockAssistantUids}
+                                onValuesChange={setEditBlockAssistantUids}
+                                allUsers={allUsers}
+                              />
+                            </div>
                           </div>
                         )}
 
@@ -13221,31 +13568,25 @@ export default function App() {
                               </Label>
                               <div className="flex gap-2">
                                 {(() => {
-                                                                  const otherTeams = teams.filter(t => !isTeamInBlock(t, currentActiveBlock));
+                                  const otherTeams = teams.filter(t => !isTeamInBlock(t, currentActiveBlock));
                                   return (
                                     <>
-                                      <Select value={editBlockSelectedTeamToAssign} onValueChange={setEditBlockSelectedTeamToAssign}>
-                                        <SelectTrigger className="flex-1 bg-white border-slate-200 rounded-xl h-9 text-xs text-slate-700">
-                                          <SelectValue placeholder="Chọn phòng kinh doanh...">
-                                            <span className="truncate block text-left flex-1 font-sans">
-                                              {otherTeams.find(t => t.id === editBlockSelectedTeamToAssign)?.name || editBlockSelectedTeamToAssign || "Chọn phòng kinh doanh..."}
-                                            </span>
-                                          </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {otherTeams.length === 0 ? (
-                                            <SelectItem value="_dummy" disabled>Tất cả phòng đã gán khối!</SelectItem>
-                                          ) : (
-                                            otherTeams.map(t => (
-                                              <SelectItem key={t.id} value={t.id} className="text-xs">
-                                                {t.name} ({t.teamCode || 'Chưa gán mã'})
-                                              </SelectItem>
-                                            ))
-                                          )}
-                                        </SelectContent>
-                                      </Select>
+                                      <div className="flex-1">
+                                        <SearchableSelectGeneric
+                                          items={otherTeams.map(t => ({
+                                            id: t.id,
+                                            name: `${t.name} (${t.teamCode || 'Chưa gán mã'})`,
+                                            code: t.teamCode
+                                          }))}
+                                          value={editBlockSelectedTeamToAssign}
+                                          onValueChange={setEditBlockSelectedTeamToAssign}
+                                          placeholder="Tìm & chọn phòng kinh doanh..."
+                                          searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
+                                          emptyMessage="Tất cả phòng đã gán khối!"
+                                        />
+                                      </div>
                                       <Button
-                                        disabled={!editBlockSelectedTeamToAssign || editBlockSelectedTeamToAssign === '_dummy'}
+                                        disabled={!editBlockSelectedTeamToAssign}
                                         onClick={() => {
                                           handleAddTeamToBlockDirect(editBlockSelectedTeamToAssign);
                                           setEditBlockSelectedTeamToAssign('');
@@ -13291,37 +13632,33 @@ export default function App() {
                       <CardContent className="space-y-4">
                         <div className="space-y-2">
                           <Label>Dự Án</Label>
-                          <Select value={blockBudgetProject} onValueChange={setBlockBudgetProject}>
-                            <SelectTrigger className="rounded-xl border-slate-200">
-                              <SelectValue placeholder="Chọn dự án...">
-                                <span className="truncate block text-left flex-1 font-sans">
-                                  {projects.find(p => p.id === blockBudgetProject)?.name || blockBudgetProject || "Chọn dự án..."}
-                                </span>
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {projects.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelectGeneric
+                            items={projects.map(p => ({
+                              id: p.id,
+                              name: `${p.name} (${p.projectCode || 'N/A'})`,
+                              code: p.projectCode
+                            }))}
+                            value={blockBudgetProject}
+                            onValueChange={setBlockBudgetProject}
+                            placeholder="Chọn dự án..."
+                            searchPlaceholder="Gõ tên hoặc mã dự án..."
+                            emptyMessage="Không tìm thấy dự án"
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Nhóm Trực Thuộc</Label>
-                          <Select value={blockBudgetTeam} onValueChange={setBlockBudgetTeam}>
-                            <SelectTrigger className="rounded-xl border-slate-200">
-                              <SelectValue placeholder="Chọn nhóm...">
-                                <span className="truncate block text-left flex-1 font-sans">
-                                  {myBlockTeams.find(t => t.id === blockBudgetTeam)?.name || blockBudgetTeam || "Chọn nhóm..."}
-                                </span>
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {myBlockTeams.map((t) => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelectGeneric
+                            items={myBlockTeams.map(t => ({
+                              id: t.id,
+                              name: `${t.name} (${t.teamCode || 'N/A'})`,
+                              code: t.teamCode
+                            }))}
+                            value={blockBudgetTeam}
+                            onValueChange={setBlockBudgetTeam}
+                            placeholder="Chọn nhóm..."
+                            searchPlaceholder="Gõ tên hoặc mã nhóm..."
+                            emptyMessage="Không tìm thấy nhóm"
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Người phụ trách ngân sách (Người dùng)</Label>
@@ -13406,43 +13743,47 @@ export default function App() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {filteredBlockBudgets.map((b) => (
-                                    <TableRow key={b.id} className="hover:bg-slate-50/50">
-                                      <TableCell className="font-semibold text-xs text-slate-700">{b.teamName || 'N/A'}</TableCell>
-                                      <TableCell className="font-semibold text-xs text-rose-600">
-                                        {extractGDKD(b.teamName || '')}
-                                      </TableCell>
-                                      <TableCell className="font-semibold text-xs text-indigo-600">{b.projectName || 'N/A'}</TableCell>
-                                      <TableCell className="font-mono text-xs">{b.month}</TableCell>
-                                      <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
-                                      <TableCell className="text-xs font-mono text-slate-500">
-                                        {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                                      </TableCell>
-                                      <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
-                                        {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <Button 
-                                          size="xs" 
-                                          variant="ghost" 
-                                          className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
-                                          onClick={async () => {
-                                            if (window.confirm("Bạn có chắc chắn muốn xóa đăng ký ngân sách này?")) {
-                                              try {
-                                                await deleteDoc(doc(db, 'budgets', b.id));
-                                                await logAction('DELETE', 'budgets', b.id, { id: b.id });
-                                                toast.success("Xóa ngân sách thành công!");
-                                              } catch (err) {
-                                                handleFirestoreError(err, OperationType.DELETE, 'budgets');
+                                  {filteredBlockBudgets.map((b) => {
+                                    const displayTeam = resolveTeamName(b.teamId, b.teamName);
+                                    const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                    return (
+                                      <TableRow key={b.id} className="hover:bg-slate-50/50">
+                                        <TableCell className="font-semibold text-xs text-slate-700">{displayTeam}</TableCell>
+                                        <TableCell className="font-semibold text-xs text-rose-600">
+                                          {extractGDKD(displayTeam)}
+                                        </TableCell>
+                                        <TableCell className="font-semibold text-xs text-indigo-600">{displayProj}</TableCell>
+                                        <TableCell className="font-mono text-xs">{b.month}</TableCell>
+                                        <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs font-mono text-slate-500">
+                                          {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                        </TableCell>
+                                        <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
+                                          {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                          <Button 
+                                            size="xs" 
+                                            variant="ghost" 
+                                            className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
+                                            onClick={async () => {
+                                              if (window.confirm("Bạn có chắc chắn muốn xóa đăng ký ngân sách này?")) {
+                                                try {
+                                                  await deleteDoc(doc(db, 'budgets', b.id));
+                                                  await logAction('DELETE', 'budgets', b.id, { id: b.id });
+                                                  toast.success("Xóa ngân sách thành công!");
+                                                } catch (err) {
+                                                  handleFirestoreError(err, OperationType.DELETE, 'budgets');
+                                                }
                                               }
-                                            }
-                                          }}
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
+                                            }}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                                 </TableBody>
                               </Table>
                             </div>
@@ -13465,37 +13806,33 @@ export default function App() {
                       <CardContent className="space-y-3">
                         <div className="space-y-1">
                           <Label className="text-xs">Dự Án</Label>
-                          <Select value={blockCostProject} onValueChange={setBlockCostProject}>
-                            <SelectTrigger className="rounded-xl border-slate-200">
-                              <SelectValue placeholder="Chọn dự án...">
-                                <span className="truncate block text-left flex-1 font-sans text-xs">
-                                  {projects.find(p => p.id === blockCostProject)?.name || blockCostProject || "Chọn dự án..."}
-                                </span>
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {projects.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelectGeneric
+                            items={projects.map(p => ({
+                              id: p.id,
+                              name: `${p.name} (${p.projectCode || 'N/A'})`,
+                              code: p.projectCode
+                            }))}
+                            value={blockCostProject}
+                            onValueChange={setBlockCostProject}
+                            placeholder="Chọn dự án..."
+                            searchPlaceholder="Gõ tên hoặc mã dự án..."
+                            emptyMessage="Không tìm thấy dự án"
+                          />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Nhóm Kinh Doanh</Label>
-                          <Select value={blockCostTeam} onValueChange={setBlockCostTeam}>
-                            <SelectTrigger className="rounded-xl border-slate-200">
-                              <SelectValue placeholder="Chọn nhóm...">
-                                <span className="truncate block text-left flex-1 font-sans text-xs">
-                                  {myBlockTeams.find(t => t.id === blockCostTeam)?.name || blockCostTeam || "Chọn nhóm..."}
-                                </span>
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {myBlockTeams.map((t) => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelectGeneric
+                            items={myBlockTeams.map(t => ({
+                              id: t.id,
+                              name: `${t.name} (${t.teamCode || 'N/A'})`,
+                              code: t.teamCode
+                            }))}
+                            value={blockCostTeam}
+                            onValueChange={setBlockCostTeam}
+                            placeholder="Chọn nhóm..."
+                            searchPlaceholder="Gõ tên hoặc mã nhóm..."
+                            emptyMessage="Không tìm thấy nhóm"
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
@@ -13600,45 +13937,49 @@ export default function App() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {filteredBlockCosts.map((c) => (
-                                    <TableRow key={c.id} className="hover:bg-slate-50/50">
-                                      <TableCell className="font-semibold text-xs text-slate-700">{c.teamName || 'N/A'}</TableCell>
-                                      <TableCell className="text-xs">
-                                        <div className="font-semibold text-indigo-600">{c.projectName}</div>
-                                        {c.channels && (
-                                          <div className="text-[10px] text-slate-400 font-mono">
-                                            FB: {new Intl.NumberFormat('vi-VN').format(c.channels.fbAds || 0)} | 
-                                            GG: {new Intl.NumberFormat('vi-VN').format(c.channels.googleAds || 0)}
-                                          </div>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="font-mono text-xs">{c.month}</TableCell>
-                                      <TableCell className="text-xs text-slate-500 max-w-[150px] truncate">{c.note || 'N/A'}</TableCell>
-                                      <TableCell className="text-right font-black text-xs text-rose-600 select-all">
-                                        {new Intl.NumberFormat('vi-VN').format(c.amount)} đ
-                                      </TableCell>
-                                      <TableCell className="text-center">
-                                        <Button 
-                                          size="xs" 
-                                          variant="ghost" 
-                                          className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
-                                          onClick={async () => {
-                                            if (window.confirm("Bạn có chắc chắn muốn xóa chi phí này?")) {
-                                              try {
-                                                await deleteDoc(doc(db, 'costs', c.id));
-                                                await logAction('DELETE', 'costs', c.id, { id: c.id });
-                                                toast.success("Xóa chi phí thành công!");
-                                              } catch (err) {
-                                                handleFirestoreError(err, OperationType.DELETE, 'costs');
+                                  {filteredBlockCosts.map((c) => {
+                                    const displayTeam = resolveTeamName(c.teamId, c.teamName);
+                                    const displayProj = resolveProjectName(c.projectId, c.projectName);
+                                    return (
+                                      <TableRow key={c.id} className="hover:bg-slate-50/50">
+                                        <TableCell className="font-semibold text-xs text-slate-700">{displayTeam}</TableCell>
+                                        <TableCell className="text-xs">
+                                          <div className="font-semibold text-indigo-600">{displayProj}</div>
+                                          {c.channels && (
+                                            <div className="text-[10px] text-slate-400 font-mono">
+                                              FB: {new Intl.NumberFormat('vi-VN').format(c.channels.fbAds || 0)} | 
+                                              GG: {new Intl.NumberFormat('vi-VN').format(c.channels.googleAds || 0)}
+                                            </div>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs">{c.month}</TableCell>
+                                        <TableCell className="text-xs text-slate-500 max-w-[150px] truncate">{c.note || 'N/A'}</TableCell>
+                                        <TableCell className="text-right font-black text-xs text-rose-600 select-all">
+                                          {new Intl.NumberFormat('vi-VN').format(c.amount)} đ
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                          <Button 
+                                            size="xs" 
+                                            variant="ghost" 
+                                            className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
+                                            onClick={async () => {
+                                              if (window.confirm("Bạn có chắc chắn muốn xóa chi phí này?")) {
+                                                try {
+                                                  await deleteDoc(doc(db, 'costs', c.id));
+                                                  await logAction('DELETE', 'costs', c.id, { id: c.id });
+                                                  toast.success("Xóa chi phí thành công!");
+                                                } catch (err) {
+                                                  handleFirestoreError(err, OperationType.DELETE, 'costs');
+                                                }
                                               }
-                                            }
-                                          }}
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
+                                            }}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                                 </TableBody>
                               </Table>
                             </div>
@@ -13717,6 +14058,45 @@ export default function App() {
                       )}
                     </CardContent>
                   </Card>
+                </TabsContent>
+
+                {/* TAB 5: Acceptance Manager & Synchronized MKT records for Block */}
+                <TabsContent value="block-nt" className="space-y-6">
+                  <AcceptanceManager 
+                    isAdmin={isAdmin}
+                    isSuperAdmin={isSuperAdmin}
+                    isMod={isMod}
+                    isAccountant={isAccountant}
+                    user={user}
+                    teams={myBlockTeams}
+                    uniqueTeams={myBlockTeams}
+                    projects={projects}
+                    regions={regions}
+                    acceptances={acceptances.filter(a => {
+                      if (a.teamId && myBlockTeams.some(t => t.id === a.teamId)) return true;
+                      if (a.teamName && myBlockTeams.some(t => t.name?.toLowerCase() === a.teamName?.toLowerCase())) return true;
+                      if (currentActiveBlock?.teamPrefix && a.teamName && a.teamName.toUpperCase().includes(currentActiveBlock.teamPrefix.toUpperCase())) return true;
+                      return false;
+                    })}
+                    finalAcceptances={finalAcceptances.filter(a => {
+                      if (a.teamId && myBlockTeams.some(t => t.id === a.teamId)) return true;
+                      if (a.teamName && myBlockTeams.some(t => t.name?.toLowerCase() === a.teamName?.toLowerCase())) return true;
+                      if (currentActiveBlock?.teamPrefix && a.teamName && a.teamName.toUpperCase().includes(currentActiveBlock.teamPrefix.toUpperCase())) return true;
+                      return false;
+                    })}
+                    teamMap={teamMap}
+                    projectMap={projectMap}
+                    formatCurrency={formatCurrency}
+                    getMarketingMonth={getMarketingMonth}
+                    handleFirestoreError={handleFirestoreError}
+                    formatCurrencyInput={formatCurrencyInput}
+                    isImportingAcceptances={isImportingAcceptances}
+                    setIsImportingAcceptances={setIsImportingAcceptances}
+                    isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
+                    setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
+                    handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                    blocks={currentActiveBlock ? [currentActiveBlock] : blocks}
+                  />
                 </TabsContent>
 
               </Tabs>
@@ -20131,71 +20511,190 @@ export default function App() {
               </DialogContent>
             </Dialog>
 
-            <Card className="border-none shadow-sm bg-white overflow-hidden">
-              <CardHeader className="border-b border-slate-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg font-bold text-slate-900">Danh sách đăng ký gần đây</CardTitle>
-                    <CardDescription>Các khoản ngân sách vừa được thiết lập</CardDescription>
+            <Card className="border-none shadow-sm bg-white overflow-hidden rounded-3xl">
+              <CardHeader className="border-b border-slate-100/80 bg-slate-50/40 p-5 sm:p-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <CardTitle className="text-lg font-black text-slate-900 tracking-tight">
+                        Danh sách đăng ký ngân sách gần đây
+                      </CardTitle>
+                    </div>
+                    <CardDescription className="text-xs text-slate-500 font-medium">
+                      Hiển thị tất cả bản ghi ngân sách bạn đã tạo hoặc cập nhật trong các kỳ
+                    </CardDescription>
                   </div>
-                  <div className="flex items-center gap-4">
+                  
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {(isAdmin || isAccountant) && (
                       <div className="flex items-center gap-2">
                         {selectedBudgetIds.length > 0 && (
                           <Button 
                             variant="destructive" 
                             size="sm" 
-                            className="h-8 text-[10px]"
+                            className="h-8 text-xs font-bold rounded-xl shadow-xs"
                             onClick={handleBulkDeleteBudgets}
                           >
-                            <Trash2 className="w-3 h-3 mr-1" /> Xóa {selectedBudgetIds.length} đã chọn
+                            <Trash2 className="w-3.5 h-3.5 mr-1" /> Xóa {selectedBudgetIds.length} đã chọn
                           </Button>
                         )}
                         <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          className="h-8 text-[10px]"
-                          onClick={handleDeleteAllBudgets}
-                          disabled={budgets.length === 0}
-                        >
-                          <AlertTriangle className="w-3 h-3 mr-1" /> Xóa tất cả
-                        </Button>
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-xl"
+                            onClick={handleDeleteAllBudgets}
+                            disabled={budgets.length === 0}
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Xóa tất cả
+                          </Button>
                       </div>
                     )}
-                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">
-                      {budgets.length} bản ghi
+                    <Badge variant="secondary" className="bg-indigo-50/80 text-indigo-700 border border-indigo-100 font-bold text-xs px-3 py-1 rounded-xl">
+                      {filteredRecentBudgets.length} bản ghi • {formatCurrency(filteredRecentBudgets.reduce((sum, b) => sum + Number(b.amount || 0), 0))}
                     </Badge>
                   </div>
                 </div>
+
+                {/* Filter and Search Bar */}
+                <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Period (Month) Selector */}
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1 shadow-2xs">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[11px] font-bold text-slate-600 shrink-0">Kỳ:</span>
+                      <select 
+                        value={recentBudgetMonthFilter} 
+                        onChange={(e) => setRecentBudgetMonthFilter(e.target.value)}
+                        className="text-xs font-bold text-slate-800 bg-transparent border-none outline-hidden cursor-pointer pr-2"
+                      >
+                        <option value="all">Tất cả các kỳ</option>
+                        {recentAvailableBudgetMonths.map(m => (
+                          <option key={m} value={m}>
+                            Tháng {m} {getReportingPeriod(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Role Filter Tabs */}
+                    <div className="flex items-center bg-slate-100/80 p-1 rounded-xl gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setRecentBudgetRoleFilter('all')}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                          recentBudgetRoleFilter === 'all' 
+                            ? "bg-white text-slate-900 shadow-2xs" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Tất cả ({userRelatedRecentBudgets.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecentBudgetRoleFilter('created')}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                          recentBudgetRoleFilter === 'created' 
+                            ? "bg-white text-blue-600 shadow-2xs" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Tôi tạo ({userRelatedRecentBudgets.filter(b => b._isCreator).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecentBudgetRoleFilter('updated')}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                          recentBudgetRoleFilter === 'updated' 
+                            ? "bg-white text-amber-600 shadow-2xs" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Tôi cập nhật ({userRelatedRecentBudgets.filter(b => b._isUpdater).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecentBudgetRoleFilter('team')}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
+                          recentBudgetRoleFilter === 'team' 
+                            ? "bg-white text-emerald-600 shadow-2xs" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Đội của tôi ({userRelatedRecentBudgets.filter(b => b._isTeamMember).length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search and Limit */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 md:w-56">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input 
+                        type="text"
+                        placeholder="Tìm dự án, đội, người nhập..."
+                        value={recentBudgetSearch}
+                        onChange={(e) => setRecentBudgetSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                      {recentBudgetSearch && (
+                        <button 
+                          onClick={() => setRecentBudgetSearch('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Xem:</span>
+                      <select 
+                        value={recentBudgetLimit} 
+                        onChange={(e) => setRecentBudgetLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                        className="text-xs font-bold text-slate-700 bg-transparent border-none outline-hidden cursor-pointer"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value="all">Tất cả</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
+
               <CardContent className="p-0">
                 {isMobile ? (
-                  <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
-                    {budgets
-                      .filter(b => {
-                        const userEmail = user?.email?.toLowerCase();
-                        const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                        const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-                        const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-                        const isAssignedGDDA = isGDDA && (
-                          !userProfile?.assignedProjects || 
-                          userProfile.assignedProjects.length === 0 || 
-                          userProfile.assignedProjects.includes(b.projectId)
-                        );
-                        
-                        return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
-                      })
-                      .slice(0, 10).map(b => (
+                  <div className="p-4 space-y-4 max-h-[650px] overflow-y-auto custom-scrollbar">
+                    {(recentBudgetLimit === 'all' ? filteredRecentBudgets : filteredRecentBudgets.slice(0, recentBudgetLimit)).map(b => {
+                      const canModify = isAdmin || (isWithinRegistrationWindow() && (b._isCreator || b._isUpdater || b._isSubContributor || (b.userEmail && b.userEmail.toLowerCase() === user?.email?.toLowerCase())));
+                      const lastEditStr = b._lastHistoryItem
+                        ? `${b._lastHistoryItem.editorName || b._lastHistoryItem.editorEmail || 'Thành viên'} (${safeFormat(b._lastHistoryItem.timestamp, 'HH:mm dd/MM')})`
+                        : (b.updatedAt ? safeFormat(b.updatedAt, 'HH:mm dd/MM') : null);
+
+                      return (
                         <div 
                           key={b.id} 
                           className={cn(
-                            "p-4 rounded-2xl border transition-all duration-300 bg-slate-50/50 hover:bg-slate-50/80",
-                            selectedBudgetIds.includes(b.id) ? "border-blue-500 bg-blue-50/30" : "border-slate-100"
+                            "p-4 rounded-2xl border transition-all duration-300 bg-slate-50/50 hover:bg-slate-50/80 shadow-2xs",
+                            selectedBudgetIds.includes(b.id) ? "border-blue-500 bg-blue-50/30 ring-2 ring-blue-500/10" : "border-slate-100"
                           )}
                         >
                           <div className="flex items-start justify-between gap-2 mb-3">
                             <div className="flex flex-col gap-1 min-w-0">
-                              <span className="font-bold text-slate-800 text-sm truncate">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 text-sm truncate">
+                                  {projectMap[b.projectId] || b.projectName || 'N/A'}
+                                </span>
+                              </div>
+                              
                               <div className="flex flex-wrap gap-1.5 items-center">
                                 <span className="text-[10px] text-slate-500 font-bold">
                                   {projects.find(p => p.id === b.projectId)?.projectCode || ''}
@@ -20204,8 +20703,25 @@ export default function App() {
                                   {b.teamName}
                                 </Badge>
                                 <span className="font-mono text-[9px] font-black text-indigo-600 bg-indigo-50/50 px-1 py-0.5 rounded border border-indigo-100/40">
-                                  {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
+                                  {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || b.teamCode || ''}
                                 </span>
+                                
+                                {/* Relationship Badges */}
+                                {b._isCreator && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
+                                    Người tạo
+                                  </Badge>
+                                )}
+                                {b._isUpdater && (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
+                                    Đã cập nhật
+                                  </Badge>
+                                )}
+                                {b._isSubContributor && b._mySubAmount > 0 && (
+                                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
+                                    Đóng góp: {formatCurrency(b._mySubAmount)}
+                                  </Badge>
+                                )}
                               </div>
                             </div>
 
@@ -20225,52 +20741,65 @@ export default function App() {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 mb-4 bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
+                          <div className="grid grid-cols-2 gap-3 mb-4 bg-white p-3 rounded-xl border border-slate-100 shadow-2xs">
                             <div>
                               <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Kỳ ngân sách</p>
-                              <div className="flex items-center gap-1">
+                              <div className="flex flex-col">
                                 <span className="text-xs font-bold text-slate-700">{b.month}</span>
-                                <span className="text-[9px] text-blue-600 font-medium font-sans">({getReportingPeriod(b.month)})</span>
+                                <span className="text-[9px] text-indigo-600 font-medium font-sans">({getReportingPeriod(b.month)})</span>
                               </div>
                             </div>
                             <div>
-                              <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5 text-right">Ngân sách đăng ký</p>
-                              <p className="font-mono font-black text-sm text-blue-600 text-right">
-                                {b.amount.toLocaleString()} đ
+                              <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5 text-right">Ngân sách tổng</p>
+                              <p className="font-mono font-black text-sm text-indigo-600 text-right">
+                                {formatCurrency(b.amount)}
                               </p>
+                              {b._mySubAmount > 0 && b._mySubAmount !== b.amount && (
+                                <p className="text-[10px] text-purple-600 font-bold text-right">
+                                  Phần bạn: {formatCurrency(b._mySubAmount)}
+                                </p>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-1 text-[10px] text-slate-500 mb-3.5 border-t border-dashed border-slate-100 pt-2.5">
+                          <div className="flex flex-col gap-1 text-[10px] text-slate-500 mb-3.5 border-t border-dashed border-slate-100 pt-2.5 space-y-0.5">
                             <div className="flex justify-between items-center">
                               <span className="text-slate-400 font-medium">Người triển khai:</span>
-                              <span className="font-bold text-slate-700">{b.implementerName}</span>
+                              <span className="font-bold text-slate-700">{b.implementerName || 'Chưa rõ'}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-slate-400 font-medium">Người nhập:</span>
-                              <span className="font-bold text-slate-700 truncate max-w-[150px]">{b.userEmail}</span>
+                              <span className="text-slate-400 font-medium">Người tạo ban đầu:</span>
+                              <span className="font-bold text-slate-700 truncate max-w-[150px]">{b.userEmail || b.createdByEmail || '-'}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-slate-400 font-medium">Thời gian đăng ký:</span>
                               <span className="font-mono font-semibold text-slate-700">{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
                             </div>
+                            {lastEditStr && (
+                              <div className="flex justify-between items-center text-amber-700 bg-amber-50/60 px-1.5 py-0.5 rounded">
+                                <span className="font-medium text-[9px]">Sửa gần nhất:</span>
+                                <span className="font-bold text-[10px] truncate max-w-[180px]">{lastEditStr}</span>
+                              </div>
+                            )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2.5">
+                          <div className="flex items-center justify-end gap-1.5 border-t border-slate-100 pt-2.5">
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="h-8 text-[11px] font-bold text-slate-500 hover:bg-slate-50 border-slate-200 rounded-lg touch-manipulation px-2"
+                              className="h-8 text-[11px] font-bold text-slate-600 hover:bg-slate-50 border-slate-200 rounded-lg touch-manipulation px-2.5 shadow-2xs"
                               onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
                             >
-                              <History className="h-3.5 w-3.5 mr-1" /> Lịch sử
+                              <History className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                              Lịch sử {b._historyCount > 0 && `(${b._historyCount})`}
                             </Button>
-                            {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
+
+                            {canModify && (
                               <>
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="h-8 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50/50 hover:text-emerald-700 border-emerald-200 rounded-lg touch-manipulation px-2"
+                                  className="h-8 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50/50 hover:text-emerald-700 border-emerald-200 rounded-lg touch-manipulation px-2.5 shadow-2xs"
                                   onClick={() => handleOpenAdjustBudget(b)}
                                 >
                                   <Sliders className="h-3.5 w-3.5 mr-1" /> Điều chỉnh
@@ -20278,18 +20807,19 @@ export default function App() {
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="h-8 text-[11px] font-bold text-blue-600 hover:bg-blue-50/50 hover:text-blue-700 border-blue-200 rounded-lg touch-manipulation px-2"
+                                  className="h-8 text-[11px] font-bold text-blue-600 hover:bg-blue-50/50 hover:text-blue-700 border-blue-200 rounded-lg touch-manipulation px-2.5 shadow-2xs"
                                   onClick={() => handleOpenEditBudget(b)}
                                 >
                                   <Edit2 className="h-3.5 w-3.5 mr-1" /> Sửa
                                 </Button>
                               </>
                             )}
+
                             {(isAdmin || isAccountant) && (
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 text-[11px] font-bold text-rose-600 hover:bg-rose-50 border-rose-200 rounded-lg touch-manipulation px-2"
+                                className="h-8 text-[11px] font-bold text-rose-600 hover:bg-rose-50 border-rose-200 rounded-lg touch-manipulation px-2 shadow-2xs"
                                 onClick={() => handleDeleteBudget(b.id, b.projectName)}
                               >
                                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Xóa
@@ -20297,14 +20827,17 @@ export default function App() {
                             )}
                           </div>
                         </div>
-                      ))}
-                    {budgets.length === 0 && (
+                      );
+                    })}
+
+                    {filteredRecentBudgets.length === 0 && (
                       <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-100">
                         <div className="flex flex-col items-center gap-2">
                           <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center">
                             <Plus className="w-6 h-6 text-slate-200" />
                           </div>
-                          <span>Chưa có dữ liệu đăng ký ngân sách</span>
+                          <span className="font-bold text-sm text-slate-600">Không tìm thấy bản ghi ngân sách phù hợp</span>
+                          <span className="text-xs text-slate-400">Hãy thử đổi bộ lọc kỳ hoặc từ khóa tìm kiếm</span>
                         </div>
                       </div>
                     )}
@@ -20312,17 +20845,17 @@ export default function App() {
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
-                      <TableHeader className="bg-slate-50/50">
+                      <TableHeader className="bg-slate-50/60">
                         <TableRow className="hover:bg-transparent border-b border-slate-100">
                           {(isAdmin || isAccountant) && (
-                            <TableHead className="w-[40px] py-4">
+                            <TableHead className="w-[40px] py-4 pl-4">
                               <input 
                                 type="checkbox" 
                                 className="rounded border-slate-300"
-                                checked={selectedBudgetIds.length === Math.min(budgets.length, 10) && budgets.length > 0}
+                                checked={selectedBudgetIds.length === Math.min(filteredRecentBudgets.length, 25) && filteredRecentBudgets.length > 0}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedBudgetIds(budgets.slice(0, 10).map(b => b.id));
+                                    setSelectedBudgetIds(filteredRecentBudgets.slice(0, 25).map(b => b.id));
                                   } else {
                                     setSelectedBudgetIds([]);
                                   }
@@ -20330,143 +20863,206 @@ export default function App() {
                               />
                             </TableHead>
                           )}
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Dự án</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Team</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Mã Team</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Tháng</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Thời gian đăng ký</TableHead>
-                          <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4">Người nhập</TableHead>
-                          {(isAdmin || isAccountant) && <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-4 text-right">Thao tác</TableHead>}
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Dự án</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Team & Mã</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Người triển khai</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Kỳ báo cáo</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4 text-right">Ngân sách tổng</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Người tạo & Ngày tạo</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4">Cập nhật gần nhất</TableHead>
+                          <TableHead className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-4 text-right pr-4">Thao tác</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {budgets
-                          .filter(b => {
-                            const userEmail = user?.email?.toLowerCase();
-                            const budgetEmail = b.userEmail?.toLowerCase() || b.createdByEmail?.toLowerCase();
-                            const isOwner = (budgetEmail && userEmail && budgetEmail === userEmail) || (b.createdBy === user?.uid);
-                            const isAssigned = b.assignedUserEmail?.toLowerCase() === userEmail;
-                            const isAssignedGDDA = isGDDA && (
-                              !userProfile?.assignedProjects || 
-                              userProfile.assignedProjects.length === 0 || 
-                              userProfile.assignedProjects.includes(b.projectId)
-                            );
-                            
-                            return isAdmin || isMod || isAccountant || isOwner || isAssigned || isAssignedGDDA;
-                          })
-                          .slice(0, 10).map(b => (
-                          <TableRow key={b.id} className={`${selectedBudgetIds.includes(b.id) ? "bg-blue-50/30" : ""} hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0`}>
-                          {(isAdmin || isAccountant) && (
-                            <TableCell className="py-4">
-                              <input 
-                                type="checkbox" 
-                                className="rounded border-slate-300"
-                                checked={selectedBudgetIds.includes(b.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedBudgetIds(prev => [...prev, b.id]);
-                                  } else {
-                                    setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
-                                  }
-                                }}
-                              />
-                            </TableCell>
-                          )}
-                            <TableCell className="py-4">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-semibold text-slate-700">{projectMap[b.projectId] || b.projectName || 'N/A'}</span>
-                                <span className="text-[10px] text-slate-400 font-normal">({projects.find(p => p.id === b.projectId)?.projectCode || ''})</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <Badge variant="outline" className="font-normal border-slate-200 text-slate-600 bg-white">
-                                {b.teamName}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2.5 py-1 rounded-lg border border-indigo-100/40">
-                                {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || ''}
-                              </span>
-                            </TableCell>
-                            <TableCell className="py-4 text-slate-600">{b.implementerName}</TableCell>
-                            <TableCell className="py-4">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
-                                  {b.month}
-                                </span>
-                                <span className="text-[10px] text-blue-600 font-medium">{getReportingPeriod(b.month)}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 text-right">
-                              <span className="font-mono font-bold text-blue-600">
-                                {b.amount.toLocaleString()} đ
-                              </span>
-                            </TableCell>
-                            <TableCell className="py-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                              {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                            </TableCell>
-                            <TableCell className="py-4">
-                              <div className="flex flex-col">
-                                <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{b.userEmail}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 text-right">
-                               <div className="flex justify-end gap-1">
+                        {(recentBudgetLimit === 'all' ? filteredRecentBudgets : filteredRecentBudgets.slice(0, recentBudgetLimit)).map(b => {
+                          const canModify = isAdmin || (isWithinRegistrationWindow() && (b._isCreator || b._isUpdater || b._isSubContributor || (b.userEmail && b.userEmail.toLowerCase() === user?.email?.toLowerCase())));
+                          const lastEditStr = b._lastHistoryItem
+                            ? `${b._lastHistoryItem.editorName || b._lastHistoryItem.editorEmail || 'Thành viên'} (${safeFormat(b._lastHistoryItem.timestamp, 'HH:mm dd/MM')})`
+                            : (b.updatedAt ? safeFormat(b.updatedAt, 'HH:mm dd/MM') : null);
+
+                          return (
+                            <TableRow 
+                              key={b.id} 
+                              className={cn(
+                                "hover:bg-slate-50/60 transition-colors border-b border-slate-50 last:border-0",
+                                selectedBudgetIds.includes(b.id) && "bg-blue-50/30"
+                              )}
+                            >
+                              {(isAdmin || isAccountant) && (
+                                <TableCell className="py-4 pl-4">
+                                  <input 
+                                    type="checkbox" 
+                                    className="rounded border-slate-300"
+                                    checked={selectedBudgetIds.includes(b.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedBudgetIds(prev => [...prev, b.id]);
+                                      } else {
+                                        setSelectedBudgetIds(prev => prev.filter(id => id !== b.id));
+                                      }
+                                    }}
+                                  />
+                                </TableCell>
+                              )}
+                              <TableCell className="py-4">
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-900 text-xs">
+                                      {projectMap[b.projectId] || b.projectName || 'N/A'}
+                                    </span>
+                                    {projects.find(p => p.id === b.projectId)?.projectCode && (
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        ({projects.find(p => p.id === b.projectId)?.projectCode})
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex flex-wrap gap-1">
+                                    {b._isCreator && (
+                                      <Badge className="bg-blue-50 text-blue-700 border-blue-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
+                                        Người tạo
+                                      </Badge>
+                                    )}
+                                    {b._isUpdater && (
+                                      <Badge className="bg-amber-50 text-amber-700 border-amber-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
+                                        Đã cập nhật
+                                      </Badge>
+                                    )}
+                                    {b._isSubContributor && b._mySubAmount > 0 && (
+                                      <Badge className="bg-purple-50 text-purple-700 border-purple-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
+                                        Đóng góp: {formatCurrency(b._mySubAmount)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-4">
+                                <div className="flex items-center gap-1.5">
+                                  <Badge variant="outline" className="font-bold border-slate-200 text-slate-700 bg-white text-xs">
+                                    {b.teamName}
+                                  </Badge>
+                                  <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-lg border border-indigo-100/40">
+                                    {teams.find(t => t.id === b.teamId || t.name === b.teamName)?.teamCode || b.teamCode || ''}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-4 font-medium text-xs text-slate-700">
+                                {b.implementerName || 'Chưa rõ'}
+                              </TableCell>
+
+                              <TableCell className="py-4">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md w-fit">
+                                    {b.month}
+                                  </span>
+                                  <span className="text-[10px] text-indigo-600 font-medium">
+                                    {getReportingPeriod(b.month)}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-4 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="font-mono font-black text-sm text-indigo-600">
+                                    {formatCurrency(b.amount)}
+                                  </span>
+                                  {b._mySubAmount > 0 && b._mySubAmount !== b.amount && (
+                                    <span className="text-[10px] font-bold text-purple-600">
+                                      Phần bạn: {formatCurrency(b._mySubAmount)}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-4">
+                                <div className="flex flex-col text-xs">
+                                  <span className="font-bold text-slate-700 truncate max-w-[130px]" title={b.userEmail || b.createdByEmail}>
+                                    {b.userEmail || b.createdByEmail || '-'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="py-4">
+                                {lastEditStr ? (
+                                  <div className="flex flex-col text-xs">
+                                    <span className="font-bold text-amber-800 truncate max-w-[140px]">
+                                      {b._lastHistoryItem?.editorName || b._lastHistoryItem?.editorEmail || 'Thành viên'}
+                                    </span>
+                                    <span className="text-[10px] text-amber-600 font-mono">
+                                      {safeFormat(b._lastHistoryItem?.timestamp || b.updatedAt, 'HH:mm dd/MM/yyyy')}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">Ban đầu</span>
+                                )}
+                              </TableCell>
+
+                              <TableCell className="py-4 text-right pr-4">
+                                <div className="flex justify-end items-center gap-1">
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-lg"
                                     onClick={() => handleOpenHistory(b, `${b.projectName} - ${b.teamName}`)}
-                                    title="Lịch sử thay đổi"
+                                    title={`Lịch sử cập nhật (${b._historyCount || 0} lần)`}
                                   >
-                                    <History className="h-3.5 w-3.5" />
+                                    <History className="h-4 w-4" />
                                   </Button>
-                                  {(isAdmin || (b.userEmail === user?.email?.toLowerCase() && isWithinRegistrationWindow())) && (
+
+                                  {canModify && (
                                     <>
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-emerald-600"
+                                        className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50 rounded-lg"
                                         onClick={() => handleOpenAdjustBudget(b)}
                                         title="Điều chỉnh ngân sách"
                                       >
-                                        <Sliders className="h-3.5 w-3.5" />
+                                        <Sliders className="h-4 w-4" />
                                       </Button>
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                                        className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50/50 rounded-lg"
                                         onClick={() => handleOpenEditBudget(b)}
                                         title="Chỉnh sửa thông tin"
                                       >
-                                        <Edit2 className="h-3.5 w-3.5" />
+                                        <Edit2 className="h-4 w-4" />
                                       </Button>
                                     </>
                                   )}
+
                                   {(isAdmin || isAccountant) && (
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                      className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 rounded-lg"
                                       onClick={() => handleDeleteBudget(b.id, b.projectName)}
+                                      title="Xóa bản ghi"
                                     >
-                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <Trash2 className="h-4 w-4" />
                                     </Button>
                                   )}
-                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {budgets.length === 0 && (
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+
+                        {filteredRecentBudgets.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center py-12 text-slate-400">
+                            <TableCell colSpan={9} className="text-center py-12 text-slate-400">
                               <div className="flex flex-col items-center gap-2">
                                 <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center">
                                   <Plus className="w-6 h-6 text-slate-200" />
                                 </div>
-                                <span>Chưa có dữ liệu đăng ký ngân sách</span>
+                                <span className="font-bold text-sm text-slate-600">Không tìm thấy bản ghi ngân sách phù hợp</span>
+                                <span className="text-xs text-slate-400">Hãy thử đổi bộ lọc kỳ hoặc từ khóa tìm kiếm</span>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -22479,15 +23075,69 @@ export default function App() {
                     {editingBudgetTeam ? `${teamMap[editingBudgetTeam] || teams.find(t => t.id === editingBudgetTeam || t.name === editingBudgetTeam)?.name || editingBudgetTeam} (${teams.find(t => (t.id === editingBudgetTeam || t.name === editingBudgetTeam))?.teamCode || ''})` : "Chọn team"}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup className="max-h-[250px] overflow-y-auto">
-                    {teams.map(t => (
-                      <SelectItem key={t.id} value={t.id} className="text-xs">{t.name} ({t.teamCode})</SelectItem>
-                    ))}
+                <SelectContent className="w-[88vw] sm:w-[380px] md:w-[450px]">
+                  <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Tìm team theo tên hoặc mã..."
+                        className="pl-8 pr-8 h-9 text-xs"
+                        value={editingBudgetTeamSearch}
+                        onChange={(e) => setEditingBudgetTeamSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                      {editingBudgetTeamSearch && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingBudgetTeamSearch('');
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <SelectGroup className="max-h-[260px] overflow-y-auto">
+                    {teams
+                      .filter(t => {
+                        const q = editingBudgetTeamSearch.toLowerCase().trim();
+                        if (!q) return true;
+                        return (t.name || '').toLowerCase().includes(q) ||
+                               (t.teamCode || '').toLowerCase().includes(q) ||
+                               (t.id || '').toLowerCase().includes(q);
+                      })
+                      .map(t => (
+                        <SelectItem key={t.id} value={t.id} className="text-xs py-2">
+                          <div className="flex items-center justify-between w-full gap-3">
+                            <span className="font-semibold text-slate-800">{t.name}</span>
+                            <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/60 shrink-0">
+                              {t.teamCode || 'N/A'}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    }
                     {editingBudgetTeam && !teams.some(t => t.id === editingBudgetTeam) && (
-                      <SelectItem value={editingBudgetTeam} className="text-xs">
-                        {teamMap[editingBudgetTeam] || editingBudgetTeam}
+                      <SelectItem value={editingBudgetTeam} className="text-xs py-2">
+                        <div className="flex items-center justify-between w-full gap-3">
+                          <span className="font-semibold text-slate-800">{teamMap[editingBudgetTeam] || editingBudgetTeam}</span>
+                          <span className="text-[10px] text-slate-400 italic font-mono bg-slate-100 px-1.5 py-0.5 rounded">Hiện tại</span>
+                        </div>
                       </SelectItem>
+                    )}
+                    {teams.filter(t => {
+                      const q = editingBudgetTeamSearch.toLowerCase().trim();
+                      if (!q) return true;
+                      return (t.name || '').toLowerCase().includes(q) ||
+                             (t.teamCode || '').toLowerCase().includes(q) ||
+                             (t.id || '').toLowerCase().includes(q);
+                    }).length === 0 && (
+                      <div className="py-6 text-center text-xs text-slate-400">
+                        Không tìm thấy team phù hợp
+                      </div>
                     )}
                   </SelectGroup>
                 </SelectContent>

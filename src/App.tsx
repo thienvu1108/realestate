@@ -172,27 +172,50 @@ const DebouncedInput = memo(({
 const SearchableSelectGeneric = memo(({ 
   value, 
   onValueChange, 
-  items, 
+  items = [], 
   placeholder, 
   searchPlaceholder = "Tìm kiếm...",
   noResultsText = "Không tìm thấy kết quả",
+  emptyMessage,
   triggerClassName,
   triggerDisplay,
   selectContentClassName,
   renderItem
 }: any) => {
   const [search, setSearch] = useState('');
+
+  const normalizedItems = useMemo(() => {
+    return (items || []).map((item: any) => {
+      const val = item.value !== undefined ? String(item.value) : (item.id !== undefined ? String(item.id) : '');
+      const lbl = item.label !== undefined ? String(item.label) : (item.name !== undefined ? String(item.name) : (item.title !== undefined ? String(item.title) : val));
+      const searchStr = item.searchString !== undefined 
+        ? String(item.searchString).toLowerCase()
+        : `${lbl} ${item.code || item.teamCode || item.projectCode || ''} ${val}`.toLowerCase();
+      return {
+        ...item,
+        value: val,
+        label: lbl,
+        searchString: searchStr
+      };
+    });
+  }, [items]);
+
   const filteredItems = useMemo(() => {
-    return items.filter((item: any) => 
-      item.searchString.toLowerCase().includes(search.toLowerCase())
+    const q = (search || '').toLowerCase().trim();
+    if (!q) return normalizedItems;
+    return normalizedItems.filter((item: any) => 
+      (item.searchString || '').includes(q)
     );
-  }, [items, search]);
+  }, [normalizedItems, search]);
+
+  const resolvedDisplay = triggerDisplay || normalizedItems.find((i: any) => i.value === String(value ?? ''))?.label || undefined;
+  const resolvedNoResults = emptyMessage || noResultsText;
 
   return (
-    <Select value={value ?? ''} onValueChange={onValueChange}>
+    <Select value={value !== undefined && value !== null ? String(value) : ''} onValueChange={onValueChange}>
       <SelectTrigger className={`w-full overflow-hidden flex items-center justify-between ${triggerClassName}`}>
         <SelectValue placeholder={placeholder}>
-          <span className="truncate block text-left flex-1">{triggerDisplay || placeholder}</span>
+          <span className="truncate block text-left flex-1">{resolvedDisplay || placeholder}</span>
         </SelectValue>
       </SelectTrigger>
       <SelectContent className={selectContentClassName}>
@@ -214,7 +237,7 @@ const SearchableSelectGeneric = memo(({
           </SelectItem>
         ))}
         {filteredItems.length === 0 && (
-          <div className="p-4 text-center text-xs text-muted-foreground">{noResultsText}</div>
+          <div className="p-4 text-center text-xs text-muted-foreground">{resolvedNoResults}</div>
         )}
       </SelectContent>
     </Select>
@@ -1918,8 +1941,8 @@ export default function App() {
       );
 
       const isInMyTeam = isGDKD && userProfile?.teamName && (
-        (b.teamName && b.teamName.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim()) ||
-        (b.teamId && teams.find(t => t.id === b.teamId)?.name?.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim())
+        (b.teamName && b.teamName.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim()) ||
+        (b.teamId && teams.find(t => t.id === b.teamId)?.name?.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim())
       );
 
       const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isInMyBlock || isInMyTeam || (isOwner || isAssigned);
@@ -1967,8 +1990,8 @@ export default function App() {
       );
 
       const isInMyTeam = isGDKD && userProfile?.teamName && (
-        (c.teamName && c.teamName.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim()) ||
-        (c.teamId && teams.find(t => t.id === c.teamId)?.name?.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim())
+        (c.teamName && c.teamName.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim()) ||
+        (c.teamId && teams.find(t => t.id === c.teamId)?.name?.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim())
       );
 
       const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isInMyBlock || isInMyTeam || (isOwner || isAssigned);
@@ -2005,9 +2028,9 @@ export default function App() {
 
     // 1. Group budgets by team + project across selected months
     filteredBudgets.forEach(b => {
-      const bTeamName = resolveTeamName(b.teamId, b.teamName);
-      const bProjectName = resolveProjectName(b.projectId, b.projectName);
-      const key = `${bTeamName.trim().toLowerCase()}|${bProjectName.trim().toLowerCase()}`;
+      const bTeamName = resolveTeamName(b.teamId, b.teamName) || '';
+      const bProjectName = resolveProjectName(b.projectId, b.projectName) || '';
+      const key = `${String(bTeamName).trim().toLowerCase()}|${String(bProjectName).trim().toLowerCase()}`;
 
       if (!budgetMap[key]) {
         budgetMap[key] = {
@@ -2031,8 +2054,8 @@ export default function App() {
     const blockTeamCodes = new Set(blockTeams.map(t => (t.teamCode || '').toLowerCase().trim()));
 
     acceptances.forEach(a => {
-      const aProjectName = resolveProjectName(a.projectId, a.projectName);
-      const aTeamName = resolveTeamName(a.teamId, a.teamName);
+      const aProjectName = resolveProjectName(a.projectId, a.projectName) || '';
+      const aTeamName = resolveTeamName(a.teamId, a.teamName) || '';
       const project = projects.find(p => p.id === a.projectId || p.name === aProjectName);
       const normalizedAMonth = normalizeMonth(a.month);
 
@@ -2047,8 +2070,8 @@ export default function App() {
       );
 
       const isInMyTeam = isGDKD && userProfile?.teamName && (
-        (a.teamName && a.teamName.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim()) ||
-        (a.teamId && teams.find(t => t.id === a.teamId)?.name?.toLowerCase().trim() === userProfile.teamName.toLowerCase().trim())
+        (a.teamName && a.teamName.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim()) ||
+        (a.teamId && teams.find(t => t.id === a.teamId)?.name?.toLowerCase().trim() === String(userProfile.teamName).toLowerCase().trim())
       );
 
       const hasAccess = isAdmin || isMod || isAccountant || isGDDA || isInMyBlock || isInMyTeam || isOwner;
@@ -2062,7 +2085,7 @@ export default function App() {
       const matchType = reportType === 'all' || (project?.type || 'Khác') === reportType;
 
       if (matchProject && matchTeam && matchMonth && matchRegion && matchType) {
-        const key = `${aTeamName.trim().toLowerCase()}|${aProjectName.trim().toLowerCase()}`;
+        const key = `${String(aTeamName).trim().toLowerCase()}|${String(aProjectName).trim().toLowerCase()}`;
         // Use confirmed cost if finalized
         const costValue = a.status === 'Đã nghiệm thu' ? (a.afterAcceptanceCost || 0) : 0;
 
@@ -3241,13 +3264,14 @@ export default function App() {
   }, [acceptances, budgets, resolveTeamName, resolveProjectName, teamMap, projectMap, teams]);
 
   const filteredUnbudgetedAcceptances = useMemo(() => {
+    const q = (debouncedAdminBudgetSearch || '').toLowerCase().trim();
     return unbudgetedAcceptances.filter(item => {
       const matchesSearch = 
-        !debouncedAdminBudgetSearch ||
-        item.projectName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
-        item.teamName.toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
-        (item.teamCode || '').toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase()) ||
-        extractGDKD(item.teamName).toLowerCase().includes(debouncedAdminBudgetSearch.toLowerCase());
+        !q ||
+        (item.projectName || '').toLowerCase().includes(q) ||
+        (item.teamName || '').toLowerCase().includes(q) ||
+        (item.teamCode || '').toLowerCase().includes(q) ||
+        extractGDKD(item.teamName || '').toLowerCase().includes(q);
       
       const matchesMonth = !adminBudgetMonthFilter || normalizeMonth(item.month) === normalizeMonth(adminBudgetMonthFilter);
       return matchesSearch && matchesMonth;
@@ -5130,8 +5154,8 @@ export default function App() {
             continue;
           }
 
-          const project = projects.find(p => p.id === pRef || p.projectCode === pRef || p.name.toLowerCase() === pRef.toLowerCase());
-          const team = teams.find(t => t.id === tRef || t.teamCode === tRef || t.name.toLowerCase() === tRef.toLowerCase());
+          const project = projects.find(p => p.id === pRef || p.projectCode === pRef || (p.name && String(p.name).toLowerCase() === String(pRef).toLowerCase()));
+          const team = teams.find(t => t.id === tRef || t.teamCode === tRef || (t.name && String(t.name).toLowerCase() === String(tRef).toLowerCase()));
 
           if (!project) {
             currentImportErrors.push(
@@ -5346,22 +5370,24 @@ export default function App() {
 
       for (const item of consolidatedItems) {
         const findProject = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return projects.find(p => 
             p.id === ref || 
-            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
         const findTeam = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return teams.find(t => 
             t.id === ref || 
-            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
@@ -5614,22 +5640,24 @@ export default function App() {
         }
 
         const findProject = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return projects.find(p => 
             p.id === ref || 
-            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
         const findTeam = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return teams.find(t => 
             t.id === ref || 
-            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
@@ -6198,8 +6226,9 @@ export default function App() {
   };
 
   const sortedProjects = useMemo(() => {
+    const q = (debouncedProjectSearch || '').toLowerCase().trim();
     let filtered = projects.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(debouncedProjectSearch.toLowerCase());
+      const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.projectCode || '').toLowerCase().includes(q);
       const matchRegion = adminProjectRegionFilter === 'all' || p.region === adminProjectRegionFilter;
       const matchType = adminProjectTypeFilter === 'all' || p.type === adminProjectTypeFilter;
       
@@ -6235,8 +6264,11 @@ export default function App() {
 
 
   const sortedTeams = useMemo(() => {
+    const q = (debouncedTeamSearch || '').toLowerCase().trim();
     let filtered = teams.filter(t => 
-      t.name.toLowerCase().includes(debouncedTeamSearch.toLowerCase())
+      !q ||
+      (t.name || '').toLowerCase().includes(q) ||
+      (t.teamCode || '').toLowerCase().includes(q)
     );
 
     return filtered.sort((a, b) => {
@@ -6389,15 +6421,15 @@ export default function App() {
 
   const currentActiveTeam = useMemo(() => {
     if (isGDKD && userProfile?.teamName) {
-      const tn = userProfile.teamName.toLowerCase().trim();
-      return teams.find(t => t.name.toLowerCase().trim() === tn || (t.teamCode && t.teamCode.toLowerCase().trim() === tn)) || null;
+      const tn = String(userProfile.teamName).toLowerCase().trim();
+      return teams.find(t => (t.name && String(t.name).toLowerCase().trim() === tn) || (t.teamCode && String(t.teamCode).toLowerCase().trim() === tn)) || null;
     }
     if (activeTeamMgmtId) {
       return teams.find(t => t.id === activeTeamMgmtId) || null;
     }
     if (userProfile?.teamName) {
-      const tn = userProfile.teamName.toLowerCase().trim();
-      const found = teams.find(t => t.name.toLowerCase().trim() === tn || (t.teamCode && t.teamCode.toLowerCase().trim() === tn));
+      const tn = String(userProfile.teamName).toLowerCase().trim();
+      const found = teams.find(t => (t.name && String(t.name).toLowerCase().trim() === tn) || (t.teamCode && String(t.teamCode).toLowerCase().trim() === tn));
       if (found) return found;
     }
     return teams[0] || null;
@@ -6406,24 +6438,24 @@ export default function App() {
   const teamMembers = useMemo(() => {
     const activeTeam = currentActiveTeam;
     if (!activeTeam) return [];
-    const targetTeam = activeTeam.name.toLowerCase().trim();
+    const targetTeam = (activeTeam.name || '').toLowerCase().trim();
     const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
     return allUsers.filter(u => {
       const uTeam = (u.teamName || '').toLowerCase().trim();
-      return uTeam === targetTeam || (targetCode && uTeam === targetCode);
+      return (targetTeam && uTeam === targetTeam) || (targetCode && uTeam === targetCode);
     });
   }, [allUsers, currentActiveTeam]);
 
   const myTeamCosts = useMemo(() => {
     const activeTeam = currentActiveTeam;
     if (!activeTeam) return [];
-    const targetTeam = activeTeam.name.toLowerCase().trim();
+    const targetTeam = (activeTeam.name || '').toLowerCase().trim();
     const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
     const teamId = activeTeam.id;
     return costs.filter(c => {
       if (c.teamId && teamId && c.teamId === teamId) return true;
       const cTeam = (c.teamName || '').toLowerCase().trim();
-      return cTeam === targetTeam || (targetCode && cTeam === targetCode);
+      return (targetTeam && cTeam === targetTeam) || (targetCode && cTeam === targetCode);
     });
   }, [costs, currentActiveTeam]);
 
@@ -6432,26 +6464,26 @@ export default function App() {
   const myTeamBudgets = useMemo(() => {
     const activeTeam = currentActiveTeam;
     if (!activeTeam) return [];
-    const targetTn = activeTeam.name.toLowerCase().trim();
+    const targetTn = (activeTeam.name || '').toLowerCase().trim();
     const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
     const teamId = activeTeam.id;
     return budgets.filter(b => {
       if (b.teamId && teamId && b.teamId === teamId) return true;
       const bTeam = (b.teamName || '').toLowerCase().trim();
-      return bTeam === targetTn || (targetCode && bTeam === targetCode);
+      return (targetTn && bTeam === targetTn) || (targetCode && bTeam === targetCode);
     });
   }, [budgets, currentActiveTeam]);
 
   const myTeamActualCosts = useMemo(() => {
     const activeTeam = currentActiveTeam;
     if (!activeTeam) return [];
-    const targetTn = activeTeam.name.toLowerCase().trim();
+    const targetTn = (activeTeam.name || '').toLowerCase().trim();
     const targetCode = (activeTeam.teamCode || '').toLowerCase().trim();
     const teamId = activeTeam.id;
     return costs.filter(c => {
       if (c.teamId && teamId && c.teamId === teamId) return true;
       const cTeam = (c.teamName || '').toLowerCase().trim();
-      return cTeam === targetTn || (targetCode && cTeam === targetCode);
+      return (targetTn && cTeam === targetTn) || (targetCode && cTeam === targetCode);
     });
   }, [costs, currentActiveTeam]);
 
@@ -6479,7 +6511,7 @@ export default function App() {
 
   const teamAggregatedData = useMemo(() => {
     if (!userProfile?.teamName) return [];
-    const targetTeam = userProfile.teamName.toLowerCase().trim();
+    const targetTeam = String(userProfile.teamName).toLowerCase().trim();
     const data: Record<string, { projectName: string; budgetTotal: number; costTotal: number }> = {};
 
     budgets
@@ -10915,22 +10947,24 @@ export default function App() {
 
         for (const item of consolidatedItems) {
           const findProjectAddress = (ref: string) => {
-            const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (!ref) return null;
+            const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
             if (!cleanRef) return null;
             return projects.find(p => 
               p.id === ref || 
-              (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-              p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+              (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+              (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
             );
           };
 
           const findTeamAddress = (ref: string) => {
-            const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (!ref) return null;
+            const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
             if (!cleanRef) return null;
             return teams.find(t => 
               t.id === ref || 
-              (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-              t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+              (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+              (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
             );
           };
 
@@ -11092,22 +11126,24 @@ export default function App() {
     setImportErrors([]);
 
     const findProjectInternal = (ref: string) => {
-      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!ref) return null;
+      const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return projects.find(p => 
         p.id === ref || 
-        (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-        p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+        (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
       );
     };
 
     const findTeamInternal = (ref: string) => {
-      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!ref) return null;
+      const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return teams.find(t => 
         t.id === ref || 
-        (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-        t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+        (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
       );
     };
 
@@ -11414,22 +11450,24 @@ export default function App() {
         }
 
         const findProject = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return projects.find(p => 
             p.id === ref || 
-            (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
         const findTeam = (ref: string) => {
-          const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          if (!ref) return null;
+          const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           if (!cleanRef) return null;
           return teams.find(t => 
             t.id === ref || 
-            (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-            t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+            (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+            (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
           );
         };
 
@@ -11536,22 +11574,24 @@ export default function App() {
     setImportErrors([]);
 
     const findProjectInternal = (ref: string) => {
-      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!ref) return null;
+      const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return projects.find(p => 
         p.id === ref || 
-        (p.projectCode && p.projectCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-        p.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+        (p.projectCode && String(p.projectCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        (p.name && String(p.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
       );
     };
 
     const findTeamInternal = (ref: string) => {
-      const cleanRef = ref.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (!ref) return null;
+      const cleanRef = String(ref).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       if (!cleanRef) return null;
       return teams.find(t => 
         t.id === ref || 
-        (t.teamCode && t.teamCode.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
-        t.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef
+        (t.teamCode && String(t.teamCode).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef) ||
+        (t.name && String(t.name).toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanRef)
       );
     };
 
@@ -15954,10 +15994,10 @@ export default function App() {
                             </TableHeader>
                             <TableBody>
                               {regions
-                                .filter(r => r.name.toLowerCase().includes(regionSearch.toLowerCase()))
+                                .filter(r => (r.name || '').toLowerCase().includes((regionSearch || '').toLowerCase()))
                                 .sort((a, b) => {
                                   const factor = regionSort.direction === 'asc' ? 1 : -1;
-                                  return a.name.localeCompare(b.name) * factor;
+                                  return (a.name || '').localeCompare(b.name || '') * factor;
                                 })
                                 .map(r => {
                                   const regionProjects = projects.filter(p => p.region === r.name);
@@ -16237,10 +16277,10 @@ export default function App() {
                             </TableHeader>
                             <TableBody>
                               {types
-                                .filter(t => t.name.toLowerCase().includes(typeSearch.toLowerCase()))
+                                .filter(t => (t.name || '').toLowerCase().includes((typeSearch || '').toLowerCase()))
                                 .sort((a, b) => {
                                   const factor = typeSort.direction === 'asc' ? 1 : -1;
-                                  return a.name.localeCompare(b.name) * factor;
+                                  return (a.name || '').localeCompare(b.name || '') * factor;
                                 })
                                 .map(t => {
                                   const typeProjects = projects.filter(p => (p.type || '').trim() === (t.name || '').trim());
@@ -19028,7 +19068,7 @@ export default function App() {
                           </TableHeader>
                           <TableBody>
                             {allUsers
-                              .filter(u => u.email.toLowerCase().includes(userSearch.toLowerCase()) || u.fullName?.toLowerCase().includes(userSearch.toLowerCase()))
+                              .filter(u => (u.email || '').toLowerCase().includes((userSearch || '').toLowerCase()) || (u.fullName || '').toLowerCase().includes((userSearch || '').toLowerCase()))
                               .map(u => (
                               <TableRow key={u.id}>
                                 <TableCell>
@@ -20144,7 +20184,7 @@ export default function App() {
                           </div>
                           <SelectGroup>
                             {projects
-                              .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                              .filter(p => (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()))
                               .map(p => {
                                 const isAlreadyRegistered = registeredProjectIdsInPeriod.has(p.id);
                                 return (
@@ -20200,7 +20240,7 @@ export default function App() {
                           </div>
                           <SelectGroup>
                             {teams
-                              .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
+                              .filter(t => (t.name || '').toLowerCase().includes((teamSearch || '').toLowerCase()))
                               .map(t => (
                                 <SelectItem key={t.id} value={t.id}>{t.name} ({t.teamCode})</SelectItem>
                               ))
@@ -22264,12 +22304,12 @@ export default function App() {
                       </div>
                       <SelectGroup>
                         {teams
-                          .filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()))
+                          .filter(t => (t.name || '').toLowerCase().includes((teamSearch || '').toLowerCase()))
                           .map(t => (
                             <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
                           ))
                         }
-                        {teams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                        {teams.filter(t => (t.name || '').toLowerCase().includes((teamSearch || '').toLowerCase())).length === 0 && (
                           <div className="p-4 text-center text-xs text-muted-foreground">Không tìm thấy team</div>
                         )}
                       </SelectGroup>
@@ -22305,7 +22345,7 @@ export default function App() {
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
               {projects
-                .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                .filter(p => (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()))
                 .map(p => (
                   <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md transition-colors">
                     <input 
@@ -22388,7 +22428,7 @@ export default function App() {
               </div>
               <div className="max-h-[250px] overflow-y-auto border rounded-md p-2 space-y-1">
                 {projects
-                  .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                  .filter(p => (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()))
                   .map(p => (
                     <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md transition-colors">
                       <input 
@@ -22440,7 +22480,7 @@ export default function App() {
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md p-2 space-y-1">
               {projects
-                .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                .filter(p => (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()))
                 .map(p => (
                   <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md transition-colors">
                     <input 
@@ -23050,7 +23090,7 @@ export default function App() {
                   </div>
                   <SelectGroup className="max-h-[300px] overflow-y-auto">
                     {projects
-                      .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                      .filter(p => (p.name || '').toLowerCase().includes((projectSearch || '').toLowerCase()))
                       .map(p => (
                         <SelectItem key={p.id} value={p.id}>
                           <div className="flex items-center justify-between w-full gap-4">

@@ -46,6 +46,7 @@ import { AcceptanceDraftRow } from './acceptance/AcceptanceDraftRow';
 import { AcceptanceRow } from './acceptance/AcceptanceRow';
 import { AcceptanceFooter } from './acceptance/AcceptanceFooter';
 import { AcceptanceDialogs } from './acceptance/AcceptanceDialogs';
+import { AcceptanceSearchableSelect } from './acceptance/AcceptanceSearchableSelect';
 import { 
   parseCurrencyFormula, 
   getRowComputed, 
@@ -201,6 +202,44 @@ export const AcceptanceManager = React.memo(({
       return b.localeCompare(a);
     });
   }, [acceptances]);
+
+  // Searchable items for team filter
+  const filterTeamItems = useMemo(() => {
+    const allOpt = { value: 'all', label: 'Tất cả Team', searchString: 'tất cả team all' };
+    const list = (teams || []).map((t: any) => {
+      const code = t.teamCode || '';
+      const name = t.name || '';
+      const label = code ? `${code} - ${name}` : name;
+      return {
+        value: t.id,
+        label,
+        code,
+        subLabel: t.blockCode ? `Khối: ${t.blockCode}` : (t.blockName ? `Khối: ${t.blockName}` : ''),
+        searchString: `${code} ${name} ${t.blockCode || ''} ${t.blockName || ''} ${t.id}`.toLowerCase(),
+        rawItem: t
+      };
+    });
+    return [allOpt, ...list];
+  }, [teams]);
+
+  // Searchable items for project filter
+  const filterProjectItems = useMemo(() => {
+    const allOpt = { value: 'all', label: 'Tất cả Dự án', searchString: 'tất cả dự án all' };
+    const list = (projects || []).map((p: any) => {
+      const code = p.projectCode || '';
+      const name = p.name || '';
+      const label = code ? `[${code}] ${name}` : name;
+      return {
+        value: p.id,
+        label,
+        code,
+        subLabel: p.region ? `Khu vực: ${p.region}` : (p.type ? `Loại: ${p.type}` : ''),
+        searchString: `${code} ${name} ${p.region || ''} ${p.type || ''} ${p.id}`.toLowerCase(),
+        rawItem: p
+      };
+    });
+    return [allOpt, ...list];
+  }, [projects]);
 
   // Filtered acceptances (Optimized with O(1) lookups)
   const filteredAcceptances = useMemo(() => {
@@ -1200,37 +1239,29 @@ export const AcceptanceManager = React.memo(({
             {/* Filter Team */}
             <div className="space-y-1">
               <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Team</Label>
-              <Select value={acceptanceTeamFilter} onValueChange={setAcceptanceTeamFilter}>
-                <SelectTrigger className="h-8 bg-slate-50 border-slate-200 rounded-xl text-xs font-bold">
-                  <SelectValue placeholder="Tất cả Team" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  <SelectItem value="all">Tất cả Team</SelectItem>
-                  {(teams || []).map((t: any) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.teamCode ? `${t.teamCode} - ${t.name}` : t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AcceptanceSearchableSelect
+                value={acceptanceTeamFilter}
+                onValueChange={setAcceptanceTeamFilter}
+                items={filterTeamItems}
+                placeholder="Tất cả Team"
+                searchPlaceholder="Tìm kiếm Team, mã Team..."
+                triggerClassName="h-8 bg-slate-50 border-slate-200 rounded-xl text-xs font-bold"
+                contentClassName="max-h-72 w-[280px] sm:w-[320px]"
+              />
             </div>
 
             {/* Filter Project */}
             <div className="space-y-1">
               <Label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Dự án</Label>
-              <Select value={acceptanceProjectFilter} onValueChange={setAcceptanceProjectFilter}>
-                <SelectTrigger className="h-8 bg-slate-50 border-slate-200 rounded-xl text-xs font-bold">
-                  <SelectValue placeholder="Tất cả Dự án" />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  <SelectItem value="all">Tất cả Dự án</SelectItem>
-                  {(projects || []).map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.projectCode ? `[${p.projectCode}] ${p.name}` : p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AcceptanceSearchableSelect
+                value={acceptanceProjectFilter}
+                onValueChange={setAcceptanceProjectFilter}
+                items={filterProjectItems}
+                placeholder="Tất cả Dự án"
+                searchPlaceholder="Tìm kiếm dự án, mã dự án..."
+                triggerClassName="h-8 bg-slate-50 border-slate-200 rounded-xl text-xs font-bold"
+                contentClassName="max-h-72 w-[280px] sm:w-[320px]"
+              />
             </div>
           </div>
 

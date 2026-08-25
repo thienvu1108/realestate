@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calculator, Save, Trash2 } from 'lucide-react';
 import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
+import { AcceptanceSearchableSelect } from './AcceptanceSearchableSelect';
 
 interface DraftRowProps {
   draftRow: any;
@@ -60,6 +61,38 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         p.id === draftRow.projectName
       );
   const currentDraftProjId = selectedProj?.id || draftRow.projectId || '';
+
+  const teamItems = useMemo(() => {
+    return (teams || []).map((t: any) => {
+      const code = t.teamCode || '';
+      const name = t.name || '';
+      const label = code ? `${code} - ${name}` : name;
+      return {
+        value: t.id,
+        label,
+        code,
+        subLabel: t.blockCode ? `Khối: ${t.blockCode}` : (t.blockName ? `Khối: ${t.blockName}` : ''),
+        searchString: `${code} ${name} ${t.blockCode || ''} ${t.blockName || ''} ${t.id}`.toLowerCase(),
+        rawItem: t
+      };
+    });
+  }, [teams]);
+
+  const projectItems = useMemo(() => {
+    return (projects || []).map((p: any) => {
+      const code = p.projectCode || '';
+      const name = p.name || '';
+      const label = code ? `[${code}] ${name}` : name;
+      return {
+        value: p.id,
+        label,
+        code,
+        subLabel: p.region ? `Khu vực: ${p.region}` : (p.type ? `Loại: ${p.type}` : ''),
+        searchString: `${code} ${name} ${p.region || ''} ${p.type || ''} ${p.id}`.toLowerCase(),
+        rawItem: p
+      };
+    });
+  }, [projects]);
 
   const renderCalcInput = (
     fieldKey: string,
@@ -120,11 +153,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       </TableCell>
 
       {/* Col B: MÃ TEAM */}
-      <TableCell className="p-1 min-w-[140px]">
-        <Select
+      <TableCell className="p-1 min-w-[150px]">
+        <AcceptanceSearchableSelect
           value={currentDraftTeamId || ''}
-          onValueChange={(teamId) => {
-            const tm = (teams || []).find((t: any) => t.id === teamId) || (findTeam ? findTeam(teamId) : null);
+          items={teamItems}
+          placeholder="Chọn Team"
+          searchPlaceholder="Tìm kiếm Team, mã Team..."
+          triggerDisplay={
+            selectedTeam ? (
+              <span className="truncate text-slate-800 font-bold">
+                {selectedTeam.teamCode ? `${selectedTeam.teamCode} - ${selectedTeam.name}` : selectedTeam.name}
+              </span>
+            ) : undefined
+          }
+          onValueChange={(teamId, rawTm) => {
+            const tm = rawTm || (teams || []).find((t: any) => t.id === teamId) || (findTeam ? findTeam(teamId) : null);
             if (tm) {
               const tmName = tm.name || '';
               const code = tm.teamCode || tm.name || '';
@@ -153,24 +196,7 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
               onUpdateField('teamId', teamId);
             }
           }}
-        >
-          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded truncate">
-            {selectedTeam ? (
-              <span className="truncate text-slate-800 font-bold">
-                {selectedTeam.teamCode ? `${selectedTeam.teamCode} - ${selectedTeam.name}` : selectedTeam.name}
-              </span>
-            ) : (
-              <SelectValue placeholder="Chọn Team" />
-            )}
-          </SelectTrigger>
-          <SelectContent className="max-h-56">
-            {(teams || []).map((t: any) => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.teamCode ? `${t.teamCode} - ${t.name}` : t.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </TableCell>
 
       {/* Col C: GĐKD */}
@@ -194,11 +220,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       </TableCell>
 
       {/* Col E: DỰ ÁN */}
-      <TableCell className="p-1 min-w-[180px]">
-        <Select
+      <TableCell className="p-1 min-w-[190px]">
+        <AcceptanceSearchableSelect
           value={currentDraftProjId || ''}
-          onValueChange={(projectId) => {
-            const p = (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
+          items={projectItems}
+          placeholder="Chọn Dự án"
+          searchPlaceholder="Tìm kiếm dự án, mã dự án..."
+          triggerDisplay={
+            selectedProj ? (
+              <span className="truncate text-slate-800 font-bold">
+                {selectedProj.projectCode ? `[${selectedProj.projectCode}] ${selectedProj.name}` : selectedProj.name}
+              </span>
+            ) : undefined
+          }
+          onValueChange={(projectId, rawP) => {
+            const p = rawP || (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
             if (p) {
               if (onUpdateFields) {
                 onUpdateFields({
@@ -215,24 +251,7 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
               onUpdateField('projectId', projectId);
             }
           }}
-        >
-          <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded truncate">
-            {selectedProj ? (
-              <span className="truncate text-slate-800 font-bold">
-                {selectedProj.projectCode ? `[${selectedProj.projectCode}] ${selectedProj.name}` : selectedProj.name}
-              </span>
-            ) : (
-              <SelectValue placeholder="Chọn Dự án" />
-            )}
-          </SelectTrigger>
-          <SelectContent className="max-h-56">
-            {(projects || []).map((p: any) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.projectCode ? `[${p.projectCode}] ${p.name}` : p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </TableCell>
 
       {/* Group 1: DIGITAL CHẠY (Chưa VAT) */}

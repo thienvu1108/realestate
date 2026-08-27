@@ -3,7 +3,7 @@ import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calculator, Save, Trash2 } from 'lucide-react';
+import { Calculator, Save, Trash2, Loader2 } from 'lucide-react';
 import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
 import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
 
@@ -19,7 +19,7 @@ interface DraftRowProps {
   findTeam?: (idOrCodeOrName: string) => any;
   findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
-  onSaveDraft: (draftRow: any) => void;
+  onSaveDraft: (draftRow: any) => Promise<void> | void;
   onRemoveDraft: (id: string) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
 }
@@ -42,10 +42,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 }) => {
   // Local state keeps typing 100% fluid without triggering parent table re-renders
   const [localDraft, setLocalDraft] = useState<any>(draftRow);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   useEffect(() => {
     setLocalDraft(draftRow);
   }, [draftRow.id]);
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSaveDraft(localDraft);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const comp = useMemo(() => getRowComputed(localDraft), [localDraft]);
 
@@ -395,16 +406,26 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         <div className="flex items-center justify-center gap-1">
           <Button
             size="sm"
-            onClick={() => onSaveDraft(localDraft)}
-            className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm"
+            disabled={isSaving}
+            onClick={handleSave}
+            className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm transition-all"
           >
-            <Save className="w-3 h-3" /> Lưu
+            {isSaving ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" /> Lưu...
+              </>
+            ) : (
+              <>
+                <Save className="w-3 h-3" /> Lưu
+              </>
+            )}
           </Button>
           <Button
             size="sm"
             variant="ghost"
+            disabled={isSaving}
             onClick={() => onRemoveDraft(draftRow.id)}
-            className="h-7 px-2 text-rose-600 hover:bg-rose-100 rounded text-[10px]"
+            className="h-7 px-2 text-rose-600 hover:bg-rose-100 disabled:opacity-50 rounded text-[10px]"
           >
             <Trash2 className="w-3 h-3" />
           </Button>

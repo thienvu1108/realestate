@@ -403,7 +403,7 @@ export const AcceptanceManager = React.memo(({
   };
 
   // Save Draft to Firestore
-  const handleSaveDraft = async (draftRow: any) => {
+  const handleSaveDraft = useCallback(async (draftRow: any) => {
     if (!draftRow.teamId && !draftRow.teamCode && !draftRow.teamName) {
       toast.error('Vui lòng chọn Team cho dòng nghiệm thu!');
       return;
@@ -534,7 +534,7 @@ export const AcceptanceManager = React.memo(({
       console.error('Error saving draft:', err);
       toast.error('Lỗi khi lưu bản ghi nghiệm thu');
     }
-  };
+  }, [user, teamLookup, projectLookup, teams, projects, acceptanceMonthFilter]);
 
   // Start Edit
   const handleStartEdit = useCallback((item: any) => {

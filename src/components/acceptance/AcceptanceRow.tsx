@@ -9,7 +9,8 @@ import {
   Edit, 
   Trash2, 
   Save, 
-  History 
+  History,
+  Loader2
 } from 'lucide-react';
 import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
 import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
@@ -37,7 +38,7 @@ interface RowProps {
   onSelectRow: (id: string, checked: boolean) => void;
   onStartEdit: (item: any) => void;
   onCancelEdit: () => void;
-  onSaveEdit: (id: string, updatedState: any) => void;
+  onSaveEdit: (id: string, updatedState: any) => Promise<void> | void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
   onFinalize?: (item: any) => void;
   onDelete: (id: string) => void;
@@ -78,6 +79,17 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   const [localEditState, setLocalEditState] = useState<any>(() => {
     return propEditingState || item;
   });
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSaveEdit(item.id, localEditState);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (isEditing) {
@@ -423,16 +435,26 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           <div className="flex items-center justify-center gap-1">
             <Button
               size="sm"
-              onClick={() => onSaveEdit(item.id, localEditState)}
-              className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm"
+              disabled={isSaving}
+              onClick={handleSave}
+              className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm transition-all"
             >
-              <Save className="w-3 h-3" /> Lưu
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" /> Lưu...
+                </>
+              ) : (
+                <>
+                  <Save className="w-3 h-3" /> Lưu
+                </>
+              )}
             </Button>
             <Button
               size="sm"
               variant="ghost"
+              disabled={isSaving}
               onClick={onCancelEdit}
-              className="h-7 px-2 text-slate-500 hover:bg-slate-200 rounded text-[10px]"
+              className="h-7 px-2 text-slate-500 hover:bg-slate-200 disabled:opacity-50 rounded text-[10px]"
             >
               Hủy
             </Button>

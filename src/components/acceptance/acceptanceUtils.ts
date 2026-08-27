@@ -1,13 +1,16 @@
-import { ComputedRowValues } from './acceptanceTypes';
+import { ComputedRowValues, ParsedFormulaResult } from './acceptanceTypes';
 
-// --- EXCEL-STYLE MATH MULTI-VALUE PARSER & CHANNELS AUDITOR ENGINE ---
-export const parseCurrencyFormula = (input: string | number | undefined | null): { total: number; items: { amount: number; label: string }[]; displayString: string } => {
-  if (input === undefined || input === null || input === '' || input === 0) {
+// Fast cache for formula parsing strings
+const formulaCache = new Map<string, ParsedFormulaResult>();
+const MAX_CACHE_SIZE = 1000;
+
+export const parseCurrencyFormula = (input: any): ParsedFormulaResult => {
+  if (input === undefined || input === null || input === '' || input === 0 || input === '0') {
     return { total: 0, items: [], displayString: '' };
   }
-  
+
   if (typeof input === 'number') {
-    if (isNaN(input) || input === 0) return { total: 0, items: [], displayString: '' };
+    if (isNaN(input)) return { total: 0, items: [], displayString: '' };
     return {
       total: input,
       items: [{ amount: input, label: 'Khoản chi' }],
@@ -16,16 +19,26 @@ export const parseCurrencyFormula = (input: string | number | undefined | null):
   }
 
   const str = String(input).trim();
-  if (!str || str === '0') return { total: 0, items: [], displayString: '' };
+  if (!str || str === '0' || str === 'undefined' || str === 'null') {
+    return { total: 0, items: [], displayString: '' };
+  }
+
+  if (formulaCache.has(str)) {
+    return formulaCache.get(str)!;
+  }
 
   // Fast path for simple numeric strings without formula characters
-  if (/^-?[\d.,\s]+$/.test(str)) {
-    const num = parseFloat(str.replace(/[.,\s]/g, '')) || 0;
-    return {
-      total: num,
-      items: [{ amount: num, label: 'Khoản chi' }],
+  if (/^-?[0-9.,\s]+$/.test(str)) {
+    const cleanStr = str.replace(/[.,\s]/g, '');
+    const num = cleanStr ? parseFloat(cleanStr) : 0;
+    const res = {
+      total: isNaN(num) ? 0 : num,
+      items: [{ amount: isNaN(num) ? 0 : num, label: 'Khoản chi' }],
       displayString: num ? num.toLocaleString('vi-VN') + ' đ' : ''
     };
+    if (formulaCache.size >= MAX_CACHE_SIZE) formulaCache.clear();
+    formulaCache.set(str, res);
+    return res;
   }
 
   const parts = str.split(/[+\n;]/);
@@ -38,11 +51,9 @@ export const parseCurrencyFormula = (input: string | number | undefined | null):
 
     const numRegex = /(-?[0-9.,]+)\s*([kKmM]?)/;
     const match = trimmed.match(numRegex);
-
     if (match) {
       const numStr = match[1].replace(/[.,]/g, '');
       let val = parseFloat(numStr) || 0;
-
       const unit = (match[2] || '').toLowerCase();
       if (unit === 'k') {
         val *= 1000;
@@ -65,11 +76,15 @@ export const parseCurrencyFormula = (input: string | number | undefined | null):
     .map(itm => `${itm.amount.toLocaleString('vi-VN')} đ${itm.label !== 'Khoản chi' ? ` (${itm.label})` : ''}`)
     .join(' + ');
 
-  return {
+  const res: ParsedFormulaResult = {
     total,
     items,
     displayString
   };
+
+  if (formulaCache.size >= MAX_CACHE_SIZE) formulaCache.clear();
+  formulaCache.set(str, res);
+  return res;
 };
 
 export const handleCostInputChange = (value: string, updateFn: (val: string) => void) => {
@@ -102,6 +117,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   const dTiktok = parseCurrencyFormula(row.digitalTiktok).total;
   const dKhac = parseCurrencyFormula(row.digitalKhac).total;
   const dTotalChuaVat = dFb + dZalo + dTiktok + dKhac;
+
   // Cột K: Digital chạy sau VAT (Facebook, Tiktok, Khác 10%, Zalo 8%)
   const dTotalSauVat = Math.round(dFb * 1.10 + dZalo * 1.08 + dTiktok * 1.10 + dKhac * 1.10);
 
@@ -111,6 +127,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   const vTiktok = parseCurrencyFormula(row.visaTiktok).total;
   const vDangTin = parseCurrencyFormula(row.visaDangTin).total;
   const vTotalChuaVat = vFb + vZalo + vTiktok + vDangTin;
+
   // Cột Q: Thẻ visa sau VAT (Facebook, Tiktok 10%, Zalo, Đăng tin 8%)
   const vTotalSauVat = Math.round(vFb * 1.10 + vZalo * 1.08 + vTiktok * 1.10 + vDangTin * 1.08);
 
@@ -125,6 +142,7 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   const cnZalo = parseCurrencyFormula(row.caNhanZalo ?? row.zaloCost).total;
   const cnGoogle = parseCurrencyFormula(row.caNhanGoogle ?? row.googleCost).total;
   const cnTiktok = parseCurrencyFormula(row.caNhanTiktok ?? row.tiktokCost).total;
+
   // Cột Y: Cá nhân chạy ngoài tổng
   const cnTotal = cnFb + cnDangTin + cnZalo + cnGoogle + cnTiktok;
 
@@ -150,8 +168,17 @@ export const getRowComputed = (row: any): ComputedRowValues => {
 
 export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: any[] = []) => {
   if (!item) return '';
-  const comp = getRowComputed(item);
+
+  // Fast path for non-computed string/metadata fields to avoid expensive getRowComputed
   switch (key) {
+    case 'month': return item.month || '';
+    case 'teamCode': return item.teamCode || '';
+    case 'teamName': return item.teamName || '';
+    case 'gdkdName': return item.gdkdName || '';
+    case 'implementerName': return item.implementerName || '';
+    case 'projectName': return item.projectName || '';
+    case 'status': return item.status || '';
+    case 'notes': return item.notes || '';
     case 'blockName': {
       const teamObj = (teams || []).find((t: any) => t.id === item.teamId || t.name === item.teamName || (item.teamCode && t.teamCode === item.teamCode));
       if (teamObj) {
@@ -160,13 +187,14 @@ export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: 
       }
       return item.blockName || item.blockCode || '';
     }
-    case 'month': return item.month || '';
-    case 'teamCode': return item.teamCode || '';
-    case 'teamName': return item.teamName || '';
-    case 'gdkdName': return item.gdkdName || '';
-    case 'implementerName': return item.implementerName || '';
-    case 'projectName': return item.projectName || '';
-    
+  }
+
+  // Fast path for pre-stored numeric values
+  if (typeof item[key] === 'number') return item[key];
+
+  // Only calculate computed row values when strictly sorting by a computed column
+  const comp = getRowComputed(item);
+  switch (key) {
     // Group 1
     case 'digitalFb': return comp.dFb;
     case 'digitalZalo': return comp.dZalo;
@@ -204,8 +232,6 @@ export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: 
     // Group 5 & 6
     case 'grandTotal': return comp.grandTotal;
     case 'caNhanNopTien': return comp.cnNopTien;
-    case 'status': return item.status || '';
-    case 'notes': return item.notes || '';
     default: return item[key] !== undefined ? item[key] : '';
   }
 };
@@ -219,6 +245,7 @@ export const buildCostBreakdownsOfRecord = (rowState: any) => {
     'caNhanNapTienQuaCty', 'caNhanNapTienCty',
     'caNhanNopTien'
   ];
+
   const breakdowns: any = {};
   for (const field of fields) {
     const val = rowState[field] || '';

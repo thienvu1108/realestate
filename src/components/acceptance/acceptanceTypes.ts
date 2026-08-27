@@ -82,6 +82,12 @@ export interface AcceptanceRecord {
   isDraft?: boolean;
 }
 
+export interface ParsedFormulaResult {
+  total: number;
+  items: { amount: number; label: string }[];
+  displayString: string;
+}
+
 export interface ComputedRowValues {
   dFb: number;
   dZalo: number;

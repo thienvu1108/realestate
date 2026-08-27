@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calculator, Save, Trash2 } from 'lucide-react';
 import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
-import { AcceptanceSearchableSelect } from './AcceptanceSearchableSelect';
+import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
 
 interface DraftRowProps {
   draftRow: any;
@@ -14,11 +14,11 @@ interface DraftRowProps {
   projects: any[];
   blocks: any[];
   monthsList: string[];
+  teamItems?: SearchableItem[];
+  projectItems?: SearchableItem[];
   findTeam?: (idOrCodeOrName: string) => any;
   findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
-  onUpdateField: (field: string, value: any) => void;
-  onUpdateFields?: (fields: Record<string, any>) => void;
   onSaveDraft: (draftRow: any) => void;
   onRemoveDraft: (id: string) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
@@ -31,38 +31,52 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
   projects,
   blocks,
   monthsList,
+  teamItems: propTeamItems,
+  projectItems: propProjectItems,
   findTeam,
   findProject,
   formatCurrency,
-  onUpdateField,
-  onUpdateFields,
   onSaveDraft,
   onRemoveDraft,
   onOpenCalculator
 }) => {
-  const comp = getRowComputed(draftRow);
+  // Local state keeps typing 100% fluid without triggering parent table re-renders
+  const [localDraft, setLocalDraft] = useState<any>(draftRow);
 
-  const selectedTeam = (findTeam
-    ? (findTeam(draftRow.teamId) || findTeam(draftRow.teamCode) || findTeam(draftRow.teamName))
-    : null) || (teams || []).find((t: any) => 
-        t.id === draftRow.teamId || 
-        (draftRow.teamCode && t.teamCode === draftRow.teamCode) || 
-        (draftRow.teamName && t.name === draftRow.teamName) ||
-        t.id === draftRow.teamCode
-      );
-  const currentDraftTeamId = selectedTeam?.id || draftRow.teamId || '';
+  useEffect(() => {
+    setLocalDraft(draftRow);
+  }, [draftRow.id]);
 
-  const selectedProj = (findProject
-    ? (findProject(draftRow.projectId) || findProject(draftRow.projectName) || findProject(draftRow.projectCode))
-    : null) || (projects || []).find((p: any) => 
-        p.id === draftRow.projectId || 
-        (draftRow.projectName && p.name === draftRow.projectName) || 
-        (draftRow.projectName && p.projectCode === draftRow.projectName) ||
-        p.id === draftRow.projectName
-      );
-  const currentDraftProjId = selectedProj?.id || draftRow.projectId || '';
+  const comp = useMemo(() => getRowComputed(localDraft), [localDraft]);
+
+  const selectedTeam = useMemo(() => {
+    return (findTeam
+      ? (findTeam(localDraft.teamId) || findTeam(localDraft.teamCode) || findTeam(localDraft.teamName))
+      : null) || (teams || []).find((t: any) => 
+          t.id === localDraft.teamId || 
+          (localDraft.teamCode && t.teamCode === localDraft.teamCode) || 
+          (localDraft.teamName && t.name === localDraft.teamName) ||
+          t.id === localDraft.teamCode
+        );
+  }, [findTeam, localDraft.teamId, localDraft.teamCode, localDraft.teamName, teams]);
+
+  const currentDraftTeamId = selectedTeam?.id || localDraft.teamId || '';
+
+  const selectedProj = useMemo(() => {
+    return (findProject
+      ? (findProject(localDraft.projectId) || findProject(localDraft.projectName) || findProject(localDraft.projectCode))
+      : null) || (projects || []).find((p: any) => 
+          p.id === localDraft.projectId || 
+          (localDraft.projectName && p.name === localDraft.projectName) || 
+          (localDraft.projectName && p.projectCode === localDraft.projectName) ||
+          p.id === localDraft.projectName
+        );
+  }, [findProject, localDraft.projectId, localDraft.projectName, localDraft.projectCode, projects]);
+
+  const currentDraftProjId = selectedProj?.id || localDraft.projectId || '';
 
   const teamItems = useMemo(() => {
+    if (propTeamItems) return propTeamItems;
     return (teams || []).map((t: any) => {
       const code = t.teamCode || '';
       const name = t.name || '';
@@ -76,9 +90,10 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         rawItem: t
       };
     });
-  }, [teams]);
+  }, [propTeamItems, teams]);
 
   const projectItems = useMemo(() => {
+    if (propProjectItems) return propProjectItems;
     return (projects || []).map((p: any) => {
       const code = p.projectCode || '';
       const name = p.name || '';
@@ -92,7 +107,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         rawItem: p
       };
     });
-  }, [projects]);
+  }, [propProjectItems, projects]);
+
+  const handleUpdateLocalField = (fieldKey: string, val: any) => {
+    setLocalDraft((prev: any) => ({
+      ...prev,
+      [fieldKey]: val
+    }));
+  };
+
+  const handleUpdateLocalFields = (fieldsObj: Record<string, any>) => {
+    setLocalDraft((prev: any) => ({
+      ...prev,
+      ...fieldsObj
+    }));
+  };
 
   const renderCalcInput = (
     fieldKey: string,
@@ -106,13 +135,13 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         <Input
           value={value || ''}
           placeholder={placeholder}
-          onChange={(e) => handleCostInputChange(e.target.value, (val) => onUpdateField(fieldKey, val))}
+          onChange={(e) => handleCostInputChange(e.target.value, (val) => handleUpdateLocalField(fieldKey, val))}
           className={`h-7 text-right font-mono text-[11px] font-bold pr-5 border-slate-200 focus:border-indigo-500 rounded bg-white ${className}`}
         />
         <button
           type="button"
           tabIndex={-1}
-          onClick={() => onOpenCalculator(fieldKey, fieldLabel, value || '', (val) => onUpdateField(fieldKey, val))}
+          onClick={() => onOpenCalculator(fieldKey, fieldLabel, value || '', (val) => handleUpdateLocalField(fieldKey, val))}
           className="absolute right-1 text-slate-400 hover:text-indigo-600 opacity-60 group-hover:opacity-100 transition-opacity"
           title={`Mở máy tính cộng dồn (${fieldLabel})`}
         >
@@ -134,8 +163,8 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       {/* Col A: THÁNG */}
       <TableCell className="p-1 min-w-[110px]">
         <Select
-          value={draftRow.month || 'Kì 1 - Tháng 8'}
-          onValueChange={(val) => onUpdateField('month', val)}
+          value={localDraft.month || 'Kì 1 - Tháng 8'}
+          onValueChange={(val) => handleUpdateLocalField('month', val)}
         >
           <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
             <SelectValue placeholder="Chọn tháng" />
@@ -175,25 +204,16 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
               if (code && tmName.startsWith(code)) {
                 gdkd = tmName.substring(code.length).trim();
               }
-              if (onUpdateFields) {
-                onUpdateFields({
-                  teamId: tm.id,
-                  teamCode: tm.teamCode || tm.name || '',
-                  teamName: tm.name || tm.teamCode || '',
-                  blockId: tm.blockId || '',
-                  blockCode: tm.blockCode || '',
-                  gdkdName: gdkd
-                });
-              } else {
-                onUpdateField('teamId', tm.id);
-                onUpdateField('teamCode', tm.teamCode || tm.name || '');
-                onUpdateField('teamName', tm.name || tm.teamCode || '');
-                onUpdateField('blockId', tm.blockId || '');
-                onUpdateField('blockCode', tm.blockCode || '');
-                onUpdateField('gdkdName', gdkd);
-              }
+              handleUpdateLocalFields({
+                teamId: tm.id,
+                teamCode: tm.teamCode || tm.name || '',
+                teamName: tm.name || tm.teamCode || '',
+                blockId: tm.blockId || '',
+                blockCode: tm.blockCode || '',
+                gdkdName: gdkd
+              });
             } else {
-              onUpdateField('teamId', teamId);
+              handleUpdateLocalField('teamId', teamId);
             }
           }}
         />
@@ -202,9 +222,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       {/* Col C: GĐKD */}
       <TableCell className="p-1 min-w-[120px]">
         <Input
-          value={draftRow.gdkdName || ''}
+          value={localDraft.gdkdName || ''}
           placeholder="GĐKD"
-          onChange={(e) => onUpdateField('gdkdName', e.target.value)}
+          onChange={(e) => handleUpdateLocalField('gdkdName', e.target.value)}
           className="h-7 text-xs font-semibold border-slate-200 rounded bg-white"
         />
       </TableCell>
@@ -212,9 +232,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       {/* Col D: NGƯỜI PHỤ TRÁCH */}
       <TableCell className="p-1 min-w-[110px]">
         <Input
-          value={draftRow.implementerName || ''}
+          value={localDraft.implementerName || ''}
           placeholder="Phụ trách"
-          onChange={(e) => onUpdateField('implementerName', e.target.value)}
+          onChange={(e) => handleUpdateLocalField('implementerName', e.target.value)}
           className="h-7 text-xs font-semibold border-slate-200 rounded bg-white"
         />
       </TableCell>
@@ -236,19 +256,13 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
           onValueChange={(projectId, rawP) => {
             const p = rawP || (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
             if (p) {
-              if (onUpdateFields) {
-                onUpdateFields({
-                  projectId: p.id,
-                  projectName: p.name || '',
-                  projectCode: p.projectCode || ''
-                });
-              } else {
-                onUpdateField('projectId', p.id);
-                onUpdateField('projectName', p.name || '');
-                onUpdateField('projectCode', p.projectCode || '');
-              }
+              handleUpdateLocalFields({
+                projectId: p.id,
+                projectName: p.name || '',
+                projectCode: p.projectCode || ''
+              });
             } else {
-              onUpdateField('projectId', projectId);
+              handleUpdateLocalField('projectId', projectId);
             }
           }}
         />
@@ -256,21 +270,23 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Group 1: DIGITAL CHẠY (Chưa VAT) */}
       <TableCell className="p-1 bg-sky-50/30">
-        {renderCalcInput('digitalFb', 'Digital FB', draftRow.digitalFb)}
+        {renderCalcInput('digitalFb', 'Digital FB', localDraft.digitalFb)}
       </TableCell>
       <TableCell className="p-1 bg-sky-50/30">
-        {renderCalcInput('digitalZalo', 'Digital Zalo', draftRow.digitalZalo)}
+        {renderCalcInput('digitalZalo', 'Digital Zalo', localDraft.digitalZalo)}
       </TableCell>
       <TableCell className="p-1 bg-sky-50/30">
-        {renderCalcInput('digitalTiktok', 'Digital Tiktok', draftRow.digitalTiktok)}
+        {renderCalcInput('digitalTiktok', 'Digital Tiktok', localDraft.digitalTiktok)}
       </TableCell>
       <TableCell className="p-1 bg-sky-50/30">
-        {renderCalcInput('digitalKhac', 'Digital Khác', draftRow.digitalKhac)}
+        {renderCalcInput('digitalKhac', 'Digital Khác', localDraft.digitalKhac)}
       </TableCell>
+
       {/* Col J: TỔNG DIGITAL CHƯA VAT */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-bold text-sky-950 bg-sky-100/50">
         {formatCurrency(comp.dTotalChuaVat).replace(' đ', '')}
       </TableCell>
+
       {/* Col K: DIGITAL CHẠY (SAU VAT) */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-black text-sky-900 bg-sky-200/50">
         {formatCurrency(comp.dTotalSauVat).replace(' đ', '')}
@@ -278,21 +294,23 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Group 2: THẺ VISA CÔNG TY (Chưa VAT) */}
       <TableCell className="p-1 bg-emerald-50/30">
-        {renderCalcInput('visaFb', 'Visa FB', draftRow.visaFb)}
+        {renderCalcInput('visaFb', 'Visa FB', localDraft.visaFb)}
       </TableCell>
       <TableCell className="p-1 bg-emerald-50/30">
-        {renderCalcInput('visaZalo', 'Visa Zalo', draftRow.visaZalo)}
+        {renderCalcInput('visaZalo', 'Visa Zalo', localDraft.visaZalo)}
       </TableCell>
       <TableCell className="p-1 bg-emerald-50/30">
-        {renderCalcInput('visaTiktok', 'Visa Tiktok', draftRow.visaTiktok)}
+        {renderCalcInput('visaTiktok', 'Visa Tiktok', localDraft.visaTiktok)}
       </TableCell>
       <TableCell className="p-1 bg-emerald-50/30">
-        {renderCalcInput('visaDangTin', 'Visa Đăng Tin', draftRow.visaDangTin)}
+        {renderCalcInput('visaDangTin', 'Visa Đăng Tin', localDraft.visaDangTin)}
       </TableCell>
+
       {/* Col P: TỔNG VISA CHƯA VAT */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-bold text-emerald-950 bg-emerald-100/50">
         {formatCurrency(comp.vTotalChuaVat).replace(' đ', '')}
       </TableCell>
+
       {/* Col Q: THẺ VISA CÔNG TY (SAU VAT) */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-black text-indigo-900 bg-indigo-100/50">
         {formatCurrency(comp.vTotalSauVat).replace(' đ', '')}
@@ -300,8 +318,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Group 3: ĐĂNG TIN CÔNG TY */}
       <TableCell className="p-1 bg-indigo-50/30">
-        {renderCalcInput('dangTinCtyChuaVat', 'Đăng tin CTY chưa VAT', draftRow.dangTinCtyChuaVat)}
+        {renderCalcInput('dangTinCtyChuaVat', 'Đăng tin CTY chưa VAT', localDraft.dangTinCtyChuaVat)}
       </TableCell>
+
       {/* Col S: ĐĂNG TIN CÔNG TY (SAU VAT 8%) */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-black text-indigo-950 bg-indigo-100/60">
         {formatCurrency(comp.dtCtySauVat).replace(' đ', '')}
@@ -309,20 +328,21 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Group 4: CÁ NHÂN CHẠY NGOÀI */}
       <TableCell className="p-1 bg-amber-50/30">
-        {renderCalcInput('caNhanFb', 'Cá nhân FB', draftRow.caNhanFb)}
+        {renderCalcInput('caNhanFb', 'Cá nhân FB', localDraft.caNhanFb)}
       </TableCell>
       <TableCell className="p-1 bg-amber-50/30">
-        {renderCalcInput('caNhanDangTin', 'Cá nhân Đăng tin', draftRow.caNhanDangTin)}
+        {renderCalcInput('caNhanDangTin', 'Cá nhân Đăng tin', localDraft.caNhanDangTin)}
       </TableCell>
       <TableCell className="p-1 bg-amber-50/30">
-        {renderCalcInput('caNhanZalo', 'Cá nhân Zalo', draftRow.caNhanZalo)}
+        {renderCalcInput('caNhanZalo', 'Cá nhân Zalo', localDraft.caNhanZalo)}
       </TableCell>
       <TableCell className="p-1 bg-amber-50/30">
-        {renderCalcInput('caNhanGoogle', 'Cá nhân Google', draftRow.caNhanGoogle)}
+        {renderCalcInput('caNhanGoogle', 'Cá nhân Google', localDraft.caNhanGoogle)}
       </TableCell>
       <TableCell className="p-1 bg-amber-50/30">
-        {renderCalcInput('caNhanTiktok', 'Cá nhân Tiktok', draftRow.caNhanTiktok)}
+        {renderCalcInput('caNhanTiktok', 'Cá nhân Tiktok', localDraft.caNhanTiktok)}
       </TableCell>
+
       {/* Col Y: CÁ NHÂN TỔNG */}
       <TableCell className="p-1 text-right font-mono text-[11px] font-extrabold text-amber-950 bg-amber-100/60">
         {formatCurrency(comp.cnTotal).replace(' đ', '')}
@@ -330,7 +350,7 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Cột: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
       <TableCell className="p-1 bg-violet-50/30">
-        {renderCalcInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', draftRow.caNhanNapTienQuaCty)}
+        {renderCalcInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', localDraft.caNhanNapTienQuaCty)}
       </TableCell>
 
       {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
@@ -340,14 +360,14 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
 
       {/* Col AA: SỐ LEAD */}
       <TableCell className="p-1 bg-cyan-50/40">
-        {renderCalcInput('caNhanNopTien', 'Số Lead', draftRow.caNhanNopTien)}
+        {renderCalcInput('caNhanNopTien', 'Số Lead', localDraft.caNhanNopTien)}
       </TableCell>
 
       {/* Col AB: TRẠNG THÁI */}
       <TableCell className="p-1 bg-yellow-50/40 min-w-[100px]">
         <Select
-          value={draftRow.status || 'Đã nghiệm thu'}
-          onValueChange={(val) => onUpdateField('status', val)}
+          value={localDraft.status || 'Đã nghiệm thu'}
+          onValueChange={(val) => handleUpdateLocalField('status', val)}
         >
           <SelectTrigger className="h-7 text-[10px] font-bold border-yellow-200 bg-white rounded">
             <SelectValue />
@@ -363,9 +383,9 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       {/* Col AC: GHI CHÚ */}
       <TableCell className="p-1 bg-yellow-50/40 min-w-[120px]">
         <Input
-          value={draftRow.notes || ''}
+          value={localDraft.notes || ''}
           placeholder="Ghi chú..."
-          onChange={(e) => onUpdateField('notes', e.target.value)}
+          onChange={(e) => handleUpdateLocalField('notes', e.target.value)}
           className="h-7 text-xs font-medium border-yellow-200 rounded bg-white"
         />
       </TableCell>
@@ -375,7 +395,7 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         <div className="flex items-center justify-center gap-1">
           <Button
             size="sm"
-            onClick={() => onSaveDraft(draftRow)}
+            onClick={() => onSaveDraft(localDraft)}
             className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm"
           >
             <Save className="w-3 h-3" /> Lưu

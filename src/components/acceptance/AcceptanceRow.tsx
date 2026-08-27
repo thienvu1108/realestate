@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,10 @@ import {
   Edit, 
   Trash2, 
   Save, 
-  CheckCircle2, 
-  History, 
-  ShieldCheck 
+  History 
 } from 'lucide-react';
 import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
-import { AcceptanceSearchableSelect } from './AcceptanceSearchableSelect';
+import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
 
 interface RowProps {
   item: any;
@@ -22,22 +20,24 @@ interface RowProps {
   isFinalizedView?: boolean;
   isSelected: boolean;
   isEditing: boolean;
-  editingState: any;
+  editingState?: any;
   teams: any[];
   projects: any[];
   blocks: any[];
   monthsList: string[];
   teamMap?: Record<string, string>;
   projectMap?: Record<string, string>;
+  teamIdSet?: Set<string>;
+  projectIdSet?: Set<string>;
+  teamItems?: SearchableItem[];
+  projectItems?: SearchableItem[];
   findTeam?: (idOrCodeOrName: string) => any;
   findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
   onSelectRow: (id: string, checked: boolean) => void;
   onStartEdit: (item: any) => void;
   onCancelEdit: () => void;
-  onSaveEdit: () => void;
-  onUpdateEditingField: (field: string, value: any) => void;
-  onUpdateEditingFields?: (fields: Record<string, any>) => void;
+  onSaveEdit: (id: string, updatedState: any) => void;
   onOpenCalculator: (fieldKey: string, fieldVNName: string, currentVal: string, onUpdate: (val: string) => void) => void;
   onFinalize?: (item: any) => void;
   onDelete: (id: string) => void;
@@ -51,13 +51,17 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   isFinalizedView = false,
   isSelected,
   isEditing,
-  editingState,
+  editingState: propEditingState,
   teams,
   projects,
   blocks,
   monthsList,
   teamMap = {},
   projectMap = {},
+  teamIdSet,
+  projectIdSet,
+  teamItems: propTeamItems,
+  projectItems: propProjectItems,
   findTeam,
   findProject,
   formatCurrency,
@@ -65,83 +69,126 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
-  onUpdateEditingField,
-  onUpdateEditingFields,
   onOpenCalculator,
   onDelete,
   onOpenHistory,
   renderBreakdownTooltip
 }) => {
-  // Helper to identify raw database IDs / hashes to prevent displaying IDs
-  const isRawId = (val: string | undefined | null) => {
+  // Local edit state to ensure typing inside edit row is 100% instant and doesn't re-render parent/other rows
+  const [localEditState, setLocalEditState] = useState<any>(() => {
+    return propEditingState || item;
+  });
+
+  useEffect(() => {
+    if (isEditing) {
+      setLocalEditState(propEditingState || {
+        ...item,
+        digitalFb: item.digitalFb ?? item.fbDigitalChuaVat ?? '',
+        digitalZalo: item.digitalZalo ?? '',
+        digitalTiktok: item.digitalTiktok ?? '',
+        digitalKhac: item.digitalKhac ?? '',
+        visaFb: item.visaFb ?? item.fbVisaCostChuaVat ?? '',
+        visaZalo: item.visaZalo ?? '',
+        visaTiktok: item.visaTiktok ?? '',
+        visaDangTin: item.visaDangTin ?? '',
+        dangTinCtyChuaVat: item.dangTinCtyChuaVat ?? item.dangTinCongTyChuaVat ?? '',
+        caNhanFb: item.caNhanFb ?? item.caNhanCost ?? item.otherCost ?? '',
+        caNhanDangTin: item.caNhanDangTin ?? item.dangTinCaNhanCost ?? '',
+        caNhanZalo: item.caNhanZalo ?? item.zaloCost ?? '',
+        caNhanGoogle: item.caNhanGoogle ?? item.googleCost ?? '',
+        caNhanTiktok: item.caNhanTiktok ?? item.tiktokCost ?? '',
+        caNhanNapTienQuaCty: item.caNhanNapTienQuaCty ?? item.caNhanNapTienCty ?? '',
+        caNhanNopTien: item.caNhanNopTien ?? item.personalPaidToCompany ?? '',
+        status: item.status || 'Đã nghiệm thu',
+        notes: item.notes || ''
+      });
+    }
+  }, [isEditing, propEditingState, item]);
+
+  // Fast O(1) Raw database ID check
+  const isRawId = useCallback((val: string | undefined | null) => {
     if (!val) return false;
     const str = String(val).trim();
     if (str.startsWith('draft-')) return true;
-    if ((teams || []).some((t: any) => t.id === str)) return true;
-    if ((projects || []).some((p: any) => p.id === str)) return true;
+    if (teamIdSet && teamIdSet.has(str)) return true;
+    if (projectIdSet && projectIdSet.has(str)) return true;
     if (str.length >= 16 && /^[a-zA-Z0-9_-]+$/.test(str) && !str.includes(' ') && !str.includes('.')) return true;
     return false;
+  }, [teamIdSet, projectIdSet]);
+
+  const teamItems = useMemo(() => {
+    if (propTeamItems) return propTeamItems;
+    return (teams || []).map((t: any) => {
+      const code = t.teamCode || '';
+      const name = t.name || '';
+      const label = code ? `${code} - ${name}` : name;
+      return {
+        value: t.id,
+        label,
+        code,
+        subLabel: t.blockCode ? `Khối: ${t.blockCode}` : (t.blockName ? `Khối: ${t.blockName}` : ''),
+        searchString: `${code} ${name} ${t.blockCode || ''} ${t.blockName || ''} ${t.id}`.toLowerCase(),
+        rawItem: t
+      };
+    });
+  }, [propTeamItems, teams]);
+
+  const projectItems = useMemo(() => {
+    if (propProjectItems) return propProjectItems;
+    return (projects || []).map((p: any) => {
+      const code = p.projectCode || '';
+      const name = p.name || '';
+      const label = code ? `[${code}] ${name}` : name;
+      return {
+        value: p.id,
+        label,
+        code,
+        subLabel: p.region ? `Khu vực: ${p.region}` : (p.type ? `Loại: ${p.type}` : ''),
+        searchString: `${code} ${name} ${p.region || ''} ${p.type || ''} ${p.id}`.toLowerCase(),
+        rawItem: p
+      };
+    });
+  }, [propProjectItems, projects]);
+
+  const handleUpdateEditField = (fieldKey: string, val: any) => {
+    setLocalEditState((prev: any) => ({
+      ...prev,
+      [fieldKey]: val
+    }));
   };
 
-  // If in editing mode, compute from editingState
-  if (isEditing && editingState) {
-    const editComp = getRowComputed(editingState);
+  const handleUpdateEditFields = (fieldsObj: Record<string, any>) => {
+    setLocalEditState((prev: any) => ({
+      ...prev,
+      ...fieldsObj
+    }));
+  };
 
-    // Resolve matching team for editingState
+  // 1. EDITING MODE RENDER
+  if (isEditing && localEditState) {
+    const editComp = getRowComputed(localEditState);
+
     const currentEditTeam = (findTeam 
-      ? (findTeam(editingState.teamId) || findTeam(editingState.teamCode) || findTeam(editingState.teamName))
+      ? (findTeam(localEditState.teamId) || findTeam(localEditState.teamCode) || findTeam(localEditState.teamName))
       : null) || (teams || []).find((t: any) => 
-          t.id === editingState.teamId || 
-          t.id === editingState.teamCode || 
-          t.id === editingState.teamName ||
-          (editingState.teamCode && t.teamCode === editingState.teamCode) || 
-          (editingState.teamName && t.name === editingState.teamName)
+          t.id === localEditState.teamId || 
+          t.id === localEditState.teamCode || 
+          t.id === localEditState.teamName ||
+          (localEditState.teamCode && t.teamCode === localEditState.teamCode) || 
+          (localEditState.teamName && t.name === localEditState.teamName)
         );
-    const currentEditTeamId = currentEditTeam?.id || editingState.teamId || '';
+    const currentEditTeamId = currentEditTeam?.id || localEditState.teamId || '';
 
-    // Resolve matching project for editingState
     const currentEditProj = (findProject
-      ? (findProject(editingState.projectId) || findProject(editingState.projectName) || findProject(editingState.projectCode))
+      ? (findProject(localEditState.projectId) || findProject(localEditState.projectName) || findProject(localEditState.projectCode))
       : null) || (projects || []).find((p: any) => 
-          p.id === editingState.projectId || 
-          p.id === editingState.projectName || 
-          p.id === editingState.projectCode ||
-          (editingState.projectName && p.name === editingState.projectName) || 
-          (editingState.projectCode && p.projectCode === editingState.projectCode)
+          p.id === localEditState.projectId || 
+          p.id === localEditState.projectName || 
+          p.id === localEditState.projectCode ||
+          (localEditState.projectName && p.name === localEditState.projectName) || 
+          (localEditState.projectCode && p.projectCode === localEditState.projectCode)
         );
-    const currentEditProjId = currentEditProj?.id || editingState.projectId || '';
-
-    const teamItems = useMemo(() => {
-      return (teams || []).map((t: any) => {
-        const code = t.teamCode || '';
-        const name = t.name || '';
-        const label = code ? `${code} - ${name}` : name;
-        return {
-          value: t.id,
-          label,
-          code,
-          subLabel: t.blockCode ? `Khối: ${t.blockCode}` : (t.blockName ? `Khối: ${t.blockName}` : ''),
-          searchString: `${code} ${name} ${t.blockCode || ''} ${t.blockName || ''} ${t.id}`.toLowerCase(),
-          rawItem: t
-        };
-      });
-    }, [teams]);
-
-    const projectItems = useMemo(() => {
-      return (projects || []).map((p: any) => {
-        const code = p.projectCode || '';
-        const name = p.name || '';
-        const label = code ? `[${code}] ${name}` : name;
-        return {
-          value: p.id,
-          label,
-          code,
-          subLabel: p.region ? `Khu vực: ${p.region}` : (p.type ? `Loại: ${p.type}` : ''),
-          searchString: `${code} ${name} ${p.region || ''} ${p.type || ''} ${p.id}`.toLowerCase(),
-          rawItem: p
-        };
-      });
-    }, [projects]);
+    const currentEditProjId = currentEditProj?.id || localEditState.projectId || '';
 
     const renderEditInput = (
       fieldKey: string,
@@ -153,13 +200,13 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         <Input
           value={val || ''}
           placeholder={placeholder}
-          onChange={(e) => handleCostInputChange(e.target.value, (v) => onUpdateEditingField(fieldKey, v))}
+          onChange={(e) => handleCostInputChange(e.target.value, (v) => handleUpdateEditField(fieldKey, v))}
           className="h-7 text-right font-mono text-[11px] font-bold pr-5 border-indigo-200 focus:border-indigo-500 rounded bg-white"
         />
         <button
           type="button"
           tabIndex={-1}
-          onClick={() => onOpenCalculator(fieldKey, fieldLabel, val || '', (v) => onUpdateEditingField(fieldKey, v))}
+          onClick={() => onOpenCalculator(fieldKey, fieldLabel, val || '', (v) => handleUpdateEditField(fieldKey, v))}
           className="absolute right-1 text-slate-400 hover:text-indigo-600 opacity-60 group-hover:opacity-100 transition-opacity"
           title={`Mở máy tính (${fieldLabel})`}
         >
@@ -178,8 +225,8 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {/* Col A: THÁNG */}
         <TableCell className="p-1 min-w-[110px]">
           <Select
-            value={editingState.month || 'Kì 1 - Tháng 8'}
-            onValueChange={(val) => onUpdateEditingField('month', val)}
+            value={localEditState.month || 'Kì 1 - Tháng 8'}
+            onValueChange={(val) => handleUpdateEditField('month', val)}
           >
             <SelectTrigger className="h-7 text-[11px] font-bold border-indigo-200 bg-white rounded">
               <SelectValue />
@@ -220,27 +267,16 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
                 if (code && tmName.startsWith(code)) {
                   gdkd = tmName.substring(code.length).trim();
                 }
-                if (onUpdateEditingFields) {
-                  onUpdateEditingFields({
-                    teamId: tm.id,
-                    teamCode: tm.teamCode || tm.name || '',
-                    teamName: tm.name || tm.teamCode || '',
-                    blockId: tm.blockId || '',
-                    blockCode: tm.blockCode || '',
-                    gdkdName: (!editingState.gdkdName || editingState.gdkdName === '-') ? gdkd : editingState.gdkdName
-                  });
-                } else {
-                  onUpdateEditingField('teamId', tm.id);
-                  onUpdateEditingField('teamCode', tm.teamCode || tm.name || '');
-                  onUpdateEditingField('teamName', tm.name || tm.teamCode || '');
-                  onUpdateEditingField('blockId', tm.blockId || '');
-                  onUpdateEditingField('blockCode', tm.blockCode || '');
-                  if (!editingState.gdkdName || editingState.gdkdName === '-') {
-                    onUpdateEditingField('gdkdName', gdkd);
-                  }
-                }
+                handleUpdateEditFields({
+                  teamId: tm.id,
+                  teamCode: tm.teamCode || tm.name || '',
+                  teamName: tm.name || tm.teamCode || '',
+                  blockId: tm.blockId || '',
+                  blockCode: tm.blockCode || '',
+                  gdkdName: (!localEditState.gdkdName || localEditState.gdkdName === '-') ? gdkd : localEditState.gdkdName
+                });
               } else {
-                onUpdateEditingField('teamId', teamId);
+                handleUpdateEditField('teamId', teamId);
               }
             }}
           />
@@ -249,8 +285,8 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {/* Col C: GĐKD */}
         <TableCell className="p-1 min-w-[120px]">
           <Input
-            value={editingState.gdkdName || ''}
-            onChange={(e) => onUpdateEditingField('gdkdName', e.target.value)}
+            value={localEditState.gdkdName || ''}
+            onChange={(e) => handleUpdateEditField('gdkdName', e.target.value)}
             className="h-7 text-xs font-semibold border-indigo-200 rounded bg-white"
           />
         </TableCell>
@@ -258,8 +294,8 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {/* Col D: NGƯỜI PHỤ TRÁCH */}
         <TableCell className="p-1 min-w-[110px]">
           <Input
-            value={editingState.implementerName || ''}
-            onChange={(e) => onUpdateEditingField('implementerName', e.target.value)}
+            value={localEditState.implementerName || ''}
+            onChange={(e) => handleUpdateEditField('implementerName', e.target.value)}
             className="h-7 text-xs font-semibold border-indigo-200 rounded bg-white"
           />
         </TableCell>
@@ -282,80 +318,84 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
             onValueChange={(projectId, rawP) => {
               const p = rawP || (projects || []).find((pr: any) => pr.id === projectId) || (findProject ? findProject(projectId) : null);
               if (p) {
-                if (onUpdateEditingFields) {
-                  onUpdateEditingFields({
-                    projectId: p.id,
-                    projectName: p.name || '',
-                    projectCode: p.projectCode || ''
-                  });
-                } else {
-                  onUpdateEditingField('projectId', p.id);
-                  onUpdateEditingField('projectName', p.name || '');
-                  onUpdateEditingField('projectCode', p.projectCode || '');
-                }
+                handleUpdateEditFields({
+                  projectId: p.id,
+                  projectName: p.name || '',
+                  projectCode: p.projectCode || ''
+                });
               } else {
-                onUpdateEditingField('projectId', projectId);
+                handleUpdateEditField('projectId', projectId);
               }
             }}
           />
         </TableCell>
 
-        {/* Group 1: DIGITAL CHẠY */}
-        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalFb', 'Digital FB', editingState.digitalFb)}</TableCell>
-        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalZalo', 'Digital Zalo', editingState.digitalZalo)}</TableCell>
-        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalTiktok', 'Digital Tiktok', editingState.digitalTiktok)}</TableCell>
-        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalKhac', 'Digital Khác', editingState.digitalKhac)}</TableCell>
+        {/* Group 1: DIGITAL */}
+        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalFb', 'Digital FB', localEditState.digitalFb)}</TableCell>
+        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalZalo', 'Digital Zalo', localEditState.digitalZalo)}</TableCell>
+        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalTiktok', 'Digital Tiktok', localEditState.digitalTiktok)}</TableCell>
+        <TableCell className="p-1 bg-sky-50/40">{renderEditInput('digitalKhac', 'Digital Khác', localEditState.digitalKhac)}</TableCell>
+
+        {/* Col J: TỔNG DIGITAL CHƯA VAT */}
         <TableCell className="p-1 text-right font-mono text-[11px] font-bold text-sky-950 bg-sky-100/50">
           {formatCurrency(editComp.dTotalChuaVat).replace(' đ', '')}
         </TableCell>
+
+        {/* Col K: DIGITAL CHẠY (SAU VAT) */}
         <TableCell className="p-1 text-right font-mono text-[11px] font-black text-sky-900 bg-sky-200/50">
           {formatCurrency(editComp.dTotalSauVat).replace(' đ', '')}
         </TableCell>
 
-        {/* Group 2: THẺ VISA CÔNG TY */}
-        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaFb', 'Visa FB', editingState.visaFb)}</TableCell>
-        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaZalo', 'Visa Zalo', editingState.visaZalo)}</TableCell>
-        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaTiktok', 'Visa Tiktok', editingState.visaTiktok)}</TableCell>
-        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaDangTin', 'Visa Đăng tin', editingState.visaDangTin)}</TableCell>
+        {/* Group 2: VISA CÔNG TY */}
+        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaFb', 'Visa FB', localEditState.visaFb)}</TableCell>
+        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaZalo', 'Visa Zalo', localEditState.visaZalo)}</TableCell>
+        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaTiktok', 'Visa Tiktok', localEditState.visaTiktok)}</TableCell>
+        <TableCell className="p-1 bg-emerald-50/40">{renderEditInput('visaDangTin', 'Visa Đăng Tin', localEditState.visaDangTin)}</TableCell>
+
+        {/* Col P: TỔNG VISA CHƯA VAT */}
         <TableCell className="p-1 text-right font-mono text-[11px] font-bold text-emerald-950 bg-emerald-100/50">
           {formatCurrency(editComp.vTotalChuaVat).replace(' đ', '')}
         </TableCell>
+
+        {/* Col Q: THẺ VISA CÔNG TY (SAU VAT) */}
         <TableCell className="p-1 text-right font-mono text-[11px] font-black text-indigo-900 bg-indigo-100/50">
           {formatCurrency(editComp.vTotalSauVat).replace(' đ', '')}
         </TableCell>
 
         {/* Group 3: ĐĂNG TIN CÔNG TY */}
-        <TableCell className="p-1 bg-indigo-50/40">{renderEditInput('dangTinCtyChuaVat', 'Đăng tin CTY chưa VAT', editingState.dangTinCtyChuaVat)}</TableCell>
+        <TableCell className="p-1 bg-indigo-50/40">{renderEditInput('dangTinCtyChuaVat', 'Đăng tin CTY chưa VAT', localEditState.dangTinCtyChuaVat)}</TableCell>
         <TableCell className="p-1 text-right font-mono text-[11px] font-black text-indigo-950 bg-indigo-100/60">
           {formatCurrency(editComp.dtCtySauVat).replace(' đ', '')}
         </TableCell>
 
-        {/* Group 4: CÁ NHÂN CHẠY NGOÀI */}
-        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanFb', 'Cá nhân FB', editingState.caNhanFb)}</TableCell>
-        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanDangTin', 'Cá nhân Đăng tin', editingState.caNhanDangTin)}</TableCell>
-        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanZalo', 'Cá nhân Zalo', editingState.caNhanZalo)}</TableCell>
-        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanGoogle', 'Cá nhân Google', editingState.caNhanGoogle)}</TableCell>
-        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanTiktok', 'Cá nhân Tiktok', editingState.caNhanTiktok)}</TableCell>
+        {/* Group 4: CÁ NHÂN */}
+        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanFb', 'Cá nhân FB', localEditState.caNhanFb)}</TableCell>
+        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanDangTin', 'Cá nhân Đăng tin', localEditState.caNhanDangTin)}</TableCell>
+        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanZalo', 'Cá nhân Zalo', localEditState.caNhanZalo)}</TableCell>
+        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanGoogle', 'Cá nhân Google', localEditState.caNhanGoogle)}</TableCell>
+        <TableCell className="p-1 bg-amber-50/40">{renderEditInput('caNhanTiktok', 'Cá nhân Tiktok', localEditState.caNhanTiktok)}</TableCell>
+
+        {/* Col Y: CÁ NHÂN TỔNG */}
         <TableCell className="p-1 text-right font-mono text-[11px] font-extrabold text-amber-950 bg-amber-100/60">
           {formatCurrency(editComp.cnTotal).replace(' đ', '')}
         </TableCell>
 
         {/* Cột: CÁ NHÂN NẠP TIỀN QUA CÔNG TY */}
-        <TableCell className="p-1 bg-violet-50/40">{renderEditInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', editingState.caNhanNapTienQuaCty)}</TableCell>
+        <TableCell className="p-1 bg-violet-50/40">{renderEditInput('caNhanNapTienQuaCty', 'Cá nhân nạp tiền qua CTY', localEditState.caNhanNapTienQuaCty)}</TableCell>
 
-        {/* Col Z: TỔNG (K + Q + S + Y + CÁ NHÂN NẠP TIỀN QUA CÔNG TY) */}
+        {/* Col Z: TỔNG */}
         <TableCell className="p-1 text-right font-mono text-xs font-black text-rose-900 bg-rose-100/70">
           {formatCurrency(editComp.grandTotal).replace(' đ', '')}
         </TableCell>
 
         {/* Col AA: SỐ LEAD */}
-        <TableCell className="p-1 bg-cyan-50/40">{renderEditInput('caNhanNopTien', 'Số Lead', editingState.caNhanNopTien)}</TableCell>
+        <TableCell className="p-1 bg-cyan-50/40">{renderEditInput('caNhanNopTien', 'Số Lead', localEditState.caNhanNopTien)}</TableCell>
 
         {/* Col AB: TRẠNG THÁI */}
         <TableCell className="p-1 min-w-[100px]">
           <Select
-            value={editingState.status || 'Đã nghiệm thu'}
-            onValueChange={(val) => onUpdateEditingField('status', val)}
+            value={localEditState.status || 'Đã nghiệm thu'}
+            onValueChange={(val) => handleUpdateEditField('status', val)}
           >
             <SelectTrigger className="h-7 text-[10px] font-bold border-yellow-200 bg-white rounded">
               <SelectValue />
@@ -371,9 +411,9 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
         {/* Col AC: GHI CHÚ */}
         <TableCell className="p-1 min-w-[120px]">
           <Input
-            value={editingState.notes || ''}
+            value={localEditState.notes || ''}
             placeholder="Ghi chú..."
-            onChange={(e) => onUpdateEditingField('notes', e.target.value)}
+            onChange={(e) => handleUpdateEditField('notes', e.target.value)}
             className="h-7 text-xs font-medium border-yellow-200 rounded bg-white"
           />
         </TableCell>
@@ -383,7 +423,7 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           <div className="flex items-center justify-center gap-1">
             <Button
               size="sm"
-              onClick={onSaveEdit}
+              onClick={() => onSaveEdit(item.id, localEditState)}
               className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow-sm"
             >
               <Save className="w-3 h-3" /> Lưu
@@ -402,10 +442,9 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
     );
   }
 
-  // Normal Read-only Row
+  // 2. NORMAL READ-ONLY ROW
   const comp = getRowComputed(item);
 
-  // Exact resolution of team name and team code to avoid showing raw IDs
   const matchedTeam = (findTeam 
     ? (findTeam(item.teamId) || findTeam(item.teamCode) || findTeam(item.teamName))
     : null) || (teams || []).find((t: any) => 
@@ -428,7 +467,6 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
     matchedTeam?.teamCode || 
     (displayTeamCode !== '-' ? displayTeamCode : '');
 
-  // Exact resolution of project name to avoid showing raw IDs
   const matchedProject = (findProject
     ? (findProject(item.projectId) || findProject(item.projectName) || findProject(item.projectCode))
     : null) || (projects || []).find((p: any) => 
@@ -442,37 +480,42 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
 
   const displayProjectName = matchedProject?.name || 
     (!isRawId(rawProjectName) && rawProjectName ? rawProjectName : '') || 
-    (matchedProject?.projectCode ? `[${matchedProject.projectCode}]` : '') || 
+    matchedProject?.projectCode || 
     '-';
 
   const displayProjectCode = matchedProject?.projectCode || 
-    (!isRawId(rawProjectCode) && rawProjectCode ? rawProjectCode : '');
+    (!isRawId(rawProjectCode) && rawProjectCode ? rawProjectCode : '') || 
+    '';
 
   return (
-    <TableRow className="hover:bg-slate-50/80 transition-colors group border-b border-slate-200">
-      {/* STT & Checkbox */}
-      <TableCell className="text-center font-bold text-xs text-slate-500 bg-slate-50/50 sticky left-0 z-10">
-        <div className="flex items-center justify-center gap-2">
+    <TableRow
+      className={`hover:bg-indigo-50/25 transition-colors group ${
+        isSelected ? 'bg-indigo-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+      }`}
+    >
+      {/* STT / Select */}
+      <TableCell className="text-center font-medium text-xs text-slate-500 sticky left-0 z-10 bg-inherit shadow-r">
+        <div className="flex items-center justify-center gap-1.5">
           <input
             type="checkbox"
             checked={isSelected}
             onChange={(e) => onSelectRow(item.id, e.target.checked)}
-            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer accent-indigo-600"
+            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
           />
-          <span className="font-mono text-[11px] text-slate-400">{index + 1}</span>
+          <span className="font-mono text-slate-400 font-semibold">{index + 1}</span>
         </div>
       </TableCell>
 
       {/* Col A: THÁNG */}
-      <TableCell className="font-extrabold text-xs text-slate-800 whitespace-nowrap">
-        <Badge variant="outline" className="bg-slate-50 font-mono text-[11px] border-slate-200">
+      <TableCell className="font-bold text-xs text-slate-800 whitespace-nowrap">
+        <Badge variant="outline" className="bg-slate-100/80 text-slate-700 border-slate-200 font-bold text-[11px] px-1.5 py-0.5">
           {item.month || '-'}
         </Badge>
       </TableCell>
 
       {/* Col B: MÃ TEAM */}
-      <TableCell className="text-center font-mono font-bold text-xs text-slate-700 whitespace-nowrap" title={displayTeamName ? `${displayTeamCode} - ${displayTeamName}` : displayTeamCode}>
-        <Badge variant="outline" className="bg-slate-50 border-slate-200 text-slate-700 font-mono font-bold text-[11px] px-2 py-0.5 shadow-2xs">
+      <TableCell className="font-mono font-bold text-xs text-indigo-700 whitespace-nowrap">
+        <Badge variant="outline" className="bg-indigo-50/70 text-indigo-700 border-indigo-200 font-mono font-extrabold text-[11px] px-1.5 py-0.5" title={displayTeamName}>
           {displayTeamCode}
         </Badge>
       </TableCell>
@@ -512,10 +555,12 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       <TableCell className="text-right font-mono text-xs text-slate-600 bg-sky-50/20">
         {renderBreakdownTooltip(comp.dKhac, item.costBreakdowns?.digitalKhac, 'Khác Digital')}
       </TableCell>
+
       {/* Col J: TỔNG DIGITAL CHƯA VAT */}
       <TableCell className="text-right font-mono text-xs font-bold text-sky-950 bg-sky-100/40">
         {formatCurrency(comp.dTotalChuaVat).replace(' đ', '')}
       </TableCell>
+
       {/* Col K: DIGITAL CHẠY (SAU VAT) */}
       <TableCell className="text-right font-mono text-xs font-black text-sky-900 bg-sky-200/40">
         {formatCurrency(comp.dTotalSauVat).replace(' đ', '')}
@@ -534,10 +579,12 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       <TableCell className="text-right font-mono text-xs text-slate-600 bg-emerald-50/20">
         {renderBreakdownTooltip(comp.vDangTin, item.costBreakdowns?.visaDangTin, 'Đăng tin Visa')}
       </TableCell>
+
       {/* Col P: TỔNG VISA CHƯA VAT */}
       <TableCell className="text-right font-mono text-xs font-bold text-emerald-950 bg-emerald-100/40">
         {formatCurrency(comp.vTotalChuaVat).replace(' đ', '')}
       </TableCell>
+
       {/* Col Q: THẺ VISA CÔNG TY (SAU VAT) */}
       <TableCell className="text-right font-mono text-xs font-black text-indigo-900 bg-indigo-100/40">
         {formatCurrency(comp.vTotalSauVat).replace(' đ', '')}
@@ -547,6 +594,7 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       <TableCell className="text-right font-mono text-xs text-slate-600 bg-indigo-50/20">
         {renderBreakdownTooltip(comp.dtCtyChuaVat, item.costBreakdowns?.dangTinCtyChuaVat || item.costBreakdowns?.dangTinCongTy, 'Đăng tin CTY chưa VAT')}
       </TableCell>
+
       {/* Col S: ĐĂNG TIN CÔNG TY (SAU VAT 8%) */}
       <TableCell className="text-right font-mono text-xs font-black text-indigo-950 bg-indigo-100/50">
         {formatCurrency(comp.dtCtySauVat).replace(' đ', '')}
@@ -568,6 +616,7 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       <TableCell className="text-right font-mono text-xs text-slate-600 bg-amber-50/20">
         {renderBreakdownTooltip(comp.cnTiktok, item.costBreakdowns?.caNhanTiktok || item.costBreakdowns?.tiktok, 'Cá nhân Tiktok')}
       </TableCell>
+
       {/* Col Y: CÁ NHÂN TỔNG */}
       <TableCell className="text-right font-mono text-xs font-extrabold text-amber-950 bg-amber-100/50">
         {formatCurrency(comp.cnTotal).replace(' đ', '')}
@@ -618,7 +667,6 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           >
             <Edit className="w-3 h-3" />
           </Button>
-
           <Button
             size="sm"
             variant="ghost"
@@ -628,7 +676,6 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           >
             <History className="w-3 h-3" />
           </Button>
-
           <Button
             size="sm"
             variant="ghost"

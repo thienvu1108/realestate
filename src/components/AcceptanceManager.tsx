@@ -203,10 +203,9 @@ export const AcceptanceManager = React.memo(({
     });
   }, [acceptances]);
 
-  // Searchable items for team filter
-  const filterTeamItems = useMemo(() => {
-    const allOpt = { value: 'all', label: 'Tất cả Team', searchString: 'tất cả team all' };
-    const list = (teams || []).map((t: any) => {
+  // Base searchable items for dropdown selectors
+  const baseTeamItems = useMemo(() => {
+    return (teams || []).map((t: any) => {
       const code = t.teamCode || '';
       const name = t.name || '';
       const label = code ? `${code} - ${name}` : name;
@@ -219,13 +218,10 @@ export const AcceptanceManager = React.memo(({
         rawItem: t
       };
     });
-    return [allOpt, ...list];
   }, [teams]);
 
-  // Searchable items for project filter
-  const filterProjectItems = useMemo(() => {
-    const allOpt = { value: 'all', label: 'Tất cả Dự án', searchString: 'tất cả dự án all' };
-    const list = (projects || []).map((p: any) => {
+  const baseProjectItems = useMemo(() => {
+    return (projects || []).map((p: any) => {
       const code = p.projectCode || '';
       const name = p.name || '';
       const label = code ? `[${code}] ${name}` : name;
@@ -238,8 +234,22 @@ export const AcceptanceManager = React.memo(({
         rawItem: p
       };
     });
-    return [allOpt, ...list];
   }, [projects]);
+
+  const teamIdSet = useMemo(() => new Set((teams || []).map((t: any) => t.id)), [teams]);
+  const projectIdSet = useMemo(() => new Set((projects || []).map((p: any) => p.id)), [projects]);
+
+  // Searchable items for team filter
+  const filterTeamItems = useMemo(() => {
+    const allOpt = { value: 'all', label: 'Tất cả Team', searchString: 'tất cả team all' };
+    return [allOpt, ...baseTeamItems];
+  }, [baseTeamItems]);
+
+  // Searchable items for project filter
+  const filterProjectItems = useMemo(() => {
+    const allOpt = { value: 'all', label: 'Tất cả Dự án', searchString: 'tất cả dự án all' };
+    return [allOpt, ...baseProjectItems];
+  }, [baseProjectItems]);
 
   // Filtered acceptances (Optimized with O(1) lookups)
   const filteredAcceptances = useMemo(() => {
@@ -529,42 +539,40 @@ export const AcceptanceManager = React.memo(({
   // Start Edit
   const handleStartEdit = useCallback((item: any) => {
     setEditingRowId(item.id);
-    setEditingRowState({
-      ...item,
-      digitalFb: item.digitalFb ?? item.fbDigitalChuaVat ?? '',
-      digitalZalo: item.digitalZalo ?? '',
-      digitalTiktok: item.digitalTiktok ?? '',
-      digitalKhac: item.digitalKhac ?? '',
-      visaFb: item.visaFb ?? item.fbVisaCostChuaVat ?? '',
-      visaZalo: item.visaZalo ?? '',
-      visaTiktok: item.visaTiktok ?? '',
-      visaDangTin: item.visaDangTin ?? '',
-      dangTinCtyChuaVat: item.dangTinCtyChuaVat ?? item.dangTinCongTyChuaVat ?? '',
-      caNhanFb: item.caNhanFb ?? item.caNhanCost ?? item.otherCost ?? '',
-      caNhanDangTin: item.caNhanDangTin ?? item.dangTinCaNhanCost ?? '',
-      caNhanZalo: item.caNhanZalo ?? item.zaloCost ?? '',
-      caNhanGoogle: item.caNhanGoogle ?? item.googleCost ?? '',
-      caNhanTiktok: item.caNhanTiktok ?? item.tiktokCost ?? '',
-      caNhanNapTienQuaCty: item.caNhanNapTienQuaCty ?? item.caNhanNapTienCty ?? '',
-      caNhanNopTien: item.caNhanNopTien ?? item.personalPaidToCompany ?? '',
-      status: item.status || 'Đã nghiệm thu',
-      notes: item.notes || ''
-    });
   }, []);
 
-  // Save Edit
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingRowId || !editingRowState) return;
-    const comp = getRowComputed(editingRowState);
-    const tm = teamLookup.findTeam(editingRowState.teamId) || teamLookup.findTeam(editingRowState.teamCode) || teamLookup.findTeam(editingRowState.teamName);
-    const pr = projectLookup.findProject(editingRowState.projectId) || projectLookup.findProject(editingRowState.projectName) || projectLookup.findProject(editingRowState.projectCode);
+  const handleCancelEdit = useCallback(() => {
+    setEditingRowId(null);
+  }, []);
+
+  // Save Edit (Takes local row state directly from child component)
+  const handleSaveEdit = useCallback(async (id: string, updatedState: any) => {
+    if (!id || !updatedState) return;
+    const comp = getRowComputed(updatedState);
+    const tm = (teamLookup.findTeam 
+      ? (teamLookup.findTeam(updatedState.teamId) || teamLookup.findTeam(updatedState.teamCode) || teamLookup.findTeam(updatedState.teamName))
+      : null) || (teams || []).find((t: any) => 
+          t.id === updatedState.teamId || 
+          (updatedState.teamCode && t.teamCode === updatedState.teamCode) || 
+          (updatedState.teamName && t.name === updatedState.teamName) ||
+          t.id === updatedState.teamCode
+        );
+
+    const pr = (projectLookup.findProject
+      ? (projectLookup.findProject(updatedState.projectId) || projectLookup.findProject(updatedState.projectName) || projectLookup.findProject(updatedState.projectCode))
+      : null) || (projects || []).find((p: any) => 
+          p.id === updatedState.projectId || 
+          (updatedState.projectName && p.name === updatedState.projectName) || 
+          (updatedState.projectName && p.projectCode === updatedState.projectName) ||
+          p.id === updatedState.projectName
+        );
 
     try {
-      const oldItem = acceptances.find((a: any) => a.id === editingRowId);
+      const oldItem = acceptances.find((a: any) => a.id === id);
       const oldHistory = Array.isArray(oldItem?.editHistory) ? oldItem.editHistory : [];
 
       const changesObj: any = {};
-      if (oldItem?.month !== editingRowState.month) changesObj['Tháng'] = { old: oldItem?.month, new: editingRowState.month };
+      if (oldItem?.month !== updatedState.month) changesObj['Tháng'] = { old: oldItem?.month, new: updatedState.month };
       if (oldItem?.totalCost !== comp.grandTotal) changesObj['Tổng chi phí'] = { old: oldItem?.totalCost, new: comp.grandTotal };
 
       const newHistoryEntry = {
@@ -574,21 +582,21 @@ export const AcceptanceManager = React.memo(({
         changes: changesObj
       };
 
-      const resolvedTeamName = tm?.name || (editingRowState.teamName && !editingRowState.teamName.startsWith('draft-') ? editingRowState.teamName : oldItem?.teamName || tm?.teamCode || '');
-      const resolvedTeamCode = tm?.teamCode || (editingRowState.teamCode && !editingRowState.teamCode.startsWith('draft-') ? editingRowState.teamCode : oldItem?.teamCode || tm?.name || '');
-      const resolvedProjectName = pr?.name || (editingRowState.projectName && !editingRowState.projectName.startsWith('draft-') ? editingRowState.projectName : oldItem?.projectName || pr?.projectCode || '');
-      const resolvedProjectCode = pr?.projectCode || (editingRowState.projectCode && !editingRowState.projectCode.startsWith('draft-') ? editingRowState.projectCode : oldItem?.projectCode || '');
+      const resolvedTeamName = tm?.name || (updatedState.teamName && !updatedState.teamName.startsWith('draft-') ? updatedState.teamName : oldItem?.teamName || tm?.teamCode || '');
+      const resolvedTeamCode = tm?.teamCode || (updatedState.teamCode && !updatedState.teamCode.startsWith('draft-') ? updatedState.teamCode : oldItem?.teamCode || tm?.name || '');
+      const resolvedProjectName = pr?.name || (updatedState.projectName && !updatedState.projectName.startsWith('draft-') ? updatedState.projectName : oldItem?.projectName || pr?.projectCode || '');
+      const resolvedProjectCode = pr?.projectCode || (updatedState.projectCode && !updatedState.projectCode.startsWith('draft-') ? updatedState.projectCode : oldItem?.projectCode || '');
 
       const payload: any = {
-        month: editingRowState.month || oldItem?.month || 'Kì 1 - Tháng 8',
-        teamId: tm?.id || editingRowState.teamId || oldItem?.teamId || '',
+        month: updatedState.month || oldItem?.month || 'Kì 1 - Tháng 8',
+        teamId: tm?.id || updatedState.teamId || oldItem?.teamId || '',
         teamName: resolvedTeamName,
         teamCode: resolvedTeamCode,
-        blockId: tm?.blockId || editingRowState.blockId || oldItem?.blockId || '',
-        blockCode: tm?.blockCode || editingRowState.blockCode || oldItem?.blockCode || '',
-        gdkdName: editingRowState.gdkdName || tm?.name || oldItem?.gdkdName || '',
-        implementerName: editingRowState.implementerName || oldItem?.implementerName || '',
-        projectId: pr?.id || editingRowState.projectId || oldItem?.projectId || '',
+        blockId: tm?.blockId || updatedState.blockId || oldItem?.blockId || '',
+        blockCode: tm?.blockCode || updatedState.blockCode || oldItem?.blockCode || '',
+        gdkdName: updatedState.gdkdName || tm?.name || oldItem?.gdkdName || '',
+        implementerName: updatedState.implementerName || oldItem?.implementerName || '',
+        projectId: pr?.id || updatedState.projectId || oldItem?.projectId || '',
         projectName: resolvedProjectName,
         projectCode: resolvedProjectCode,
 
@@ -630,8 +638,8 @@ export const AcceptanceManager = React.memo(({
 
         // Group 6
         caNhanNopTien: comp.cnNopTien,
-        status: editingRowState.status || 'Đã nghiệm thu',
-        notes: editingRowState.notes || '',
+        status: updatedState.status || 'Đã nghiệm thu',
+        notes: updatedState.notes || '',
 
         // Legacy compatibility
         fbDigitalChuaVat: comp.dFb,
@@ -648,21 +656,36 @@ export const AcceptanceManager = React.memo(({
         googleCost: comp.cnGoogle,
         tiktokCost: comp.cnTiktok,
 
-        costBreakdowns: buildCostBreakdownsOfRecord(editingRowState),
+        costBreakdowns: buildCostBreakdownsOfRecord(updatedState),
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || '',
         editHistory: [...oldHistory, newHistoryEntry]
       };
 
-      await updateDoc(doc(db, 'acceptances', editingRowId), payload);
+      await updateDoc(doc(db, 'acceptances', id), payload);
       toast.success('Đã cập nhật bản ghi nghiệm thu!');
       setEditingRowId(null);
-      setEditingRowState(null);
     } catch (err) {
       console.error('Error updating acceptance:', err);
       toast.error('Lỗi khi cập nhật bản ghi');
     }
-  }, [editingRowId, editingRowState, acceptances, user, teamLookup, projectLookup]);
+  }, [acceptances, user, teamLookup, projectLookup, teams, projects]);
+
+  const handleSelectRow = useCallback((id: string, checked: boolean) => {
+    setSelectedAcceptanceIds(prev => 
+      checked ? [...prev, id] : prev.filter(x => x !== id)
+    );
+  }, []);
+
+  const handleOpenDeleteModal = useCallback((id: string) => {
+    setItemToDeleteId(id);
+    setIsDeleteDialogOpen(true);
+  }, []);
+
+  const handleOpenHistoryModal = useCallback((acc: any) => {
+    setHistoryTargetRecord(acc);
+    setIsHistoryDialogOpen(true);
+  }, []);
 
   // Delete single
   const handleConfirmDelete = async () => {
@@ -1449,11 +1472,11 @@ export const AcceptanceManager = React.memo(({
                     projects={projects}
                     blocks={blocks}
                     monthsList={uniqueMonths}
+                    teamItems={baseTeamItems}
+                    projectItems={baseProjectItems}
                     findTeam={teamLookup.findTeam}
                     findProject={projectLookup.findProject}
                     formatCurrency={formatCurrency}
-                    onUpdateField={(field, val) => handleUpdateDraftField(idx, field, val)}
-                    onUpdateFields={(fields) => handleUpdateDraftFields(idx, fields)}
                     onSaveDraft={handleSaveDraft}
                     onRemoveDraft={handleRemoveDraft}
                     onOpenCalculator={handleOpenCalculator}
@@ -1483,35 +1506,20 @@ export const AcceptanceManager = React.memo(({
                         projects={projects}
                         blocks={blocks}
                         monthsList={uniqueMonths}
+                        teamItems={baseTeamItems}
+                        projectItems={baseProjectItems}
+                        teamIdSet={teamIdSet}
+                        projectIdSet={projectIdSet}
                         findTeam={teamLookup.findTeam}
                         findProject={projectLookup.findProject}
                         formatCurrency={formatCurrency}
-                        onSelectRow={(id, checked) => {
-                          setSelectedAcceptanceIds(prev => 
-                            checked ? [...prev, id] : prev.filter(x => x !== id)
-                          );
-                        }}
+                        onSelectRow={handleSelectRow}
                         onStartEdit={handleStartEdit}
-                        onCancelEdit={() => {
-                          setEditingRowId(null);
-                          setEditingRowState(null);
-                        }}
+                        onCancelEdit={handleCancelEdit}
                         onSaveEdit={handleSaveEdit}
-                        onUpdateEditingField={(field, val) => {
-                          setEditingRowState((prev: any) => ({ ...prev, [field]: val }));
-                        }}
-                        onUpdateEditingFields={(fields) => {
-                          setEditingRowState((prev: any) => ({ ...prev, ...fields }));
-                        }}
                         onOpenCalculator={handleOpenCalculator}
-                        onDelete={(id) => {
-                          setItemToDeleteId(id);
-                          setIsDeleteDialogOpen(true);
-                        }}
-                        onOpenHistory={(acc) => {
-                          setHistoryTargetRecord(acc);
-                          setIsHistoryDialogOpen(true);
-                        }}
+                        onDelete={handleOpenDeleteModal}
+                        onOpenHistory={handleOpenHistoryModal}
                         renderBreakdownTooltip={renderBreakdownTooltip}
                       />
                     );

@@ -58,7 +58,15 @@ service cloud.firestore {
     }
 
     function isGDKhoi() {
-      return isSignedIn() && hasUserData() && getUserData().get('role', 'user') in ['gd_khoi', 'gdkhoi', 'GĐ Khối', 'Giám đốc Khối', 'Giám đốc liên khối', 'giám đốc liên khối'];
+      return isSignedIn() && hasUserData() && (
+        getUserData().get('role', 'user') in [
+          'gd_khoi', 'gdkhoi', 'gđ khối', 'GĐ Khối', 'Giám đốc Khối', 'giám đốc khối', 
+          'Giám đốc liên khối', 'giám đốc liên khối', 'gdk', 
+          'tro_ly_khoi', 'tro ly khoi', 'trợ lý khối', 'tro_ly_gdkhoi', 'assistant_block', 
+          'assistant', 'trợ lý', 'tro ly'
+        ] ||
+        (getUserData().get('assignedBlock', '') != '')
+      );
     }
 
     function isGDKD() {

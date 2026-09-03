@@ -4844,7 +4844,7 @@ export default function App() {
     // Listen to audit logs
     let unsubLogs = () => {};
     if (isAdmin || isMod || isAccountant) {
-      const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(500));
+      const qLogs = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(100));
       unsubLogs = onSnapshot(qLogs, (snapshot) => {
         setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
@@ -5026,7 +5026,7 @@ export default function App() {
       unsubReportNT();
       unsubTeamNotifs();
     };
-  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, JSON.stringify(userProfile), JSON.stringify(currentRolePermissions)]);
+  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, (userProfile?.assignedProjects || []).slice().sort().join(',')]);
 
   useEffect(() => {
     if (!user) return;
@@ -10111,9 +10111,11 @@ export default function App() {
           batchesToCommit.push(currentBatch);
         }
 
-        // Commit all batches sequentially
+        // Commit all batches sequentially with event loop yield to keep UI smooth
         for (const batchToCommit of batchesToCommit) {
           await batchToCommit.commit();
+          // Yield to browser event loop
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         await logAction('MIGRATE_MH_TO_MAY', 'multiple', 'bulk', {
@@ -10133,7 +10135,7 @@ export default function App() {
         if (!silent) {
           toast.success(`Đã chuyển đổi thành công ${totalUpdated} tài liệu từ MH sang MAY!`, { id: toastId! });
         } else if (totalUpdated > 0) {
-          toast.success(`Hệ thống đã tự động chuyển đổi ${totalUpdated} dữ liệu từ MH sang MAY trên toàn bộ database!`, { duration: 4000 });
+          toast.success(`Hệ thống đã chuyển đổi ${totalUpdated} dữ liệu từ MH sang MAY!`, { duration: 4000 });
         }
       } else {
         const totalUpdated = teamsCount + usersCount + budgetsCount + costsCount + blocksCount + acceptancesCount + finalAcceptancesCount + docProcessingCount + efficiencyCount + supportCount;
@@ -10164,16 +10166,6 @@ export default function App() {
       setIsMigratingMhToMay(false);
     }
   };
-
-  const autoMigratedRef = useRef(false);
-  useEffect(() => {
-    if ((isAdmin || isSuperAdmin || user?.email?.toLowerCase() === 'thienvu1108@gmail.com') && !autoMigratedRef.current && user) {
-      autoMigratedRef.current = true;
-      setTimeout(() => {
-        handleMigrateMhToMay(true, true).catch(err => console.error("Auto background MH->MAY migration:", err));
-      }, 1500);
-    }
-  }, [isAdmin, isSuperAdmin, user]);
 
   const [isRestoreAllDialogOpen, setIsRestoreAllDialogOpen] = useState(false);
   const [logLimit, setLogLimit] = useState(50);

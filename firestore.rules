@@ -125,25 +125,28 @@ service cloud.firestore {
     // Users
     // ===============================================================
     function isValidUser(data) {
-      return isValidEmail(data.email) &&
+      return (!('email' in data) || isValidEmail(data.email)) &&
              (!('role' in data) || data.role is string);
     }
 
     match /users/{userId} {
-      allow get: if isOwner(userId) || isInternalStaff() || isGDKD() || isGDKhoi();
-      allow list: if isAdmin() || isAccountant() || isGDKD() || isGDKhoi();
+      allow read: if isSignedIn();
       allow create: if (isOwner(userId) && isValidUser(incoming())) || 
+                       isAdmin() || isAccountant() || isSuperAdmin() ||
                        (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
       allow update: if (
         (isOwner(userId) && 
-         incoming().role == existing().role && 
+         (!('role' in incoming().diff(existing()).affectedKeys()) || incoming().get('role', 'user') == existing().get('role', 'user')) && 
          !('assignedProjects' in incoming().diff(existing()).affectedKeys()) &&
-         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'teamName', 'displayName', 'onboardingTeam', 'updatedAt'])
+         !('assignedBlock' in incoming().diff(existing()).affectedKeys()) &&
+         incoming().diff(existing()).affectedKeys().hasOnly([
+           'fullName', 'teamName', 'teamId', 'teamCode', 'displayName', 'onboardingTeam', 'updatedAt', 'photoURL', 'phoneNumber', 'email', 'uid'
+         ])
         ) || 
-        isAdmin() || isAccountant() ||
+        isAdmin() || isAccountant() || isSuperAdmin() || isMod() || isGDKhoi() ||
         (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_') && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'))
       );
-      allow delete: if isAdmin() || isAccountant() || 
+      allow delete: if isAdmin() || isAccountant() || isSuperAdmin() ||
                        (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
     }
 
@@ -240,9 +243,8 @@ service cloud.firestore {
     // Audit Logs
     // ===============================================================
     match /auditLogs/{logId} {
-      allow get: if isInternalStaff();
-      allow list: if isInternalStaff();
-      allow create: if isSignedIn();
+      allow read: if isInternalStaff();
+      allow create, update: if isSignedIn();
     }
 
     // ===============================================================
@@ -283,13 +285,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || isAccountant();
     }
 
-    // ===============================================================
-    // Audit Logs
-    // ===============================================================
-    match /auditLogs/{logId} {
-      allow read: if true;
-      allow create: if isSignedIn();
-    }
 
     // ===============================================================
     // Document Processing

@@ -540,7 +540,17 @@ export async function addDoc(collectionRef: any, data: any) {
   
   try {
     return await firestore.addDoc(collectionRef, data);
-  } catch (err) {
+  } catch (err: any) {
+    const errMsg = String(err?.message || err);
+    if (errMsg.includes('already exists') || errMsg.includes('Already exists') || err?.code === 'already-exists') {
+      try {
+        const freshDoc = firestore.doc(collectionRef);
+        await firestore.setDoc(freshDoc, data);
+        return freshDoc;
+      } catch {
+        return { id: 'log_' + Date.now() };
+      }
+    }
     if (isQuotaError(err)) {
       setQuotaExceeded();
       return addDoc(collectionRef, data);

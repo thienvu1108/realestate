@@ -13,6 +13,8 @@
         "displayName": { "type": "string" },
         "fullName": { "type": "string" },
         "teamName": { "type": "string" },
+        "teamId": { "type": "string", "description": "Team ID the user belongs to" },
+        "teamCode": { "type": "string", "description": "Team code the user belongs to" },
         "assignedBlock": { "type": "string", "description": "Block ID assigned to GĐ Khối (e.g. EG01)" },
         "assignedProjects": { 
           "type": "array", 

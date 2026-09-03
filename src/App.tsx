@@ -1637,29 +1637,63 @@ export default function App() {
     }
   };
 
+  const sanitizeForFirestore = (val: any): any => {
+    if (val === undefined) return null;
+    if (val === null || typeof val !== 'object') return val;
+    if (val instanceof Date) return val;
+    // Preserve Firestore FieldValue or Timestamp
+    if (typeof val.toMillis === 'function' || val._methodName || typeof val.isEqual === 'function') {
+      return val;
+    }
+    if (Array.isArray(val)) {
+      return val.map(item => (item === undefined ? null : sanitizeForFirestore(item)));
+    }
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      if (v === undefined) {
+        clean[k] = null;
+      } else {
+        clean[k] = sanitizeForFirestore(v);
+      }
+    }
+    return clean;
+  };
+
   const logAction = async (action: string, collectionName: string, docId: string, data: any) => {
     try {
+      const sanitizedData = sanitizeForFirestore(data) ?? {};
       const logData = {
-        action,
-        collection: collectionName,
-        docId,
-        data,
+        action: action || 'UNKNOWN',
+        collection: collectionName || '',
+        docId: docId || '',
+        data: sanitizedData,
         timestamp: serverTimestamp(),
-        userEmail: user?.email,
-        userId: user?.uid
+        userEmail: user?.email || null,
+        userId: user?.uid || null
       };
       
-      await addDoc(collection(db, 'auditLogs'), logData);
+      try {
+        await addDoc(collection(db, 'auditLogs'), logData);
+      } catch (writeErr: any) {
+        const msg = String(writeErr?.message || writeErr);
+        if (!msg.includes('already exists') && !msg.includes('Already exists') && writeErr?.code !== 'already-exists') {
+          throw writeErr;
+        }
+      }
       
       // Tự động đồng bộ Nhật ký này sang Google Sheet ngay lập tức
       syncLogToGoogleSheets({
         action,
         collection: collectionName,
         docId,
-        data,
-        userEmail: user?.email
+        data: sanitizedData,
+        userEmail: user?.email || ''
       });
-    } catch (error) {
+    } catch (error: any) {
+      const errMsg = String(error?.message || error);
+      if (errMsg.includes('already exists') || errMsg.includes('Already exists') || error?.code === 'already-exists') {
+        return;
+      }
       console.error('Audit log error:', error);
     }
   };
@@ -1783,13 +1817,13 @@ export default function App() {
     try {
       const existing = docProcessingStatus.find(s => s.projectId === projectId && s.teamId === teamId);
       const data = {
-        projectId,
-        teamId,
-        confirmation,
-        note,
+        projectId: projectId || '',
+        teamId: teamId || '',
+        confirmation: confirmation || '',
+        note: note || '',
         updatedAt: serverTimestamp(),
-        updatedBy: user?.uid,
-        updatedByEmail: user?.email
+        updatedBy: user?.uid || null,
+        updatedByEmail: user?.email || null
       };
 
       if (existing) {
@@ -3834,7 +3868,7 @@ export default function App() {
   // Recent Budget Registration List States - Defaults to current marketing period
   const [recentBudgetMonthFilter, setRecentBudgetMonthFilter] = useState<string>(() => getMarketingMonth(new Date()) || 'all');
   const [recentBudgetProjectFilter, setRecentBudgetProjectFilter] = useState<string>('all');
-  const [recentBudgetRoleFilter, setRecentBudgetRoleFilter] = useState<'all' | 'created' | 'updated' | 'team'>('all');
+  const [recentBudgetRoleFilter, setRecentBudgetRoleFilter] = useState<'all' | 'created' | 'updated' | 'team' | 'mine'>('all');
   const [recentBudgetSearch, setRecentBudgetSearch] = useState('');
   const debouncedRecentBudgetSearch = useDebounce(recentBudgetSearch, 300);
   const [recentBudgetLimit, setRecentBudgetLimit] = useState<number | 'all'>(25);
@@ -3874,6 +3908,20 @@ export default function App() {
     const currentFullName = (userProfile?.fullName || user?.displayName || '').toLowerCase().trim();
     const currentTeamId = userProfile?.teamId || '';
     const currentTeamName = (userProfile?.teamName || '').toLowerCase().trim();
+
+    // Xác định thông tin phòng kinh doanh (team) của người dùng hiện tại
+    const matchedUserTeam = teams.find(t => 
+      (currentTeamId && t.id === currentTeamId) ||
+      (currentTeamName && normalizeTeamName(t.name).toLowerCase() === normalizeTeamName(currentTeamName).toLowerCase()) ||
+      (currentTeamName && t.name.toLowerCase().trim() === currentTeamName) ||
+      (currentTeamName && t.teamCode && t.teamCode.toLowerCase().trim() === currentTeamName) ||
+      (currentTeamName && extractTeamCode(t.name).toLowerCase() === extractTeamCode(currentTeamName).toLowerCase())
+    ) || null;
+
+    const myTeamId = currentTeamId || matchedUserTeam?.id || '';
+    const myTeamNameNorm = normalizeTeamName(matchedUserTeam?.name || currentTeamName).toLowerCase().trim();
+    const myTeamCode = (matchedUserTeam?.teamCode || extractTeamCode(matchedUserTeam?.name || currentTeamName) || '').toLowerCase().trim();
+    const myRawTeamName = (currentTeamName || matchedUserTeam?.name || '').toLowerCase().trim();
 
     return budgets
       .map(b => {
@@ -3929,9 +3977,20 @@ export default function App() {
           }
         }
 
+        // Đăng ký của tôi: Bao gồm cả đăng ký tôi tạo và tôi cập nhật
+        const isMine = Boolean(isCreator || isUpdater || isSubContributor);
+
+        // Đăng ký đội của tôi: Bao gồm các đăng ký của phòng kinh doanh của tôi (gồm của tôi và những nhân viên khác)
+        const bTeamId = b.teamId || '';
+        const bTeamName = (b.teamName || '').toLowerCase().trim();
+        const bTeamNameNorm = normalizeTeamName(b.teamName || '').toLowerCase().trim();
+        const bTeamCode = (b.teamCode || extractTeamCode(b.teamName || '') || '').toLowerCase().trim();
+
         const isTeamMember = Boolean(
-          (currentTeamId && b.teamId && currentTeamId === b.teamId) ||
-          (currentTeamName && b.teamName && currentTeamName === b.teamName.toLowerCase().trim())
+          (myTeamId && bTeamId && myTeamId === bTeamId) ||
+          (myTeamNameNorm && bTeamNameNorm && myTeamNameNorm === bTeamNameNorm) ||
+          (myTeamCode && bTeamCode && myTeamCode === bTeamCode) ||
+          (myRawTeamName && bTeamName && myRawTeamName === bTeamName)
         );
 
         const isAssignedGDDA = isGDDA && (
@@ -3940,8 +3999,25 @@ export default function App() {
           userProfile.assignedProjects.includes(b.projectId)
         );
 
-        // All users can view the budget records in this view
-        const isVisible = true;
+        const isSameBlock = isGDKhoi && Boolean(
+          currentActiveBlock && isTeamInBlock(b.teamId || b.teamName, currentActiveBlock, teams)
+        );
+
+        // Phân quyền hiển thị (User Permission):
+        // - Admin, SuperAdmin, Mod, Kế toán: Xem toàn bộ hệ thống
+        // - GDKhoi: Xem đăng ký của mình, đội mình, và các phòng trong khối phụ trách
+        // - GDDA: Xem đăng ký của mình, đội mình, và các dự án được phân công
+        // - User thông thường: CHỈ nhìn được đăng ký của tôi (tạo hoặc cập nhật) và đăng ký đội của tôi (phòng KD)
+        let isVisible = true;
+        if (!isAdmin && !isSuperAdmin && !isAccountant && !isMod) {
+          if (isGDKhoi) {
+            isVisible = Boolean(isMine || isTeamMember || isSameBlock);
+          } else if (isGDDA) {
+            isVisible = Boolean(isMine || isTeamMember || isAssignedGDDA);
+          } else {
+            isVisible = Boolean(isMine || isTeamMember);
+          }
+        }
 
         // Effective activity timestamp for sorting
         let effectiveTime = 0;
@@ -3958,6 +4034,7 @@ export default function App() {
           _isCreator: isCreator,
           _isUpdater: isUpdater,
           _isSubContributor: isSubContributor,
+          _isMine: isMine,
           _isTeamMember: isTeamMember,
           _mySubAmount: mySubAmount,
           _historyCount: historyCount,
@@ -3967,8 +4044,16 @@ export default function App() {
         };
       })
       .filter(b => b._isVisible)
-      .sort((a, b) => b._effectiveTime - a._effectiveTime);
-  }, [budgets, user, userProfile, isAdmin, isMod, isAccountant, isGDDA]);
+      .sort((a, b) => {
+        // Ưu tiên hiển thị: Đăng ký của tôi (tôi tạo hoặc cập nhật) luôn hiển thị lên trước
+        const aMine = a._isMine ? 1 : 0;
+        const bMine = b._isMine ? 1 : 0;
+        if (aMine !== bMine) {
+          return bMine - aMine; // Của tôi (1) lên trước (0)
+        }
+        return b._effectiveTime - a._effectiveTime;
+      });
+  }, [budgets, user, userProfile, isAdmin, isSuperAdmin, isMod, isAccountant, isGDDA, isGDKhoi, teams, currentActiveBlock]);
 
   // Scoped recent budgets for the active month filter (for accurate pill count badges)
   const monthScopedRecentBudgets = useMemo(() => {
@@ -3996,8 +4081,8 @@ export default function App() {
         }
       }
 
-      // 3. Role Filter
-      if (recentBudgetRoleFilter === 'created' && !b._isCreator) return false;
+      // 3. Role Filter: 'mine' hoặc 'created' bao gồm cả đăng ký tôi tạo và tôi cập nhật
+      if ((recentBudgetRoleFilter === 'created' || recentBudgetRoleFilter === 'mine') && !b._isMine) return false;
       if (recentBudgetRoleFilter === 'updated' && !b._isUpdater) return false;
       if (recentBudgetRoleFilter === 'team' && !b._isTeamMember) return false;
 
@@ -4645,15 +4730,19 @@ export default function App() {
 
           if (!userDoc.exists()) {
             const initialProfile = {
+              uid: firebaseUser.uid,
               email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
+              displayName: firebaseUser.displayName || '',
               role: role,
               fullName: '',
               teamName: '',
+              teamId: '',
+              teamCode: '',
               assignedProjects: [],
-              createdAt: serverTimestamp()
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
             };
-            await setDoc(userDocRef, initialProfile);
+            await setDoc(userDocRef, initialProfile, { merge: true });
             setUserProfile(initialProfile);
             setShowOnboarding(true);
           }
@@ -7100,9 +7189,14 @@ export default function App() {
         blockId: currentActiveBlock?.id || '',
         blockCode: currentActiveBlock?.blockCode || '',
         createdAt: serverTimestamp(),
-        createdBy: user?.uid
+        createdBy: user?.uid || null
       });
-      await logAction('CREATE', 'teams', docRef.id, { name: newBlockTeamName, teamCode: finalCode, blockId: currentActiveBlock?.id });
+      await logAction('CREATE', 'teams', docRef.id, { 
+        name: newBlockTeamName, 
+        teamCode: finalCode, 
+        blockId: currentActiveBlock?.id || '',
+        blockCode: currentActiveBlock?.blockCode || ''
+      });
       toast.success(`Đã tạo và gán Phòng Kinh Doanh "${newBlockTeamName}" (${finalCode}) vào Khối!`);
       setNewBlockTeamName('');
       setNewBlockTeamCode('');
@@ -7268,13 +7362,16 @@ export default function App() {
       const targetTeamCode = selectedTeamObj?.teamCode || extractTeamCode(targetTeamName);
 
       const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, {
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: onboardingName.trim() || user.displayName || '',
         fullName: onboardingName.trim(),
         teamName: targetTeamName,
         teamId: targetTeamId,
         teamCode: targetTeamCode,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
       
       setUserProfile(prev => ({
         ...prev,
@@ -7493,9 +7590,14 @@ export default function App() {
           blockId: targetBlock?.id || '',
           blockCode: targetBlock?.blockCode || '',
           createdAt: serverTimestamp(),
-          createdBy: user?.uid
+          createdBy: user?.uid || null
         });
-        await logAction('CREATE', 'teams', docRef.id, { name, teamCode, blockId: targetBlock?.id, blockCode: targetBlock?.blockCode });
+        await logAction('CREATE', 'teams', docRef.id, { 
+          name, 
+          teamCode, 
+          blockId: targetBlock?.id || '', 
+          blockCode: targetBlock?.blockCode || '' 
+        });
         successCount++;
         existingNames.add(name.toLowerCase());
       } catch (error) {
@@ -19399,7 +19501,10 @@ export default function App() {
                       </div>
                     </div>
                     <CardDescription className="text-xs text-slate-500 font-medium">
-                      Hiển thị danh sách ngân sách trong kỳ {recentBudgetMonthFilter === 'all' ? 'tất cả các kỳ' : `tháng ${recentBudgetMonthFilter} ${getReportingPeriod(recentBudgetMonthFilter)}`} (bao gồm các bản ghi bạn tạo hoặc cập nhật) mà không cần chọn dự án.
+                      {isAdmin || isAccountant || isMod
+                        ? `Hiển thị danh sách ngân sách kỳ ${recentBudgetMonthFilter === 'all' ? 'tất cả các kỳ' : `tháng ${recentBudgetMonthFilter} ${getReportingPeriod(recentBudgetMonthFilter)}`} (toàn hệ thống, ưu tiên bản ghi của bạn lên đầu).`
+                        : `Hiển thị ngân sách của bạn (tạo / cập nhật - ưu tiên lên đầu) và ngân sách của phòng kinh doanh (${userProfile?.teamName || 'Đội của bạn'}) trong kỳ ${recentBudgetMonthFilter === 'all' ? 'tất cả các kỳ' : `tháng ${recentBudgetMonthFilter} ${getReportingPeriod(recentBudgetMonthFilter)}`}.`
+                      }
                     </CardDescription>
                   </div>
                   
@@ -19502,15 +19607,31 @@ export default function App() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setRecentBudgetRoleFilter('created')}
+                        onClick={() => setRecentBudgetRoleFilter('mine')}
                         className={cn(
-                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
-                          recentBudgetRoleFilter === 'created' 
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1",
+                          (recentBudgetRoleFilter === 'mine' || recentBudgetRoleFilter === 'created')
                             ? "bg-white text-blue-600 shadow-2xs" 
                             : "text-slate-500 hover:text-slate-800"
                         )}
+                        title="Đăng ký của tôi: bao gồm cả đăng ký do bạn tạo và bạn cập nhật"
                       >
-                        Tôi tạo ({monthScopedRecentBudgets.filter(b => b._isCreator).length})
+                        <UserCheck className="w-3 h-3" />
+                        Đăng ký của tôi ({monthScopedRecentBudgets.filter(b => b._isMine).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecentBudgetRoleFilter('team')}
+                        className={cn(
+                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1",
+                          recentBudgetRoleFilter === 'team' 
+                            ? "bg-white text-emerald-600 shadow-2xs" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                        title="Đăng ký đội của tôi: bao gồm các đăng ký của phòng kinh doanh của bạn gồm của bạn và nhân viên khác"
+                      >
+                        <Users className="w-3 h-3" />
+                        Đội của tôi ({monthScopedRecentBudgets.filter(b => b._isTeamMember).length})
                       </button>
                       <button
                         type="button"
@@ -19521,20 +19642,9 @@ export default function App() {
                             ? "bg-white text-amber-600 shadow-2xs" 
                             : "text-slate-500 hover:text-slate-800"
                         )}
+                        title="Các đăng ký do bạn đã cập nhật/chỉnh sửa"
                       >
                         Tôi cập nhật ({monthScopedRecentBudgets.filter(b => b._isUpdater).length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRecentBudgetRoleFilter('team')}
-                        className={cn(
-                          "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
-                          recentBudgetRoleFilter === 'team' 
-                            ? "bg-white text-emerald-600 shadow-2xs" 
-                            : "text-slate-500 hover:text-slate-800"
-                        )}
-                      >
-                        Đội của tôi ({monthScopedRecentBudgets.filter(b => b._isTeamMember).length})
                       </button>
                     </div>
                   </div>
@@ -19590,8 +19700,12 @@ export default function App() {
                         <div 
                           key={b.id} 
                           className={cn(
-                            "p-4 rounded-2xl border transition-all duration-300 bg-slate-50/50 hover:bg-slate-50/80 shadow-2xs",
-                            selectedBudgetIds.includes(b.id) ? "border-blue-500 bg-blue-50/30 ring-2 ring-blue-500/10" : "border-slate-100"
+                            "p-4 rounded-2xl border transition-all duration-300 shadow-2xs",
+                            selectedBudgetIds.includes(b.id) 
+                              ? "border-blue-500 bg-blue-50/30 ring-2 ring-blue-500/10" 
+                              : b._isMine 
+                                ? "border-blue-200 bg-blue-50/20 hover:bg-blue-50/40" 
+                                : "border-slate-100 bg-slate-50/50 hover:bg-slate-50/80"
                           )}
                         >
                           <div className="flex items-start justify-between gap-2 mb-3">
@@ -19614,14 +19728,14 @@ export default function App() {
                                 </span>
                                 
                                 {/* Relationship Badges */}
-                                {b._isCreator && (
-                                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
-                                    Người tạo
+                                {b._isMine && (
+                                  <Badge className="bg-blue-600 text-white border-blue-600 py-0 px-1.5 h-4 text-[9px] font-bold rounded shadow-2xs">
+                                    ★ Đăng ký của tôi {b._isCreator && b._isUpdater ? '(Tạo & Sửa)' : b._isCreator ? '(Tôi tạo)' : '(Tôi sửa)'}
                                   </Badge>
                                 )}
-                                {b._isUpdater && (
-                                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
-                                    Đã cập nhật
+                                {!b._isMine && b._isTeamMember && (
+                                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 py-0 px-1.5 h-4 text-[9px] font-bold rounded">
+                                    Đội của tôi
                                   </Badge>
                                 )}
                                 {b._isSubContributor && b._mySubAmount > 0 && (
@@ -19793,7 +19907,8 @@ export default function App() {
                               key={b.id} 
                               className={cn(
                                 "hover:bg-slate-50/60 transition-colors border-b border-slate-50 last:border-0",
-                                selectedBudgetIds.includes(b.id) && "bg-blue-50/30"
+                                selectedBudgetIds.includes(b.id) && "bg-blue-50/30",
+                                b._isMine && !selectedBudgetIds.includes(b.id) && "bg-blue-50/15"
                               )}
                             >
                               {(isAdmin || isAccountant) && (
@@ -19826,14 +19941,14 @@ export default function App() {
                                   </div>
                                   
                                   <div className="flex flex-wrap gap-1">
-                                    {b._isCreator && (
-                                      <Badge className="bg-blue-50 text-blue-700 border-blue-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
-                                        Người tạo
+                                    {b._isMine && (
+                                      <Badge className="bg-blue-600 text-white border-blue-600 text-[9px] py-0 px-1.5 h-4 font-bold rounded shadow-2xs">
+                                        ★ Đăng ký của tôi {b._isCreator && b._isUpdater ? '(Tạo & Sửa)' : b._isCreator ? '(Tôi tạo)' : '(Tôi sửa)'}
                                       </Badge>
                                     )}
-                                    {b._isUpdater && (
-                                      <Badge className="bg-amber-50 text-amber-700 border-amber-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
-                                        Đã cập nhật
+                                    {!b._isMine && b._isTeamMember && (
+                                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200/80 text-[9px] py-0 px-1.5 h-4 font-bold rounded">
+                                        Đội của tôi
                                       </Badge>
                                     )}
                                     {b._isSubContributor && b._mySubAmount > 0 && (

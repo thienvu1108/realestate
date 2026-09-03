@@ -3482,9 +3482,9 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Month M is 15/(M-1) - 14/M
-      const endDate = new Date(year, month - 1, 14);
-      const startDate = new Date(year, month - 2, 15);
+      // Month M is 21/(M-1) - 20/M
+      const endDate = new Date(year, month - 1, 20);
+      const startDate = new Date(year, month - 2, 21);
       return `( ${format(startDate, 'd/M')} - ${format(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
@@ -3795,9 +3795,9 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Chu kỳ Marketing Tháng M: 15/(M-1) - 14/M (Thời hạn mở đăng ký: 15/(M-1) đến hết 05/M)
-      const startDate = new Date(year, month - 2, 15);
-      const endDate = new Date(year, month - 1, 14);
+      // Chu kỳ Marketing Tháng M: 21/(M-1) - 20/M (Thời hạn mở đăng ký: 15/(M-1) đến hết 05/M)
+      const startDate = new Date(year, month - 2, 21);
+      const endDate = new Date(year, month - 1, 20);
       return `Tháng ${month} ( ${safeFormat(startDate, 'd/M')} - ${safeFormat(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
@@ -12067,8 +12067,8 @@ export default function App() {
     const mMonth = getMarketingMonth(now);
     if (!mMonth) return 1;
     const [year, month] = mMonth.split('-').map(Number);
-    // Budget month M starts on 15th of month M-1
-    const startDate = new Date(year, month - 2, 15);
+    // Budget month M starts on 21st of month M-1
+    const startDate = new Date(year, month - 2, 21);
     const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
     
     if (diffDays < 7) return 1;
@@ -12081,8 +12081,8 @@ export default function App() {
     if (!monthStr || !period || period === 'all') return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
-      // Budget month M starts on 15th of month M-1
-      const startDate = new Date(year, month - 2, 15);
+      // Budget month M starts on 21st of month M-1
+      const startDate = new Date(year, month - 2, 21);
       const pNum = Number(period);
       
       const periodStart = new Date(startDate);
@@ -12092,9 +12092,9 @@ export default function App() {
         periodStart.setDate(startDate.getDate() + (pNum - 1) * 7);
         periodEnd.setDate(periodStart.getDate() + 6);
       } else {
-        // Kỳ 4: Until the end (14th of month M)
+        // Kỳ 4: Until the end (20th of month M)
         periodStart.setDate(startDate.getDate() + 21);
-        periodEnd = new Date(year, month - 1, 14);
+        periodEnd = new Date(year, month - 1, 20);
       }
       
       return `${format(periodStart, 'd/M')} - ${format(periodEnd, 'd/M')}`;
@@ -18951,7 +18951,7 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className="text-slate-500 font-medium">
-                        Thời gian mở ĐK: <strong>15/{(() => { const m = Number(getMarketingMonth(new Date()).split('-')[1]); return m === 1 ? 12 : m - 1; })()} &rarr; hết ngày 05/{Number(getMarketingMonth(new Date()).split('-')[1])}</strong>
+                        Thời gian mở ĐK: <strong>{systemSettings?.budgetStartDay || 15}/{(() => { const m = Number(getMarketingMonth(new Date()).split('-')[1]); return m === 1 ? 12 : m - 1; })()} &rarr; hết ngày {String(systemSettings?.budgetEndDay || 5).padStart(2, '0')}/{Number(getMarketingMonth(new Date()).split('-')[1])}</strong>
                       </span>
                       {isWithinRegistrationWindow() ? (
                         <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none px-2 py-0.5 text-[10px] font-black flex items-center gap-1 shadow-none">
@@ -19407,7 +19407,7 @@ export default function App() {
                       </div>
                     </div>
                     <CardDescription className="text-xs text-slate-500 font-medium">
-                      Hiển thị danh sách ngân sách trong kỳ {recentBudgetMonthFilter === 'all' ? 'tất cả các kỳ' : `tháng ${recentBudgetMonthFilter} (${getReportingPeriod(recentBudgetMonthFilter)})`} (bao gồm các bản ghi bạn tạo hoặc cập nhật) mà không cần chọn dự án.
+                      Hiển thị danh sách ngân sách trong kỳ {recentBudgetMonthFilter === 'all' ? 'tất cả các kỳ' : `tháng ${recentBudgetMonthFilter} ${getReportingPeriod(recentBudgetMonthFilter)}`} (bao gồm các bản ghi bạn tạo hoặc cập nhật) mà không cần chọn dự án.
                     </CardDescription>
                   </div>
                   
@@ -19661,7 +19661,7 @@ export default function App() {
                               <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Kỳ ngân sách</p>
                               <div className="flex flex-col">
                                 <span className="text-xs font-bold text-slate-700">{b.month}</span>
-                                <span className="text-[9px] text-indigo-600 font-medium font-sans">({getReportingPeriod(b.month)})</span>
+                                <span className="text-[9px] text-indigo-600 font-medium font-sans">{getReportingPeriod(b.month)}</span>
                               </div>
                             </div>
                             <div>

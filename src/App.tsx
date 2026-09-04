@@ -1290,6 +1290,7 @@ export default function App() {
   const [teams, setTeams] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
+  const [blockBudgets, setBlockBudgets] = useState<any[]>([]);
   const [costs, setCosts] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [efficiencyReports, setEfficiencyReports] = useState<any[]>([]);
@@ -1302,6 +1303,8 @@ export default function App() {
   const [projectPage, setProjectPage] = useState(1);
   const [teamPage, setTeamPage] = useState(1);
   const [budgetPage, setBudgetPage] = useState(1);
+  const [adminBlockBudgetPage, setAdminBlockBudgetPage] = useState(1);
+  const [homeBlockBudgetMonth, setHomeBlockBudgetMonth] = useState<string>('all');
   const [unbudgetedPage, setUnbudgetedPage] = useState(1);
   const [costPage, setCostPage] = useState(1);
   const [efficiencyPage, setEfficiencyPage] = useState(1);
@@ -1356,6 +1359,10 @@ export default function App() {
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return role === 'assistant' || role === 'trợ lý' || role === 'tro ly';
   }, [userRole, userProfile]);
+
+  const canManageBlockBudget = useMemo(() => {
+    return isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin;
+  }, [isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin]);
 
   const isUser = useMemo(() => {
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
@@ -3062,17 +3069,17 @@ export default function App() {
   const menuItems = useMemo(() => {
     return [
       { value: 'home', label: 'Trang chủ', icon: LayoutDashboard, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('home.view'), desc: 'Tổng quan báo cáo' },
-      { value: 'admin', label: 'Quản trị hệ thống', icon: ShieldCheck, color: 'text-rose-600', activeBg: 'bg-slate-900', activeText: 'text-white font-black', visible: (hasPermission('admin.projects.view') || hasPermission('admin.teams.view') || hasPermission('admin.budgets.view') || hasPermission('admin.costs.view') || hasPermission('admin.users.view') || hasPermission('admin.permissions.edit')), desc: 'Cấu hình dự án, ngân sách, nhân sự' },
-      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant, desc: 'Đồng bộ & giám sát ngân sách Khối' },
-      { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
+      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin || isAccountant, desc: 'Đồng bộ & giám sát ngân sách Khối' },
       { value: 'register', label: 'Đăng ký MKT', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
-      { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
+      { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
       { value: 'report-nt', label: 'Nghiệm thu MKT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Nghiệm thu MKT tự động lấy từ Google Sheet' },
+      { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
+      { value: 'admin', label: 'Quản trị hệ thống', icon: ShieldCheck, color: 'text-rose-600', activeBg: 'bg-slate-900', activeText: 'text-white font-black', visible: (isAdmin || isSuperAdmin || isAccountant || hasPermission('admin.projects.view') || hasPermission('admin.teams.view') || hasPermission('admin.budgets.view') || hasPermission('admin.costs.view') || hasPermission('admin.users.view') || hasPermission('admin.permissions.edit')), desc: 'Cấu hình dự án, ngân sách, nhân sự' },
       { value: 'support', label: 'Hỗ trợ kỹ thuật', icon: MessageCircle, color: 'text-blue-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('support.create') || hasPermission('support.resolve'), badge: pendingSupportCount, desc: 'Yêu cầu hỗ trợ, phản hồi sự cố' },
       { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_mkt.create'), desc: 'Quản lý quy trình chiến dịch Marketing' },
       { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_doiung.create'), desc: 'Quản lý đối ứng & bàn giao' },
     ].filter(item => item.visible);
-  }, [hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, pendingSupportCount]);
+  }, [hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin, isAccountant, pendingSupportCount]);
 
   const adminFilteredBudgets = useMemo(() => {
     const getTime = (item: any) => {
@@ -4258,6 +4265,24 @@ export default function App() {
   const [editingCostAmount, setEditingCostAmount] = useState('');
   const [editingCostNote, setEditingCostNote] = useState('');
 
+  // Edit states for Block Budget
+  const [editingBlockBudget, setEditingBlockBudget] = useState<any | null>(null);
+  const [isEditBlockBudgetOpen, setIsEditBlockBudgetOpen] = useState(false);
+  const [editBlockBudgetAmount, setEditBlockBudgetAmount] = useState('');
+  const [editBlockBudgetMonth, setEditBlockBudgetMonth] = useState('');
+  const [editBlockBudgetProjectId, setEditBlockBudgetProjectId] = useState('');
+
+  // Admin states for Block Budget
+  const [adminBlockBudgetSearch, setAdminBlockBudgetSearch] = useState('');
+  const [adminBlockBudgetFilterBlock, setAdminBlockBudgetFilterBlock] = useState('all');
+  const [adminBlockBudgetFilterMonth, setAdminBlockBudgetFilterMonth] = useState('all');
+  const [adminBlockBudgetFilterProject, setAdminBlockBudgetFilterProject] = useState('all');
+  const [isAdminAddBlockBudgetOpen, setIsAdminAddBlockBudgetOpen] = useState(false);
+  const [adminAddBlockBudgetBlockId, setAdminAddBlockBudgetBlockId] = useState('');
+  const [adminAddBlockBudgetProjectId, setAdminAddBlockBudgetProjectId] = useState('');
+  const [adminAddBlockBudgetMonth, setAdminAddBlockBudgetMonth] = useState(getMarketingMonth(new Date()));
+  const [adminAddBlockBudgetAmount, setAdminAddBlockBudgetAmount] = useState('');
+
   // Edit states
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
@@ -4907,6 +4932,13 @@ export default function App() {
       setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
+    // Listen to block_budgets - block-level marketing budget registrations
+    const qBlockBudgets = query(collection(db, 'block_budgets'), orderBy('createdAt', 'desc'));
+    const unsubBlockBudgets = onSnapshot(qBlockBudgets, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      setBlockBudgets(data);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'block_budgets'));
+
     // Listen to costs - load all relevant costs to ensure mapping, team visibility, and actual costs work perfectly
     const qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
@@ -5102,6 +5134,7 @@ export default function App() {
       unsubRegions();
       unsubTypes();
       unsubBudgets();
+      unsubBlockBudgets();
       unsubCosts();
       unsubBlocks();
       unsubLogs();
@@ -6586,6 +6619,171 @@ export default function App() {
     return list;
   }, [myBlockBudgets]);
 
+  const myActiveBlockBudgets = useMemo(() => {
+    const block = currentActiveBlock;
+    if (!block) return [];
+    return blockBudgets.filter(b => b.blockId === block.id || b.blockCode === block.blockCode);
+  }, [currentActiveBlock, blockBudgets]);
+
+  const filteredActiveBlockBudgets = useMemo(() => {
+    if (!blockBudgetMonthFilter || blockBudgetMonthFilter === 'all') return myActiveBlockBudgets;
+    return myActiveBlockBudgets.filter(b => b.month === blockBudgetMonthFilter);
+  }, [myActiveBlockBudgets, blockBudgetMonthFilter]);
+
+  const availableActiveBlockBudgetMonths = useMemo(() => {
+    const list = Array.from(new Set(myActiveBlockBudgets.map(b => b.month))).filter((m): m is string => typeof m === 'string' && !!m);
+    list.sort((a, b) => a.localeCompare(b));
+    return list;
+  }, [myActiveBlockBudgets]);
+
+  const filteredAdminBlockBudgets = useMemo(() => {
+    let list = [...blockBudgets];
+    if (adminBlockBudgetFilterBlock && adminBlockBudgetFilterBlock !== 'all') {
+      list = list.filter(b => b.blockId === adminBlockBudgetFilterBlock);
+    }
+    if (adminBlockBudgetFilterMonth && adminBlockBudgetFilterMonth !== 'all') {
+      list = list.filter(b => b.month === adminBlockBudgetFilterMonth);
+    }
+    if (adminBlockBudgetFilterProject && adminBlockBudgetFilterProject !== 'all') {
+      list = list.filter(b => b.projectId === adminBlockBudgetFilterProject);
+    }
+    if (adminBlockBudgetSearch.trim()) {
+      const q = adminBlockBudgetSearch.toLowerCase().trim();
+      list = list.filter(b => {
+        const pName = (b.projectName || '').toLowerCase();
+        const pCode = (b.projectCode || '').toLowerCase();
+        const bName = (b.blockName || '').toLowerCase();
+        const bCode = (b.blockCode || '').toLowerCase();
+        const creator = (b.createdByName || b.createdByEmail || '').toLowerCase();
+        return pName.includes(q) || pCode.includes(q) || bName.includes(q) || bCode.includes(q) || creator.includes(q);
+      });
+    }
+    return list.sort((a, b) => {
+      const timeA = a.createdAt?.seconds || 0;
+      const timeB = b.createdAt?.seconds || 0;
+      return timeB - timeA;
+    });
+  }, [blockBudgets, adminBlockBudgetFilterBlock, adminBlockBudgetFilterMonth, adminBlockBudgetFilterProject, adminBlockBudgetSearch]);
+
+  const totalAdminBlockBudgetPages = Math.max(1, Math.ceil(filteredAdminBlockBudgets.length / 20));
+  const paginatedAdminBlockBudgets = useMemo(() => {
+    const start = (adminBlockBudgetPage - 1) * 20;
+    return filteredAdminBlockBudgets.slice(start, start + 20);
+  }, [filteredAdminBlockBudgets, adminBlockBudgetPage]);
+
+  const availableAdminBlockBudgetMonths = useMemo(() => {
+    const list = Array.from(new Set(blockBudgets.map(b => b.month))).filter((m): m is string => typeof m === 'string' && !!m);
+    list.sort((a, b) => b.localeCompare(a));
+    return list;
+  }, [blockBudgets]);
+
+  const blockBudgetByBlockSummary = useMemo(() => {
+    const map: Record<string, {
+      block: any;
+      totalBudget: number;
+      projectBudgets: { projectId: string; projectName: string; amount: number }[];
+      teamCount: number;
+    }> = {};
+
+    blocks.forEach(b => {
+      const bTeams = teams.filter(t => isTeamInBlock(t, b));
+      map[b.id] = {
+        block: b,
+        totalBudget: 0,
+        projectBudgets: [],
+        teamCount: bTeams.length
+      };
+    });
+
+    blockBudgets.forEach(bb => {
+      if (homeBlockBudgetMonth !== 'all' && bb.month !== homeBlockBudgetMonth) return;
+      if (!map[bb.blockId]) {
+        const found = blocks.find(b => b.id === bb.blockId);
+        if (found) {
+          map[bb.blockId] = {
+            block: found,
+            totalBudget: 0,
+            projectBudgets: [],
+            teamCount: 0
+          };
+        } else {
+          return;
+        }
+      }
+      map[bb.blockId].totalBudget += (bb.amount || 0);
+      const projName = resolveProjectName(bb.projectId, bb.projectName);
+      const existing = map[bb.blockId].projectBudgets.find(p => p.projectId === bb.projectId);
+      if (existing) {
+        existing.amount += (bb.amount || 0);
+      } else {
+        map[bb.blockId].projectBudgets.push({
+          projectId: bb.projectId,
+          projectName: projName,
+          amount: bb.amount || 0
+        });
+      }
+    });
+
+    return Object.values(map).sort((a, b) => b.totalBudget - a.totalBudget);
+  }, [blocks, teams, blockBudgets, homeBlockBudgetMonth]);
+
+  const handleAddAdminBlockBudget = async () => {
+    if (!adminAddBlockBudgetBlockId) {
+      toast.error("Vui lòng chọn Khối!");
+      return;
+    }
+    if (!adminAddBlockBudgetProjectId) {
+      toast.error("Vui lòng chọn Dự án!");
+      return;
+    }
+    if (!adminAddBlockBudgetMonth.trim()) {
+      toast.error("Vui lòng nhập Tháng (YYYY-MM)!");
+      return;
+    }
+    const cleanAmount = Number(adminAddBlockBudgetAmount.replace(/[^0-9]/g, ''));
+    if (!cleanAmount || cleanAmount <= 0) {
+      toast.error("Số tiền ngân sách phải lớn hơn 0!");
+      return;
+    }
+
+    const targetBlock = blocks.find(b => b.id === adminAddBlockBudgetBlockId);
+    const targetProj = projects.find(p => p.id === adminAddBlockBudgetProjectId);
+
+    try {
+      const docRef = await addDoc(collection(db, 'block_budgets'), {
+        blockId: adminAddBlockBudgetBlockId,
+        blockName: targetBlock?.name || '',
+        blockCode: targetBlock?.blockCode || '',
+        projectId: adminAddBlockBudgetProjectId,
+        projectName: targetProj?.name || '',
+        projectCode: targetProj?.projectCode || '',
+        month: adminAddBlockBudgetMonth.trim(),
+        amount: cleanAmount,
+        createdBy: user?.uid || '',
+        createdByName: user?.displayName || user?.email || '',
+        createdByEmail: user?.email || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await logAction('CREATE', 'block_budgets', docRef.id, {
+        blockId: adminAddBlockBudgetBlockId,
+        blockName: targetBlock?.name || '',
+        projectId: adminAddBlockBudgetProjectId,
+        projectName: targetProj?.name || '',
+        month: adminAddBlockBudgetMonth.trim(),
+        amount: cleanAmount,
+      });
+
+      toast.success("Tạo ngân sách Khối thành công!");
+      setIsAdminAddBlockBudgetOpen(false);
+      setAdminAddBlockBudgetAmount('');
+    } catch (err) {
+      console.error("Error creating block budget:", err);
+      toast.error("Lỗi khi tạo ngân sách Khối!");
+    }
+  };
+
   const availableCostMonths = useMemo(() => {
     const list = Array.from(new Set(myBlockCosts.map(c => c.month))).filter((m): m is string => typeof m === 'string' && !!m);
     list.sort((a, b) => a.localeCompare(b));
@@ -7243,8 +7441,17 @@ export default function App() {
   };
 
   const handleAddBlockBudget = async () => {
-    if (!blockBudgetProject || !blockBudgetTeam || !blockBudgetAmount || !blockBudgetMonth || !blockBudgetImplementer) {
-      toast.error("Vui lòng nhập đầy đủ thông tin ngân sách!");
+    if (!canManageBlockBudget) {
+      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền đăng ký ngân sách Khối!");
+      return;
+    }
+    const block = currentActiveBlock;
+    if (!block) {
+      toast.error("Vui lòng chọn Khối trước khi đăng ký!");
+      return;
+    }
+    if (!blockBudgetProject || !blockBudgetAmount || !blockBudgetMonth) {
+      toast.error("Vui lòng chọn Dự án, Tháng và nhập Mức ngân sách!");
       return;
     }
     const amt = parseVal(blockBudgetAmount);
@@ -7253,36 +7460,193 @@ export default function App() {
       return;
     }
     const selectedProject = projects.find(p => p.id === blockBudgetProject);
-    const selectedTeam = teams.find(t => t.id === blockBudgetTeam);
     
-    const existsInDb = budgets.some(
-      b => b.teamId === blockBudgetTeam && b.projectId === blockBudgetProject && b.month === blockBudgetMonth
+    const existsInBlock = blockBudgets.some(
+      b => (b.blockId === block.id || b.blockCode === block.blockCode) && 
+           b.projectId === blockBudgetProject && 
+           b.month === blockBudgetMonth
     );
-    if (existsInDb) {
-      toast.error(`Team "${selectedTeam?.name || 'N/A'}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${blockBudgetMonth}. Mỗi dự án chỉ được đăng ký 1 ngân sách trong 1 kỳ.`);
+    if (existsInBlock) {
+      toast.error(`Khối "${block.name || block.blockCode}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${blockBudgetMonth}. Vui lòng chỉnh sửa bản đăng ký hiện có nếu cần thay đổi.`);
       return;
     }
     
     try {
-      const docRef = await addDoc(collection(db, 'budgets'), {
+      const docRef = await addDoc(collection(db, 'block_budgets'), {
+        blockId: block.id,
+        blockCode: block.blockCode || '',
+        blockName: block.name || '',
         projectId: blockBudgetProject,
         projectName: selectedProject?.name || 'N/A',
-        teamId: blockBudgetTeam,
-        teamName: selectedTeam?.name || 'N/A',
-        teamCode: selectedTeam?.teamCode || extractTeamCode(selectedTeam?.name || ''),
-        implementerName: blockBudgetImplementer,
         month: blockBudgetMonth,
         amount: amt,
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
-        userEmail: user?.email?.toLowerCase()
+        userEmail: user?.email?.toLowerCase(),
+        creatorName: user?.displayName || userProfile?.fullName || user?.email || 'N/A'
       });
-      await logAction('CREATE', 'budgets', docRef.id, { projectId: blockBudgetProject, teamName: selectedTeam?.name, amount: amt });
-      toast.success("Đăng ký ngân sách thành công!");
+      await logAction('CREATE', 'block_budgets', docRef.id, { 
+        blockId: block.id, 
+        blockCode: block.blockCode, 
+        projectName: selectedProject?.name, 
+        amount: amt, 
+        month: blockBudgetMonth 
+      });
+      toast.success(`Đăng ký ngân sách Khối thành công (${new Intl.NumberFormat('vi-VN').format(amt)} đ)!`);
       setBlockBudgetAmount('');
-      setBlockBudgetImplementer('');
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'budgets');
+      handleFirestoreError(e, OperationType.CREATE, 'block_budgets');
+    }
+  };
+
+  const handleOpenEditBlockBudget = (b: any) => {
+    if (!canManageBlockBudget) {
+      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
+      return;
+    }
+    setEditingBlockBudget(b);
+    setEditBlockBudgetAmount(b.amount !== undefined && b.amount !== null ? b.amount.toString() : '');
+    setEditBlockBudgetMonth(b.month || '');
+    setEditBlockBudgetProjectId(b.projectId || '');
+    setIsEditBlockBudgetOpen(true);
+  };
+
+  const handleSaveEditBlockBudget = async () => {
+    if (!canManageBlockBudget) {
+      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
+      return;
+    }
+    if (!editingBlockBudget) return;
+    const amt = parseVal(editBlockBudgetAmount);
+    if (amt <= 0) {
+      toast.error("Vui lòng nhập ngân sách lớn hơn 0!");
+      return;
+    }
+    if (!editBlockBudgetMonth) {
+      toast.error("Vui lòng nhập tháng marketing!");
+      return;
+    }
+    const selectedProject = projects.find(p => p.id === editBlockBudgetProjectId);
+
+    try {
+      await updateDoc(doc(db, 'block_budgets', editingBlockBudget.id), {
+        amount: amt,
+        month: editBlockBudgetMonth,
+        projectId: editBlockBudgetProjectId || editingBlockBudget.projectId,
+        projectName: selectedProject?.name || editingBlockBudget.projectName,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.uid,
+        updatedByEmail: user?.email
+      });
+      await logAction('UPDATE', 'block_budgets', editingBlockBudget.id, {
+        previousAmount: editingBlockBudget.amount,
+        newAmount: amt,
+        month: editBlockBudgetMonth
+      });
+      toast.success("Cập nhật ngân sách Khối thành công!");
+      setIsEditBlockBudgetOpen(false);
+      setEditingBlockBudget(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'block_budgets');
+    }
+  };
+
+  const handleDeleteBlockBudget = async (b: any) => {
+    if (!canManageBlockBudget) {
+      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền xóa ngân sách Khối!");
+      return;
+    }
+    const displayProj = resolveProjectName(b.projectId, b.projectName);
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa bản đăng ký ngân sách Khối của dự án "${displayProj}" kỳ ${b.month}?`)) return;
+    try {
+      await deleteDoc(doc(db, 'block_budgets', b.id));
+      await logAction('DELETE', 'block_budgets', b.id, { id: b.id, projectName: displayProj, amount: b.amount });
+      toast.success("Xóa ngân sách Khối thành công!");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'block_budgets');
+    }
+  };
+
+  const syncOldBudgetsToBlockBudgets = async () => {
+    if (blocks.length === 0 || budgets.length === 0) {
+      toast.info("Chưa có dữ liệu Khối hoặc Ngân sách cũ để đồng bộ");
+      return;
+    }
+    
+    let createdCount = 0;
+    
+    // Group old team budgets by block, project, month
+    const grouped: Record<string, {
+      block: any;
+      projectId: string;
+      projectName: string;
+      month: string;
+      amount: number;
+      firstCreatedAt: any;
+    }> = {};
+
+    budgets.forEach(b => {
+      if (!b.month || !b.projectId) return;
+      const targetBlock = blocks.find(blk => 
+        isTeamInBlock({ id: b.teamId, name: b.teamName, teamCode: b.teamCode }, blk, teams) ||
+        b.blockId === blk.id ||
+        b.blockCode === blk.blockCode
+      );
+      if (!targetBlock) return;
+
+      const key = `${targetBlock.id}___${b.projectId}___${b.month}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          block: targetBlock,
+          projectId: b.projectId,
+          projectName: b.projectName || 'N/A',
+          month: b.month,
+          amount: 0,
+          firstCreatedAt: b.createdAt
+        };
+      }
+      grouped[key].amount += Number(b.amount) || 0;
+    });
+
+    const batchList = Object.values(grouped);
+    if (batchList.length === 0) {
+      toast.info("Không tìm thấy ngân sách cũ thuộc các Khối hiện có");
+      return;
+    }
+
+    for (const item of batchList) {
+      const existing = blockBudgets.find(bb => 
+        (bb.blockId === item.block.id || bb.blockCode === item.block.blockCode) && 
+        bb.projectId === item.projectId && 
+        bb.month === item.month
+      );
+      
+      if (!existing) {
+        try {
+          await addDoc(collection(db, 'block_budgets'), {
+            blockId: item.block.id,
+            blockCode: item.block.blockCode || '',
+            blockName: item.block.name || '',
+            projectId: item.projectId,
+            projectName: item.projectName,
+            month: item.month,
+            amount: item.amount,
+            createdAt: item.firstCreatedAt || serverTimestamp(),
+            createdBy: user?.uid || 'system_migration',
+            userEmail: user?.email?.toLowerCase() || 'system',
+            creatorName: 'Hệ thống (Đồng bộ từ dữ liệu cũ)'
+          });
+          createdCount++;
+        } catch (err) {
+          console.error("Lỗi tạo ngân sách khối:", err);
+        }
+      }
+    }
+
+    if (createdCount > 0) {
+      toast.success(`Đã đồng bộ thành công ${createdCount} bản ghi ngân sách Khối từ dữ liệu cũ!`);
+    } else {
+      toast.info("Tất cả ngân sách cũ đã có bản ghi Ngân sách Khối tương ứng.");
     }
   };
 
@@ -7362,7 +7726,7 @@ export default function App() {
       const targetTeamCode = selectedTeamObj?.teamCode || extractTeamCode(targetTeamName);
 
       const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
+      const updatePayload: Record<string, any> = {
         uid: user.uid,
         email: user.email || '',
         displayName: onboardingName.trim() || user.displayName || '',
@@ -7371,14 +7735,20 @@ export default function App() {
         teamId: targetTeamId,
         teamCode: targetTeamCode,
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+      if (selectedTeamObj?.blockId) {
+        updatePayload.assignedBlock = selectedTeamObj.blockId;
+      }
+
+      await setDoc(userDocRef, updatePayload, { merge: true });
       
       setUserProfile(prev => ({
         ...prev,
         fullName: onboardingName.trim(),
         teamName: targetTeamName,
         teamId: targetTeamId,
-        teamCode: targetTeamCode
+        teamCode: targetTeamCode,
+        ...(selectedTeamObj?.blockId ? { assignedBlock: selectedTeamObj.blockId } : {})
       }));
       
       // Auto-fill form fields across the app
@@ -12586,6 +12956,17 @@ export default function App() {
                         </button>
 
                         <button
+                          onClick={() => { setAdminSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            adminSubTab === 'block-budgets' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Layers className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+                          <span>Quản lý Ngân sách Khối</span>
+                        </button>
+
+                        <button
                           onClick={() => { setAdminSubTab('projects'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
@@ -12765,6 +13146,39 @@ export default function App() {
           </div>
         </motion.div>
 
+        {/* Main Horizontal Menu Bar */}
+        <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 p-1.5 sm:p-2 rounded-2xl shadow-sm overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-max">
+            {menuItems.map((item) => {
+              const IconComponent = item.icon;
+              const isActive = activeTab === item.value;
+              return (
+                <button
+                  key={item.value}
+                  onClick={() => setActiveTab(item.value)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap touch-manipulation",
+                    isActive
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 font-black"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+                  )}
+                >
+                  <IconComponent className={cn("w-4 h-4 shrink-0", isActive ? "text-white" : item.color)} />
+                  <span>{item.label}</span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className={cn(
+                      "flex h-4.5 min-w-[18px] px-1 items-center justify-center rounded-full text-[10px] font-black leading-none",
+                      isActive ? "bg-white text-indigo-700" : "bg-rose-500 text-white"
+                    )}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
 
           {/* Sub-menu for Admin if active */}
@@ -12792,6 +13206,14 @@ export default function App() {
                         onClick={() => setAdminSubTab('budgets')}
                       >
                         <Wallet className="mr-2 h-4 w-4" /> Ngân sách
+                      </Button>
+                      <Button 
+                        variant={adminSubTab === 'block-budgets' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'block-budgets' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => setAdminSubTab('block-budgets')}
+                      >
+                        <Layers className="mr-2 h-4 w-4" /> Ngân sách Khối
                       </Button>
                       <Button 
                         variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
@@ -13221,6 +13643,134 @@ export default function App() {
                   </Button>
                 </div>
               )}
+            </Card>
+
+            {/* Mục: Ngân Sách Marketing Của Từng Khối tại Trung Tâm Điều Hành */}
+            <Card className="border-none shadow-xl shadow-slate-100 bg-white rounded-[32px] overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 w-full" />
+              <CardHeader className="p-6 sm:p-8 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <CardTitle className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                      Ngân Sách Marketing Theo Khối
+                    </CardTitle>
+                  </div>
+                  <CardDescription className="text-xs sm:text-sm text-slate-500 font-medium">
+                    Hạn mức ngân sách Marketing được phân bổ trực tiếp theo từng Khối kinh doanh và dự án
+                  </CardDescription>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Tháng:</span>
+                    <Select value={homeBlockBudgetMonth} onValueChange={setHomeBlockBudgetMonth}>
+                      <SelectTrigger className="w-[140px] rounded-xl text-xs h-9 bg-slate-50 border-slate-200">
+                        <SelectValue placeholder="Chọn tháng..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="all">Tất cả tháng</SelectItem>
+                        {availableAdminBlockBudgetMonths.map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab('block-mgmt')}
+                    className="h-9 rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-bold gap-1.5"
+                  >
+                    <span>Quản lý Khối</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-6 sm:p-8 pt-2">
+                {blockBudgetByBlockSummary.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
+                    <Layers className="w-10 h-10 mx-auto opacity-30 mb-2 text-purple-600" />
+                    <p className="text-sm font-medium">Chưa có dữ liệu ngân sách Khối nào</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {blockBudgetByBlockSummary.map(({ block: b, totalBudget, projectBudgets, teamCount }) => (
+                      <div 
+                        key={b.id}
+                        className="bg-gradient-to-b from-white to-purple-50/30 border border-purple-100/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative group"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="outline" className="font-mono text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50">
+                                {b.blockCode}
+                              </Badge>
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                {teamCount} phòng KD
+                              </span>
+                            </div>
+                            <h4 className="text-base font-black text-slate-900 mt-1">
+                              {b.name}
+                            </h4>
+                          </div>
+
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedBlockId(b.id);
+                              setActiveTab('block-mgmt');
+                            }}
+                            className="text-purple-600 hover:bg-purple-100/50 h-7 w-7 p-0 rounded-lg opacity-80 group-hover:opacity-100 transition-opacity"
+                            title="Đi tới quản lý khối"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+
+                        {/* Tổng ngân sách */}
+                        <div className="p-3 bg-white rounded-xl border border-purple-100/60 shadow-xs">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tổng ngân sách MKT</p>
+                          <p className="text-xl font-black text-purple-700 mt-0.5">
+                            {new Intl.NumberFormat('vi-VN').format(totalBudget)} đ
+                          </p>
+                        </div>
+
+                        {/* Chi tiết theo Dự án */}
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            Phân bổ dự án ({projectBudgets.length})
+                          </p>
+                          {projectBudgets.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">Chưa đăng ký dự án nào</p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {projectBudgets.map(p => (
+                                <div key={p.projectId} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-slate-50/70 border border-slate-100">
+                                  <span className="font-semibold text-slate-700 truncate max-w-[150px]">{p.projectName}</span>
+                                  <span className="font-bold text-emerald-600 font-mono">
+                                    {new Intl.NumberFormat('vi-VN').format(p.amount)} đ
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer: GĐ Khối */}
+                        <div className="pt-2 border-t border-purple-100/60 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="truncate">GĐ Khối: <strong>{b.directorName || 'Chưa gán'}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             </Card>
               </>
             )}
@@ -14002,15 +14552,29 @@ export default function App() {
   {blockSubTab === 'block-budgets' && (
     <>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Đăng ký */}
+                    {/* Đăng ký ngân sách theo Khối */}
                     <Card className="border-slate-100 shadow-md">
                       <CardHeader>
-                        <CardTitle className="text-lg font-black text-slate-900">Nhập Ngân Sách Dự Án</CardTitle>
-                        <CardDescription>Đăng ký hạn mức ngân sách chiến dịch cho các nhóm trong khối.</CardDescription>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg font-black text-slate-900">Nhập Ngân Sách Dự Án</CardTitle>
+                          <Badge variant="outline" className="text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50">
+                            THEO KHỐI
+                          </Badge>
+                        </div>
+                        <CardDescription>
+                          Đăng ký hạn mức ngân sách Marketing trực tiếp cho toàn bộ <strong>{currentActiveBlock?.name || currentActiveBlock?.blockCode || 'Khối'}</strong> theo từng dự án.
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {!canManageBlockBudget && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                            <span>Chỉ Giám đốc Khối và Trợ lý mới có quyền tạo và chỉnh sửa ngân sách Khối.</span>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
-                          <Label>Dự Án</Label>
+                          <Label className="text-xs font-bold text-slate-700">Dự Án Đăng Ký <span className="text-rose-500">*</span></Label>
                           <SearchableSelectGeneric
                             items={projects.map(p => ({
                               id: p.id,
@@ -14022,155 +14586,146 @@ export default function App() {
                             placeholder="Chọn dự án..."
                             searchPlaceholder="Gõ tên hoặc mã dự án..."
                             emptyMessage="Không tìm thấy dự án"
+                            disabled={!canManageBlockBudget}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label>Nhóm Trực Thuộc</Label>
-                          <SearchableSelectGeneric
-                            items={myBlockTeams.map(t => ({
-                              id: t.id,
-                              name: `${t.name} (${t.teamCode || 'N/A'})`,
-                              code: t.teamCode
-                            }))}
-                            value={blockBudgetTeam}
-                            onValueChange={setBlockBudgetTeam}
-                            placeholder="Chọn nhóm..."
-                            searchPlaceholder="Gõ tên hoặc mã nhóm..."
-                            emptyMessage="Không tìm thấy nhóm"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Người phụ trách ngân sách (Người dùng)</Label>
-                          <Input 
-                            placeholder="Nhập tên người đăng ký..."
-                            value={blockBudgetImplementer}
-                            onChange={(e) => setBlockBudgetImplementer(e.target.value)}
-                            className="rounded-xl border-slate-200"
-                          />
-                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Tháng Marketing</Label>
+                            <Label className="text-xs font-bold text-slate-700">Tháng Marketing <span className="text-rose-500">*</span></Label>
                             <Input 
                               type="text"
                               value={blockBudgetMonth}
                               onChange={(e) => setBlockBudgetMonth(e.target.value)}
                               placeholder="YYYY-MM"
                               className="rounded-xl border-slate-200"
+                              disabled={!canManageBlockBudget}
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Số tiền ngân sách</Label>
+                            <Label className="text-xs font-bold text-slate-700">Mức Ngân Sách (VNĐ) <span className="text-rose-500">*</span></Label>
                             <Input 
                               placeholder="Nhập số tiền..."
                               value={blockBudgetAmount}
                               onChange={(e) => setBlockBudgetAmount(e.target.value)}
-                              className="rounded-xl border-slate-200"
+                              className="rounded-xl border-slate-200 font-semibold"
+                              disabled={!canManageBlockBudget}
                             />
                           </div>
                         </div>
+
                         <Button 
                           onClick={handleAddBlockBudget}
-                          className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold py-2.5 transition-all shadow-md shadow-violet-100"
+                          disabled={!canManageBlockBudget}
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold py-2.5 transition-all shadow-md shadow-purple-100 cursor-pointer"
                         >
-                          Đăng Ký Ngân Sách
+                          <Plus className="w-4 h-4 mr-1.5" /> Đăng Ký Ngân Sách Khối
                         </Button>
                       </CardContent>
                     </Card>
 
-                    {/* Danh sách */}
+                    {/* Danh sách Hồ sơ Ngân sách trong khối */}
                     <div className="lg:col-span-2">
                       <Card className="border-slate-100 shadow-md">
-                        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 space-y-0">
-                          <CardTitle className="text-lg font-black text-slate-900">
-                            Hồ sơ Ngân sách trong Khối ({filteredBlockBudgets.length})
-                          </CardTitle>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Lọc tháng:</span>
-                            <Select value={blockBudgetMonthFilter} onValueChange={setBlockBudgetMonthFilter}>
-                              <SelectTrigger className="w-[140px] rounded-xl text-xs h-8 bg-slate-50 border-slate-200">
-                                <SelectValue placeholder="Chọn tháng..." />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-xl">
-                                <SelectItem value="all">Tất cả các tháng</SelectItem>
-                                {availableBudgetMonths.map((m) => (
-                                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 space-y-0">
+                          <div>
+                            <CardTitle className="text-lg font-black text-slate-900">
+                              Hồ sơ Ngân sách trong Khối ({filteredActiveBlockBudgets.length})
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-500">
+                              Các bản ghi hạn mức Marketing được cấp theo dự án cho Khối
+                            </CardDescription>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {canManageBlockBudget && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={syncOldBudgetsToBlockBudgets}
+                                className="h-8 text-xs font-bold border-purple-200 text-purple-700 bg-purple-50/50 hover:bg-purple-100 rounded-xl"
+                                title="Tạo tự động bản ghi Ngân sách Khối từ ngân sách các team cũ"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Đồng bộ từ bản cũ
+                              </Button>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Tháng:</span>
+                              <Select value={blockBudgetMonthFilter} onValueChange={setBlockBudgetMonthFilter}>
+                                <SelectTrigger className="w-[130px] rounded-xl text-xs h-8 bg-slate-50 border-slate-200">
+                                  <SelectValue placeholder="Chọn tháng..." />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  <SelectItem value="all">Tất cả tháng</SelectItem>
+                                  {availableActiveBlockBudgetMonths.map((m) => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </CardHeader>
                         <CardContent>
-                          {filteredBlockBudgets.length === 0 ? (
+                          {filteredActiveBlockBudgets.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
                               <Wallet className="w-10 h-10 mx-auto opacity-30 mb-2" />
-                              <p className="text-sm font-medium">Không tìm thấy bản đăng ký ngân sách nào cho tháng này</p>
+                              <p className="text-sm font-medium">Không tìm thấy bản đăng ký ngân sách Khối nào cho tháng này</p>
+                              {canManageBlockBudget && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                  Bấm "Đồng bộ từ bản cũ" nếu muốn tạo bản ghi từ các đăng ký cũ của các team thuộc Khối.
+                                </p>
+                              )}
                             </div>
                           ) : (
                             <div className="overflow-x-auto rounded-xl border border-slate-100">
                               <Table>
                                 <TableHeader className="bg-slate-50/70">
                                   <TableRow>
-                                    <TableHead className="font-bold">Nhóm</TableHead>
-                                    <TableHead className="font-bold">GĐKD</TableHead>
-                                    <TableHead className="font-bold">Dự án</TableHead>
-                                    <TableHead className="font-bold">Tháng MKT</TableHead>
-                                    <TableHead className="font-bold">Nhân sự phụ trách</TableHead>
-                                    <TableHead className="font-bold">Thời gian đăng ký</TableHead>
-                                    <TableHead className="font-bold text-right">Mức Ngân Sách</TableHead>
-                                    <TableHead className="font-bold text-center">Thao tác</TableHead>
+                                    <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                    <TableHead className="font-bold text-slate-800">Tháng</TableHead>
+                                    <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
+                                    <TableHead className="font-bold text-right text-slate-800">Mức Ngân sách</TableHead>
+                                    <TableHead className="font-bold text-center text-slate-800">Thao tác chỉnh sửa</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {filteredBlockBudgets.map((b) => {
-                                    const displayTeam = resolveTeamName(b.teamId, b.teamName);
+                                  {filteredActiveBlockBudgets.map((b) => {
                                     const displayProj = resolveProjectName(b.projectId, b.projectName);
                                     return (
                                       <TableRow key={b.id} className="hover:bg-slate-50/50">
-                                        <TableCell className="font-semibold text-xs text-slate-700">{displayTeam}</TableCell>
-                                        <TableCell className="font-semibold text-xs text-rose-600">
-                                          {extractGDKD(displayTeam)}
-                                        </TableCell>
-                                        <TableCell className="font-semibold text-xs text-indigo-600">{displayProj}</TableCell>
-                                        <TableCell className="font-mono text-xs">{b.month}</TableCell>
-                                        <TableCell className="text-xs font-medium text-slate-500">{b.implementerName || 'N/A'}</TableCell>
+                                        <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
+                                        <TableCell className="font-mono text-xs font-semibold text-slate-700">{b.month}</TableCell>
                                         <TableCell className="text-xs font-mono text-slate-500">
                                           {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-xs sm:text-sm text-slate-900 select-all">
-                                          {new Intl.NumberFormat('vi-VN').format(b.amount)} đ
+                                        <TableCell className="text-right font-bold text-xs sm:text-sm text-emerald-600 select-all">
+                                          {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
                                         </TableCell>
                                         <TableCell className="text-center">
-                                          <div className="flex items-center justify-center gap-1">
-                                            <Button 
-                                              size="xs" 
-                                              variant="ghost" 
-                                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-8 w-8 p-0"
-                                              title="Chỉnh sửa ngân sách"
-                                              onClick={() => handleOpenEditBudget(b)}
-                                            >
-                                              <Edit2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                            <Button 
-                                              size="xs" 
-                                              variant="ghost" 
-                                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 w-8 p-0"
-                                              title="Xóa đăng ký ngân sách"
-                                              onClick={async () => {
-                                                if (window.confirm("Bạn có chắc chắn muốn xóa đăng ký ngân sách này?")) {
-                                                  try {
-                                                    await deleteDoc(doc(db, 'budgets', b.id));
-                                                    await logAction('DELETE', 'budgets', b.id, { id: b.id });
-                                                    toast.success("Xóa ngân sách thành công!");
-                                                  } catch (err) {
-                                                    handleFirestoreError(err, OperationType.DELETE, 'budgets');
-                                                  }
-                                                }
-                                              }}
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                          </div>
+                                          {canManageBlockBudget ? (
+                                            <div className="flex items-center justify-center gap-1.5">
+                                              <Button 
+                                                size="xs" 
+                                                variant="outline" 
+                                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1"
+                                                title="Chỉnh sửa ngân sách"
+                                                onClick={() => handleOpenEditBlockBudget(b)}
+                                              >
+                                                <Edit2 className="w-3.5 h-3.5" />
+                                                <span>Sửa</span>
+                                              </Button>
+                                              <Button 
+                                                size="xs" 
+                                                variant="outline" 
+                                                className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs"
+                                                title="Xóa đăng ký ngân sách"
+                                                onClick={() => handleDeleteBlockBudget(b)}
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
+                                          )}
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -14183,6 +14738,74 @@ export default function App() {
                       </Card>
                     </div>
                   </div>
+
+                  {/* Modal Chỉnh Sửa Ngân Sách Khối */}
+                  <Dialog open={isEditBlockBudgetOpen} onOpenChange={setIsEditBlockBudgetOpen}>
+                    <DialogContent className="sm:max-w-md rounded-2xl">
+                      <DialogHeader>
+                        <DialogTitle className="text-lg font-black text-slate-900">
+                          Chỉnh Sửa Ngân Sách Khối
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                          Cập nhật mức ngân sách marketing được cấp cho Khối
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Dự án</Label>
+                          <SearchableSelectGeneric
+                            items={projects.map(p => ({
+                              id: p.id,
+                              name: `${p.name} (${p.projectCode || 'N/A'})`,
+                              code: p.projectCode
+                            }))}
+                            value={editBlockBudgetProjectId}
+                            onValueChange={setEditBlockBudgetProjectId}
+                            placeholder="Chọn dự án..."
+                            searchPlaceholder="Gõ tên hoặc mã dự án..."
+                            emptyMessage="Không tìm thấy dự án"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Tháng Marketing (YYYY-MM)</Label>
+                          <Input 
+                            value={editBlockBudgetMonth}
+                            onChange={(e) => setEditBlockBudgetMonth(e.target.value)}
+                            placeholder="YYYY-MM"
+                            className="rounded-xl font-mono text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Mức Ngân Sách (VNĐ)</Label>
+                          <Input 
+                            value={editBlockBudgetAmount}
+                            onChange={(e) => setEditBlockBudgetAmount(e.target.value)}
+                            placeholder="Nhập số tiền..."
+                            className="rounded-xl font-semibold text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                          variant="ghost"
+                          onClick={() => setIsEditBlockBudgetOpen(false)}
+                          className="rounded-xl text-xs font-bold"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleSaveEditBlockBudget}
+                          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-100"
+                        >
+                          Lưu Thay Đổi
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
     </>
   )}
                 </TabsContent>
@@ -17892,6 +18515,364 @@ export default function App() {
                       </CardContent>
                     </Card>
                   </div>
+    </>
+  )}
+                </TabsContent>
+
+                {/* Admin Block Budget Management Tab */}
+                <TabsContent value="block-budgets" className="space-y-6">
+  {adminSubTab === 'block-budgets' && (
+    <>
+                  <div className="space-y-6">
+                    <Card className="border-none shadow-sm overflow-hidden bg-white">
+                      <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-600 w-full" />
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Layers className="w-5 h-5 text-purple-600" />
+                            <CardTitle className="text-xl font-black text-slate-900">Quản lý Ngân sách Khối</CardTitle>
+                          </div>
+                          <CardDescription className="text-xs font-medium text-slate-500">
+                            Quản lý, rà soát và kiểm soát các bản ghi Đăng ký Ngân sách Marketing theo từng Khối và Dự án
+                          </CardDescription>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 text-xs font-bold text-purple-700 border-purple-200 hover:bg-purple-50 rounded-xl"
+                            onClick={syncOldBudgetsToBlockBudgets}
+                            title="Tạo bản ghi Ngân sách Khối từ ngân sách cũ của các team"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Đồng bộ từ bản ghi cũ
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="h-9 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md shadow-purple-100"
+                            onClick={() => setIsAdminAddBlockBudgetOpen(true)}
+                          >
+                            <Plus className="w-4 h-4 mr-1" /> Thêm Ngân Sách Khối
+                          </Button>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        {/* Summary Badges */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/50 rounded-2xl border border-purple-100/60">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-white rounded-xl shadow-xs border border-purple-100">
+                              <Layers className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng bản ghi</p>
+                              <p className="text-base font-black text-slate-900">{filteredAdminBlockBudgets.length}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-white rounded-xl shadow-xs border border-purple-100">
+                              <Wallet className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng ngân sách</p>
+                              <p className="text-base font-black text-emerald-600">
+                                {new Intl.NumberFormat('vi-VN').format(
+                                  filteredAdminBlockBudgets.reduce((sum, b) => sum + (b.amount || 0), 0)
+                                )} đ
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-white rounded-xl shadow-xs border border-purple-100">
+                              <Building2 className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Số Khối có ngân sách</p>
+                              <p className="text-base font-black text-indigo-600">
+                                {new Set(filteredAdminBlockBudgets.map(b => b.blockId)).size} / {blocks.length}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Search & Filters */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="relative">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <Input 
+                              placeholder="Tìm dự án, khối, người tạo..."
+                              value={adminBlockBudgetSearch}
+                              onChange={(e) => {
+                                setAdminBlockBudgetSearch(e.target.value);
+                                setAdminBlockBudgetPage(1);
+                              }}
+                              className="pl-9 h-10 rounded-xl border-slate-200 text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <Select 
+                              value={adminBlockBudgetFilterBlock} 
+                              onValueChange={(val) => {
+                                setAdminBlockBudgetFilterBlock(val);
+                                setAdminBlockBudgetPage(1);
+                              }}
+                            >
+                              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs bg-slate-50/50">
+                                <SelectValue placeholder="Lọc theo Khối" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl">
+                                <SelectItem value="all">Tất cả Khối</SelectItem>
+                                {blocks.map(b => (
+                                  <SelectItem key={b.id} value={b.id}>
+                                    {b.name} ({b.blockCode})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Select 
+                              value={adminBlockBudgetFilterMonth} 
+                              onValueChange={(val) => {
+                                setAdminBlockBudgetFilterMonth(val);
+                                setAdminBlockBudgetPage(1);
+                              }}
+                            >
+                              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs bg-slate-50/50">
+                                <SelectValue placeholder="Lọc theo Tháng" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl">
+                                <SelectItem value="all">Tất cả các tháng</SelectItem>
+                                {availableAdminBlockBudgetMonths.map(m => (
+                                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Select 
+                              value={adminBlockBudgetFilterProject} 
+                              onValueChange={(val) => {
+                                setAdminBlockBudgetFilterProject(val);
+                                setAdminBlockBudgetPage(1);
+                              }}
+                            >
+                              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs bg-slate-50/50">
+                                <SelectValue placeholder="Lọc theo Dự án" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl">
+                                <SelectItem value="all">Tất cả Dự án</SelectItem>
+                                {projects.map(p => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name} ({p.projectCode || 'N/A'})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {/* Table */}
+                        {filteredAdminBlockBudgets.length === 0 ? (
+                          <div className="text-center py-12 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
+                            <Layers className="w-10 h-10 mx-auto opacity-30 mb-2 text-purple-600" />
+                            <p className="text-sm font-medium">Không tìm thấy bản đăng ký ngân sách Khối nào</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Bạn có thể bấm "Đồng bộ từ bản ghi cũ" để tự động tạo ngân sách Khối từ ngân sách các team cũ.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto rounded-xl border border-slate-200">
+                            <Table>
+                              <TableHeader className="bg-slate-50/80">
+                                <TableRow>
+                                  <TableHead className="font-bold text-slate-800">Khối</TableHead>
+                                  <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                  <TableHead className="font-bold text-slate-800">Tháng MKT</TableHead>
+                                  <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
+                                  <TableHead className="font-bold text-slate-800">Người đăng ký</TableHead>
+                                  <TableHead className="font-bold text-right text-slate-800">Mức Ngân Sách</TableHead>
+                                  <TableHead className="font-bold text-center text-slate-800">Thao tác</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {paginatedAdminBlockBudgets.map((b) => {
+                                  const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                  const displayBlock = blocks.find(blk => blk.id === b.blockId)?.name || b.blockName || b.blockCode || 'Khối N/A';
+                                  return (
+                                    <TableRow key={b.id} className="hover:bg-purple-50/30 transition-colors">
+                                      <TableCell className="font-bold text-xs text-purple-700">
+                                        <div className="flex items-center gap-1.5">
+                                          <Layers className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                          <span>{displayBlock}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="font-bold text-xs text-indigo-700">
+                                        {displayProj}
+                                      </TableCell>
+                                      <TableCell className="font-mono text-xs font-semibold text-slate-700">
+                                        <Badge variant="outline" className="font-mono bg-slate-50 border-slate-200">
+                                          {b.month}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-xs font-mono text-slate-500">
+                                        {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                      </TableCell>
+                                      <TableCell className="text-xs text-slate-600">
+                                        <span className="font-medium">{b.createdByName || b.createdByEmail || 'Hệ thống'}</span>
+                                      </TableCell>
+                                      <TableCell className="text-right font-bold text-xs sm:text-sm text-emerald-600 select-all">
+                                        {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <Button 
+                                            size="xs" 
+                                            variant="ghost" 
+                                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-8 w-8 p-0"
+                                            title="Chỉnh sửa ngân sách Khối"
+                                            onClick={() => handleOpenEditBlockBudget(b)}
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                          <Button 
+                                            size="xs" 
+                                            variant="ghost" 
+                                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 w-8 p-0"
+                                            title="Xóa ngân sách Khối"
+                                            onClick={() => handleDeleteBlockBudget(b)}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+
+                        {/* Pagination */}
+                        {filteredAdminBlockBudgets.length > 20 && (
+                          <div className="flex items-center justify-between pt-2">
+                            <p className="text-xs font-medium text-slate-500">
+                              Trang {adminBlockBudgetPage} / {totalAdminBlockBudgetPages} ({filteredAdminBlockBudgets.length} bản ghi)
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-slate-200"
+                                disabled={adminBlockBudgetPage <= 1}
+                                onClick={() => setAdminBlockBudgetPage(p => Math.max(1, p - 1))}
+                              >
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Trang trước
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl border-slate-200"
+                                disabled={adminBlockBudgetPage >= totalAdminBlockBudgetPages}
+                                onClick={() => setAdminBlockBudgetPage(p => Math.min(totalAdminBlockBudgetPages, p + 1))}
+                              >
+                                Trang sau <ChevronRight className="w-4 h-4 ml-1" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Admin Modal: Thêm Ngân Sách Khối Mới */}
+                  <Dialog open={isAdminAddBlockBudgetOpen} onOpenChange={setIsAdminAddBlockBudgetOpen}>
+                    <DialogContent className="sm:max-w-md rounded-2xl">
+                      <DialogHeader>
+                        <DialogTitle className="text-lg font-black text-slate-900">
+                          Thêm Ngân Sách Khối (Quản Trị)
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                          Cấp hạn mức ngân sách Marketing cho Khối theo dự án
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Chọn Khối <span className="text-rose-500">*</span></Label>
+                          <SearchableSelectGeneric
+                            items={blocks.map(b => ({
+                              id: b.id,
+                              name: `${b.name} (${b.blockCode})`,
+                              code: b.blockCode
+                            }))}
+                            value={adminAddBlockBudgetBlockId}
+                            onValueChange={setAdminAddBlockBudgetBlockId}
+                            placeholder="Chọn khối..."
+                            searchPlaceholder="Gõ tên hoặc mã khối..."
+                            emptyMessage="Không tìm thấy khối"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Chọn Dự Án <span className="text-rose-500">*</span></Label>
+                          <SearchableSelectGeneric
+                            items={projects.map(p => ({
+                              id: p.id,
+                              name: `${p.name} (${p.projectCode || 'N/A'})`,
+                              code: p.projectCode
+                            }))}
+                            value={adminAddBlockBudgetProjectId}
+                            onValueChange={setAdminAddBlockBudgetProjectId}
+                            placeholder="Chọn dự án..."
+                            searchPlaceholder="Gõ tên hoặc mã dự án..."
+                            emptyMessage="Không tìm thấy dự án"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-700">Tháng Marketing <span className="text-rose-500">*</span></Label>
+                            <Input 
+                              value={adminAddBlockBudgetMonth}
+                              onChange={(e) => setAdminAddBlockBudgetMonth(e.target.value)}
+                              placeholder="YYYY-MM"
+                              className="rounded-xl font-mono text-xs"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-700">Mức Ngân Sách (VNĐ) <span className="text-rose-500">*</span></Label>
+                            <Input 
+                              value={adminAddBlockBudgetAmount}
+                              onChange={(e) => setAdminAddBlockBudgetAmount(e.target.value)}
+                              placeholder="Nhập số tiền..."
+                              className="rounded-xl font-semibold text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                          variant="ghost"
+                          onClick={() => setIsAdminAddBlockBudgetOpen(false)}
+                          className="rounded-xl text-xs font-bold"
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          onClick={handleAddAdminBlockBudget}
+                          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-100"
+                        >
+                          Thêm Ngân Sách Khối
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
     </>
   )}
                 </TabsContent>

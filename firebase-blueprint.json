@@ -141,6 +141,27 @@
       },
       "required": ["name"]
     },
+    "BlockBudget": {
+      "title": "Block Budget Registration",
+      "description": "Marketing budget registration by block and project",
+      "type": "object",
+      "properties": {
+        "blockId": { "type": "string" },
+        "blockCode": { "type": "string" },
+        "blockName": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "amount": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "creatorName": { "type": "string" }
+      },
+      "required": ["blockId", "projectId", "month", "amount"]
+    },
     "EfficiencyReport": {
       "title": "Efficiency Report",
       "description": "Actual sales and revenue performance by team and project",
@@ -322,6 +343,10 @@
     "/blocks/{blockId}": {
       "schema": "Block",
       "description": "Blocks (Khối) collection"
+    },
+    "/block_budgets/{blockBudgetId}": {
+      "schema": "BlockBudget",
+      "description": "Block Marketing Budget Registrations"
     },
     "/efficiencyReports/{reportId}": {
       "schema": "EfficiencyReport",

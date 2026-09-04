@@ -125,26 +125,24 @@ service cloud.firestore {
     // Users
     // ===============================================================
     function isValidUser(data) {
-      return (!('email' in data) || isValidEmail(data.email)) &&
+      return (!('email' in data) || data.email == null || data.email == '' || isValidEmail(data.email)) &&
              (!('role' in data) || data.role is string);
     }
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if (isOwner(userId) && isValidUser(incoming())) || 
-                       isAdmin() || isAccountant() || isSuperAdmin() ||
-                       (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
-      allow update: if (
+      allow create: if isSignedIn() && (
+                       (isOwner(userId) && isValidUser(incoming())) || 
+                       isAdmin() || isAccountant() || isSuperAdmin() || isGDKhoi() ||
+                       (isGDKD() && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'))
+                     );
+      allow update: if isSignedIn() && (
         (isOwner(userId) && 
-         (!('role' in incoming().diff(existing()).affectedKeys()) || incoming().get('role', 'user') == existing().get('role', 'user')) && 
-         !('assignedProjects' in incoming().diff(existing()).affectedKeys()) &&
-         !('assignedBlock' in incoming().diff(existing()).affectedKeys()) &&
-         incoming().diff(existing()).affectedKeys().hasOnly([
-           'fullName', 'teamName', 'teamId', 'teamCode', 'displayName', 'onboardingTeam', 'updatedAt', 'photoURL', 'phoneNumber', 'email', 'uid'
-         ])
+         (!('role' in incoming().diff(existing()).affectedKeys()) || incoming().get('role', 'user') == existing().get('role', 'user') || isAdmin()) && 
+         (!('assignedProjects' in incoming().diff(existing()).affectedKeys()) || isAdmin())
         ) || 
         isAdmin() || isAccountant() || isSuperAdmin() || isMod() || isGDKhoi() ||
-        (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_') && incoming().get('teamName', '') == getUserData().get('teamName', '_NONE_'))
+        (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_'))
       );
       allow delete: if isAdmin() || isAccountant() || isSuperAdmin() ||
                        (isGDKD() && existing().get('teamName', '') == getUserData().get('teamName', '_NONE_'));
@@ -211,6 +209,22 @@ service cloud.firestore {
                        (isGDKD() && resource.data.get('teamName', '') == getUserData().get('teamName', '_NONE_')) ||
                        (isGDKhoi() && isMatchBlockPrefix(resource.data.get('teamId', ''))) ||
                        resource.data.get('createdBy', '') == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Block Budgets
+    // ===============================================================
+    function isValidBlockBudget(data) {
+      return (!('projectId' in data) || data.projectId is string) &&
+             (!('month' in data) || data.month is string) &&
+             (!('amount' in data) || data.amount is number || data.amount is int || data.amount is float);
+    }
+
+    match /block_budgets/{blockBudgetId} {
+      allow read: if isSignedIn();
+      allow create: if (isAdmin() || isAccountant() || isGDKhoi() || isSignedIn()) && isValidBlockBudget(incoming());
+      allow update: if (isAdmin() || isAccountant() || isGDKhoi() || resource.data.get('createdBy', '') == request.auth.uid) && isValidBlockBudget(incoming());
+      allow delete: if isAdmin() || isAccountant() || isGDKhoi() || resource.data.get('createdBy', '') == request.auth.uid;
     }
 
     // ===============================================================

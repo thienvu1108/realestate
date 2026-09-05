@@ -336,9 +336,15 @@ export const AcceptanceManager = React.memo(({
 
       // Enforce block-level scoping for GĐK and Trợ lý
       if (isGDKorAssistant && activeTargetBlock) {
-        const blockTeamIds = new Set((teams || []).map((t: any) => t.id));
-        const blockTeamCodes = new Set((teams || []).map((t: any) => (t.teamCode || '').toUpperCase().trim()));
-        const blockTeamNames = new Set((teams || []).map((t: any) => (t.name || '').toLowerCase().trim()));
+        const blockTeamsList = (teams || []).filter((t: any) => {
+          if (t.blockId && (t.blockId === activeTargetBlock.id || t.blockId === activeTargetBlock.blockCode)) return true;
+          if (t.blockCode && (t.blockCode === activeTargetBlock.id || t.blockCode === activeTargetBlock.blockCode)) return true;
+          return false;
+        });
+        const sourceBlockTeams = blockTeamsList.length > 0 ? blockTeamsList : (teams || []);
+        const blockTeamIds = new Set(sourceBlockTeams.map((t: any) => t.id));
+        const blockTeamCodes = new Set(sourceBlockTeams.map((t: any) => (t.teamCode || '').toUpperCase().trim()));
+        const blockTeamNames = new Set(sourceBlockTeams.map((t: any) => (t.name || '').toLowerCase().trim()));
 
         const aTeamCode = (a.teamCode || '').toUpperCase().trim();
         const aTeamName = (a.teamName || '').toLowerCase().trim();
@@ -626,8 +632,12 @@ export const AcceptanceManager = React.memo(({
 
   // Start Edit
   const handleStartEdit = useCallback((item: any) => {
+    if (!canEdit) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền chỉnh sửa bản ghi Nghiệm thu MKT!');
+      return;
+    }
     setEditingRowId(item.id);
-  }, []);
+  }, [canEdit]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingRowId(null);
@@ -635,6 +645,10 @@ export const AcceptanceManager = React.memo(({
 
   // Save Edit (Takes local row state directly from child component)
   const handleSaveEdit = useCallback(async (id: string, updatedState: any) => {
+    if (!canEdit) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền chỉnh sửa bản ghi Nghiệm thu MKT!');
+      return;
+    }
     if (!id || !updatedState) return;
     const comp = getRowComputed(updatedState);
     const tm = (teamLookup.findTeam 
@@ -757,7 +771,7 @@ export const AcceptanceManager = React.memo(({
       console.error('Error updating acceptance:', err);
       toast.error('Lỗi khi cập nhật bản ghi');
     }
-  }, [acceptances, user, teamLookup, projectLookup, teams, projects]);
+  }, [canEdit, acceptances, user, teamLookup, projectLookup, teams, projects]);
 
   const handleSelectRow = useCallback((id: string, checked: boolean) => {
     setSelectedAcceptanceIds(prev => 
@@ -766,9 +780,13 @@ export const AcceptanceManager = React.memo(({
   }, []);
 
   const handleOpenDeleteModal = useCallback((id: string) => {
+    if (!canDelete) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền xóa bản ghi Nghiệm thu MKT!');
+      return;
+    }
     setItemToDeleteId(id);
     setIsDeleteDialogOpen(true);
-  }, []);
+  }, [canDelete]);
 
   const handleOpenHistoryModal = useCallback((acc: any) => {
     setHistoryTargetRecord(acc);
@@ -777,6 +795,10 @@ export const AcceptanceManager = React.memo(({
 
   // Delete single
   const handleConfirmDelete = async () => {
+    if (!canDelete) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền xóa bản ghi Nghiệm thu MKT!');
+      return;
+    }
     if (!itemToDeleteId) return;
     try {
       await deleteDoc(doc(db, 'acceptances', itemToDeleteId));
@@ -791,6 +813,10 @@ export const AcceptanceManager = React.memo(({
 
   // Bulk delete
   const handleConfirmBulkDelete = async () => {
+    if (!canDelete) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền xóa bản ghi Nghiệm thu MKT!');
+      return;
+    }
     if (selectedAcceptanceIds.length === 0) return;
     const toastId = toast.loading(`Đang xóa ${selectedAcceptanceIds.length} bản ghi...`);
     try {
@@ -1270,12 +1296,14 @@ export const AcceptanceManager = React.memo(({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={handleAddDraftRow}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs h-9 px-3.5 rounded-2xl shadow-md shadow-indigo-100 flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" /> Thêm dòng
-          </Button>
+          {canCreate && (
+            <Button
+              onClick={handleAddDraftRow}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs h-9 px-3.5 rounded-2xl shadow-md shadow-indigo-100 flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> Thêm dòng
+            </Button>
+          )}
 
           <Button
             variant="outline"
@@ -1285,13 +1313,15 @@ export const AcceptanceManager = React.memo(({
             <Download className="w-3.5 h-3.5" /> Xuất Excel
           </Button>
 
-          <Button
-            variant="outline"
-            onClick={() => setIsImportAcceptancesDialogOpen(true)}
-            className="border-slate-200 text-indigo-600 hover:bg-indigo-50 font-black text-xs h-9 px-3 rounded-2xl flex items-center gap-1.5"
-          >
-            <Upload className="w-3.5 h-3.5" /> Nhập Excel
-          </Button>
+          {canImport && (
+            <Button
+              variant="outline"
+              onClick={() => setIsImportAcceptancesDialogOpen(true)}
+              className="border-slate-200 text-indigo-600 hover:bg-indigo-50 font-black text-xs h-9 px-3 rounded-2xl flex items-center gap-1.5"
+            >
+              <Upload className="w-3.5 h-3.5" /> Nhập Excel
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1377,7 +1407,7 @@ export const AcceptanceManager = React.memo(({
           </div>
 
           {/* Bulk Selection Notification Bar */}
-          {selectedAcceptanceIds.length > 0 && (
+          {canDelete && selectedAcceptanceIds.length > 0 && (
             <div className="mt-3 bg-rose-50 border border-rose-100 py-2 px-4 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in">
               <div className="flex items-center gap-2 text-rose-900 font-extrabold text-xs">
                 <Trash2 className="w-4 h-4 text-rose-600" />
@@ -1547,6 +1577,7 @@ export const AcceptanceManager = React.memo(({
                   }
                 }}
                 isAllSelected={displayedRecords.length > 0 && selectedAcceptanceIds.length === displayedRecords.length}
+                canDelete={canDelete}
               />
 
               <TableBody>
@@ -1601,6 +1632,8 @@ export const AcceptanceManager = React.memo(({
                         findTeam={teamLookup.findTeam}
                         findProject={projectLookup.findProject}
                         formatCurrency={formatCurrency}
+                        canEdit={canEdit}
+                        canDelete={canDelete}
                         onSelectRow={handleSelectRow}
                         onStartEdit={handleStartEdit}
                         onCancelEdit={handleCancelEdit}

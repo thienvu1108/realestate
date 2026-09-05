@@ -966,153 +966,152 @@ const extractProjectCode = (name: string) => {
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   super_admin: [
     'home.view', 'home.export',
-    'admin.projects.view', 'admin.projects.edit', 'admin.projects.import',
-    'admin.teams.view', 'admin.teams.edit',
-    'admin.budgets.view', 'admin.budgets.edit',
-    'admin.costs.view', 'admin.costs.edit',
-    'admin.efficiency.edit',
-    'admin.users.view', 'admin.users.edit',
-    'admin.backup.view', 'admin.permissions.edit',
-    'block.view', 'block.approve',
-    'team_mgmt.view', 'team_mgmt.approve',
-    'register.view', 'register.create', 'register.edit', 'register.import',
-    'actual.view', 'actual.create', 'actual.edit', 'actual.import',
+    'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
+    'block.view', 'block.create', 'block.edit', 'block.delete', 'block.approve',
+    'team_mgmt.view', 'team_mgmt.create', 'team_mgmt.edit', 'team_mgmt.delete', 'team_mgmt.approve',
+    'register.view', 'register.create', 'register.edit', 'register.delete', 'register.import',
+    'actual.view', 'actual.create', 'actual.edit', 'actual.delete', 'actual.import',
     'history.view', 'history.export',
-    'report_nt.view', 'report_nt.sync',
-    'support.create', 'support.resolve',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
-    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.edit', 'process_mkt.delete', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.edit', 'process_doiung.delete', 'process_doiung.approve',
+    'support.view', 'support.create', 'support.resolve',
+    'admin.projects.view', 'admin.projects.create', 'admin.projects.edit', 'admin.projects.delete', 'admin.projects.import',
+    'admin.teams.view', 'admin.teams.create', 'admin.teams.edit', 'admin.teams.delete',
+    'admin.budgets.view', 'admin.budgets.create', 'admin.budgets.edit', 'admin.budgets.delete',
+    'admin.costs.view', 'admin.costs.create', 'admin.costs.edit', 'admin.costs.delete',
+    'admin.efficiency.view', 'admin.efficiency.edit',
+    'admin.users.view', 'admin.users.create', 'admin.users.edit', 'admin.users.delete',
+    'admin.backup.view', 'admin.backup.restore', 'admin.permissions.edit'
   ],
   admin: [
     'home.view', 'home.export',
-    'admin.projects.view', 'admin.projects.edit', 'admin.projects.import',
-    'admin.teams.view', 'admin.teams.edit',
-    'admin.budgets.view', 'admin.budgets.edit',
-    'admin.costs.view', 'admin.costs.edit',
-    'admin.efficiency.edit',
-    'admin.users.view', 'admin.users.edit',
-    'admin.backup.view', 'admin.permissions.edit',
-    'block.view', 'block.approve',
-    'team_mgmt.view', 'team_mgmt.approve',
-    'register.view', 'register.create', 'register.edit', 'register.import',
-    'actual.view', 'actual.create', 'actual.edit', 'actual.import',
+    'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
+    'block.view', 'block.create', 'block.edit', 'block.delete', 'block.approve',
+    'team_mgmt.view', 'team_mgmt.create', 'team_mgmt.edit', 'team_mgmt.delete', 'team_mgmt.approve',
+    'register.view', 'register.create', 'register.edit', 'register.delete', 'register.import',
+    'actual.view', 'actual.create', 'actual.edit', 'actual.delete', 'actual.import',
     'history.view', 'history.export',
-    'report_nt.view', 'report_nt.sync',
-    'support.create', 'support.resolve',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
-    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.edit', 'process_mkt.delete', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.edit', 'process_doiung.delete', 'process_doiung.approve',
+    'support.view', 'support.create', 'support.resolve',
+    'admin.projects.view', 'admin.projects.create', 'admin.projects.edit', 'admin.projects.delete', 'admin.projects.import',
+    'admin.teams.view', 'admin.teams.create', 'admin.teams.edit', 'admin.teams.delete',
+    'admin.budgets.view', 'admin.budgets.create', 'admin.budgets.edit', 'admin.budgets.delete',
+    'admin.costs.view', 'admin.costs.create', 'admin.costs.edit', 'admin.costs.delete',
+    'admin.efficiency.view', 'admin.efficiency.edit',
+    'admin.users.view', 'admin.users.create', 'admin.users.edit', 'admin.users.delete',
+    'admin.backup.view', 'admin.backup.restore', 'admin.permissions.edit'
   ],
   mod: [
     'home.view',
-    'admin.projects.view', 'admin.teams.view',
-    'admin.budgets.view', 'admin.costs.view',
+    'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
     'block.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
-    'report_nt.view',
-    'support.create', 'support.resolve',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
-    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.edit', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.edit', 'process_doiung.approve',
+    'support.view', 'support.create', 'support.resolve',
+    'admin.projects.view', 'admin.teams.view', 'admin.budgets.view', 'admin.costs.view'
   ],
   accountant: [
     'home.view', 'home.export',
-    'admin.projects.view', 'admin.projects.edit',
-    'admin.teams.view',
-    'admin.budgets.view', 'admin.budgets.edit',
-    'admin.costs.view', 'admin.costs.edit',
+    'report_nt.view',
     'block.view',
     'team_mgmt.view',
     'register.view',
     'actual.view',
     'history.view', 'history.export',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create',
-    'process_doiung.create',
-    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter',
+    'process_mkt.view', 'process_mkt.create',
+    'process_doiung.view', 'process_doiung.create',
+    'support.view', 'support.create',
+    'admin.projects.view', 'admin.projects.edit',
+    'admin.teams.view',
+    'admin.budgets.view', 'admin.budgets.edit',
+    'admin.costs.view', 'admin.costs.edit'
   ],
   gdda: [
     'home.view',
-    'admin.projects.view',
+    'report_nt.view',
     'block.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
-    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
+    'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter',
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.approve',
+    'admin.projects.view'
   ],
   gd_khoi: [
     'home.view',
+    'report_nt.view',
     'block.view', 'block.approve',
     'team_mgmt.view',
     'register.view',
     'actual.view',
     'history.view',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.approve',
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   tro_ly_khoi: [
     'home.view',
+    'report_nt.view',
     'block.view', 'block.approve',
     'team_mgmt.view',
     'register.view',
     'actual.view',
     'history.view',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.approve',
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   gdkd: [
     'home.view',
+    'report_nt.view',
     'block.view',
     'team_mgmt.view', 'team_mgmt.approve',
     'register.view',
     'actual.view',
     'history.view',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.approve',
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   assistant: [
     'home.view', 'home.export',
+    'report_nt.view',
     'block.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view', 'history.export',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create', 'process_mkt.approve',
-    'process_doiung.create', 'process_doiung.approve',
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create', 'process_mkt.approve',
+    'process_doiung.view', 'process_doiung.create', 'process_doiung.approve',
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   user: [
     'home.view',
+    'report_nt.view',
     'block.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
     'history.view',
-    'report_nt.view',
-    'support.create',
-    'process_mkt.create',
-    'process_doiung.create'
+    'support.view', 'support.create',
+    'process_mkt.view', 'process_mkt.create',
+    'process_doiung.view', 'process_doiung.create'
   ]
 };
 
@@ -1133,59 +1132,59 @@ export const PERMISSION_GROUPS = [
   {
     category: 'Trang chủ (Dashboard & Báo cáo tổng thể)',
     items: [
-      { key: 'home.view', label: 'Xem Trang chủ', desc: 'Có quyền truy cập tab Trang chủ, xem biểu đồ, doanh số, chi phí tổng quan.' },
+      { key: 'home.view', label: 'Xem Trang chủ', desc: 'Truy cập tab Trang chủ, xem biểu đồ, doanh số, chi phí tổng quan.' },
       { key: 'home.export', label: 'Tải báo cáo tổng hợp', desc: 'Tải báo cáo Excel tích lũy và hiệu quả tổng hợp.' }
     ]
   },
   {
-    category: 'Quản trị hệ thống (Admin Panel)',
+    category: 'Nghiệm thu Marketing (Nghiệm thu MKT)',
     items: [
-      { key: 'admin.projects.view', label: 'Xem danh sách Dự án', desc: 'Xem danh sách các dự án trong hệ thống.' },
-      { key: 'admin.projects.edit', label: 'Quản lý Dự án (Thêm/Sửa/Xóa/Gán)', desc: 'Thêm dự án mới, sửa thông tin, xóa dự án, gán loại hình/vùng miền.' },
-      { key: 'admin.projects.import', label: 'Nhập dữ liệu dự án', desc: 'Nhập danh mục dự án hàng loạt từ file Excel.' },
-      { key: 'admin.teams.view', label: 'Xem danh sách Team/Đội', desc: 'Xem danh sách các phòng ban/tổ đội.' },
-      { key: 'admin.teams.edit', label: 'Quản lý Team/Đội (Thêm/Sửa/Xóa)', desc: 'Thêm team, cập nhật mã team, phân bổ tổ đội.' },
-      { key: 'admin.budgets.view', label: 'Xem duyệt đăng ký ngân sách', desc: 'Xem danh sách toàn bộ các đăng ký ngân sách của hệ thống.' },
-      { key: 'admin.budgets.edit', label: 'Phần bổ & Duyệt Ngân sách', desc: 'Duyệt/Xác định ngân sách, chỉnh sửa, gán người xử lý.' },
-      { key: 'admin.costs.view', label: 'Xem duyệt chi phí thực tế', desc: 'Xem danh sách toàn bộ chi phí thực chi thực tế.' },
-      { key: 'admin.costs.edit', label: 'Duyệt & Quản lý Chi phí thực tế', desc: 'Chỉnh sửa, xóa, duyệt số liệu chi phí thực tế cấp hệ thống.' },
-      { key: 'admin.efficiency.edit', label: 'Cập nhật hiệu quả kinh doanh', desc: 'Nhập/Sửa số căn bán mới, doanh số bán lẻ để tính ROI.' },
-      { key: 'admin.users.view', label: 'Xem danh sách Người dùng', desc: 'Xem danh sách các tài khoản đăng ký trong app.' },
-      { key: 'admin.users.edit', label: 'Phân quyền tài khoản & Gán dự án', desc: 'Chỉnh sửa vai trò, gán danh sách dự án cho Mod.' },
-      { key: 'admin.backup.view', label: 'Quản trị Sao lưu & Phục hồi', desc: 'Xem nhật ký thay đổi và quét/phục hồi dữ liệu cũ bị xóa.' },
-      { key: 'admin.permissions.edit', label: 'Quản lý phân quyền vai trò', desc: 'Được phép tùy chỉnh danh mục quyền này.' }
+      { key: 'report_nt.view', label: 'Xem Nghiệm thu MKT', desc: 'Xem danh sách và chi tiết các bản ghi Nghiệm thu MKT (GĐK & Trợ lý chỉ xem các phòng trực thuộc khối mình).' },
+      { key: 'report_nt.create', label: 'Tạo mới Nghiệm thu MKT', desc: 'Thêm dòng mới trong bảng Nghiệm thu MKT (Chỉ Admin và Mod).' },
+      { key: 'report_nt.edit', label: 'Chỉnh sửa Nghiệm thu MKT', desc: 'Sửa số liệu các cột chi phí, VAT, người triển khai trong Nghiệm thu MKT (Chỉ Admin và Mod).' },
+      { key: 'report_nt.delete', label: 'Xóa Nghiệm thu MKT', desc: 'Xóa đơn lẻ hoặc xóa hàng loạt bản ghi Nghiệm thu MKT (Chỉ Admin và Mod).' },
+      { key: 'report_nt.import', label: 'Nhập Excel Nghiệm thu', desc: 'Nhập dữ liệu nghiệm thu hàng loạt từ file Excel (Chỉ Admin và Mod).' },
+      { key: 'report_nt.sync', label: 'Đồng bộ Google Sheet', desc: 'Cập nhật và đồng bộ dữ liệu từ liên kết Google Spreadsheet.' }
     ]
   },
   {
     category: 'Quản lý Khối (Block management)',
     items: [
-      { key: 'block.view', label: 'Giám sát chi phí Khối', desc: 'Xem số liệu phân bổ, thực chi, cảnh báo ngân sách của Block.' },
-      { key: 'block.approve', label: 'Phê duyệt cấp Khối', desc: 'Ghi ý kiến phê duyệt / Đề xuất ngân sách liên phòng.' }
+      { key: 'block.view', label: 'Xem chi phí & ngân sách Khối', desc: 'Xem số liệu phân bổ, thực chi, cảnh báo ngân sách của Block.' },
+      { key: 'block.create', label: 'Tạo mới Khối kinh doanh', desc: 'Được phép tạo mới Khối trong hệ thống.' },
+      { key: 'block.edit', label: 'Chỉnh sửa thông tin Khối', desc: 'Cập nhật tên khối, mã khối, phân bổ ngân sách khối.' },
+      { key: 'block.delete', label: 'Xóa Khối kinh doanh', desc: 'Xóa Khối kinh doanh khỏi hệ thống.' },
+      { key: 'block.approve', label: 'Phê duyệt cấp Khối', desc: 'Ghi ý kiến phê duyệt / Đề xuất ngân sách liên phòng của Khối.' }
     ]
   },
   {
     category: 'Quản lý Phòng KD (Team management)',
     items: [
-      { key: 'team_mgmt.view', label: 'Giám sát hoạt động Đội nhóm', desc: 'Theo dõi đăng ký, tiến độ chạy chi phí của các team trực thuộc.' },
-      { key: 'team_mgmt.approve', label: 'Ý kiến đề xuất cấp Phòng KD', desc: 'Ghi nhận đề xuất/Ý kiến điều hành chung cấp phòng.' }
+      { key: 'team_mgmt.view', label: 'Xem hoạt động Phòng KD', desc: 'Theo dõi đăng ký, tiến độ chạy chi phí của các phòng kinh doanh trực thuộc.' },
+      { key: 'team_mgmt.create', label: 'Tạo mới Phòng KD / Team', desc: 'Tạo phòng kinh doanh hoặc đội nhóm mới.' },
+      { key: 'team_mgmt.edit', label: 'Chỉnh sửa Phòng KD / Team', desc: 'Sửa tên, mã phòng, trưởng phòng, khối trực thuộc.' },
+      { key: 'team_mgmt.delete', label: 'Xóa Phòng KD / Team', desc: 'Xóa phòng kinh doanh khỏi hệ thống.' },
+      { key: 'team_mgmt.approve', label: 'Phê duyệt cấp Phòng KD', desc: 'Ghi nhận đề xuất/Ý kiến điều hành chung cấp phòng.' }
     ]
   },
   {
-    category: 'Đăng ký ngân sách',
+    category: 'Đăng ký ngân sách Marketing',
     items: [
-      { key: 'register.view', label: 'Xem danh sách đăng ký', desc: 'Có quyền xem danh mục đăng ký ngân sách của đội hoặc bản thân.' },
-      { key: 'register.create', label: 'Tạo mới phiếu đăng ký', desc: 'Được phép lập kế hoạch và submit ngân sách tháng mới.' },
-      { key: 'register.edit', label: 'Chỉnh sửa/Xóa phiếu đăng ký cá nhân', desc: 'Sửa hoặc xóa phiếu đăng ký khi ở trạng thái Chờ duyệt.' },
-      { key: 'register.import', label: 'Nhập Excel ngân sách hàng loạt', desc: 'Nhập excel đăng ký nhiều dòng đồng thời.' }
+      { key: 'register.view', label: 'Xem danh sách đăng ký ngân sách', desc: 'Xem danh mục đăng ký ngân sách theo phạm vi quyền hạn.' },
+      { key: 'register.create', label: 'Tạo mới phiếu đăng ký ngân sách', desc: 'Lập kế hoạch và gửi đăng ký ngân sách Marketing tháng mới.' },
+      { key: 'register.edit', label: 'Chỉnh sửa phiếu đăng ký ngân sách', desc: 'Sửa phiếu đăng ký khi ở trạng thái Chờ duyệt.' },
+      { key: 'register.delete', label: 'Xóa phiếu đăng ký ngân sách', desc: 'Xóa phiếu đăng ký ngân sách chưa duyệt.' },
+      { key: 'register.import', label: 'Nhập Excel ngân sách hàng loạt', desc: 'Nhập danh sách đăng ký ngân sách từ file Excel.' }
     ]
   },
   {
-    category: 'Ghi nhận chi phí thực tế',
+    category: 'Ghi nhận chi phí thực tế (Actual Costs)',
     items: [
-      { key: 'actual.view', label: 'Xem thực chi chiến dịch', desc: 'Xem danh sách thực chi chiến chiến dịch quảng cáo.' },
-      { key: 'actual.create', label: 'Tạo mới phiếu chi thực tế', desc: 'Tạo phiếu ghi nhận chi phí thực tế hàng tuần.' },
-      { key: 'actual.edit', label: 'Sửa/Xóa phiếu chi thực tế chưa duyệt', desc: 'Sửa hoặc xóa phiếu chi thực tế ở trạng thái chưa đối soát.' },
-      { key: 'actual.import', label: 'Nhập Excel thực tế hàng loạt', desc: 'Nhập hàng loạt các dòng chi thực tế bằng file Excel.' }
+      { key: 'actual.view', label: 'Xem thực chi chiến dịch', desc: 'Xem danh sách chi phí thực tế quảng cáo đã giải ngân.' },
+      { key: 'actual.create', label: 'Tạo mới phiếu chi thực tế', desc: 'Tạo phiếu ghi nhận chi phí thực tế hàng tuần / kỳ.' },
+      { key: 'actual.edit', label: 'Chỉnh sửa phiếu chi thực tế', desc: 'Sửa phiếu chi thực tế ở trạng thái chưa đối soát.' },
+      { key: 'actual.delete', label: 'Xóa phiếu chi thực tế', desc: 'Xóa bản ghi chi phí thực tế chưa duyệt.' },
+      { key: 'actual.import', label: 'Nhập Excel chi phí thực tế', desc: 'Nhập hàng loạt các dòng chi thực tế bằng file Excel.' }
     ]
   },
   {
@@ -1196,39 +1195,70 @@ export const PERMISSION_GROUPS = [
     ]
   },
   {
-    category: 'Báo cáo Nghiệm thu (NT Report)',
+    category: 'Hiệu quả Marketing (MKT Efficiency)',
     items: [
-      { key: 'report_nt.view', label: 'Xem Báo cáo Nghiệm thu', desc: 'Xem báo cáo nghiệm thu tự động kết nối từ Google Sheet.' },
-      { key: 'report_nt.sync', label: 'Đồng bộ hóa & Cập nhật Sheet Link', desc: 'Đồng bộ lại dữ liệu nghiệm thu, đổi link Google Sheets.' }
+      { key: 'mkt_efficiency.view', label: 'Xem chi tiết Hiệu quả MKT', desc: 'Xem tab Hiệu quả Marketing, các biểu đồ, chi tiết chiến dịch và danh sách bản ghi.' },
+      { key: 'mkt_efficiency.export', label: 'Xuất file Excel Hiệu quả MKT', desc: 'Tải về các bản ghi và báo cáo chiến dịch dưới dạng file Excel.' },
+      { key: 'mkt_efficiency.filter', label: 'Lọc danh sách Hiệu quả MKT', desc: 'Sử dụng tùy chọn lọc theo Dự án, Phòng ban và Tháng trong danh sách hiệu quả.' }
     ]
   },
   {
-    category: 'Hỗ trợ kỹ thuật (Support Center)',
+    category: 'Quy trình Marketing (Campaign Flow)',
     items: [
-      { key: 'support.create', label: 'Gửi yêu cầu hỗ trợ mới', desc: 'Tạo ticket nhờ hỗ trợ kỹ thuật hoặc báo lỗi.' },
-      { key: 'support.resolve', label: 'Xử lý & Đóng yêu cầu hỗ trợ', desc: 'Viết câu trả lời phản hồi, thay đổi trạng thái ticket (Dành cho Admin/Mod).' }
-    ]
-  },
-  {
-    category: 'Quy trình Marketing',
-    items: [
-      { key: 'process_mkt.create', label: 'Tạo quy trình Marketing', desc: 'Thiết lập quy trình chiến dịch và chuyển giao trạng thái.' },
+      { key: 'process_mkt.view', label: 'Xem quy trình Marketing', desc: 'Theo dõi tiến trình và trạng thái các bước quy trình Marketing.' },
+      { key: 'process_mkt.create', label: 'Tạo mới quy trình Marketing', desc: 'Thiết lập quy trình chiến dịch và chuyển giao trạng thái.' },
+      { key: 'process_mkt.edit', label: 'Chỉnh sửa quy trình Marketing', desc: 'Cập nhật nội dung các bước quy trình Marketing.' },
+      { key: 'process_mkt.delete', label: 'Xóa quy trình Marketing', desc: 'Xóa quy trình chiến dịch Marketing.' },
       { key: 'process_mkt.approve', label: 'Duyệt quy trình Marketing', desc: 'Phê duyệt các bước trong quy trình Marketing.' }
     ]
   },
   {
     category: 'Quy trình đối ứng bàn giao',
     items: [
-      { key: 'process_doiung.create', label: 'Tạo quy trình đối ứng', desc: 'Khởi tạo quy trình bàn giao nhận đối ứng.' },
+      { key: 'process_doiung.view', label: 'Xem quy trình đối ứng bàn giao', desc: 'Theo dõi các đợt đối ứng và giao nhận tài sản/tài liệu.' },
+      { key: 'process_doiung.create', label: 'Tạo quy trình đối ứng', desc: 'Khởi tạo quy trình bàn giao nhận đối ứng mới.' },
+      { key: 'process_doiung.edit', label: 'Chỉnh sửa quy trình đối ứng', desc: 'Sửa đổi thông tin biên bản quy trình đối ứng.' },
+      { key: 'process_doiung.delete', label: 'Xóa quy trình đối ứng', desc: 'Hủy/Xóa quy trình đối ứng.' },
       { key: 'process_doiung.approve', label: 'Duyệt quy trình đối ứng', desc: 'Phê duyệt quy trình đối ứng bàn giao.' }
     ]
   },
   {
-    category: 'Hiệu quả Marketing (MKT Efficiency)',
+    category: 'Hỗ trợ kỹ thuật (Support Center)',
     items: [
-      { key: 'mkt_efficiency.view', label: 'Xem chi tiết Hiệu quả MKT', desc: 'Quyền xem tab Hiệu quả Marketing, các biểu đồ, chi tiết chiến dịch và danh sách bản ghi.' },
-      { key: 'mkt_efficiency.export', label: 'Xuất file Excel Hiệu quả MKT', desc: 'Quyền tải về các bản ghi và báo cáo chiến dịch dưới dạng file Excel.' },
-      { key: 'mkt_efficiency.filter', label: 'Lọc danh sách Hiệu quả MKT', desc: 'Quyền sử dụng tùy chọn lọc theo Dự án, Phòng ban và Tháng trong danh sách hiệu quả.' }
+      { key: 'support.view', label: 'Xem danh sách yêu cầu hỗ trợ', desc: 'Xem danh sách các ticket hỗ trợ kỹ thuật.' },
+      { key: 'support.create', label: 'Gửi yêu cầu hỗ trợ mới', desc: 'Tạo ticket nhờ hỗ trợ kỹ thuật hoặc báo lỗi.' },
+      { key: 'support.resolve', label: 'Xử lý & Đóng yêu cầu hỗ trợ', desc: 'Viết phản hồi, thay đổi trạng thái ticket (Admin/Mod).' }
+    ]
+  },
+  {
+    category: 'Quản trị hệ thống (Admin Panel)',
+    items: [
+      { key: 'admin.projects.view', label: 'Xem danh mục Dự án', desc: 'Xem danh sách các dự án trong hệ thống.' },
+      { key: 'admin.projects.create', label: 'Tạo mới Dự án', desc: 'Thêm dự án mới vào danh mục hệ thống.' },
+      { key: 'admin.projects.edit', label: 'Chỉnh sửa Dự án', desc: 'Sửa thông tin dự án, gán loại hình, vùng miền.' },
+      { key: 'admin.projects.delete', label: 'Xóa Dự án', desc: 'Xóa dự án khỏi danh mục hệ thống.' },
+      { key: 'admin.projects.import', label: 'Nhập dữ liệu dự án từ Excel', desc: 'Nhập danh mục dự án hàng loạt từ file Excel.' },
+      { key: 'admin.teams.view', label: 'Xem danh sách Team/Đội', desc: 'Xem danh sách các phòng ban/tổ đội.' },
+      { key: 'admin.teams.create', label: 'Tạo mới Team/Đội', desc: 'Thêm phòng ban/tổ đội mới.' },
+      { key: 'admin.teams.edit', label: 'Chỉnh sửa Team/Đội', desc: 'Cập nhật mã team, phân bổ tổ đội.' },
+      { key: 'admin.teams.delete', label: 'Xóa Team/Đội', desc: 'Xóa team/đội khỏi hệ thống.' },
+      { key: 'admin.budgets.view', label: 'Xem duyệt đăng ký ngân sách', desc: 'Xem danh sách toàn bộ các đăng ký ngân sách của hệ thống.' },
+      { key: 'admin.budgets.create', label: 'Tạo mới kế hoạch ngân sách quản trị', desc: 'Thêm trực tiếp ngân sách từ trang quản trị.' },
+      { key: 'admin.budgets.edit', label: 'Phân bổ & Duyệt Ngân sách', desc: 'Duyệt/Xác định ngân sách, chỉnh sửa, gán người xử lý.' },
+      { key: 'admin.budgets.delete', label: 'Xóa yêu cầu/kế hoạch ngân sách', desc: 'Xóa phiếu đăng ký ngân sách cấp quản trị.' },
+      { key: 'admin.costs.view', label: 'Xem duyệt chi phí thực tế', desc: 'Xem danh sách toàn bộ chi phí thực chi thực tế.' },
+      { key: 'admin.costs.create', label: 'Tạo mới chi phí thực tế quản trị', desc: 'Thêm trực tiếp chi phí thực tế từ trang quản trị.' },
+      { key: 'admin.costs.edit', label: 'Duyệt & Quản lý Chi phí thực tế', desc: 'Chỉnh sửa, duyệt số liệu chi phí thực tế cấp hệ thống.' },
+      { key: 'admin.costs.delete', label: 'Xóa bản ghi chi phí thực tế', desc: 'Xóa chi phí thực tế cấp quản trị.' },
+      { key: 'admin.efficiency.view', label: 'Xem báo cáo hiệu quả & ROI', desc: 'Xem số liệu tính toán ROI và hiệu quả kinh doanh.' },
+      { key: 'admin.efficiency.edit', label: 'Cập nhật hiệu quả kinh doanh', desc: 'Nhập/Sửa số căn bán mới, doanh số bán lẻ để tính ROI.' },
+      { key: 'admin.users.view', label: 'Xem danh sách Người dùng', desc: 'Xem danh sách các tài khoản đăng ký trong app.' },
+      { key: 'admin.users.create', label: 'Tạo mới Người dùng', desc: 'Thêm tài khoản người dùng trực tiếp.' },
+      { key: 'admin.users.edit', label: 'Phân quyền tài khoản & Gán dự án/Khối', desc: 'Chỉnh sửa vai trò, gán danh sách dự án, khối cho người dùng.' },
+      { key: 'admin.users.delete', label: 'Xóa Người dùng', desc: 'Xóa tài khoản người dùng khỏi hệ thống.' },
+      { key: 'admin.backup.view', label: 'Xem nhật ký sao lưu & Lịch sử thao tác', desc: 'Xem nhật ký thay đổi và lịch sử hệ thống.' },
+      { key: 'admin.backup.restore', label: 'Phục hồi dữ liệu hệ thống', desc: 'Quét và phục hồi dữ liệu cũ bị xóa.' },
+      { key: 'admin.permissions.edit', label: 'Quản lý phân quyền vai trò', desc: 'Được phép tùy chỉnh danh mục quyền chi tiết của từng vai trò.' }
     ]
   }
 ];
@@ -1256,7 +1286,19 @@ export default function App() {
     if (user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin') {
       return true;
     }
-    return currentRolePermissions.includes(permKey);
+    if (currentRolePermissions.includes(permKey)) {
+      return true;
+    }
+    // Backward compatibility fallbacks for existing stored permissions in Firestore:
+    if (permKey.endsWith('.create') || permKey.endsWith('.delete')) {
+      const baseKey = permKey.replace(/\.(create|delete)$/, '');
+      if (currentRolePermissions.includes(`${baseKey}.edit`)) return true;
+    }
+    if (permKey.endsWith('.view')) {
+      const baseKey = permKey.replace(/\.view$/, '');
+      if (currentRolePermissions.some(p => p.startsWith(`${baseKey}.`))) return true;
+    }
+    return false;
   }, [currentRolePermissions, userRole, user?.email]);
 
   useEffect(() => {
@@ -15047,6 +15089,16 @@ export default function App() {
                     isMod={isMod}
                     isAccountant={isAccountant}
                     user={user}
+                    userProfile={userProfile}
+                    isGDKhoi={isGDKhoi}
+                    isTroLyKhoi={isTroLyKhoi}
+                    isAssistant={isAssistant}
+                    myBlock={myBlock}
+                    currentActiveBlock={currentActiveBlock}
+                    canCreate={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canEdit={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canDelete={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canImport={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
                     teams={myBlockTeams}
                     uniqueTeams={myBlockTeams}
                     projects={projects}
@@ -17900,6 +17952,16 @@ export default function App() {
                           isMod={isMod}
                           isAccountant={isAccountant}
                           user={user}
+                          userProfile={userProfile}
+                          isGDKhoi={isGDKhoi}
+                          isTroLyKhoi={isTroLyKhoi}
+                          isAssistant={isAssistant}
+                          myBlock={myBlock}
+                          currentActiveBlock={currentActiveBlock}
+                          canCreate={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                          canEdit={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                          canDelete={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                          canImport={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
                           teams={teams}
                           uniqueTeams={uniqueTeams}
                           projects={projects}
@@ -21158,6 +21220,16 @@ export default function App() {
                     isMod={isMod}
                     isAccountant={isAccountant}
                     user={user}
+                    userProfile={userProfile}
+                    isGDKhoi={isGDKhoi}
+                    isTroLyKhoi={isTroLyKhoi}
+                    isAssistant={isAssistant}
+                    myBlock={myBlock}
+                    currentActiveBlock={currentActiveBlock}
+                    canCreate={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canEdit={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canDelete={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                    canImport={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
                     teams={teams}
                     uniqueTeams={uniqueTeams}
                     projects={projects}

@@ -8,6 +8,7 @@ interface HeaderProps {
   selectedAcceptanceIds: string[];
   onSelectAll: (checked: boolean) => void;
   isAllSelected: boolean;
+  canDelete?: boolean;
 }
 
 export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
@@ -15,7 +16,8 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
   onSort,
   selectedAcceptanceIds,
   onSelectAll,
-  isAllSelected
+  isAllSelected,
+  canDelete = true
 }) => {
   const isSorted = (key: string) => sortConfig.key === key;
   const isAsc = (key: string) => sortConfig.key === key && sortConfig.direction === 'asc';
@@ -53,13 +55,15 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
         {/* STT & Multi-select */}
         <TableHead rowSpan={2} className="w-16 text-center font-black bg-slate-100 text-slate-800 border-r border-slate-300 px-2 py-2 text-[11px] sticky left-0 z-30">
           <div className="flex flex-col items-center justify-center gap-1">
-            <input
-              type="checkbox"
-              checked={isAllSelected}
-              onChange={(e) => onSelectAll(e.target.checked)}
-              className="rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer accent-indigo-600"
-              title="Chọn tất cả"
-            />
+            {canDelete && (
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                onChange={(e) => onSelectAll(e.target.checked)}
+                className="rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer accent-indigo-600"
+                title="Chọn tất cả"
+              />
+            )}
             <span className="text-[10px] font-bold">STT</span>
           </div>
         </TableHead>

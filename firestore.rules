@@ -80,7 +80,10 @@ service cloud.firestore {
     function isMatchBlockPrefix(teamId) {
       return teamId != '' && 
              exists(/databases/$(database)/documents/teams/$(teamId)) && 
-             get(/databases/$(database)/documents/teams/$(teamId)).data.get('teamCode', '_NONE_').matches('^' + getGDKhoiPrefix() + '.*');
+             (
+               get(/databases/$(database)/documents/teams/$(teamId)).data.get('blockId', '') == getUserData().get('assignedBlock', '') ||
+               get(/databases/$(database)/documents/teams/$(teamId)).data.get('teamCode', '_NONE_').matches('^' + getGDKhoiPrefix() + '.*')
+             );
     }
 
     function isInternalStaff() {
@@ -168,8 +171,8 @@ service cloud.firestore {
     // ===============================================================
     match /teams/{teamId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() || isAccountant() || isGDKhoi();
-      allow update: if isAdmin() || isAccountant() || isGDKhoi();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isAdmin() || isAccountant() || isGDKhoi();
     }
 
@@ -179,7 +182,7 @@ service cloud.firestore {
     function isValidBlock(data) {
       return data.name is string && data.name.size() > 0 &&
              data.blockCode is string && data.blockCode.size() > 0 &&
-             data.teamPrefix is string && data.teamPrefix.size() > 0;
+             (!('teamPrefix' in data) || data.teamPrefix is string);
     }
 
     match /blocks/{blockId} {
@@ -287,16 +290,16 @@ service cloud.firestore {
     // ===============================================================
     match /acceptances/{acceptanceId} {
       allow read: if true;
-      allow create: if isInternalStaff();
-      allow update: if isInternalStaff();
-      allow delete: if isAdmin() || isAccountant();
+      allow create: if isAdmin() || isMod();
+      allow update: if isAdmin() || isMod();
+      allow delete: if isAdmin() || isMod();
     }
 
     match /finalAcceptances/{finalId} {
       allow read: if true;
-      allow create: if isAdmin() || isMod() || isAccountant();
-      allow update: if isAdmin() || isMod() || isAccountant();
-      allow delete: if isAdmin() || isAccountant();
+      allow create: if isAdmin() || isMod();
+      allow update: if isAdmin() || isMod();
+      allow delete: if isAdmin() || isMod();
     }
 
 

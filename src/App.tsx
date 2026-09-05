@@ -900,26 +900,42 @@ const extractTeamCode = (name: string) => {
   return '';
 };
 
+const getBlockPrefixes = (block: any): string[] => {
+  if (!block || !block.teamPrefix) return [];
+  const raw = String(block.teamPrefix).toUpperCase();
+  return raw
+    .split(/[,;/|\s]+/)
+    .map(p => p.trim())
+    .map(p => (p === 'MH' ? 'MAY' : p))
+    .filter(Boolean);
+};
+
+let _cachedTeams: any[] = [];
+
 const isTeamInBlock = (t: any, block: any, allTeams?: any[]) => {
   if (!block || !t) return false;
   let teamObj = t;
+  const teamsList = (allTeams && allTeams.length > 0) ? allTeams : _cachedTeams;
   if (typeof t === 'string') {
-    if (allTeams && allTeams.length > 0) {
-      teamObj = allTeams.find(item => item.id === t || item.name === t || item.teamCode === t) || { name: t };
+    if (teamsList && teamsList.length > 0) {
+      teamObj = teamsList.find(item => item.id === t || item.name === t || item.teamCode === t) || { name: t };
     } else {
       teamObj = { name: t };
     }
   }
-  if (teamObj.blockId === block.id || teamObj.blockCode === block.blockCode) return true;
+  // 1. Explicit assignment takes absolute highest priority:
+  if (teamObj.blockId === block.id || (teamObj.blockCode && teamObj.blockCode === block.blockCode)) return true;
+  // 2. Explicitly assigned to another block or marked unassigned:
   if (teamObj.blockId === 'unassigned' || teamObj.blockCode === 'unassigned' || teamObj.blockId === 'none' || teamObj.blockCode === 'none') return false;
   if (teamObj.blockId && teamObj.blockId !== block.id) return false;
   if (teamObj.blockCode && teamObj.blockCode !== block.blockCode) return false;
   
-  let prefix = (block.teamPrefix || '').toUpperCase().trim();
-  if (prefix === 'MH') prefix = 'MAY';
-  if (!prefix) return false;
-  const code = teamObj.teamCode || extractTeamCode(teamObj.name || '');
-  return code.toUpperCase().trim().startsWith(prefix);
+  // 3. Match against block's configured teamPrefix (supporting multiple comma/slash separated prefixes)
+  const prefixes = getBlockPrefixes(block);
+  if (prefixes.length === 0) return false;
+  const code = (teamObj.teamCode || extractTeamCode(teamObj.name || '')).toUpperCase().trim();
+  if (!code) return false;
+  return prefixes.some(prefix => code.startsWith(prefix));
 };
 
 const extractGDKD = (name: string) => {
@@ -1499,14 +1515,7 @@ export default function App() {
     if (!block) return false;
     const team = teams.find(t => t.id === teamId);
     if (!team) return false;
-    if (team.blockId === block.id || team.blockCode === block.blockCode) return true;
-    if (team.blockId === 'unassigned' || team.blockCode === 'unassigned' || team.blockId === 'none' || team.blockCode === 'none') return false;
-    if (team.blockId && team.blockId !== block.id) return false;
-    if (team.blockCode && team.blockCode !== block.blockCode) return false;
-    const code = team.teamCode || extractTeamCode(team.name || '');
-    let prefix = (block.teamPrefix || '').toUpperCase().trim();
-    if (prefix === 'MH') prefix = 'MAY';
-    return !!(prefix && code.toUpperCase().startsWith(prefix));
+    return isTeamInBlock(team, block, teams);
   }, [currentActiveBlock, teams, isAdmin, isAccountant, isSuperAdmin]);
 
   const [budgetReportSort, setBudgetReportSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'amount', direction: 'desc' });
@@ -4319,9 +4328,10 @@ export default function App() {
         (t.teamCode || '').toLowerCase().includes(q) ||
         (t.blockCode || '').toLowerCase().includes(q);
       
+      const targetBlock = blocks.find(b => b.id === adminTeamBlockFilter || b.blockCode === adminTeamBlockFilter);
       const matchesBlock = adminTeamBlockFilter === 'all' || 
-        (adminTeamBlockFilter === 'unassigned' && (!t.blockId || t.blockId === '')) ||
-        (t.blockId === adminTeamBlockFilter || t.blockCode === adminTeamBlockFilter);
+        (adminTeamBlockFilter === 'unassigned' && (!t.blockId || t.blockId === '' || t.blockId === 'unassigned')) ||
+        (targetBlock ? isTeamInBlock(t, targetBlock, teams) : (t.blockId === adminTeamBlockFilter || t.blockCode === adminTeamBlockFilter));
 
       return matchesSearch && matchesBlock;
     }).sort((a, b) => {
@@ -4891,6 +4901,7 @@ export default function App() {
         teamCode: normalizeTeamCode(t.teamCode || extractTeamCode(t.name))
       }));
       setTeams(sanitized);
+      _cachedTeams = sanitized;
 
 
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
@@ -7363,9 +7374,8 @@ export default function App() {
     if (!finalCode) {
       finalCode = extractTeamCode(newBlockTeamName);
     }
-    const prefix = (currentActiveBlock?.teamPrefix || '').toUpperCase().trim();
-    if (prefix && !finalCode.startsWith(prefix)) {
-      finalCode = `${prefix}${finalCode}`;
+    if (!finalCode) {
+      finalCode = 'TEAM_' + Date.now().toString().slice(-4);
     }
 
     const nameDup = teams.some(t => t.name.toLowerCase().trim() === newBlockTeamName.toLowerCase().trim());
@@ -7416,14 +7426,13 @@ export default function App() {
       toast.error("Không tìm thấy phòng kinh doanh!");
       return;
     }
-    if (!window.confirm(`Bạn có chắc chắn muốn thêm phòng kinh doanh "${targetTeam.name}" vào Khối "${block.name}"?`)) return;
     try {
       await updateDoc(doc(db, 'teams', teamId), {
         blockId: block.id,
         blockCode: block.blockCode
       });
       await logAction('UPDATE', 'teams', teamId, { blockId: block.id, blockCode: block.blockCode });
-      toast.success(`Đã thêm phòng "${targetTeam.name}" vào Khối thành công!`);
+      toast.success(`Đã thêm phòng "${targetTeam.name}" (${targetTeam.teamCode || 'Không mã'}) vào Khối "${block.name}" thành công!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'teams');
     }
@@ -13923,12 +13932,12 @@ export default function App() {
                                     </div>
 
                                     <div className="space-y-1">
-                                      <Label className="text-xs font-bold text-slate-700">Tiền tố Mã Team quy ước (Có thể bỏ trống)</Label>
+                                      <Label className="text-xs font-bold text-slate-700">Tiền tố Mã Team quy ước (Có thể nhập nhiều tiền tố cách nhau bởi dấu phẩy, VD: EG, MB, HN hoặc bỏ trống)</Label>
                                       <Input 
-                                        placeholder="VD: EG (Tự động match các team có mã bắt đầu bằng EG)"
+                                        placeholder="VD: EG hoặc EG, MB, HN (Tùy chọn - Tự động match các team có mã bắt đầu bằng tiền tố này)"
                                         value={blockPrefixInput}
                                         onChange={(e) => setBlockPrefixInput(e.target.value.toUpperCase())}
-                                        className="h-9 text-xs rounded-xl border-slate-200 uppercase"
+                                        className="h-9 text-xs rounded-xl border-slate-200 uppercase font-mono"
                                       />
                                     </div>
 
@@ -14101,8 +14110,18 @@ export default function App() {
                               </div>
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-0.5">
-                                  <span className="text-slate-400 font-bold">Tiền tố nhóm</span>
-                                  <p className="font-mono font-bold text-slate-700">{currentActiveBlock.teamPrefix || 'N/A'}</p>
+                                  <span className="text-slate-400 font-bold">Tiền tố nhóm quy ước</span>
+                                  <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                    {getBlockPrefixes(currentActiveBlock).length > 0 ? (
+                                      getBlockPrefixes(currentActiveBlock).map(p => (
+                                        <Badge key={p} variant="secondary" className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 text-[10px] px-1.5 py-0.5">
+                                          {p}
+                                        </Badge>
+                                      ))
+                                    ) : (
+                                      <span className="text-slate-400 italic text-[11px]">Tự do (Nhiều tiền tố)</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="space-y-0.5">
                                   <span className="text-slate-400 font-bold">Cơ cấu trực thuộc</span>
@@ -14151,7 +14170,7 @@ export default function App() {
                                 <PlusCircle className="w-4 h-4 text-indigo-600" /> Quản Lý Phòng Kinh Doanh
                               </CardTitle>
                               <CardDescription className="text-[11px] font-sans">
-                                Thêm mới hoặc gán nhanh phòng kinh doanh vào Khối này.
+                                Thêm mới hoặc gán nhanh phòng kinh doanh (thuộc bất kỳ tiền tố nào) vào Khối này.
                               </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 pt-4 text-xs font-sans">
@@ -14160,23 +14179,20 @@ export default function App() {
                                 <Label className="text-[10px] font-black uppercase text-slate-400">Tạo mới Phòng KD Trực Thuộc</Label>
                                 <div className="space-y-2 font-sans">
                                   <Input 
-                                    placeholder="Tên Phòng KD mới (VD: Team BigBang)"
+                                    placeholder="Tên Phòng KD mới (VD: Team Alpha, Phòng KD 02...)"
                                     value={newBlockTeamName}
                                     onChange={(e) => {
-                                      setNewBlockTeamName(e.target.value);
-                                      const suggested = extractTeamCode(e.target.value);
-                                      const prefix = (currentActiveBlock?.teamPrefix || '').toUpperCase().trim();
-                                      if (prefix && suggested && !suggested.startsWith(prefix)) {
-                                        setNewBlockTeamCode(`${prefix}${suggested}`);
-                                      } else {
-                                        setNewBlockTeamCode(suggested);
+                                      const val = e.target.value;
+                                      setNewBlockTeamName(val);
+                                      if (!newBlockTeamCode) {
+                                        setNewBlockTeamCode(extractTeamCode(val));
                                       }
                                     }}
                                     className="h-9 rounded-xl text-xs"
                                   />
                                   <div className="flex gap-2">
                                     <Input 
-                                      placeholder="Mã Phòng (VD: EG_BB)"
+                                      placeholder="Mã Phòng tùy ý (VD: EG_BB, MB01, HN02...)"
                                       value={newBlockTeamCode}
                                       onChange={(e) => setNewBlockTeamCode(e.target.value.toUpperCase())}
                                       className="h-9 rounded-xl text-xs font-mono font-bold"
@@ -14196,21 +14212,25 @@ export default function App() {
                               {/* Option B: Gán phòng hiện có hoặc xóa phòng lẻ không thuộc khối */}
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <Label className="text-[10px] font-black uppercase text-slate-400">Phòng KD Chưa Thuộc Khối ({teamsNotInBlock.length})</Label>
+                                  <Label className="text-[10px] font-black uppercase text-slate-400">Thêm Phòng KD Vào Khối (Còn {teamsNotInBlock.length} phòng khả dụng)</Label>
                                 </div>
                                 <div className="flex gap-2">
                                   <div className="flex-1">
                                     <SearchableSelectGeneric
-                                      items={teamsNotInBlock.map(t => ({
-                                        id: t.id,
-                                        name: `${t.name} (${t.teamCode || 'Chưa gán mã'})`,
-                                        code: t.teamCode
-                                      }))}
+                                      items={teamsNotInBlock.map(t => {
+                                        const currentBlock = blocks.find(b => isTeamInBlock(t, b, teams));
+                                        const blockHint = currentBlock ? ` (Hiện ở: ${currentBlock.name})` : ' (Chưa thuộc khối)';
+                                        return {
+                                          id: t.id,
+                                          name: `${t.name} [${t.teamCode || 'Chưa gán mã'}]${blockHint}`,
+                                          code: t.teamCode
+                                        };
+                                      })}
                                       value={assignExistingTeamId}
                                       onValueChange={setAssignExistingTeamId}
-                                      placeholder="Tìm & chọn phòng kinh doanh..."
+                                      placeholder="Tìm & chọn phòng kinh doanh (bất kỳ tiền tố nào)..."
                                       searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
-                                      emptyMessage="Hệ thống không còn phòng lẻ nào"
+                                      emptyMessage="Tất cả các phòng kinh doanh đã thuộc Khối này"
                                     />
                                   </div>
                                   <Button
@@ -14314,9 +14334,12 @@ export default function App() {
                                               variant="outline" 
                                               className="border-emerald-200 text-emerald-600 bg-emerald-50/30 hover:bg-emerald-50 h-7"
                                               onClick={async () => {
-                                                const prefix = currentActiveBlock?.teamPrefix || '';
-                                                if (prefix && !editingBlockTeamCode.toUpperCase().startsWith(prefix.toUpperCase())) {
-                                                  toast.error(`Mã nhóm phải bắt đầu bằng mã khối quy ước "${prefix}"!`);
+                                                if (!editingBlockTeamName.trim()) {
+                                                  toast.error("Tên phòng kinh doanh không được để trống!");
+                                                  return;
+                                                }
+                                                if (!editingBlockTeamCode.trim()) {
+                                                  toast.error("Mã phòng không được để trống!");
                                                   return;
                                                 }
                                                 try {
@@ -14421,9 +14444,9 @@ export default function App() {
 
                             <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
-                                <Label className="text-xs font-bold text-slate-700">Tiền tố Mã nhóm</Label>
+                                <Label className="text-xs font-bold text-slate-700">Tiền tố Mã nhóm (Có thể nhập nhiều tiền tố cách nhau bởi dấu phẩy, VD: EG, MB, HN hoặc bỏ trống)</Label>
                                 <Input 
-                                  placeholder="VD: EG"
+                                  placeholder="VD: EG hoặc EG, MB, HN"
                                   value={editBlockPrefixInput}
                                   onChange={(e) => setEditBlockPrefixInput(e.target.value.toUpperCase())}
                                   className="h-9 text-xs rounded-xl border-slate-200 uppercase font-mono"
@@ -14498,16 +14521,20 @@ export default function App() {
                                     <>
                                       <div className="flex-1">
                                         <SearchableSelectGeneric
-                                          items={otherTeams.map(t => ({
-                                            id: t.id,
-                                            name: `${t.name} (${t.teamCode || 'Chưa gán mã'})`,
-                                            code: t.teamCode
-                                          }))}
+                                          items={otherTeams.map(t => {
+                                            const currentBlock = blocks.find(b => isTeamInBlock(t, b, teams));
+                                            const blockHint = currentBlock ? ` (Hiện ở: ${currentBlock.name})` : ' (Chưa thuộc khối)';
+                                            return {
+                                              id: t.id,
+                                              name: `${t.name} [${t.teamCode || 'Chưa gán mã'}]${blockHint}`,
+                                              code: t.teamCode
+                                            };
+                                          })}
                                           value={editBlockSelectedTeamToAssign}
                                           onValueChange={setEditBlockSelectedTeamToAssign}
-                                          placeholder="Tìm & chọn phòng kinh doanh..."
+                                          placeholder="Tìm & chọn phòng kinh doanh (bất kỳ tiền tố nào)..."
                                           searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
-                                          emptyMessage="Tất cả phòng đã gán khối!"
+                                          emptyMessage="Tất cả phòng kinh doanh đã thuộc Khối này!"
                                         />
                                       </div>
                                       <Button
@@ -15027,13 +15054,15 @@ export default function App() {
                     acceptances={acceptances.filter(a => {
                       if (a.teamId && myBlockTeams.some(t => t.id === a.teamId)) return true;
                       if (a.teamName && myBlockTeams.some(t => t.name?.toLowerCase() === a.teamName?.toLowerCase())) return true;
-                      if (currentActiveBlock?.teamPrefix && a.teamName && a.teamName.toUpperCase().includes(currentActiveBlock.teamPrefix.toUpperCase())) return true;
+                      const prefixes = getBlockPrefixes(currentActiveBlock);
+                      if (prefixes.length > 0 && a.teamName && prefixes.some(p => a.teamName.toUpperCase().includes(p))) return true;
                       return false;
                     })}
                     finalAcceptances={finalAcceptances.filter(a => {
                       if (a.teamId && myBlockTeams.some(t => t.id === a.teamId)) return true;
                       if (a.teamName && myBlockTeams.some(t => t.name?.toLowerCase() === a.teamName?.toLowerCase())) return true;
-                      if (currentActiveBlock?.teamPrefix && a.teamName && a.teamName.toUpperCase().includes(currentActiveBlock.teamPrefix.toUpperCase())) return true;
+                      const prefixes = getBlockPrefixes(currentActiveBlock);
+                      if (prefixes.length > 0 && a.teamName && prefixes.some(p => a.teamName.toUpperCase().includes(p))) return true;
                       return false;
                     })}
                     teamMap={teamMap}

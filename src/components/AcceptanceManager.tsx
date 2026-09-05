@@ -55,11 +55,52 @@ import {
 } from './acceptance/acceptanceUtils';
 
 export const AcceptanceManager = React.memo(({ 
-  isAdmin, isSuperAdmin, isMod, isAccountant, user, teams = [], projects = [], regions = [], acceptances = [], teamMap = {}, projectMap = {}, 
+  isAdmin, isSuperAdmin, isMod, isAccountant, user, userProfile,
+  isGDKhoi, isTroLyKhoi, isAssistant, myBlock, currentActiveBlock,
+  canCreate: propCanCreate, canEdit: propCanEdit, canDelete: propCanDelete, canImport: propCanImport,
+  teams = [], projects = [], regions = [], acceptances = [], teamMap = {}, projectMap = {}, 
   formatCurrency, getMarketingMonth, handleFirestoreError, formatCurrencyInput,
   isImportingAcceptances, setIsImportingAcceptances, isImportAcceptancesDialogOpen, setIsImportAcceptancesDialogOpen,
   handleImportAcceptancesCSV, uniqueTeams = [], blocks = []
 }: any) => {
+
+  // Detect whether current user is GĐK (Giám đốc Khối) or Trợ lý Khối
+  const isGDKorAssistant = Boolean(
+    isGDKhoi || 
+    isTroLyKhoi || 
+    (isAssistant && (myBlock || userProfile?.assignedBlock)) ||
+    (!isAdmin && !isSuperAdmin && !isMod && (myBlock || userProfile?.assignedBlock || userProfile?.role === 'gd_khoi' || userProfile?.role === 'tro_ly_khoi'))
+  );
+
+  // Active target block (if scoped to a block)
+  const activeTargetBlock = currentActiveBlock || myBlock || (userProfile?.assignedBlock ? blocks.find((b: any) => b.id === userProfile.assignedBlock || b.blockCode === userProfile.assignedBlock) : null);
+
+  // Requirement:
+  // - "Trong mục Nghiệm thu MKT , chỉ Admin và Mod có quyền Tạo mới, và chỉnh sửa bản ghi trong phần nghiệm thu MKT"
+  // - "GĐK và trợ lý chỉ có quyền xem các bản ghi Nghiệm thu MKT của các phòng kinh doanh trực thuộc khối mình . ( Không có quyền tạo mới và chỉnh sửa )"
+  const canCreate = Boolean(
+    propCanCreate !== undefined 
+      ? propCanCreate 
+      : ((isAdmin || isSuperAdmin || isMod) && !isGDKorAssistant)
+  );
+
+  const canEdit = Boolean(
+    propCanEdit !== undefined 
+      ? propCanEdit 
+      : ((isAdmin || isSuperAdmin || isMod) && !isGDKorAssistant)
+  );
+
+  const canDelete = Boolean(
+    propCanDelete !== undefined 
+      ? propCanDelete 
+      : ((isAdmin || isSuperAdmin || isMod) && !isGDKorAssistant)
+  );
+
+  const canImport = Boolean(
+    propCanImport !== undefined 
+      ? propCanImport 
+      : ((isAdmin || isSuperAdmin || isMod) && !isGDKorAssistant)
+  );
 
   const [acceptanceSearch, setAcceptanceSearch] = useState('');
   const [debouncedAcceptanceSearch, setDebouncedAcceptanceSearch] = useState('');
@@ -105,17 +146,21 @@ export const AcceptanceManager = React.memo(({
     notes: ''
   });
 
-  // Draft rows for inline addition - always initialized with at least 1 draft row
-  const [draftRows, setDraftRows] = useState<any[]>([
-    createNewDraftRow()
-  ]);
+  // Draft rows for inline addition - only initialized if user has canCreate permission
+  const [draftRows, setDraftRows] = useState<any[]>(() => {
+    return canCreate ? [createNewDraftRow()] : [];
+  });
 
-  // Always keep at least 1 draft row ready in the table
+  // Always keep at least 1 draft row ready in the table IF user can create
   useEffect(() => {
+    if (!canCreate) {
+      if (draftRows.length > 0) setDraftRows([]);
+      return;
+    }
     if (draftRows.length === 0) {
       setDraftRows([createNewDraftRow(acceptanceMonthFilter)]);
     }
-  }, [draftRows.length, acceptanceMonthFilter]);
+  }, [canCreate, draftRows.length, acceptanceMonthFilter]);
 
   // Editing row state
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -205,7 +250,18 @@ export const AcceptanceManager = React.memo(({
 
   // Base searchable items for dropdown selectors
   const baseTeamItems = useMemo(() => {
-    return (teams || []).map((t: any) => {
+    let availableTeams = teams || [];
+    if (isGDKorAssistant && activeTargetBlock) {
+      const blockFiltered = availableTeams.filter((t: any) => {
+        if (t.blockId && (t.blockId === activeTargetBlock.id || t.blockId === activeTargetBlock.blockCode)) return true;
+        if (t.blockCode && (t.blockCode === activeTargetBlock.id || t.blockCode === activeTargetBlock.blockCode)) return true;
+        return false;
+      });
+      if (blockFiltered.length > 0) {
+        availableTeams = blockFiltered;
+      }
+    }
+    return availableTeams.map((t: any) => {
       const code = t.teamCode || '';
       const name = t.name || '';
       const label = code ? `${code} - ${name}` : name;
@@ -218,7 +274,7 @@ export const AcceptanceManager = React.memo(({
         rawItem: t
       };
     });
-  }, [teams]);
+  }, [teams, isGDKorAssistant, activeTargetBlock]);
 
   const baseProjectItems = useMemo(() => {
     return (projects || []).map((p: any) => {
@@ -277,6 +333,30 @@ export const AcceptanceManager = React.memo(({
 
       // Fast team resolve
       const tm = teamLookup.findTeam(a.teamId) || teamLookup.findTeam(a.teamCode) || teamLookup.findTeam(a.teamName);
+
+      // Enforce block-level scoping for GĐK and Trợ lý
+      if (isGDKorAssistant && activeTargetBlock) {
+        const blockTeamIds = new Set((teams || []).map((t: any) => t.id));
+        const blockTeamCodes = new Set((teams || []).map((t: any) => (t.teamCode || '').toUpperCase().trim()));
+        const blockTeamNames = new Set((teams || []).map((t: any) => (t.name || '').toLowerCase().trim()));
+
+        const aTeamCode = (a.teamCode || '').toUpperCase().trim();
+        const aTeamName = (a.teamName || '').toLowerCase().trim();
+
+        const belongsToBlock = 
+          (a.blockId && (a.blockId === activeTargetBlock.id || a.blockId === activeTargetBlock.blockCode)) ||
+          (a.blockCode && (a.blockCode === activeTargetBlock.id || a.blockCode === activeTargetBlock.blockCode)) ||
+          (a.teamId && blockTeamIds.has(a.teamId)) ||
+          (aTeamCode && blockTeamCodes.has(aTeamCode)) ||
+          (aTeamName && blockTeamNames.has(aTeamName)) ||
+          (tm && (
+            tm.blockId === activeTargetBlock.id || 
+            tm.blockCode === activeTargetBlock.blockCode ||
+            blockTeamIds.has(tm.id)
+          ));
+
+        if (!belongsToBlock) return false;
+      }
 
       // Block match
       if (acceptanceBlockFilter !== 'all') {
@@ -342,7 +422,7 @@ export const AcceptanceManager = React.memo(({
         ? String(valA).localeCompare(String(valB))
         : String(valB).localeCompare(String(valA));
     });
-  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks, teamLookup, projectLookup]);
+  }, [acceptances, acceptanceMonthFilter, acceptanceBlockFilter, acceptanceTeamFilter, acceptanceProjectFilter, debouncedAcceptanceSearch, sortConfig, teams, blocks, teamLookup, projectLookup, isGDKorAssistant, activeTargetBlock]);
 
   const displayedRecords = filteredAcceptances;
 
@@ -376,6 +456,10 @@ export const AcceptanceManager = React.memo(({
 
   // Add empty draft row
   const handleAddDraftRow = () => {
+    if (!canCreate) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền tạo mới bản ghi Nghiệm thu MKT!');
+      return;
+    }
     setDraftRows((prev) => [createNewDraftRow(acceptanceMonthFilter), ...prev]);
   };
 
@@ -398,12 +482,16 @@ export const AcceptanceManager = React.memo(({
   const handleRemoveDraft = (id: string) => {
     setDraftRows((prev) => {
       const remaining = prev.filter((d) => d.id !== id);
-      return remaining.length > 0 ? remaining : [createNewDraftRow(acceptanceMonthFilter)];
+      return remaining.length > 0 ? remaining : (canCreate ? [createNewDraftRow(acceptanceMonthFilter)] : []);
     });
   };
 
   // Save Draft to Firestore
   const handleSaveDraft = useCallback(async (draftRow: any) => {
+    if (!canCreate) {
+      toast.error('Chỉ Quản trị viên (Admin) và Điều phối (Mod) mới có quyền tạo mới bản ghi Nghiệm thu MKT!');
+      return;
+    }
     if (!draftRow.teamId && !draftRow.teamCode && !draftRow.teamName) {
       toast.error('Vui lòng chọn Team cho dòng nghiệm thu!');
       return;

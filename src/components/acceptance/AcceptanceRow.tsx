@@ -35,6 +35,8 @@ interface RowProps {
   findTeam?: (idOrCodeOrName: string) => any;
   findProject?: (idOrCodeOrName: string) => any;
   formatCurrency: (amount: number) => string;
+  canEdit?: boolean;
+  canDelete?: boolean;
   onSelectRow: (id: string, checked: boolean) => void;
   onStartEdit: (item: any) => void;
   onCancelEdit: () => void;
@@ -66,6 +68,8 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
   findTeam,
   findProject,
   formatCurrency,
+  canEdit = true,
+  canDelete = true,
   onSelectRow,
   onStartEdit,
   onCancelEdit,
@@ -518,12 +522,14 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       {/* STT / Select */}
       <TableCell className="text-center font-medium text-xs text-slate-500 sticky left-0 z-10 bg-inherit shadow-r">
         <div className="flex items-center justify-center gap-1.5">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => onSelectRow(item.id, e.target.checked)}
-            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
-          />
+          {canDelete && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => onSelectRow(item.id, e.target.checked)}
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+            />
+          )}
           <span className="font-mono text-slate-400 font-semibold">{index + 1}</span>
         </div>
       </TableCell>
@@ -680,15 +686,17 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
       {/* THAO TÁC */}
       <TableCell className="text-center sticky right-0 z-20 bg-white/95 backdrop-blur group-hover:bg-slate-50/95 shadow-l">
         <div className="flex items-center justify-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onStartEdit(item)}
-            className="h-6 w-6 p-0 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-            title="Chỉnh sửa dòng"
-          >
-            <Edit className="w-3 h-3" />
-          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onStartEdit(item)}
+              className="h-6 w-6 p-0 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+              title="Chỉnh sửa dòng"
+            >
+              <Edit className="w-3 h-3" />
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -698,15 +706,17 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
           >
             <History className="w-3 h-3" />
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onDelete(item.id)}
-            className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
-            title="Xóa bản ghi"
-          >
-            <Trash2 className="w-3 h-3" />
-          </Button>
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(item.id)}
+              className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+              title="Xóa bản ghi"
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>

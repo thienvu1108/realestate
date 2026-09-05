@@ -751,8 +751,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 const normalizeMonth = (val: any): string => {
   if (!val) return '';
   if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
     const d = new Date(val.getTime() + 12 * 60 * 60 * 1000);
-    return format(d, 'yyyy-MM');
+    return isNaN(d.getTime()) ? '' : safeFormat(d, 'yyyy-MM');
   }
   const str = String(val).trim().normalize('NFC').replace(/^\uFEFF/, '');
   const parts = str.split(/[-/.]/);
@@ -771,29 +772,29 @@ const normalizeMonth = (val: any): string => {
   return str;
 };
 
-const getMarketingMonth = (date: Date | any) => {
-  if (!date) return '';
-  const d = date instanceof Date ? new Date(date.getTime()) : new Date(date);
-  if (isNaN(d.getTime())) return '';
-  const day = d.getDate();
-  if (day >= 15) {
-    d.setMonth(d.getMonth() + 1);
-  }
-  return format(d, 'yyyy-MM');
-};
-
 const parseTimestampToDate = (val: any): Date | null => {
   if (!val) return null;
-  if (val instanceof Date) return val;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val;
+  }
   if (typeof val.toDate === 'function') {
     try {
-      return val.toDate();
+      const d = val.toDate();
+      if (d instanceof Date && !isNaN(d.getTime())) return d;
+    } catch (e) {}
+  }
+  if (typeof val.toMillis === 'function') {
+    try {
+      const ms = val.toMillis();
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d;
     } catch (e) {}
   }
   if (typeof val === 'object') {
     const seconds = val.seconds ?? val._seconds;
     if (typeof seconds === 'number') {
-      return new Date(seconds * 1000 + Math.floor((val.nanoseconds ?? val._nanoseconds ?? 0) / 1000000));
+      const d = new Date(seconds * 1000 + Math.floor((val.nanoseconds ?? val._nanoseconds ?? 0) / 1000000));
+      if (!isNaN(d.getTime())) return d;
     }
   }
   try {
@@ -803,14 +804,31 @@ const parseTimestampToDate = (val: any): Date | null => {
   return null;
 };
 
-const safeFormat = (date: any, formatStr: string) => {
+const safeFormat = (date: any, formatStr: string, fallback = '') => {
   const d = parseTimestampToDate(date);
-  if (!d) return '';
+  if (!d) return fallback;
   try {
     return format(d, formatStr);
   } catch (e) {
-    return '';
+    return fallback;
   }
+};
+
+const safeToISOString = (val: any, fallback: string = new Date().toISOString()): string => {
+  const d = parseTimestampToDate(val);
+  return (d && !isNaN(d.getTime())) ? d.toISOString() : fallback;
+};
+
+const getMarketingMonth = (date: Date | any) => {
+  if (!date) return '';
+  const d = parseTimestampToDate(date);
+  if (!d || isNaN(d.getTime())) return '';
+  const copy = new Date(d.getTime());
+  const day = copy.getDate();
+  if (day >= 15) {
+    copy.setMonth(copy.getMonth() + 1);
+  }
+  return safeFormat(copy, 'yyyy-MM');
 };
 
 const formatYAxis = (value: number) => {
@@ -1102,16 +1120,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'mkt_efficiency.view', 'mkt_efficiency.export', 'mkt_efficiency.filter'
   ],
   user: [
-    'home.view',
-    'report_nt.view',
-    'block.view',
-    'team_mgmt.view',
-    'register.view', 'register.create', 'register.edit',
-    'actual.view', 'actual.create', 'actual.edit',
-    'history.view',
-    'support.view', 'support.create',
-    'process_mkt.view', 'process_mkt.create',
-    'process_doiung.view', 'process_doiung.create'
+    'process_doiung.view',
+    'process_doiung.create'
   ]
 };
 
@@ -1266,6 +1276,7 @@ export const PERMISSION_GROUPS = [
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<'super_admin' | 'admin' | 'mod' | 'accountant' | 'gdda' | 'gd_khoi' | 'gdkd' | 'assistant' | 'user' | null>(null);
+  const [userProfile, setUserProfile] = useState<{ id?: string, uid?: string, fullName?: string, teamName?: string, role?: string, assignedProjects?: string[], assignedBlock?: string, assignedBlocks?: string[] } | null>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [rolePermissionsList, setRolePermissionsList] = useState<any[]>([]);
   const [selectedRolePermission, setSelectedRolePermission] = useState<string>('admin');
@@ -1286,6 +1297,10 @@ export default function App() {
     if (user?.email === 'thienvu1108@gmail.com' || userRole === 'super_admin') {
       return true;
     }
+    const currentRole = (userRole || userProfile?.role || '').toLowerCase().trim();
+    if (!currentRole || currentRole === 'user' || currentRole === 'người dùng') {
+      return permKey.startsWith('process_doiung.');
+    }
     if (currentRolePermissions.includes(permKey)) {
       return true;
     }
@@ -1299,7 +1314,7 @@ export default function App() {
       if (currentRolePermissions.some(p => p.startsWith(`${baseKey}.`))) return true;
     }
     return false;
-  }, [currentRolePermissions, userRole, user?.email]);
+  }, [currentRolePermissions, userRole, userProfile?.role, user?.email]);
 
   useEffect(() => {
     const found = rolePermissionsList.find(rp => rp.role === selectedRolePermission);
@@ -1369,7 +1384,6 @@ export default function App() {
   const [acceptancePage, setAcceptancePage] = useState(1);
 
   // Report states moved up
-  const [userProfile, setUserProfile] = useState<{ fullName?: string, teamName?: string, role?: string, assignedProjects?: string[], assignedBlock?: string } | null>(null);
   const [budgetWarningThreshold, setBudgetWarningThreshold] = useState(80);
   const [budgetCriticalThreshold, setBudgetCriticalThreshold] = useState(100);
 
@@ -1400,7 +1414,7 @@ export default function App() {
 
   const isGDKhoi = useMemo(() => {
     const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
-    return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk' || role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'tro_ly_gdkhoi' || role === 'assistant_block';
+    return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk';
   }, [userProfile, userRole]);
 
   const isTroLyKhoi = useMemo(() => {
@@ -1415,7 +1429,7 @@ export default function App() {
 
   const isAssistant = useMemo(() => {
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
-    return role === 'assistant' || role === 'trợ lý' || role === 'tro ly';
+    return role === 'assistant' || role === 'trợ lý' || role === 'tro ly' || role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'assistant_block';
   }, [userRole, userProfile]);
 
   const canManageBlockBudget = useMemo(() => {
@@ -1522,34 +1536,58 @@ export default function App() {
   const [blockAcceptanceSearch, setBlockAcceptanceSearch] = useState<string>('');
   const [blockAcceptanceViewMode, setBlockAcceptanceViewMode] = useState<'direct' | 'google-sheet'>('direct');
 
-  const myBlock = useMemo(() => {
-    if (userProfile?.assignedBlock) {
-      const found = blocks.find(b => b.id === userProfile.assignedBlock || b.blockCode === userProfile.assignedBlock);
-      if (found) return found;
-    }
+  const myBlocks = useMemo(() => {
     const uUid = user?.uid;
-    const uEmail = user?.email?.toLowerCase();
-    if (uUid || uEmail) {
-      const found = blocks.find(b => 
-        (uUid && b.directorUid === uUid) || 
-        (uEmail && b.directorUid?.toLowerCase() === uEmail) ||
-        (Array.isArray(b.assistantUids) && (
-          (uUid && b.assistantUids.includes(uUid)) || 
-          (uEmail && b.assistantUids.some((uid: string) => uid?.toLowerCase() === uEmail))
-        ))
-      );
-      if (found) return found;
+    const uEmail = user?.email?.toLowerCase().trim();
+    const assignedBlockSet = new Set<string>();
+    
+    if (userProfile?.assignedBlock) assignedBlockSet.add(userProfile.assignedBlock);
+    if (Array.isArray(userProfile?.assignedBlocks)) {
+      userProfile.assignedBlocks.forEach(b => b && assignedBlockSet.add(b));
     }
-    return null;
-  }, [userProfile?.assignedBlock, blocks, user]);
+
+    return blocks.filter(b => {
+      // 1. Direct block ID or blockCode assignment
+      if (assignedBlockSet.has(b.id) || (b.blockCode && assignedBlockSet.has(b.blockCode))) return true;
+      
+      // 2. Block Director match
+      if (uUid && b.directorUid === uUid) return true;
+      if (uEmail && b.directorUid && b.directorUid.toLowerCase().trim() === uEmail) return true;
+      
+      // 3. Block assistantUids array match (contains UID or email)
+      if (Array.isArray(b.assistantUids)) {
+        if (uUid && b.assistantUids.includes(uUid)) return true;
+        if (uEmail && b.assistantUids.some((uid: string) => uid && uid.toLowerCase().trim() === uEmail)) return true;
+      }
+      return false;
+    });
+  }, [userProfile?.assignedBlock, userProfile?.assignedBlocks, blocks, user]);
+
+  const myBlock = useMemo(() => {
+    return myBlocks[0] || null;
+  }, [myBlocks]);
+
+  const userAllowedBlocks = useMemo(() => {
+    if (isAdmin || isSuperAdmin || isAccountant) return blocks;
+    return myBlocks;
+  }, [isAdmin, isSuperAdmin, isAccountant, blocks, myBlocks]);
 
   const currentActiveBlock = useMemo(() => {
-    if (isGDKhoi) return myBlock;
-    if (selectedBlockId) {
-      return blocks.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
+    if (isAdmin || isSuperAdmin || isAccountant) {
+      if (selectedBlockId) {
+        const found = blocks.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
+        if (found) return found;
+      }
+      return blocks[0] || null;
     }
-    return blocks[0] || null;
-  }, [isGDKhoi, myBlock, selectedBlockId, blocks]);
+
+    // For assistant / tro_ly_khoi / gd_khoi / users with assigned blocks:
+    if (selectedBlockId) {
+      const found = myBlocks.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
+      if (found) return found;
+    }
+    return myBlocks[0] || null;
+  }, [isAdmin, isSuperAdmin, isAccountant, selectedBlockId, blocks, myBlocks]);
 
   const isTeamInMyBlock = useCallback((teamId: string) => {
     if (isAdmin || isAccountant || isSuperAdmin) return true;
@@ -3118,10 +3156,14 @@ export default function App() {
   }, [supportRequests]);
 
   const menuItems = useMemo(() => {
+    if (isUser) {
+      return [
+        { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: true, desc: 'Quản lý đối ứng & bàn giao' },
+      ];
+    }
     return [
       { value: 'home', label: 'Trang chủ', icon: LayoutDashboard, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('home.view'), desc: 'Tổng quan báo cáo' },
       { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin || isAccountant, desc: 'Đồng bộ & giám sát ngân sách Khối' },
-      { value: 'register', label: 'Đăng ký MKT', icon: Wallet, color: 'text-emerald-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('register.view'), desc: 'Lập kế hoạch phân bổ chi phí tháng' },
       { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
       { value: 'report-nt', label: 'Nghiệm thu MKT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Nghiệm thu MKT tự động lấy từ Google Sheet' },
       { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
@@ -3130,17 +3172,12 @@ export default function App() {
       { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_mkt.create'), desc: 'Quản lý quy trình chiến dịch Marketing' },
       { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_doiung.create'), desc: 'Quản lý đối ứng & bàn giao' },
     ].filter(item => item.visible);
-  }, [hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin, isAccountant, pendingSupportCount]);
+  }, [isUser, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin, isAccountant, pendingSupportCount]);
 
   const adminFilteredBudgets = useMemo(() => {
     const getTime = (item: any) => {
-      if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
-      if (item.createdAt?.toMillis) return item.createdAt.toMillis();
-      if (item.createdAt) return new Date(item.createdAt).getTime();
-      if (item.updatedAt?.toDate) return item.updatedAt.toDate().getTime();
-      if (item.updatedAt?.toMillis) return item.updatedAt.toMillis();
-      if (item.updatedAt) return new Date(item.updatedAt).getTime();
-      return 0;
+      const d = parseTimestampToDate(item?.createdAt || item?.updatedAt);
+      return d ? d.getTime() : 0;
     };
 
     // Helper to get or synthesize initial history for a budget record
@@ -3150,7 +3187,7 @@ export default function App() {
       }
       const bAmt = Number(b.amount || 0);
       const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
-      const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+      const timeStr = safeToISOString(b.createdAt);
       return [{
         action: 'REGISTER',
         editorName: editor,
@@ -3574,10 +3611,11 @@ export default function App() {
     if (!monthStr) return '';
     try {
       const [year, month] = monthStr.split('-').map(Number);
+      if (!year || !month || isNaN(year) || isNaN(month)) return '';
       // Month M is 21/(M-1) - 20/M
       const endDate = new Date(year, month - 1, 20);
       const startDate = new Date(year, month - 2, 21);
-      return `( ${format(startDate, 'd/M')} - ${format(endDate, 'd/M')} )`;
+      return `( ${safeFormat(startDate, 'd/M')} - ${safeFormat(endDate, 'd/M')} )`;
     } catch (e) {
       return '';
     }
@@ -3587,17 +3625,21 @@ export default function App() {
     const options = [];
     const now = new Date();
     // The current marketing month could be the "next" calendar month if we are past the 21st
-    const currentM = getMarketingMonth(now);
-    const [y, m] = currentM.split('-').map(Number);
+    const currentM = getMarketingMonth(now) || safeFormat(now, 'yyyy-MM');
+    const [yRaw, mRaw] = currentM.split('-').map(Number);
+    const y = (!isNaN(yRaw) && yRaw > 2000) ? yRaw : now.getFullYear();
+    const m = (!isNaN(mRaw) && mRaw >= 1 && mRaw <= 12) ? mRaw : (now.getMonth() + 1);
     
     // Show current month and next 5 months
     for (let i = 0; i < 6; i++) {
       const d = new Date(y, m - 1 + i, 1);
-      const val = format(d, 'yyyy-MM');
-      options.push({
-        value: val,
-        label: getMarketingMonthDisplayRange(val)
-      });
+      const val = safeFormat(d, 'yyyy-MM');
+      if (val) {
+        options.push({
+          value: val,
+          label: getMarketingMonthDisplayRange(val)
+        });
+      }
     }
     return options;
   };
@@ -4521,7 +4563,7 @@ export default function App() {
             const bAmt = Number(b.amount || 0);
             const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
             const email = (b.userEmail || b.createdByEmail || '').toLowerCase();
-            const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+            const timeStr = safeToISOString(b.createdAt);
             combinedSubBudgets.push({
               id: b.id || `sub-${Math.random().toString(36).substring(2, 9)}`,
               userId: b.createdBy || b.userId || '',
@@ -4535,7 +4577,7 @@ export default function App() {
         });
 
         // Ensure subBudgets are chronologically sorted
-        combinedSubBudgets.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+        combinedSubBudgets.sort((a, b) => (parseTimestampToDate(a.createdAt)?.getTime() || 0) - (parseTimestampToDate(b.createdAt)?.getTime() || 0));
 
         // Collect all edit histories (synthesize initial registration entry if missing)
         let combinedHistory: any[] = [];
@@ -4545,7 +4587,7 @@ export default function App() {
           } else {
             const bAmt = Number(b.amount || 0);
             const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Hệ thống';
-            const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+            const timeStr = safeToISOString(b.createdAt);
             combinedHistory.push({
               action: 'REGISTER',
               editorName: editor,
@@ -4648,7 +4690,7 @@ export default function App() {
         if (!b.editHistory || !Array.isArray(b.editHistory) || b.editHistory.length === 0) {
           const bAmt = Number(b.amount || 0);
           const editor = b.implementerName || b.userEmail || b.createdByEmail || 'Chưa rõ';
-          const timeStr = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString());
+          const timeStr = safeToISOString(b.createdAt);
           const initialHist = [{
             action: 'REGISTER',
             editorName: editor,
@@ -4875,14 +4917,14 @@ export default function App() {
           // Initial tab redirection logic (based on initial fetch)
           const initialData = userDoc.data();
           const initialRawRole = (initialData?.role || 'user').toLowerCase().trim();
-          if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda', 'assistant', 'trợ lý', 'tro ly'].includes(initialRawRole)) {
+          if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda'].includes(initialRawRole)) {
             setActiveTab('admin');
-          } else if (['gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'giám đốc liên khối', 'gdk'].includes(initialRawRole)) {
+          } else if (['gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'giám đốc liên khối', 'gdk', 'assistant', 'trợ lý', 'tro ly', 'tro_ly_khoi', 'trợ lý khối'].includes(initialRawRole)) {
             setActiveTab('block-mgmt');
           } else if (['gdkd', 'gđkd', 'giám đốc kinh doanh', 'gđ kinh doanh'].includes(initialRawRole)) {
             setActiveTab('team-mgmt');
           } else {
-            setActiveTab('register');
+            setActiveTab('process-doiung');
           }
 
           setLoading(false);
@@ -5348,6 +5390,26 @@ export default function App() {
       document.body.style.userSelect = '';
     };
   }, []);
+
+  // Enforce access control for User role (only process-doiung) and redirect 'register' to Admin panel
+  useEffect(() => {
+    if (isUser && activeTab !== 'process-doiung') {
+      setActiveTab('process-doiung');
+    }
+  }, [isUser, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'register') {
+      if (isAdmin || isSuperAdmin) {
+        setActiveTab('admin');
+        setAdminSubTab('register');
+      } else if (isUser) {
+        setActiveTab('process-doiung');
+      } else {
+        setActiveTab('home');
+      }
+    }
+  }, [activeTab, isAdmin, isSuperAdmin, isUser]);
 
   const handleImportEfficiency = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -7257,14 +7319,22 @@ export default function App() {
         }
       }
 
-      // Update Trợ lý Khối users and their role
+      // Update Trợ lý Khối users and their role (preserving multi-block assignments)
       if (createBlockAssistantUids.length > 0) {
         for (const astUid of createBlockAssistantUids) {
           const targetUser = allUsers.find(u => u.uid === astUid || u.id === astUid);
           if (targetUser && targetUser.role !== 'admin' && targetUser.role !== 'super_admin' && targetUser.role !== 'gd_khoi') {
+            const currentBlocks: string[] = Array.isArray(targetUser.assignedBlocks) 
+              ? [...targetUser.assignedBlocks] 
+              : (targetUser.assignedBlock ? [targetUser.assignedBlock] : []);
+            const newCode = blockCodeInput.trim().toUpperCase();
+            if (!currentBlocks.includes(newCode)) currentBlocks.push(newCode);
+            if (!currentBlocks.includes(blockRef.id)) currentBlocks.push(blockRef.id);
             await updateDoc(doc(db, 'users', targetUser.id), {
-              assignedBlock: blockCodeInput.trim().toUpperCase(),
-              role: 'tro_ly_khoi'
+              assignedBlock: newCode,
+              assignedBlocks: currentBlocks,
+              role: 'tro_ly_khoi',
+              updatedAt: serverTimestamp()
             });
           }
         }
@@ -7371,14 +7441,21 @@ export default function App() {
         }
       }
 
-      // Update assistants user profiles
+      // Update assistants user profiles (preserving multi-block assignments)
       if (editBlockAssistantUids && editBlockAssistantUids.length > 0) {
         for (const astUid of editBlockAssistantUids) {
           const targetUser = allUsers.find(u => u.uid === astUid || u.id === astUid);
           if (targetUser && targetUser.role !== 'admin' && targetUser.role !== 'super_admin' && targetUser.role !== 'gd_khoi') {
+            const currentBlocks: string[] = Array.isArray(targetUser.assignedBlocks) 
+              ? [...targetUser.assignedBlocks] 
+              : (targetUser.assignedBlock ? [targetUser.assignedBlock] : []);
+            if (!currentBlocks.includes(newCode)) currentBlocks.push(newCode);
+            if (!currentBlocks.includes(block.id)) currentBlocks.push(block.id);
             await updateDoc(doc(db, 'users', targetUser.id), {
               assignedBlock: newCode,
-              role: 'tro_ly_khoi'
+              assignedBlocks: currentBlocks,
+              role: 'tro_ly_khoi',
+              updatedAt: serverTimestamp()
             });
           }
         }
@@ -9298,9 +9375,7 @@ export default function App() {
       // Check if there is an initial registration/creation action
       const hasInitial = hist.some(e => ['REGISTER', 'CREATE', 'URL_IMPORT_CREATE', 'IMPORT_CREATE'].includes(e.action));
       if (!hasInitial) {
-        const earliestTime = target?.createdAt?.toDate 
-          ? target.createdAt.toDate().toISOString() 
-          : (target?.createdAt ? new Date(target.createdAt).toISOString() : (hist[0]?.timestamp || new Date().toISOString()));
+        const earliestTime = safeToISOString(target?.createdAt, hist[0]?.timestamp || new Date().toISOString());
         
         const firstEntry = hist[0];
         const initialAmount = firstEntry?.oldAmount ?? firstEntry?.changes?.amount?.old ?? target?.amount ?? 0;
@@ -9318,9 +9393,7 @@ export default function App() {
     } else {
       const amt = Number(target?.amount || target?.actualCost || 0);
       const editor = target?.implementerName || target?.userEmail || target?.createdByEmail || 'Chưa rõ';
-      const timeStr = target?.createdAt?.toDate 
-        ? target.createdAt.toDate().toISOString() 
-        : (target?.createdAt ? new Date(target.createdAt).toISOString() : new Date().toISOString());
+      const timeStr = safeToISOString(target?.createdAt);
       
       hist = [{
         action: 'REGISTER',
@@ -12612,7 +12685,7 @@ export default function App() {
         periodEnd = new Date(year, month - 1, 20);
       }
       
-      return `${format(periodStart, 'd/M')} - ${format(periodEnd, 'd/M')}`;
+      return `${safeFormat(periodStart, 'd/M')} - ${safeFormat(periodEnd, 'd/M')}`;
     } catch (e) {
       return '';
     }
@@ -12993,6 +13066,19 @@ export default function App() {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC QUẢN TRỊ</p>
                   
                   <div className="space-y-1 pl-1">
+                    {(isAdmin || isSuperAdmin) && (
+                      <button
+                        onClick={() => { setAdminSubTab('register'); setIsMobileMenuOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                          adminSubTab === 'register' ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        <Wallet className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                        <span>Đăng ký MKT</span>
+                      </button>
+                    )}
+
                     {isInternalStaff && (
                       <>
                         <button
@@ -13248,6 +13334,16 @@ export default function App() {
             >
               <div className="bg-white/80 backdrop-blur-md border border-slate-200 p-2 rounded-2xl shadow-lg border-t-0 rounded-t-none shadow-slate-200/40 overflow-x-auto scrollbar-hide">
                 <div className="flex items-center gap-2 min-w-max">
+                  {(isAdmin || isSuperAdmin) && (
+                    <Button 
+                      variant={adminSubTab === 'register' ? 'secondary' : 'ghost'} 
+                      size="sm" 
+                      className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'register' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600'}`}
+                      onClick={() => setAdminSubTab('register')}
+                    >
+                      <Wallet className="mr-2 h-4 w-4" /> Đăng ký MKT
+                    </Button>
+                  )}
                   {isInternalStaff && (
                     <>
                       <Button 
@@ -13341,73 +13437,75 @@ export default function App() {
           )}
 
           {/* Stats Overview moved below menus */}
-          <motion.div 
-            animate={{ 
-              y: isHeaderVisible ? 0 : -60,
-              marginTop: isMenuCollapsed ? '0px' : '24px'
-            }}
-            className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 animate-in fade-in slide-in-from-top-4 duration-500"
-          >
-            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-              <div className="h-1.5 w-full bg-indigo-500" />
-              <CardHeader className="pb-3 pt-4">
-                <CardDescription className="flex items-center gap-2 font-black text-indigo-600/70 uppercase tracking-[0.1em] text-[10px]">
-                  <Building2 className="w-4 h-4" /> TỔNG DỰ ÁN
-                </CardDescription>
-                <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
-              </CardHeader>
-            </Card>
-            
-            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-              <div className="h-1.5 w-full bg-emerald-500" />
-              <CardHeader className="pb-3 pt-4">
-                <CardDescription className="flex items-center gap-2 font-black text-emerald-600/70 uppercase tracking-[0.1em] text-[10px]">
-                  <Wallet className="w-4 h-4" /> NGÂN SÁCH {dashboardStats.monthLabel}
-                </CardDescription>
-                <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 flex flex-col items-start leading-[1.1] pt-1">
-                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.budget)}
-                  <span className="text-slate-300 text-lg font-medium">đ</span>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-   
-            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-              <div className="h-1.5 w-full bg-orange-500" />
-              <CardHeader className="pb-3 pt-4">
-                <CardDescription className="flex items-center gap-2 font-black text-orange-600/70 uppercase tracking-[0.1em] text-[10px]">
-                  <TrendingUp className="w-4 h-4" /> CHI PHÍ {dashboardStats.monthLabel}
-                </CardDescription>
-                <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.cost)} <span className="text-lg font-bold text-slate-300 ml-1">đ</span>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-   
-            <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-              <div className="h-1.5 w-full bg-blue-500" />
-              <CardHeader className="pb-3 pt-4">
-                <CardDescription className="flex items-center gap-2 font-black text-blue-600/70 uppercase tracking-[0.1em] text-[10px]">
-                  <Building2 className="w-4 h-4" /> CĂN BÁN {dashboardStats.monthLabel}
-                </CardDescription>
-                <CardTitle className="text-3xl font-black text-slate-900">
-                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.sales)} <span className="text-lg font-bold text-slate-400 ml-1">Căn</span>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-   
-            <Card className="border-none shadow-xl shadow-indigo-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-400 relative">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700" />
-              <div className="h-1.5 w-full bg-white opacity-20" />
-              <CardHeader className="pb-3 pt-4">
-                <CardDescription className="flex items-center gap-2 font-black text-indigo-100 uppercase tracking-[0.1em] text-[10px]">
-                  <TrendingUp className="w-4 h-4" /> TỔNG DOANH SỐ {dashboardStats.monthLabel}
-                </CardDescription>
-                <CardTitle className="text-2xl sm:text-3xl font-black text-white leading-tight">
-                  {new Intl.NumberFormat('vi-VN').format(dashboardStats.revenue)} <span className="text-lg font-bold text-indigo-300 ml-1">đ</span>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          </motion.div>
+          {!isUser && (
+            <motion.div 
+              animate={{ 
+                y: isHeaderVisible ? 0 : -60,
+                marginTop: isMenuCollapsed ? '0px' : '24px'
+              }}
+              className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 animate-in fade-in slide-in-from-top-4 duration-500"
+            >
+              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+                <div className="h-1.5 w-full bg-indigo-500" />
+                <CardHeader className="pb-3 pt-4">
+                  <CardDescription className="flex items-center gap-2 font-black text-indigo-600/70 uppercase tracking-[0.1em] text-[10px]">
+                    <Building2 className="w-4 h-4" /> TỔNG DỰ ÁN
+                  </CardDescription>
+                  <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
+                </CardHeader>
+              </Card>
+              
+              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+                <div className="h-1.5 w-full bg-emerald-500" />
+                <CardHeader className="pb-3 pt-4">
+                  <CardDescription className="flex items-center gap-2 font-black text-emerald-600/70 uppercase tracking-[0.1em] text-[10px]">
+                    <Wallet className="w-4 h-4" /> NGÂN SÁCH {dashboardStats.monthLabel}
+                  </CardDescription>
+                  <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 flex flex-col items-start leading-[1.1] pt-1">
+                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.budget)}
+                    <span className="text-slate-300 text-lg font-medium">đ</span>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+     
+              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+                <div className="h-1.5 w-full bg-orange-500" />
+                <CardHeader className="pb-3 pt-4">
+                  <CardDescription className="flex items-center gap-2 font-black text-orange-600/70 uppercase tracking-[0.1em] text-[10px]">
+                    <TrendingUp className="w-4 h-4" /> CHI PHÍ {dashboardStats.monthLabel}
+                  </CardDescription>
+                  <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.cost)} <span className="text-lg font-bold text-slate-300 ml-1">đ</span>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+     
+              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
+                <div className="h-1.5 w-full bg-blue-500" />
+                <CardHeader className="pb-3 pt-4">
+                  <CardDescription className="flex items-center gap-2 font-black text-blue-600/70 uppercase tracking-[0.1em] text-[10px]">
+                    <Building2 className="w-4 h-4" /> CĂN BÁN {dashboardStats.monthLabel}
+                  </CardDescription>
+                  <CardTitle className="text-3xl font-black text-slate-900">
+                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.sales)} <span className="text-lg font-bold text-slate-400 ml-1">Căn</span>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+     
+              <Card className="border-none shadow-xl shadow-indigo-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-400 relative">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700" />
+                <div className="h-1.5 w-full bg-white opacity-20" />
+                <CardHeader className="pb-3 pt-4">
+                  <CardDescription className="flex items-center gap-2 font-black text-indigo-100 uppercase tracking-[0.1em] text-[10px]">
+                    <TrendingUp className="w-4 h-4" /> TỔNG DOANH SỐ {dashboardStats.monthLabel}
+                  </CardDescription>
+                  <CardTitle className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.revenue)} <span className="text-lg font-bold text-indigo-300 ml-1">đ</span>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </motion.div>
+          )}
 
 
           {/* Home / Dashboard Tab */}
@@ -13845,26 +13943,32 @@ export default function App() {
                         Quản lý Khối: <span className="underline decoration-indigo-300 decoration-3">{currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chưa chọn Khối"}</span>
                       </h2>
                     </div>
-                    {/* Block selector for Admin/Accountant */}
-                    {!isGDKhoi && (
-                      <div className="min-w-[250px] bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
-                        <Label className="text-[10px] text-indigo-200 uppercase font-black block mb-1.5 px-1">Chọn Khối Quản Lý</Label>
+                    {/* Block selector for Admin/Accountant or users managing multiple blocks */}
+                    {(isAdmin || isSuperAdmin || isAccountant || userAllowedBlocks.length > 1) && (
+                      <div className="min-w-[260px] bg-white/10 p-2.5 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
+                        <div className="flex items-center justify-between mb-1.5 px-1">
+                          <Label className="text-[10px] text-indigo-200 uppercase font-black block">
+                            {userAllowedBlocks.length > 1 ? `Khối Quản Lý (${userAllowedBlocks.length} khối)` : "Chọn Khối Quản Lý"}
+                          </Label>
+                          {userAllowedBlocks.length > 1 && (
+                            <span className="bg-emerald-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                              Đa khối
+                            </span>
+                          )}
+                        </div>
                         <Select 
-                          value={selectedBlockId || (blocks[0]?.id || '')} 
+                          value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')} 
                           onValueChange={(val) => setSelectedBlockId(val)}
                         >
                           <SelectTrigger className="bg-white text-slate-800 border-none rounded-xl font-bold h-9 text-xs">
                             <SelectValue placeholder="Chọn một khối...">
                               <span className="truncate block text-left flex-1 font-sans">
-                                {(() => {
-                                  const currentSelBlock = blocks.find(b => b.id === (selectedBlockId || (blocks[0]?.id || '')));
-                                  return currentSelBlock ? `${getBlockDisplayName(currentSelBlock)} (${currentSelBlock.blockCode})` : "Chọn một khối...";
-                                })()}
+                                {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một khối..."}
                               </span>
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {blocks.map((b) => (
+                            {userAllowedBlocks.map((b) => (
                               <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans">
                                 {getBlockDisplayName(b)} ({b.blockCode})
                               </SelectItem>
@@ -18004,7 +18108,7 @@ export default function App() {
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                   </span>
                                   <span className="text-[10px] font-black text-slate-600 tracking-tight">
-                                    Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
+                                    Cập nhật: {reportNTLastUpdated ? (safeFormat(reportNTLastUpdated, 'HH:mm dd/MM/yyyy') || 'N/A') : 'N/A'}
                                   </span>
                                 </div>
                               )}
@@ -18997,6 +19101,7 @@ export default function App() {
                               <TableHead>Vai trò</TableHead>
                               <TableHead>Team (Phòng KD)</TableHead>
                               <TableHead>Dự án gán (cho Mod)</TableHead>
+                              <TableHead>Khối gán (Trợ lý / GĐK)</TableHead>
                               <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -19086,6 +19191,91 @@ export default function App() {
                                     </div>
                                   ) : (
                                     <span className="text-xs text-slate-400 italic">N/A</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {(u.role === 'assistant' || u.role === 'tro_ly_khoi' || u.role === 'gd_khoi') ? (
+                                    <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                      <Dialog>
+                                        <DialogTrigger nativeButton={true} render={
+                                          <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 font-bold text-violet-700 bg-violet-50/60 border-violet-200 hover:bg-violet-100">
+                                            Gán Khối ({(() => {
+                                              const assigned = new Set<string>();
+                                              if (u.assignedBlock) assigned.add(u.assignedBlock);
+                                              if (Array.isArray(u.assignedBlocks)) u.assignedBlocks.forEach((x: string) => x && assigned.add(x));
+                                              blocks.forEach(b => {
+                                                if (b.directorUid === u.uid || b.directorUid === u.id) assigned.add(b.id);
+                                                if (Array.isArray(b.assistantUids) && (b.assistantUids.includes(u.uid) || b.assistantUids.includes(u.id) || (u.email && b.assistantUids.includes(u.email)))) assigned.add(b.id);
+                                              });
+                                              return assigned.size;
+                                            })()})
+                                          </Button>
+                                        }>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[420px]">
+                                          <DialogHeader>
+                                            <DialogTitle>Gán Khối quản lý cho {u.fullName || u.email}</DialogTitle>
+                                            <DialogDescription>
+                                              Chọn một hoặc nhiều Khối mà tài khoản Trợ lý / GĐ Khối này có quyền quản lý ngân sách và theo dõi.
+                                            </DialogDescription>
+                                          </DialogHeader>
+                                          <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto py-3">
+                                            {blocks.map(b => {
+                                              const assigned = new Set<string>();
+                                              if (u.assignedBlock) assigned.add(u.assignedBlock);
+                                              if (Array.isArray(u.assignedBlocks)) u.assignedBlocks.forEach((x: string) => x && assigned.add(x));
+                                              if (b.directorUid === u.uid || b.directorUid === u.id) assigned.add(b.id);
+                                              if (Array.isArray(b.assistantUids) && (b.assistantUids.includes(u.uid) || b.assistantUids.includes(u.id) || (u.email && b.assistantUids.includes(u.email)))) assigned.add(b.id);
+                                              const isChecked = assigned.has(b.id) || (b.blockCode && assigned.has(b.blockCode));
+                                              return (
+                                                <div key={b.id} className="flex items-center space-x-2.5 p-2.5 hover:bg-slate-50 rounded-xl border border-slate-100">
+                                                  <input 
+                                                    type="checkbox" 
+                                                    id={`block-${u.id}-${b.id}`}
+                                                    checked={isChecked}
+                                                    onChange={async (e) => {
+                                                      const currentBlocks = Array.isArray(u.assignedBlocks) ? [...u.assignedBlocks] : (u.assignedBlock ? [u.assignedBlock] : []);
+                                                      let nextBlocks: string[];
+                                                      if (e.target.checked) {
+                                                        nextBlocks = Array.from(new Set([...currentBlocks, b.blockCode, b.id]));
+                                                        const curAssistants = Array.isArray(b.assistantUids) ? [...b.assistantUids] : [];
+                                                        if (!curAssistants.includes(u.uid)) {
+                                                          curAssistants.push(u.uid);
+                                                          await updateDoc(doc(db, 'blocks', b.id), {
+                                                            assistantUids: curAssistants
+                                                          });
+                                                        }
+                                                      } else {
+                                                        nextBlocks = currentBlocks.filter((x: string) => x !== b.id && x !== b.blockCode);
+                                                        const curAssistants = Array.isArray(b.assistantUids) ? [...b.assistantUids] : [];
+                                                        const filteredAssistants = curAssistants.filter(uid => uid !== u.uid && uid !== u.id && uid !== u.email);
+                                                        if (filteredAssistants.length !== curAssistants.length) {
+                                                          await updateDoc(doc(db, 'blocks', b.id), {
+                                                            assistantUids: filteredAssistants
+                                                          });
+                                                        }
+                                                      }
+                                                      await updateDoc(doc(db, 'users', u.id), {
+                                                        assignedBlock: nextBlocks[0] || '',
+                                                        assignedBlocks: nextBlocks,
+                                                        updatedAt: serverTimestamp()
+                                                      });
+                                                      toast.success(`Đã cập nhật khối quản lý cho ${u.fullName || u.email}`);
+                                                    }}
+                                                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500 w-4 h-4 cursor-pointer"
+                                                  />
+                                                  <Label htmlFor={`block-${u.id}-${b.id}`} className="text-xs font-bold text-slate-800 cursor-pointer flex-1">
+                                                    {getBlockDisplayName(b)} <span className="text-slate-400 font-mono">({b.blockCode})</span>
+                                                  </Label>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-400 italic">--</span>
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -20055,16 +20245,12 @@ export default function App() {
                     </Card>
                   )}
                 </TabsContent>
-                  </Tabs>
-                </div>
-                </>
-              )}
-            </TabsContent>
-          )}
 
-          <TabsContent value="register" className="space-y-8">
-            {activeTab === 'register' && (
-              <>
+                {/* Đăng ký MKT Subtab (Chỉ dành cho Admin) */}
+                {(isAdmin || isSuperAdmin) && (
+                  <TabsContent value="register" className="space-y-8">
+                    {adminSubTab === 'register' && (
+                      <>
             {unreadTeamNotifCount > 0 && (
               <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-blue-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
                 <div className="flex items-center gap-3">
@@ -21167,9 +21353,16 @@ export default function App() {
                   </div>
               </CardContent>
             </Card>
-              </>
-            )}
-          </TabsContent>
+                      </>
+                    )}
+                  </TabsContent>
+                )}
+                  </Tabs>
+                </div>
+                </>
+              )}
+            </TabsContent>
+          )}
 
           {/* Báo cáo NT Tab */}
           <TabsContent value="report-nt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -21272,7 +21465,7 @@ export default function App() {
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
                             <span className="text-[10px] font-black text-slate-600 tracking-tight">
-                              Cập nhật: {reportNTLastUpdated ? (typeof reportNTLastUpdated === 'string' ? format(new Date(reportNTLastUpdated), 'HH:mm dd/MM/yyyy') : 'N/A') : 'N/A'}
+                              Cập nhật: {reportNTLastUpdated ? (safeFormat(reportNTLastUpdated, 'HH:mm dd/MM/yyyy') || 'N/A') : 'N/A'}
                             </span>
                           </div>
                         )}
@@ -23314,7 +23507,7 @@ export default function App() {
                           {sub.note && <p className="text-[10px] text-slate-500 italic">Ghi chú: {sub.note}</p>}
                           {sub.createdAt && (
                             <p className="text-[9px] text-slate-400 font-mono">
-                              Đăng ký: {format(new Date(sub.createdAt), 'dd/MM/yyyy HH:mm')}
+                              Đăng ký: {safeFormat(sub.createdAt, 'dd/MM/yyyy HH:mm') || '-'}
                             </p>
                           )}
                         </div>
@@ -23434,7 +23627,7 @@ export default function App() {
                               )}
                             </div>
                             <span className="text-[10px] font-mono text-slate-400 font-medium">
-                              {entry.timestamp ? format(new Date(entry.timestamp), 'dd/MM/yyyy HH:mm:ss') : '-'}
+                              {safeFormat(entry.timestamp, 'dd/MM/yyyy HH:mm:ss') || '-'}
                             </span>
                           </div>
 
@@ -23711,11 +23904,7 @@ export default function App() {
                                               (notif.userEmail && String(notif.userEmail).toLowerCase().trim() === uEmail) ||
                                               (notif.createdBy && notif.createdBy === user?.uid);
 
-                const timeStr = notif.createdAt?.toDate 
-                  ? format(notif.createdAt.toDate(), 'dd/MM/yyyy HH:mm') 
-                  : (notif.createdAt?.toMillis 
-                      ? format(new Date(notif.createdAt.toMillis()), 'dd/MM/yyyy HH:mm')
-                      : (notif.createdAt ? format(new Date(notif.createdAt), 'dd/MM/yyyy HH:mm') : 'Vừa xong'));
+                const timeStr = safeFormat(notif.createdAt, 'dd/MM/yyyy HH:mm') || 'Vừa xong';
 
                 const diff = (Number(notif.newAmount || 0) - Number(notif.oldAmount || 0));
 
@@ -23817,7 +24006,12 @@ export default function App() {
                         onClick={() => {
                           if (!isRead) markTeamNotifAsRead(notif.id);
                           setIsTeamNotificationDialogOpen(false);
-                          setActiveTab('register');
+                          if (isAdmin || isSuperAdmin) {
+                            setActiveTab('admin');
+                            setAdminSubTab('register');
+                          } else {
+                            setActiveTab('process-doiung');
+                          }
                           if (notif.projectId) setSelectedProjectId(notif.projectId);
                           if (notif.month) setBudgetMonth(notif.month);
                           toast.success(`Đã chuyển tới dự án ${notif.projectName}`);

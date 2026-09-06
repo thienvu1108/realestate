@@ -936,17 +936,30 @@ const isTeamInBlock = (t: any, block: any, allTeams?: any[]) => {
   const teamsList = (allTeams && allTeams.length > 0) ? allTeams : _cachedTeams;
   if (typeof t === 'string') {
     if (teamsList && teamsList.length > 0) {
-      teamObj = teamsList.find(item => item.id === t || item.name === t || item.teamCode === t) || { name: t };
+      teamObj = teamsList.find(item => item.id === t || item.name === t || item.teamCode === t) || { id: t, name: t };
     } else {
-      teamObj = { name: t };
+      teamObj = { id: t, name: t };
     }
   }
+
+  const bId = block.id;
+  const bCode = (block.blockCode || '').trim().toUpperCase();
+
   // 1. Explicit assignment takes absolute highest priority:
-  if (teamObj.blockId === block.id || (teamObj.blockCode && teamObj.blockCode === block.blockCode)) return true;
+  if (teamObj.blockId && teamObj.blockId === bId) return true;
+  if (bCode && teamObj.blockCode && teamObj.blockCode.toUpperCase() === bCode) return true;
+
   // 2. Explicitly assigned to another block or marked unassigned:
-  if (teamObj.blockId === 'unassigned' || teamObj.blockCode === 'unassigned' || teamObj.blockId === 'none' || teamObj.blockCode === 'none') return false;
-  if (teamObj.blockId && teamObj.blockId !== block.id) return false;
-  if (teamObj.blockCode && teamObj.blockCode !== block.blockCode) return false;
+  if (teamObj.blockId === 'unassigned' || teamObj.blockId === 'none') return false;
+  if (teamObj.blockCode === 'unassigned' || teamObj.blockCode === 'none') return false;
+  if (teamObj.blockId && teamObj.blockId !== bId) return false;
+  if (bCode && teamObj.blockCode && teamObj.blockCode.toUpperCase() !== bCode && !teamObj.blockCode.toUpperCase().startsWith(bCode)) {
+    // If assigned to a different explicit block code
+    const prefixes = getBlockPrefixes(block);
+    if (!prefixes.some(p => (teamObj.teamCode || '').toUpperCase().startsWith(p))) {
+      return false;
+    }
+  }
   
   // 3. Match against block's configured teamPrefix (supporting multiple comma/slash separated prefixes)
   const prefixes = getBlockPrefixes(block);
@@ -1414,13 +1427,36 @@ export default function App() {
 
   const isGDKhoi = useMemo(() => {
     const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
-    return role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk';
-  }, [userProfile, userRole]);
+    const isRoleDirector = role === 'gd_khoi' || role === 'gdkhoi' || role === 'gđ khối' || role === 'giám đốc khối' || role === 'giám đốc liên khối' || role === 'gdk' || role === 'gd khối' || role === 'trưởng khối';
+    const isDirectDirector = blocks.some(b => {
+      const uUid = user?.uid;
+      const uEmail = user?.email?.toLowerCase().trim();
+      const pId = userProfile?.id;
+      return (uUid && b.directorUid === uUid) ||
+             (uEmail && b.directorUid && b.directorUid.toLowerCase().trim() === uEmail) ||
+             (pId && b.directorUid === pId);
+    });
+    return isRoleDirector || isDirectDirector;
+  }, [userProfile, userRole, blocks, user]);
 
   const isTroLyKhoi = useMemo(() => {
     const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
-    return role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'tro_ly_gdkhoi' || role === 'assistant_block';
-  }, [userProfile, userRole]);
+    const isRoleAssistant = role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'tro_ly_gdkhoi' || role === 'assistant_block' || role === 'assistant' || role === 'trợ lý' || role === 'tro ly';
+    const isAssignedInBlocks = blocks.some(b => {
+      const uUid = user?.uid;
+      const uEmail = user?.email?.toLowerCase().trim();
+      const pId = userProfile?.id;
+      if (Array.isArray(b.assistantUids)) {
+        return (uUid && b.assistantUids.includes(uUid)) ||
+               (uEmail && b.assistantUids.some((uid: string) => uid && uid.toLowerCase().trim() === uEmail)) ||
+               (pId && b.assistantUids.includes(pId));
+      }
+      if (b.assistantUid && (b.assistantUid === uUid || b.assistantUid === pId || (uEmail && b.assistantUid.toLowerCase().trim() === uEmail))) return true;
+      return false;
+    });
+    const hasAssignedBlocks = Boolean(userProfile?.assignedBlock) || (Array.isArray(userProfile?.assignedBlocks) && userProfile.assignedBlocks.length > 0);
+    return isRoleAssistant || isAssignedInBlocks || hasAssignedBlocks;
+  }, [userProfile, userRole, blocks, user]);
 
   const isGDKD = useMemo(() => {
     const role = (userProfile?.role || userRole || '').toString().toLowerCase().trim();
@@ -1428,18 +1464,21 @@ export default function App() {
   }, [userProfile, userRole]);
 
   const isAssistant = useMemo(() => {
-    const role = (userRole || userProfile?.role || '').toLowerCase().trim();
-    return role === 'assistant' || role === 'trợ lý' || role === 'tro ly' || role === 'tro_ly_khoi' || role === 'tro ly khoi' || role === 'trợ lý khối' || role === 'assistant_block';
-  }, [userRole, userProfile]);
+    return isTroLyKhoi;
+  }, [isTroLyKhoi]);
 
   const canManageBlockBudget = useMemo(() => {
     return isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin;
   }, [isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin]);
 
   const isUser = useMemo(() => {
+    if (isAdmin || isSuperAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isTroLyKhoi || isAssistant || isGDKD) {
+      return false;
+    }
+    if (userProfile?.assignedBlock || (Array.isArray(userProfile?.assignedBlocks) && userProfile.assignedBlocks.length > 0)) return false;
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
     return !role || role === 'user' || role === 'người dùng';
-  }, [userRole, userProfile]);
+  }, [isAdmin, isSuperAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isTroLyKhoi, isAssistant, isGDKD, userProfile, userRole]);
 
   const isInternalStaff = useMemo(() => {
     const role = (userRole || userProfile?.role || '').toLowerCase().trim();
@@ -1539,29 +1578,55 @@ export default function App() {
   const myBlocks = useMemo(() => {
     const uUid = user?.uid;
     const uEmail = user?.email?.toLowerCase().trim();
+    const pId = userProfile?.id;
     const assignedBlockSet = new Set<string>();
     
-    if (userProfile?.assignedBlock) assignedBlockSet.add(userProfile.assignedBlock);
-    if (Array.isArray(userProfile?.assignedBlocks)) {
-      userProfile.assignedBlocks.forEach(b => b && assignedBlockSet.add(b));
-    }
+    const addBlockVal = (val: any) => {
+      if (!val) return;
+      if (typeof val === 'string') {
+        val.split(/[,;|/\n]+/).forEach(s => {
+          const clean = s.trim().toLowerCase();
+          if (clean) assignedBlockSet.add(clean);
+        });
+      } else if (Array.isArray(val)) {
+        val.forEach(item => addBlockVal(item));
+      }
+    };
+
+    addBlockVal(userProfile?.assignedBlock);
+    addBlockVal((userProfile as any)?.assignedBlocks);
+    addBlockVal((userProfile as any)?.managedBlocks);
+    addBlockVal((userProfile as any)?.blocks);
 
     return blocks.filter(b => {
-      // 1. Direct block ID or blockCode assignment
-      if (assignedBlockSet.has(b.id) || (b.blockCode && assignedBlockSet.has(b.blockCode))) return true;
+      const bId = (b.id || '').toLowerCase().trim();
+      const bCode = (b.blockCode || '').toLowerCase().trim();
+      const bName = (b.name || '').toLowerCase().trim();
+
+      // 1. Direct block ID, blockCode, or name assignment in user profile
+      if (assignedBlockSet.has(bId) || (bCode && assignedBlockSet.has(bCode)) || (bName && assignedBlockSet.has(bName))) return true;
       
-      // 2. Block Director match
+      // 2. Block Director match (UID, userProfile ID, or email)
       if (uUid && b.directorUid === uUid) return true;
+      if (pId && b.directorUid === pId) return true;
       if (uEmail && b.directorUid && b.directorUid.toLowerCase().trim() === uEmail) return true;
       
-      // 3. Block assistantUids array match (contains UID or email)
+      // 3. Block assistantUids array or string match
       if (Array.isArray(b.assistantUids)) {
         if (uUid && b.assistantUids.includes(uUid)) return true;
+        if (pId && b.assistantUids.includes(pId)) return true;
         if (uEmail && b.assistantUids.some((uid: string) => uid && uid.toLowerCase().trim() === uEmail)) return true;
+      } else if (typeof b.assistantUids === 'string') {
+        const strVal = b.assistantUids.toLowerCase();
+        if (uUid && strVal.includes(uUid.toLowerCase())) return true;
+        if (pId && strVal.includes(pId.toLowerCase())) return true;
+        if (uEmail && strVal.includes(uEmail)) return true;
       }
+      if (b.assistantUid && (b.assistantUid === uUid || b.assistantUid === pId || (uEmail && b.assistantUid.toLowerCase().trim() === uEmail))) return true;
+
       return false;
     });
-  }, [userProfile?.assignedBlock, userProfile?.assignedBlocks, blocks, user]);
+  }, [userProfile, blocks, user]);
 
   const myBlock = useMemo(() => {
     return myBlocks[0] || null;
@@ -1569,24 +1634,16 @@ export default function App() {
 
   const userAllowedBlocks = useMemo(() => {
     if (isAdmin || isSuperAdmin || isAccountant) return blocks;
-    return myBlocks;
+    return myBlocks.length > 0 ? myBlocks : blocks;
   }, [isAdmin, isSuperAdmin, isAccountant, blocks, myBlocks]);
 
   const currentActiveBlock = useMemo(() => {
-    if (isAdmin || isSuperAdmin || isAccountant) {
-      if (selectedBlockId) {
-        const found = blocks.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
-        if (found) return found;
-      }
-      return blocks[0] || null;
-    }
-
-    // For assistant / tro_ly_khoi / gd_khoi / users with assigned blocks:
+    const list = (isAdmin || isSuperAdmin || isAccountant) ? blocks : (myBlocks.length > 0 ? myBlocks : blocks);
     if (selectedBlockId) {
-      const found = myBlocks.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
+      const found = list.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
       if (found) return found;
     }
-    return myBlocks[0] || null;
+    return list[0] || null;
   }, [isAdmin, isSuperAdmin, isAccountant, selectedBlockId, blocks, myBlocks]);
 
   const isTeamInMyBlock = useCallback((teamId: string) => {
@@ -1640,6 +1697,8 @@ export default function App() {
   const [editingBlockTeamId, setEditingBlockTeamId] = useState<string | null>(null);
   const [editingBlockTeamName, setEditingBlockTeamName] = useState('');
   const [editingBlockTeamCode, setEditingBlockTeamCode] = useState('');
+  const [teamToRemoveConfirm, setTeamToRemoveConfirm] = useState<{ id: string, name: string } | null>(null);
+  const [assignExistingApplyPrefix, setAssignExistingApplyPrefix] = useState(false);
 
   const [blockBudgetProject, setBlockBudgetProject] = useState('');
   const [blockBudgetTeam, setBlockBudgetTeam] = useState('');
@@ -3163,7 +3222,7 @@ export default function App() {
     }
     return [
       { value: 'home', label: 'Trang chủ', icon: LayoutDashboard, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('home.view'), desc: 'Tổng quan báo cáo' },
-      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin || isAccountant, desc: 'Đồng bộ & giám sát ngân sách Khối' },
+      { value: 'block-mgmt', label: 'Quản lý Khối', icon: Building2, color: 'text-purple-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin || isAccountant || (myBlocks && myBlocks.length > 0) || (userAllowedBlocks && userAllowedBlocks.length > 0), desc: 'Đồng bộ & giám sát ngân sách Khối' },
       { value: 'team-mgmt', label: 'Quản lý Phòng KD', icon: Users, color: 'text-teal-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('team_mgmt.view'), desc: 'Báo cáo tích lũy, các tổ đội direct' },
       { value: 'report-nt', label: 'Nghiệm thu MKT', icon: FileCheck, color: 'text-indigo-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('report_nt.view'), desc: 'Nghiệm thu MKT tự động lấy từ Google Sheet' },
       { value: 'history', label: 'Lịch sử dòng tiền', icon: History, color: 'text-slate-600', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('history.view'), desc: 'Tra cứu lịch sử thu chi minh bạch' },
@@ -3172,7 +3231,7 @@ export default function App() {
       { value: 'process-mkt', label: 'Quy trình MKT', icon: FileText, color: 'text-amber-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_mkt.create'), desc: 'Quản lý quy trình chiến dịch Marketing' },
       { value: 'process-doiung', label: 'Quy trình đối ứng', icon: RefreshCw, color: 'text-violet-500', activeBg: 'bg-indigo-600', activeText: 'text-white font-black', visible: hasPermission('process_doiung.create'), desc: 'Quản lý đối ứng & bàn giao' },
     ].filter(item => item.visible);
-  }, [isUser, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin, isAccountant, pendingSupportCount]);
+  }, [isUser, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin, isAccountant, myBlocks, userAllowedBlocks, pendingSupportCount]);
 
   const adminFilteredBudgets = useMemo(() => {
     const getTime = (item: any) => {
@@ -4884,9 +4943,14 @@ export default function App() {
               else if (rawRole === 'mod' || rawRole === 'moderator' || rawRole === 'điều phối') synchronizedRole = 'mod';
               else if (rawRole === 'accountant' || rawRole === 'kế toán') synchronizedRole = 'accountant';
               else if (rawRole === 'gdda' || rawRole === 'gđda' || rawRole === 'giám đốc dự án') synchronizedRole = 'gdda';
-              else if (rawRole === 'gd_khoi' || rawRole === 'gdkhoi' || rawRole === 'gđ khối' || rawRole === 'giám đốc khối' || rawRole === 'giám đốc liên khối' || rawRole === 'gdk') synchronizedRole = 'gd_khoi';
+              else if (rawRole === 'gd_khoi' || rawRole === 'gdkhoi' || rawRole === 'gđ khối' || rawRole === 'giám đốc khối' || rawRole === 'giám đốc liên khối' || rawRole === 'gdk' || rawRole === 'gd khối' || rawRole === 'trưởng khối') synchronizedRole = 'gd_khoi';
               else if (rawRole === 'gdkd' || rawRole === 'gđkd' || rawRole === 'giám đốc kinh doanh' || rawRole === 'gđ kinh doanh') synchronizedRole = 'gdkd';
-              else if (rawRole === 'assistant' || rawRole === 'trợ lý' || rawRole === 'tro ly') synchronizedRole = 'assistant';
+              else if (
+                rawRole === 'assistant' || rawRole === 'trợ lý' || rawRole === 'tro ly' ||
+                rawRole === 'tro_ly_khoi' || rawRole === 'trợ lý khối' || rawRole === 'tro ly khoi' ||
+                rawRole === 'tro_ly_gdkhoi' || rawRole === 'assistant_block' ||
+                Boolean(data?.assignedBlock) || (Array.isArray(data?.assignedBlocks) && data.assignedBlocks.length > 0)
+              ) synchronizedRole = 'assistant';
               else synchronizedRole = 'user';
               
               setUserRole(synchronizedRole);
@@ -4919,7 +4983,10 @@ export default function App() {
           const initialRawRole = (initialData?.role || 'user').toLowerCase().trim();
           if (firebaseUser.email === 'thienvu1108@gmail.com' || ['super_admin', 'admin', 'mod', 'accountant', 'gdda'].includes(initialRawRole)) {
             setActiveTab('admin');
-          } else if (['gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'giám đốc liên khối', 'gdk', 'assistant', 'trợ lý', 'tro ly', 'tro_ly_khoi', 'trợ lý khối'].includes(initialRawRole)) {
+          } else if (
+            ['gd_khoi', 'gdkhoi', 'gđ khối', 'giám đốc khối', 'giám đốc liên khối', 'gdk', 'gd khối', 'trưởng khối', 'assistant', 'trợ lý', 'tro ly', 'tro_ly_khoi', 'trợ lý khối', 'tro ly khoi', 'tro_ly_gdkhoi', 'assistant_block'].includes(initialRawRole) ||
+            Boolean(initialData?.assignedBlock) || (Array.isArray(initialData?.assignedBlocks) && initialData.assignedBlocks.length > 0)
+          ) {
             setActiveTab('block-mgmt');
           } else if (['gdkd', 'gđkd', 'giám đốc kinh doanh', 'gđ kinh doanh'].includes(initialRawRole)) {
             setActiveTab('team-mgmt');
@@ -7471,13 +7538,14 @@ export default function App() {
   const handleRemoveTeamFromBlockDirect = async (teamId: string, teamName: string) => {
     const block = currentActiveBlock;
     if (!block) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa phòng kinh doanh "${teamName}" khỏi Khối? (Thông tin phòng kinh doanh này vẫn sẽ được lưu độc lập trên hệ thống)`)) return;
     try {
-      await updateDoc(doc(db, 'teams', teamId), {
-        blockId: 'unassigned',
-        blockCode: 'unassigned'
-      });
-      await logAction('UPDATE', 'teams', teamId, { blockId: 'unassigned', blockCode: 'unassigned' });
+      // Optimistic local state update for instantaneous response
+      const unassignedData = { blockId: 'unassigned', blockCode: 'unassigned' };
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...unassignedData } : t));
+      _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...unassignedData } : t);
+
+      await updateDoc(doc(db, 'teams', teamId), unassignedData);
+      await logAction('UPDATE', 'teams', teamId, unassignedData);
       toast.success(`Đã xóa phòng "${teamName}" khỏi Khối thành công!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'teams');
@@ -7489,40 +7557,55 @@ export default function App() {
       toast.error("Vui lòng nhập tên Phòng Kinh Doanh!");
       return;
     }
+    const block = currentActiveBlock;
+    if (!block) {
+      toast.error("Vui lòng chọn hoặc cấu hình Khối trước khi tạo phòng!");
+      return;
+    }
     let finalCode = newBlockTeamCode.trim().toUpperCase();
     if (!finalCode) {
       finalCode = extractTeamCode(newBlockTeamName);
     }
     if (!finalCode) {
-      finalCode = 'TEAM_' + Date.now().toString().slice(-4);
+      const pfx = block.teamPrefix || block.blockCode || 'TEAM';
+      finalCode = `${pfx}_${Date.now().toString().slice(-4)}`;
     }
 
     const nameDup = teams.some(t => t.name.toLowerCase().trim() === newBlockTeamName.toLowerCase().trim());
     if (nameDup) {
-      toast.error("Tên Phòng Kinh Doanh đã tồn tại!");
-      return;
-    }
-    const codeDup = teams.some(t => (t.teamCode || '').toUpperCase().trim() === finalCode);
-    if (codeDup) {
-      toast.error(`Mã phòng "${finalCode}" đã tồn tại! Vui lòng chọn mã khác.`);
+      toast.error("Tên Phòng Kinh Doanh đã tồn tại trong hệ thống! Nếu muốn gán vào Khối này, vui lòng chọn ở mục 'Thêm Phòng KD Vào Khối' bên dưới.");
       return;
     }
 
     setIsCreatingBlockTeam(true);
     try {
+      const bId = block.id;
+      const bCode = block.blockCode || block.id;
       const docRef = await addDoc(collection(db, 'teams'), {
         name: newBlockTeamName.trim(),
         teamCode: finalCode,
-        blockId: currentActiveBlock?.id || '',
-        blockCode: currentActiveBlock?.blockCode || '',
+        blockId: bId,
+        blockCode: bCode,
         createdAt: serverTimestamp(),
         createdBy: user?.uid || null
       });
+
+      const newTeamObj = {
+        id: docRef.id,
+        name: newBlockTeamName.trim(),
+        teamCode: finalCode,
+        blockId: bId,
+        blockCode: bCode,
+        createdAt: new Date()
+      };
+      setTeams(prev => [newTeamObj, ...prev]);
+      _cachedTeams = [newTeamObj, ..._cachedTeams];
+
       await logAction('CREATE', 'teams', docRef.id, { 
         name: newBlockTeamName, 
         teamCode: finalCode, 
-        blockId: currentActiveBlock?.id || '',
-        blockCode: currentActiveBlock?.blockCode || ''
+        blockId: bId, 
+        blockCode: bCode 
       });
       toast.success(`Đã tạo và gán Phòng Kinh Doanh "${newBlockTeamName}" (${finalCode}) vào Khối!`);
       setNewBlockTeamName('');
@@ -7534,7 +7617,7 @@ export default function App() {
     }
   };
 
-  const handleAddTeamToBlockDirect = async (teamId: string) => {
+  const handleAddTeamToBlockDirect = async (teamId: string, applyPrefix?: boolean) => {
     const block = currentActiveBlock;
     if (!block) {
       toast.error("Không tìm thấy Khối nào đang hoạt động!");
@@ -7546,12 +7629,28 @@ export default function App() {
       return;
     }
     try {
-      await updateDoc(doc(db, 'teams', teamId), {
-        blockId: block.id,
-        blockCode: block.blockCode
-      });
-      await logAction('UPDATE', 'teams', teamId, { blockId: block.id, blockCode: block.blockCode });
-      toast.success(`Đã thêm phòng "${targetTeam.name}" (${targetTeam.teamCode || 'Không mã'}) vào Khối "${block.name}" thành công!`);
+      const bId = block.id;
+      const bCode = block.blockCode || block.id;
+      const updateData: any = {
+        blockId: bId,
+        blockCode: bCode
+      };
+
+      if (applyPrefix && block.teamPrefix) {
+        const prefix = block.teamPrefix.toUpperCase().trim();
+        const curCode = (targetTeam.teamCode || extractTeamCode(targetTeam.name) || '').toUpperCase().trim();
+        if (!curCode.startsWith(prefix)) {
+          const suffix = curCode ? curCode : targetTeam.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+          updateData.teamCode = `${prefix}_${suffix}`;
+        }
+      }
+
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...updateData } : t));
+      _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...updateData } : t);
+
+      await updateDoc(doc(db, 'teams', teamId), updateData);
+      await logAction('UPDATE', 'teams', teamId, updateData);
+      toast.success(`Đã thêm phòng "${targetTeam.name}" vào Khối "${block.name}" thành công!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'teams');
     }
@@ -13944,15 +14043,15 @@ export default function App() {
                       </h2>
                     </div>
                     {/* Block selector for Admin/Accountant or users managing multiple blocks */}
-                    {(isAdmin || isSuperAdmin || isAccountant || userAllowedBlocks.length > 1) && (
+                    {userAllowedBlocks.length > 0 && (
                       <div className="min-w-[260px] bg-white/10 p-2.5 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
                         <div className="flex items-center justify-between mb-1.5 px-1">
                           <Label className="text-[10px] text-indigo-200 uppercase font-black block">
-                            {userAllowedBlocks.length > 1 ? `Khối Quản Lý (${userAllowedBlocks.length} khối)` : "Chọn Khối Quản Lý"}
+                            {userAllowedBlocks.length > 1 ? `Khối Quản Lý (${userAllowedBlocks.length} khối)` : "Khối Quản Lý"}
                           </Label>
                           {userAllowedBlocks.length > 1 && (
-                            <span className="bg-emerald-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-md">
-                              Đa khối
+                            <span className="bg-emerald-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
+                              Đa khối ({userAllowedBlocks.length})
                             </span>
                           )}
                         </div>
@@ -13960,7 +14059,7 @@ export default function App() {
                           value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')} 
                           onValueChange={(val) => setSelectedBlockId(val)}
                         >
-                          <SelectTrigger className="bg-white text-slate-800 border-none rounded-xl font-bold h-9 text-xs">
+                          <SelectTrigger className="bg-white text-slate-800 border-none rounded-xl font-bold h-9 text-xs shadow-sm">
                             <SelectValue placeholder="Chọn một khối...">
                               <span className="truncate block text-left flex-1 font-sans">
                                 {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một khối..."}
@@ -13981,13 +14080,46 @@ export default function App() {
                   <p className="text-indigo-100 text-sm max-w-2xl font-medium font-sans">
                     Xem & quản lý các nhóm trực thuộc khối, kiểm soát đăng ký ngân sách, và theo dõi báo cáo chi phí thực tế tự động cập nhật của các nhóm.
                   </p>
+                  
+                  {/* Multi-block quick switch button bar */}
+                  {userAllowedBlocks.length > 1 && (
+                    <div className="pt-2 border-t border-white/15 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-black text-indigo-100 uppercase tracking-wider flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-300" /> Chuyển khối:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {userAllowedBlocks.map((b) => {
+                          const isSelected = currentActiveBlock?.id === b.id || currentActiveBlock?.blockCode === b.blockCode;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setSelectedBlockId(b.id)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                                isSelected 
+                                  ? 'bg-white text-indigo-900 shadow-md ring-2 ring-emerald-400 font-black scale-105' 
+                                  : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
+                              }`}
+                            >
+                              <span>{getBlockDisplayName(b)}</span>
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-800' : 'bg-black/25 text-indigo-100'}`}>
+                                {b.blockCode}
+                              </span>
+                              {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {currentActiveBlock && (
                     <div className="mt-4 flex flex-wrap gap-4 text-xs">
                       <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">
                         <span className="text-indigo-200">Mã Khối:</span> <strong className="text-white font-bold ml-1">{currentActiveBlock.blockCode}</strong>
                       </div>
                       <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">
-                        <span className="text-indigo-200 font-sans">Tiền tố Mã Nhóm trực thuộc:</span> <strong className="text-white font-bold ml-1">{currentActiveBlock.teamPrefix}*</strong>
+                        <span className="text-indigo-200 font-sans">Tiền tố Mã Nhóm trực thuộc:</span> <strong className="text-white font-bold ml-1">{currentActiveBlock.teamPrefix || '(Chưa cấu hình)'}*</strong>
                       </div>
                     </div>
                   )}
@@ -14352,6 +14484,21 @@ export default function App() {
                                       {isCreatingBlockTeam ? 'Đang tạo...' : '+ Tạo & Gán'}
                                     </Button>
                                   </div>
+                                  {currentActiveBlock?.teamPrefix && (
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const pfx = (currentActiveBlock.teamPrefix || currentActiveBlock.blockCode || '').toUpperCase().trim();
+                                          const nextIdx = (myBlockTeams.length + 1).toString().padStart(2, '0');
+                                          setNewBlockTeamCode(`${pfx}${nextIdx}`);
+                                        }}
+                                        className="text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-bold px-2 py-0.5 rounded-md transition-colors"
+                                      >
+                                        + Gợi ý mã có tiền tố Khối ({currentActiveBlock.teamPrefix})
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               
@@ -14382,7 +14529,7 @@ export default function App() {
                                   <Button
                                     disabled={!assignExistingTeamId || assignExistingTeamId === '_empty'}
                                     onClick={() => {
-                                      handleAddTeamToBlockDirect(assignExistingTeamId);
+                                      handleAddTeamToBlockDirect(assignExistingTeamId, assignExistingApplyPrefix);
                                       setAssignExistingTeamId('');
                                     }}
                                     size="sm"
@@ -14407,6 +14554,17 @@ export default function App() {
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
                                 </div>
+                                {currentActiveBlock?.teamPrefix && (
+                                  <label className="flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer pt-1 select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={assignExistingApplyPrefix}
+                                      onChange={(e) => setAssignExistingApplyPrefix(e.target.checked)}
+                                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <span>Tự động chuẩn hóa tiền tố của Khối ({currentActiveBlock.teamPrefix}) vào mã phòng</span>
+                                  </label>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -14531,7 +14689,7 @@ export default function App() {
                                               variant="ghost" 
                                               className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
                                               title="Loại khỏi Khối"
-                                              onClick={() => handleRemoveTeamFromBlockDirect(team.id, team.name)}
+                                              onClick={() => setTeamToRemoveConfirm({ id: team.id, name: team.name })}
                                             >
                                               <X className="w-3.5 h-3.5 text-rose-500" />
                                             </Button>
@@ -14549,6 +14707,45 @@ export default function App() {
                       </Card>
                     </div>
                   </div>
+
+                  {/* Remove Team Confirmation Dialog */}
+                  <Dialog open={Boolean(teamToRemoveConfirm)} onOpenChange={(open) => { if (!open) setTeamToRemoveConfirm(null); }}>
+                    <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white shadow-2xl">
+                      <DialogHeader>
+                        <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-rose-500" /> Xác nhận xóa phòng khỏi Khối
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-600 pt-2 leading-relaxed font-sans">
+                          Bạn có chắc chắn muốn xóa phòng kinh doanh <strong className="text-slate-900">"{teamToRemoveConfirm?.name}"</strong> khỏi Khối <strong className="text-indigo-600">"{currentActiveBlock?.name}"</strong>?
+                          <br /><br />
+                          <span className="text-slate-500 italic">Lưu ý: Dữ liệu phòng kinh doanh vẫn được lưu an toàn trên hệ thống và có thể gán lại vào bất kỳ lúc nào.</span>
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="mt-4 flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl text-xs font-bold"
+                          onClick={() => setTeamToRemoveConfirm(null)}
+                        >
+                          Hủy bỏ
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                          onClick={async () => {
+                            if (teamToRemoveConfirm) {
+                              await handleRemoveTeamFromBlockDirect(teamToRemoveConfirm.id, teamToRemoveConfirm.name);
+                              setTeamToRemoveConfirm(null);
+                            }
+                          }}
+                        >
+                          Xác nhận xóa khỏi Khối
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {/* Edit Block Dialog */}
                   <Dialog open={isEditBlockDialogOpen} onOpenChange={setIsEditBlockDialogOpen}>

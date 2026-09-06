@@ -39,14 +39,16 @@ export async function testConnection() {
   } catch (error) {
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
+      // If we get "Missing or insufficient permissions", it confirms the server is reachable and active
+      if ((error as any).code === 'permission-denied' || msg.includes('permission')) {
+        console.log("Firestore connection verified (server reached).");
+        return true;
+      }
+
       const isQuotaOrOffline = (error as any).code === 'resource-exhausted' || 
                                (error as any).code === 'unavailable' ||
                                msg.includes('quota') || 
-                               msg.includes('exhausted') || 
-                               msg.includes('limit') ||
-                               msg.includes('offline') ||
-                               msg.includes('network') ||
-                               msg.includes('permission');
+                               msg.includes('exhausted');
       
       if (isQuotaOrOffline && typeof window !== 'undefined') {
         console.warn("Firebase Connection Test indicated Limit or Connectivity issue. Switching to Local Database fallback.");

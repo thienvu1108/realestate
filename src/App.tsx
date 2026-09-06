@@ -1698,6 +1698,7 @@ export default function App() {
   const [editingBlockTeamName, setEditingBlockTeamName] = useState('');
   const [editingBlockTeamCode, setEditingBlockTeamCode] = useState('');
   const [teamToRemoveConfirm, setTeamToRemoveConfirm] = useState<{ id: string, name: string } | null>(null);
+  const [isRemovingBlockTeam, setIsRemovingBlockTeam] = useState(false);
   const [assignExistingApplyPrefix, setAssignExistingApplyPrefix] = useState(false);
 
   const [blockBudgetProject, setBlockBudgetProject] = useState('');
@@ -5025,22 +5026,9 @@ export default function App() {
     }
   }, [user?.uid]);
 
+  // 1. Universal data listeners (independent of roles, never torn down on role/block change)
   useEffect(() => {
     if (!user) return;
-
-    // Listen to projects - load all relevant projects to ensure mapping and search work perfectly
-    let qProjects;
-    if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
-      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      qProjects = query(collection(db, 'projects'), where('__name__', 'in', userProfile.assignedProjects));
-    } else {
-      qProjects = query(collection(db, 'projects'), where('__name__', '==', 'dummy_id'));
-    }
-
-    const unsubProjects = onSnapshot(qProjects, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
 
     // Listen to teams - load all teams to ensure mapping and search work perfectly
     const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'));
@@ -5053,8 +5041,6 @@ export default function App() {
       }));
       setTeams(sanitized);
       _cachedTeams = sanitized;
-
-
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
 
     // Listen to blocks
@@ -5124,6 +5110,63 @@ export default function App() {
       console.warn("teamNotifications listener error:", error);
     });
 
+    // Listen to settings
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setSystemSettings(data);
+        if (data.budgetStartDay) setAdminBudgetStartDay(data.budgetStartDay.toString());
+        if (data.budgetEndDay) setAdminBudgetEndDay(data.budgetEndDay.toString());
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings'));
+
+    // Listen to Báo cáo NT settings and cached records
+    const unsubReportNT = onSnapshot(doc(db, 'settings', 'report_nt'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setReportNTUrl(data.sheetUrl || '');
+        setInputReportNTUrl(data.sheetUrl || '');
+        setReportNTRecords(data.records || []);
+        setReportNTLastUpdated(data.lastUpdated || null);
+      }
+    }, (error) => {
+      console.warn("Báo cáo NT settings listener skipped or not created yet:", error);
+    });
+
+    return () => {
+      unsubTeams();
+      unsubBlocks();
+      unsubRegions();
+      unsubTypes();
+      unsubBudgets();
+      unsubBlockBudgets();
+      unsubCosts();
+      unsubTeamNotifs();
+      unsubSettings();
+      unsubReportNT();
+    };
+  }, [user?.uid]);
+
+  // 2. Role-scoped data listeners (projects, reports, acceptances, users, logs)
+  useEffect(() => {
+    if (!user) return;
+
+    const assignedProjs = userProfile?.assignedProjects || [];
+    const hasAssignedProjects = assignedProjs.length > 0;
+    const isRestrictedGDDA = isGDDA && hasAssignedProjects;
+
+    // Listen to projects - load all relevant projects to ensure mapping and search work perfectly
+    let qProjects;
+    if (!isRestrictedGDDA) {
+      qProjects = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+    } else {
+      qProjects = query(collection(db, 'projects'), where('__name__', 'in', assignedProjs));
+    }
+
+    const unsubProjects = onSnapshot(qProjects, (snapshot) => {
+      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
+
     // Listen to audit logs
     let unsubLogs = () => {};
     if (isAdmin || isMod || isAccountant) {
@@ -5146,7 +5189,7 @@ export default function App() {
 
     // Listen to efficiency reports - load all relevant efficiency reports to ensure mapping and search work perfectly
     let unsubEfficiency = () => {};
-    if (isAdmin || isMod || isAccountant || isUser || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
+    if (!isRestrictedGDDA) {
       const qEfficiency = query(collection(db, 'efficiencyReports'), orderBy('createdAt', 'desc'));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
@@ -5156,8 +5199,8 @@ export default function App() {
         }));
         setEfficiencyReports(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'efficiencyReports'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', userProfile.assignedProjects));
+    } else {
+      const qEfficiency = query(collection(db, 'efficiencyReports'), where('projectId', 'in', assignedProjs));
       unsubEfficiency = onSnapshot(qEfficiency, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         const sanitized = raw.map(e => ({
@@ -5170,7 +5213,7 @@ export default function App() {
 
     // Listen to acceptances - load all relevant acceptances to ensure mapping and search work perfectly
     let unsubAcceptances = () => {};
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
+    if (!isRestrictedGDDA) {
       const qAcceptances = query(collection(db, 'acceptances'), orderBy('month', 'desc'));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
@@ -5181,8 +5224,8 @@ export default function App() {
         }));
         setAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', userProfile.assignedProjects));
+    } else {
+      const qAcceptances = query(collection(db, 'acceptances'), where('projectId', 'in', assignedProjs));
       unsubAcceptances = onSnapshot(qAcceptances, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         const sanitized = raw.map(a => ({
@@ -5194,10 +5237,10 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'acceptances'));
     }
 
-    // Listen to final acceptances - load all relevant final acceptances to ensure mapping and search work perfectly
+    // Listen to final acceptances and docProcessing - load all relevant records
     let unsubFinalAcceptances = () => {};
     let unsubDocProcessing = () => {};
-    if (isAdmin || isMod || isAccountant || isGDKhoi || isGDKD || (isGDDA && (!userProfile?.assignedProjects || userProfile.assignedProjects.length === 0))) {
+    if (!isRestrictedGDDA) {
       const qFinal = query(collection(db, 'finalAcceptances'), orderBy('finalizedAt', 'desc'));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
@@ -5218,8 +5261,8 @@ export default function App() {
         }));
         setDocProcessingStatus(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'docProcessing'));
-    } else if (isGDDA && userProfile?.assignedProjects && userProfile.assignedProjects.length > 0) {
-      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', userProfile.assignedProjects));
+    } else {
+      const qFinal = query(collection(db, 'finalAcceptances'), where('projectId', 'in', assignedProjs));
       unsubFinalAcceptances = onSnapshot(qFinal, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         const sanitized = raw.map(fa => ({
@@ -5230,7 +5273,7 @@ export default function App() {
         setFinalAcceptances(sanitized);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'finalAcceptances'));
 
-      const qDocProcessing = query(collection(db, 'docProcessing'), where('projectId', 'in', userProfile.assignedProjects));
+      const qDocProcessing = query(collection(db, 'docProcessing'), where('projectId', 'in', assignedProjs));
       unsubDocProcessing = onSnapshot(qDocProcessing, (snapshot) => {
         const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         const sanitized = raw.map(dp => ({
@@ -5267,38 +5310,8 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'supportRequests'));
     }
 
-    // Listen to settings
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setSystemSettings(data);
-        if (data.budgetStartDay) setAdminBudgetStartDay(data.budgetStartDay.toString());
-        if (data.budgetEndDay) setAdminBudgetEndDay(data.budgetEndDay.toString());
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings'));
-
-    // Listen to Báo cáo NT settings and cached records
-    const unsubReportNT = onSnapshot(doc(db, 'settings', 'report_nt'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setReportNTUrl(data.sheetUrl || '');
-        setInputReportNTUrl(data.sheetUrl || '');
-        setReportNTRecords(data.records || []);
-        setReportNTLastUpdated(data.lastUpdated || null);
-      }
-    }, (error) => {
-      console.warn("Báo cáo NT settings listener skipped or not created yet:", error);
-    });
-
     return () => {
       unsubProjects();
-      unsubTeams();
-      unsubRegions();
-      unsubTypes();
-      unsubBudgets();
-      unsubBlockBudgets();
-      unsubCosts();
-      unsubBlocks();
       unsubLogs();
       unsubUsers();
       unsubEfficiency();
@@ -5306,11 +5319,8 @@ export default function App() {
       unsubAcceptances();
       unsubFinalAcceptances();
       unsubSupport();
-      unsubSettings();
-      unsubReportNT();
-      unsubTeamNotifs();
     };
-  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, isGDKhoi, isGDKD, (userProfile?.assignedProjects || []).slice().sort().join(',')]);
+  }, [user?.uid, userRole, isAdmin, isMod, isAccountant, isGDDA, (userProfile?.assignedProjects || []).slice().sort().join(',')]);
 
   useEffect(() => {
     if (!user) return;
@@ -6988,6 +6998,19 @@ export default function App() {
     return teams.filter(t => !isTeamInBlock(t, block));
   }, [teams, currentActiveBlock]);
 
+  const teamsNotInBlockOptions = useMemo(() => {
+    if (!currentActiveBlock) return [];
+    return teamsNotInBlock.map(t => {
+      const currentBlock = blocks.find(b => isTeamInBlock(t, b, teams));
+      const blockHint = currentBlock ? ` (Hiện ở: ${currentBlock.name})` : ' (Chưa thuộc khối)';
+      return {
+        id: t.id,
+        name: `${t.name} [${t.teamCode || 'Chưa gán mã'}]${blockHint}`,
+        code: t.teamCode
+      };
+    });
+  }, [teamsNotInBlock, blocks, teams, currentActiveBlock]);
+
   const blockAggregatedData = useMemo(() => {
     const data: Record<string, { teamName: string; projectName: string; budgetTotal: number; costTotal: number }> = {};
     
@@ -7538,17 +7561,42 @@ export default function App() {
   const handleRemoveTeamFromBlockDirect = async (teamId: string, teamName: string) => {
     const block = currentActiveBlock;
     if (!block) return;
-    try {
-      // Optimistic local state update for instantaneous response
-      const unassignedData = { blockId: 'unassigned', blockCode: 'unassigned' };
-      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...unassignedData } : t));
-      _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...unassignedData } : t);
+    
+    setIsRemovingBlockTeam(true);
+    const toastId = toast.loading(`Đang thực hiện xóa phòng "${teamName}" khỏi Khối...`);
 
-      await updateDoc(doc(db, 'teams', teamId), unassignedData);
-      await logAction('UPDATE', 'teams', teamId, unassignedData);
-      toast.success(`Đã xóa phòng "${teamName}" khỏi Khối thành công!`);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'teams');
+    // 1. Optimistic local state update for instantaneous response
+    const unassignedData = { blockId: 'unassigned', blockCode: 'unassigned' };
+    const prevTeams = [...teams];
+    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...unassignedData } : t));
+    _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...unassignedData } : t);
+
+    try {
+      // 2. Perform Firestore update with timeout guard
+      await Promise.race([
+        updateDoc(doc(db, 'teams', teamId), unassignedData),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+      ]);
+
+      // 3. Asynchronously record audit log without blocking UI flow
+      logAction('UPDATE', 'teams', teamId, unassignedData).catch(err => {
+        console.warn("Audit log error:", err);
+      });
+
+      toast.success(`Đã xóa phòng "${teamName}" khỏi Khối thành công!`, { id: toastId });
+    } catch (err: any) {
+      if (err?.message === 'timeout') {
+        // Still treat as optimistic success locally since offline persistence will sync in background
+        toast.success(`Đã cập nhật trạng thái xóa phòng "${teamName}" khỏi Khối!`, { id: toastId });
+      } else {
+        // Rollback state on actual error
+        setTeams(prevTeams);
+        _cachedTeams = prevTeams;
+        handleFirestoreError(err, OperationType.UPDATE, 'teams');
+        toast.error(`Lỗi khi xóa phòng khỏi Khối: ${err?.message || 'Lỗi mạng'}`, { id: toastId });
+      }
+    } finally {
+      setIsRemovingBlockTeam(false);
     }
   };
 
@@ -14080,38 +14128,6 @@ export default function App() {
                   <p className="text-indigo-100 text-sm max-w-2xl font-medium font-sans">
                     Xem & quản lý các nhóm trực thuộc khối, kiểm soát đăng ký ngân sách, và theo dõi báo cáo chi phí thực tế tự động cập nhật của các nhóm.
                   </p>
-                  
-                  {/* Multi-block quick switch button bar */}
-                  {userAllowedBlocks.length > 1 && (
-                    <div className="pt-2 border-t border-white/15 flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-black text-indigo-100 uppercase tracking-wider flex items-center gap-1">
-                        <Building2 className="w-3.5 h-3.5 text-emerald-300" /> Chuyển khối:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {userAllowedBlocks.map((b) => {
-                          const isSelected = currentActiveBlock?.id === b.id || currentActiveBlock?.blockCode === b.blockCode;
-                          return (
-                            <button
-                              key={b.id}
-                              type="button"
-                              onClick={() => setSelectedBlockId(b.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                                isSelected 
-                                  ? 'bg-white text-indigo-900 shadow-md ring-2 ring-emerald-400 font-black scale-105' 
-                                  : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
-                              }`}
-                            >
-                              <span>{getBlockDisplayName(b)}</span>
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-800' : 'bg-black/25 text-indigo-100'}`}>
-                                {b.blockCode}
-                              </span>
-                              {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   {currentActiveBlock && (
                     <div className="mt-4 flex flex-wrap gap-4 text-xs">
@@ -14510,15 +14526,7 @@ export default function App() {
                                 <div className="flex gap-2">
                                   <div className="flex-1">
                                     <SearchableSelectGeneric
-                                      items={teamsNotInBlock.map(t => {
-                                        const currentBlock = blocks.find(b => isTeamInBlock(t, b, teams));
-                                        const blockHint = currentBlock ? ` (Hiện ở: ${currentBlock.name})` : ' (Chưa thuộc khối)';
-                                        return {
-                                          id: t.id,
-                                          name: `${t.name} [${t.teamCode || 'Chưa gán mã'}]${blockHint}`,
-                                          code: t.teamCode
-                                        };
-                                      })}
+                                      items={teamsNotInBlockOptions}
                                       value={assignExistingTeamId}
                                       onValueChange={setAssignExistingTeamId}
                                       placeholder="Tìm & chọn phòng kinh doanh (bất kỳ tiền tố nào)..."
@@ -14709,7 +14717,7 @@ export default function App() {
                   </div>
 
                   {/* Remove Team Confirmation Dialog */}
-                  <Dialog open={Boolean(teamToRemoveConfirm)} onOpenChange={(open) => { if (!open) setTeamToRemoveConfirm(null); }}>
+                  <Dialog open={Boolean(teamToRemoveConfirm)} onOpenChange={(open) => { if (!open && !isRemovingBlockTeam) setTeamToRemoveConfirm(null); }}>
                     <DialogContent className="sm:max-w-[420px] rounded-2xl p-6 bg-white shadow-2xl">
                       <DialogHeader>
                         <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -14725,6 +14733,7 @@ export default function App() {
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={isRemovingBlockTeam}
                           className="rounded-xl text-xs font-bold"
                           onClick={() => setTeamToRemoveConfirm(null)}
                         >
@@ -14733,15 +14742,23 @@ export default function App() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                          disabled={isRemovingBlockTeam}
+                          className="rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white min-w-[130px]"
                           onClick={async () => {
                             if (teamToRemoveConfirm) {
-                              await handleRemoveTeamFromBlockDirect(teamToRemoveConfirm.id, teamToRemoveConfirm.name);
+                              const target = { ...teamToRemoveConfirm };
                               setTeamToRemoveConfirm(null);
+                              await handleRemoveTeamFromBlockDirect(target.id, target.name);
                             }
                           }}
                         >
-                          Xác nhận xóa khỏi Khối
+                          {isRemovingBlockTeam ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Đang xóa...
+                            </>
+                          ) : (
+                            'Xác nhận xóa khỏi Khối'
+                          )}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
@@ -14840,7 +14857,7 @@ export default function App() {
                                       <span className="text-xs font-bold text-slate-700">{t.name}</span>
                                     </div>
                                     <Button
-                                      onClick={() => handleRemoveTeamFromBlockDirect(t.id, t.name)}
+                                      onClick={() => setTeamToRemoveConfirm({ id: t.id, name: t.name })}
                                       size="xs"
                                       variant="ghost"
                                       className="rounded-xl font-bold h-7 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-50 px-2"
@@ -14858,42 +14875,27 @@ export default function App() {
                                 <Plus className="w-3.5 h-3.5" /> Thêm Phòng kinh doanh vào Khối
                               </Label>
                               <div className="flex gap-2">
-                                {(() => {
-                                  const otherTeams = teams.filter(t => !isTeamInBlock(t, currentActiveBlock));
-                                  return (
-                                    <>
-                                      <div className="flex-1">
-                                        <SearchableSelectGeneric
-                                          items={otherTeams.map(t => {
-                                            const currentBlock = blocks.find(b => isTeamInBlock(t, b, teams));
-                                            const blockHint = currentBlock ? ` (Hiện ở: ${currentBlock.name})` : ' (Chưa thuộc khối)';
-                                            return {
-                                              id: t.id,
-                                              name: `${t.name} [${t.teamCode || 'Chưa gán mã'}]${blockHint}`,
-                                              code: t.teamCode
-                                            };
-                                          })}
-                                          value={editBlockSelectedTeamToAssign}
-                                          onValueChange={setEditBlockSelectedTeamToAssign}
-                                          placeholder="Tìm & chọn phòng kinh doanh (bất kỳ tiền tố nào)..."
-                                          searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
-                                          emptyMessage="Tất cả phòng kinh doanh đã thuộc Khối này!"
-                                        />
-                                      </div>
-                                      <Button
-                                        disabled={!editBlockSelectedTeamToAssign}
-                                        onClick={() => {
-                                          handleAddTeamToBlockDirect(editBlockSelectedTeamToAssign);
-                                          setEditBlockSelectedTeamToAssign('');
-                                        }}
-                                        size="sm"
-                                        className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-9 text-xs font-bold px-3 transition-colors shrink-0"
-                                      >
-                                        + Thêm vào
-                                      </Button>
-                                    </>
-                                  );
-                                })()}
+                                <div className="flex-1">
+                                  <SearchableSelectGeneric
+                                    items={teamsNotInBlockOptions}
+                                    value={editBlockSelectedTeamToAssign}
+                                    onValueChange={setEditBlockSelectedTeamToAssign}
+                                    placeholder="Tìm & chọn phòng kinh doanh (bất kỳ tiền tố nào)..."
+                                    searchPlaceholder="Gõ tên hoặc mã phòng để tìm..."
+                                    emptyMessage="Tất cả phòng kinh doanh đã thuộc Khối này!"
+                                  />
+                                </div>
+                                <Button
+                                  disabled={!editBlockSelectedTeamToAssign}
+                                  onClick={() => {
+                                    handleAddTeamToBlockDirect(editBlockSelectedTeamToAssign);
+                                    setEditBlockSelectedTeamToAssign('');
+                                  }}
+                                  size="sm"
+                                  className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl h-9 text-xs font-bold px-3 transition-colors shrink-0"
+                                >
+                                  + Thêm vào
+                                </Button>
                               </div>
                             </div>
                           </div>

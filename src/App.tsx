@@ -235,11 +235,16 @@ const SearchableSelectGeneric = memo(({
             />
           </div>
         </div>
-        {filteredItems.map((item: any) => renderItem ? renderItem(item) : (
+        {filteredItems.slice(0, 80).map((item: any) => renderItem ? renderItem(item) : (
           <SelectItem key={item.value} value={item.value}>
             <span className="truncate">{item.label}</span>
           </SelectItem>
         ))}
+        {filteredItems.length > 80 && (
+          <div className="p-2 text-center text-xs text-muted-foreground bg-slate-50 border-t">
+            Hiển thị 80 / {filteredItems.length} kết quả. Vui lòng nhập từ khóa để lọc thêm.
+          </div>
+        )}
         {filteredItems.length === 0 && (
           <div className="p-4 text-center text-xs text-muted-foreground">{resolvedNoResults}</div>
         )}
@@ -920,26 +925,53 @@ const extractTeamCode = (name: string) => {
 
 const getBlockPrefixes = (block: any): string[] => {
   if (!block || !block.teamPrefix) return [];
+  if (block._cachedPrefixes && block._cachedPrefixesRaw === block.teamPrefix) {
+    return block._cachedPrefixes;
+  }
   const raw = String(block.teamPrefix).toUpperCase();
-  return raw
+  const prefixes = raw
     .split(/[,;/|\s]+/)
     .map(p => p.trim())
     .map(p => (p === 'MH' ? 'MAY' : p))
     .filter(Boolean);
+  block._cachedPrefixes = prefixes;
+  block._cachedPrefixesRaw = block.teamPrefix;
+  return prefixes;
 };
 
 let _cachedTeams: any[] = [];
+let _cachedTeamsMap: Map<string, any> = new Map();
+
+const updateCachedTeams = (teamsList: any[]) => {
+  _cachedTeams = teamsList || [];
+  const map = new Map<string, any>();
+  for (const t of _cachedTeams) {
+    if (!t) continue;
+    if (t.id) map.set(t.id, t);
+    if (t.name) {
+      map.set(t.name, t);
+      map.set(t.name.toLowerCase().trim(), t);
+      const norm = normalizeTeamName(t.name).toLowerCase().trim();
+      if (norm) map.set(norm, t);
+    }
+    if (t.teamCode) {
+      map.set(t.teamCode, t);
+      map.set(t.teamCode.toLowerCase().trim(), t);
+    }
+  }
+  _cachedTeamsMap = map;
+};
 
 const isTeamInBlock = (t: any, block: any, allTeams?: any[]) => {
   if (!block || !t) return false;
   let teamObj = t;
-  const teamsList = (allTeams && allTeams.length > 0) ? allTeams : _cachedTeams;
   if (typeof t === 'string') {
-    if (teamsList && teamsList.length > 0) {
-      teamObj = teamsList.find(item => item.id === t || item.name === t || item.teamCode === t) || { id: t, name: t };
-    } else {
-      teamObj = { id: t, name: t };
+    const key = t.trim();
+    teamObj = _cachedTeamsMap.get(key) || _cachedTeamsMap.get(key.toLowerCase());
+    if (!teamObj && allTeams && allTeams.length > 0) {
+      teamObj = allTeams.find(item => item.id === t || item.name === t || item.teamCode === t);
     }
+    if (!teamObj) teamObj = { id: t, name: t };
   }
 
   const bId = block.id;
@@ -5040,7 +5072,7 @@ export default function App() {
         teamCode: normalizeTeamCode(t.teamCode || extractTeamCode(t.name))
       }));
       setTeams(sanitized);
-      _cachedTeams = sanitized;
+      updateCachedTeams(sanitized);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
 
     // Listen to blocks
@@ -5101,14 +5133,8 @@ export default function App() {
       setCosts(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'costs'));
 
-    // Listen to team notifications for budget changes
-    const qTeamNotifs = query(collection(db, 'teamNotifications'), orderBy('createdAt', 'desc'), limit(100));
-    const unsubTeamNotifs = onSnapshot(qTeamNotifs, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      setTeamNotifications(data);
-    }, (error) => {
-      console.warn("teamNotifications listener error:", error);
-    });
+    // Budget notifications disabled per user request: "Bỏ thông báo thay đổi ngân sách"
+    const unsubTeamNotifs = () => {};
 
     // Listen to settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
@@ -6745,6 +6771,12 @@ export default function App() {
     const block = currentActiveBlock;
     if (!block) return [];
     
+    // Direct block budgets registered for this block
+    const directBlockBudgets = blockBudgets.filter(b => b.blockId === block.id || b.blockCode === block.blockCode);
+    if (directBlockBudgets.length > 0) {
+      return directBlockBudgets;
+    }
+
     const blockTeamIds = new Set(myBlockTeams.map(t => t.id));
     const blockTeamNames = new Set(myBlockTeams.map(t => (t.name || '').toLowerCase().trim()));
     const blockTeamCodes = new Set(myBlockTeams.map(t => (t.teamCode || '').toLowerCase().trim()));
@@ -6755,7 +6787,7 @@ export default function App() {
       const tCode = (b.teamCode || '').toLowerCase().trim();
       return blockTeamNames.has(tName) || blockTeamCodes.has(tCode);
     });
-  }, [currentActiveBlock, myBlockTeams, budgets]);
+  }, [currentActiveBlock, blockBudgets, myBlockTeams, budgets]);
 
   const myBlockCosts = useMemo(() => {
     const block = currentActiveBlock;
@@ -6765,13 +6797,53 @@ export default function App() {
     const blockTeamNames = new Set(myBlockTeams.map(t => (t.name || '').toLowerCase().trim()));
     const blockTeamCodes = new Set(myBlockTeams.map(t => (t.teamCode || '').toLowerCase().trim()));
 
-    return costs.filter(c => {
-      if (c.teamId && blockTeamIds.has(c.teamId)) return true;
-      const tName = (c.teamName || '').toLowerCase().trim();
-      const tCode = (c.teamCode || '').toLowerCase().trim();
-      return blockTeamNames.has(tName) || blockTeamCodes.has(tCode);
+    const list: any[] = [];
+    const addedIds = new Set<string>();
+
+    finalAcceptances.forEach(fa => {
+      const tName = (fa.teamName || '').toLowerCase().trim();
+      const tCode = (fa.teamCode || '').toLowerCase().trim();
+      if ((fa.teamId && blockTeamIds.has(fa.teamId)) || blockTeamNames.has(tName) || blockTeamCodes.has(tCode)) {
+        addedIds.add(fa.id);
+        list.push({
+          id: fa.id,
+          teamId: fa.teamId,
+          teamName: fa.teamName,
+          teamCode: fa.teamCode,
+          projectId: fa.projectId,
+          projectName: fa.projectName,
+          month: fa.month,
+          amount: getAcceptanceCostValue(fa),
+          createdAt: fa.createdAt,
+          isAcceptance: true
+        });
+      }
     });
-  }, [currentActiveBlock, myBlockTeams, costs]);
+
+    acceptances.forEach(a => {
+      if (!addedIds.has(a.id)) {
+        const tName = (a.teamName || '').toLowerCase().trim();
+        const tCode = (a.teamCode || '').toLowerCase().trim();
+        if ((a.teamId && blockTeamIds.has(a.teamId)) || blockTeamNames.has(tName) || blockTeamCodes.has(tCode)) {
+          addedIds.add(a.id);
+          list.push({
+            id: a.id,
+            teamId: a.teamId,
+            teamName: a.teamName,
+            teamCode: a.teamCode,
+            projectId: a.projectId,
+            projectName: a.projectName,
+            month: a.month,
+            amount: getAcceptanceCostValue(a),
+            createdAt: a.createdAt,
+            isAcceptance: true
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [currentActiveBlock, myBlockTeams, finalAcceptances, acceptances, getAcceptanceCostValue]);
 
   const myBlockAcceptances = useMemo(() => {
     const block = currentActiveBlock;
@@ -6828,6 +6900,41 @@ export default function App() {
     return list;
   }, [myActiveBlockBudgets]);
 
+  const getBlockProjectAcceptanceCost = useCallback((projectId: string, month: string) => {
+    if (!currentActiveBlock) return 0;
+    const blockTeamIds = new Set(myBlockTeams.map(t => t.id));
+    const blockTeamNames = new Set(myBlockTeams.map(t => (t.name || '').toLowerCase().trim()));
+    const blockTeamCodes = new Set(myBlockTeams.map(t => (t.teamCode || '').toLowerCase().trim()));
+    const mKey = normalizeMonth(month);
+
+    let total = 0;
+    const addedIds = new Set<string>();
+
+    finalAcceptances.forEach(fa => {
+      if (normalizeMonth(fa.month) !== mKey) return;
+      if (fa.projectId !== projectId && resolveProjectName(fa.projectId, fa.projectName) !== resolveProjectName(projectId, '')) return;
+      const tName = (fa.teamName || '').toLowerCase().trim();
+      const tCode = (fa.teamCode || '').toLowerCase().trim();
+      if ((fa.teamId && blockTeamIds.has(fa.teamId)) || blockTeamNames.has(tName) || blockTeamCodes.has(tCode)) {
+        addedIds.add(fa.id);
+        total += getAcceptanceCostValue(fa);
+      }
+    });
+
+    acceptances.forEach(a => {
+      if (addedIds.has(a.id)) return;
+      if (normalizeMonth(a.month) !== mKey) return;
+      if (a.projectId !== projectId && resolveProjectName(a.projectId, a.projectName) !== resolveProjectName(projectId, '')) return;
+      const tName = (a.teamName || '').toLowerCase().trim();
+      const tCode = (a.teamCode || '').toLowerCase().trim();
+      if ((a.teamId && blockTeamIds.has(a.teamId)) || blockTeamNames.has(tName) || blockTeamCodes.has(tCode)) {
+        total += getAcceptanceCostValue(a);
+      }
+    });
+
+    return total;
+  }, [currentActiveBlock, myBlockTeams, finalAcceptances, acceptances, resolveProjectName, getAcceptanceCostValue]);
+
   const filteredAdminBlockBudgets = useMemo(() => {
     let list = [...blockBudgets];
     if (adminBlockBudgetFilterBlock && adminBlockBudgetFilterBlock !== 'all') {
@@ -6873,7 +6980,8 @@ export default function App() {
     const map: Record<string, {
       block: any;
       totalBudget: number;
-      projectBudgets: { projectId: string; projectName: string; amount: number }[];
+      totalAcceptanceCost: number;
+      projectBudgets: { projectId: string; projectName: string; amount: number; acceptanceCost: number }[];
       teamCount: number;
     }> = {};
 
@@ -6882,6 +6990,7 @@ export default function App() {
       map[b.id] = {
         block: b,
         totalBudget: 0,
+        totalAcceptanceCost: 0,
         projectBudgets: [],
         teamCount: bTeams.length
       };
@@ -6895,6 +7004,7 @@ export default function App() {
           map[bb.blockId] = {
             block: found,
             totalBudget: 0,
+            totalAcceptanceCost: 0,
             projectBudgets: [],
             teamCount: 0
           };
@@ -6911,13 +7021,31 @@ export default function App() {
         map[bb.blockId].projectBudgets.push({
           projectId: bb.projectId,
           projectName: projName,
-          amount: bb.amount || 0
+          amount: bb.amount || 0,
+          acceptanceCost: 0
         });
       }
     });
 
+    // Synchronize MKT acceptance costs for each block
+    const allAcceptanceList = [...finalAcceptances, ...acceptances.filter(a => !finalAcceptances.some(fa => fa.id === a.id))];
+    allAcceptanceList.forEach(a => {
+      if (homeBlockBudgetMonth !== 'all' && normalizeMonth(a.month) !== normalizeMonth(homeBlockBudgetMonth)) return;
+      const val = getAcceptanceCostValue(a);
+      if (val <= 0) return;
+
+      const targetBlock = blocks.find(b => isTeamInBlock({ id: a.teamId, name: a.teamName, teamCode: a.teamCode }, b, teams));
+      if (!targetBlock || !map[targetBlock.id]) return;
+
+      map[targetBlock.id].totalAcceptanceCost += val;
+      const existingP = map[targetBlock.id].projectBudgets.find(p => p.projectId === a.projectId || resolveProjectName(p.projectId, p.projectName) === resolveProjectName(a.projectId, a.projectName));
+      if (existingP) {
+        existingP.acceptanceCost += val;
+      }
+    });
+
     return Object.values(map).sort((a, b) => b.totalBudget - a.totalBudget);
-  }, [blocks, teams, blockBudgets, homeBlockBudgetMonth]);
+  }, [blocks, teams, blockBudgets, homeBlockBudgetMonth, finalAcceptances, acceptances, resolveProjectName, getAcceptanceCostValue]);
 
   const handleAddAdminBlockBudget = async () => {
     if (!adminAddBlockBudgetBlockId) {
@@ -7291,87 +7419,24 @@ export default function App() {
     }
   };
 
-  const sendBudgetChangeNotification = async ({
-    budgetId,
-    projectId,
-    projectName,
-    teamId,
-    teamName,
-    teamCode,
-    month,
-    oldAmount,
-    newAmount,
-    editorName,
-    editorEmail,
-    reason,
-    originalBudget,
-    subBudgetsList = []
-  }: {
-    budgetId: string;
-    projectId: string;
-    projectName: string;
-    teamId: string;
-    teamName: string;
+  const sendBudgetChangeNotification = async (_params: {
+    budgetId?: string;
+    projectId?: string;
+    projectName?: string;
+    teamId?: string;
+    teamName?: string;
     teamCode?: string;
-    month: string;
-    oldAmount: number;
-    newAmount: number;
-    editorName: string;
-    editorEmail: string;
+    month?: string;
+    oldAmount?: number;
+    newAmount?: number;
+    editorName?: string;
+    editorEmail?: string;
     reason?: string;
     originalBudget?: any;
     subBudgetsList?: any[];
   }) => {
-    try {
-      const creatorEmail = (originalBudget?.userEmail || originalBudget?.createdByEmail || '').toLowerCase().trim();
-      const assignedEmail = (originalBudget?.assignedUserEmail || '').toLowerCase().trim();
-      const origSubEmails = (originalBudget?.subBudgets || []).map((s: any) => (s.userEmail || s.email || '').toLowerCase().trim()).filter(Boolean);
-      const currSubEmails = subBudgetsList.map((s: any) => (s.userEmail || s.email || '').toLowerCase().trim()).filter(Boolean);
-      const historyEmails = (originalBudget?.editHistory || []).map((h: any) => (h.editorEmail || '').toLowerCase().trim()).filter(Boolean);
-
-      // Collect all affected user emails (creator, all users with subBudgets, previous editors)
-      const allRecipients = Array.from(new Set([
-        creatorEmail,
-        assignedEmail,
-        ...origSubEmails,
-        ...currSubEmails,
-        ...historyEmails
-      ])).filter(Boolean);
-
-      const diff = newAmount - (oldAmount || 0);
-      const diffStr = diff > 0 ? `+${formatCurrency(diff)}` : (diff < 0 ? `-${formatCurrency(Math.abs(diff))}` : '0đ');
-
-      const notifTitle = `Ngân sách dự án ${projectName} (${month}) đã được thay đổi`;
-      const notifMessage = `Ngân sách đăng ký dự án ${projectName} (${month}) đã được ${editorName} cập nhật: ${formatCurrency(oldAmount || 0)} ➜ ${formatCurrency(newAmount)} (${diffStr}).${reason ? ` Lý do: ${reason}` : ''}`;
-
-      await addDoc(collection(db, 'teamNotifications'), {
-        type: 'BUDGET_CHANGED',
-        budgetId,
-        projectId,
-        projectName,
-        teamId,
-        teamName,
-        teamCode: teamCode || originalBudget?.teamCode || extractTeamCode(teamName),
-        month,
-        oldAmount: oldAmount || 0,
-        newAmount,
-        difference: diff,
-        editorName,
-        editorEmail: (editorEmail || '').toLowerCase().trim(),
-        creatorEmail,
-        createdBy: originalBudget?.createdBy || '',
-        recipients: allRecipients,
-        previousRegistrants: allRecipients,
-        targetEmails: allRecipients,
-        title: notifTitle,
-        message: notifMessage,
-        reason: reason || '',
-        createdAt: serverTimestamp(),
-        readBy: editorEmail ? [editorEmail.toLowerCase().trim()] : []
-      });
-    } catch (err) {
-      console.warn('Failed to send budget change notification:', err);
-    }
+    // "Bỏ thông báo thay đổi ngân sách" per user request: disabled to eliminate notification noise
+    return;
   };
 
   const handleCreateBlock = async () => {
@@ -7569,7 +7634,7 @@ export default function App() {
     const unassignedData = { blockId: 'unassigned', blockCode: 'unassigned' };
     const prevTeams = [...teams];
     setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...unassignedData } : t));
-    _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...unassignedData } : t);
+    updateCachedTeams(_cachedTeams.map(t => t.id === teamId ? { ...t, ...unassignedData } : t));
 
     try {
       // 2. Perform Firestore update with timeout guard
@@ -7591,7 +7656,7 @@ export default function App() {
       } else {
         // Rollback state on actual error
         setTeams(prevTeams);
-        _cachedTeams = prevTeams;
+        updateCachedTeams(prevTeams);
         handleFirestoreError(err, OperationType.UPDATE, 'teams');
         toast.error(`Lỗi khi xóa phòng khỏi Khối: ${err?.message || 'Lỗi mạng'}`, { id: toastId });
       }
@@ -7647,7 +7712,7 @@ export default function App() {
         createdAt: new Date()
       };
       setTeams(prev => [newTeamObj, ...prev]);
-      _cachedTeams = [newTeamObj, ..._cachedTeams];
+      updateCachedTeams([newTeamObj, ..._cachedTeams]);
 
       await logAction('CREATE', 'teams', docRef.id, { 
         name: newBlockTeamName, 
@@ -7694,7 +7759,7 @@ export default function App() {
       }
 
       setTeams(prev => prev.map(t => t.id === teamId ? { ...t, ...updateData } : t));
-      _cachedTeams = _cachedTeams.map(t => t.id === teamId ? { ...t, ...updateData } : t);
+      updateCachedTeams(_cachedTeams.map(t => t.id === teamId ? { ...t, ...updateData } : t));
 
       await updateDoc(doc(db, 'teams', teamId), updateData);
       await logAction('UPDATE', 'teams', teamId, updateData);
@@ -7923,6 +7988,64 @@ export default function App() {
     } else {
       toast.info("Tất cả ngân sách cũ đã có bản ghi Ngân sách Khối tương ứng.");
     }
+  };
+
+  const handleExportBlockBudgetsExcel = () => {
+    if (!filteredActiveBlockBudgets || filteredActiveBlockBudgets.length === 0) {
+      toast.error("Không có bản ghi ngân sách Khối nào để xuất file Excel!");
+      return;
+    }
+    const exportRows = filteredActiveBlockBudgets.map((b, idx) => {
+      const displayProj = resolveProjectName(b.projectId, b.projectName);
+      const blkName = currentActiveBlock?.name || b.blockName || 'Khối';
+      const blkCode = currentActiveBlock?.blockCode || b.blockCode || '';
+      return {
+        "STT": idx + 1,
+        "Khối Kinh Doanh": blkName,
+        "Mã Khối": blkCode,
+        "Dự Án": displayProj,
+        "Tháng MKT": b.month || '',
+        "Hạn Mức Ngân Sách (VNĐ)": Number(b.amount || 0),
+        "Thời Gian Đăng Ký": safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '',
+        "Người Đăng Ký": b.createdByName || b.userEmail || b.createdByEmail || b.creatorName || 'Hệ thống'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ngan_Sach_Khoi");
+    const blockCode = currentActiveBlock?.blockCode || 'KHOI';
+    const monthSuffix = blockBudgetMonthFilter && blockBudgetMonthFilter !== 'all' ? `_${blockBudgetMonthFilter}` : '';
+    XLSX.writeFile(workbook, `Ngan_sach_khoi_${blockCode}${monthSuffix}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    toast.success("Đã xuất file Excel ngân sách Khối thành công!");
+  };
+
+  const handleExportAdminBlockBudgetsExcel = () => {
+    if (!filteredAdminBlockBudgets || filteredAdminBlockBudgets.length === 0) {
+      toast.error("Không có dữ liệu ngân sách Khối nào để xuất file Excel!");
+      return;
+    }
+    const exportRows = filteredAdminBlockBudgets.map((b, idx) => {
+      const blk = blocks.find(bl => bl.id === b.blockId);
+      const displayBlock = blk?.name || b.blockName || 'Khối';
+      const displayProj = resolveProjectName(b.projectId, b.projectName);
+      return {
+        "STT": idx + 1,
+        "Khối Kinh Doanh": displayBlock,
+        "Mã Khối": blk?.blockCode || b.blockCode || '',
+        "Dự Án": displayProj,
+        "Tháng MKT": b.month || '',
+        "Hạn Mức Ngân Sách (VNĐ)": Number(b.amount || 0),
+        "Thời Gian Đăng Ký": safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '',
+        "Người Đăng Ký": b.createdByName || b.userEmail || b.createdByEmail || b.creatorName || 'Hệ thống'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Quan_Ly_Ngan_Sach_Khoi");
+    XLSX.writeFile(workbook, `Quan_ly_ngan_sach_khoi_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+    toast.success("Đã xuất file Excel quản lý ngân sách Khối thành công!");
   };
 
   const handleAddBlockCost = async () => {
@@ -13058,34 +13181,7 @@ export default function App() {
           {/* Right Side: Notifications, User profile, logout */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Notification Bell Button */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setIsTeamNotificationDialogOpen(true);
-                }}
-                className={cn(
-                  "relative rounded-xl transition-all duration-300 touch-manipulation flex items-center justify-center cursor-pointer",
-                  unreadTeamNotifCount > 0
-                    ? "text-blue-600 bg-blue-50/80 hover:bg-blue-100 ring-1 ring-blue-200"
-                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100",
-                  isScrolled ? "h-8.5 w-8.5" : "h-10 w-10"
-                )}
-                title="Thông báo thay đổi ngân sách"
-              >
-                {unreadTeamNotifCount > 0 ? (
-                  <BellRing className={cn("transition-all duration-300 animate-bounce text-blue-600", isScrolled ? "h-4 w-4" : "h-5 w-5")} />
-                ) : (
-                  <Bell className={cn("transition-all duration-300", isScrolled ? "h-4 w-4" : "h-5 w-5")} />
-                )}
-                {unreadTeamNotifCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4.5 min-w-[18px] px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
-                    {unreadTeamNotifCount > 99 ? '99+' : unreadTeamNotifCount}
-                  </span>
-                )}
-              </Button>
-            </div>
+
 
             <div className={cn(
               "transition-all duration-300 flex flex-col items-end",
@@ -13150,29 +13246,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Mobile Notification Button */}
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  setIsTeamNotificationDialogOpen(true);
-                }}
-                className={cn(
-                  "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black transition-all touch-manipulation mb-3 border",
-                  unreadTeamNotifCount > 0
-                    ? "bg-blue-50/80 border-blue-200 text-blue-800 shadow-sm"
-                    : "bg-slate-50/60 border-slate-200/60 text-slate-600 hover:bg-slate-100"
-                )}
-              >
-                <div className="flex items-center gap-2.5">
-                  <BellRing className={cn("w-4 h-4 shrink-0", unreadTeamNotifCount > 0 ? "text-blue-600 animate-bounce" : "text-slate-400")} />
-                  <span>Thông báo thay đổi ngân sách</span>
-                </div>
-                {unreadTeamNotifCount > 0 && (
-                  <span className="flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white">
-                    {unreadTeamNotifCount}
-                  </span>
-                )}
-              </button>
+
 
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC MENU</p>
               
@@ -13995,7 +14069,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {blockBudgetByBlockSummary.map(({ block: b, totalBudget, projectBudgets, teamCount }) => (
+                    {blockBudgetByBlockSummary.map(({ block: b, totalBudget, totalAcceptanceCost, projectBudgets, teamCount }) => {
+                      const remaining = totalBudget - totalAcceptanceCost;
+                      return (
                       <div 
                         key={b.id}
                         className="bg-gradient-to-b from-white to-purple-50/30 border border-purple-100/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative group"
@@ -14029,12 +14105,28 @@ export default function App() {
                           </Button>
                         </div>
 
-                        {/* Tổng ngân sách */}
-                        <div className="p-3 bg-white rounded-xl border border-purple-100/60 shadow-xs">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tổng ngân sách MKT</p>
-                          <p className="text-xl font-black text-purple-700 mt-0.5">
-                            {new Intl.NumberFormat('vi-VN').format(totalBudget)} đ
-                          </p>
+                        {/* Tổng ngân sách & Chi phí nghiệm thu MKT */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-3 bg-white rounded-xl border border-purple-100/60 shadow-xs">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ngân sách MKT</p>
+                            <p className="text-sm sm:text-base font-black text-purple-700 mt-0.5 font-mono">
+                              {new Intl.NumberFormat('vi-VN').format(totalBudget)} đ
+                            </p>
+                          </div>
+                          <div className="p-3 bg-white rounded-xl border border-indigo-100/60 shadow-xs">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nghiệm thu MKT</p>
+                            <p className="text-sm sm:text-base font-black text-indigo-700 mt-0.5 font-mono">
+                              {new Intl.NumberFormat('vi-VN').format(totalAcceptanceCost)} đ
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Còn lại */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50/80 rounded-xl border border-slate-100 text-xs">
+                          <span className="text-slate-500 font-medium">Còn lại:</span>
+                          <span className={`font-black font-mono ${remaining >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {new Intl.NumberFormat('vi-VN').format(remaining)} đ
+                          </span>
                         </div>
 
                         {/* Chi tiết theo Dự án */}
@@ -14047,11 +14139,19 @@ export default function App() {
                           ) : (
                             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                               {projectBudgets.map(p => (
-                                <div key={p.projectId} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-slate-50/70 border border-slate-100">
-                                  <span className="font-semibold text-slate-700 truncate max-w-[150px]">{p.projectName}</span>
-                                  <span className="font-bold text-emerald-600 font-mono">
-                                    {new Intl.NumberFormat('vi-VN').format(p.amount)} đ
-                                  </span>
+                                <div key={p.projectId} className="flex flex-col gap-0.5 text-xs py-1.5 px-2 rounded-lg bg-slate-50/70 border border-slate-100">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-slate-700 truncate max-w-[140px]">{p.projectName}</span>
+                                    <span className="font-bold text-purple-700 font-mono">
+                                      {new Intl.NumberFormat('vi-VN').format(p.amount)} đ
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                    <span>Nghiệm thu MKT:</span>
+                                    <span className="font-semibold text-indigo-600 font-mono">
+                                      {new Intl.NumberFormat('vi-VN').format(p.acceptanceCost || 0)} đ
+                                    </span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -14063,7 +14163,8 @@ export default function App() {
                           <span className="truncate">GĐ Khối: <strong>{b.directorName || 'Chưa gán'}</strong></span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -14150,9 +14251,6 @@ export default function App() {
                   </TabsTrigger>
                   <TabsTrigger value="block-budgets" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <Wallet className="w-4 h-4 mr-2" /> Đăng ký Ngân sách
-                  </TabsTrigger>
-                  <TabsTrigger value="block-costs" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                    <TrendingUp className="w-4 h-4 mr-2" /> Danh sách Chi phí
                   </TabsTrigger>
                   <TabsTrigger value="block-nt" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <FileCheck className="w-4 h-4 mr-2" /> Nghiệm thu Chi phí MKT
@@ -15009,6 +15107,15 @@ export default function App() {
                             </CardDescription>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleExportBlockBudgetsExcel}
+                              className="h-8 text-xs font-bold border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 rounded-xl"
+                              title="Xuất file Excel các bản ghi ngân sách Khối đã lọc"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Xuất Excel
+                            </Button>
                             {canManageBlockBudget && (
                               <Button
                                 size="sm"
@@ -15048,62 +15155,103 @@ export default function App() {
                               )}
                             </div>
                           ) : (
-                            <div className="overflow-x-auto rounded-xl border border-slate-100">
-                              <Table>
-                                <TableHeader className="bg-slate-50/70">
-                                  <TableRow>
-                                    <TableHead className="font-bold text-slate-800">Dự án</TableHead>
-                                    <TableHead className="font-bold text-slate-800">Tháng</TableHead>
-                                    <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
-                                    <TableHead className="font-bold text-right text-slate-800">Mức Ngân sách</TableHead>
-                                    <TableHead className="font-bold text-center text-slate-800">Thao tác chỉnh sửa</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {filteredActiveBlockBudgets.map((b) => {
-                                    const displayProj = resolveProjectName(b.projectId, b.projectName);
-                                    return (
-                                      <TableRow key={b.id} className="hover:bg-slate-50/50">
-                                        <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
-                                        <TableCell className="font-mono text-xs font-semibold text-slate-700">{b.month}</TableCell>
-                                        <TableCell className="text-xs font-mono text-slate-500">
-                                          {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-bold text-xs sm:text-sm text-emerald-600 select-all">
-                                          {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                          {canManageBlockBudget ? (
-                                            <div className="flex items-center justify-center gap-1.5">
-                                              <Button 
-                                                size="xs" 
-                                                variant="outline" 
-                                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1"
-                                                title="Chỉnh sửa ngân sách"
-                                                onClick={() => handleOpenEditBlockBudget(b)}
-                                              >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                                <span>Sửa</span>
-                                              </Button>
-                                              <Button 
-                                                size="xs" 
-                                                variant="outline" 
-                                                className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs"
-                                                title="Xóa đăng ký ngân sách"
-                                                onClick={() => handleDeleteBlockBudget(b)}
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                              </Button>
-                                            </div>
-                                          ) : (
-                                            <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
-                                          )}
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
+                            <div className="space-y-4">
+                              {/* Thống kê nhanh ngân sách khối và chi phí nghiệm thu */}
+                              {(() => {
+                                const totalBudgetSum = filteredActiveBlockBudgets.reduce((s, b) => s + (b.amount || 0), 0);
+                                const totalCostSum = filteredActiveBlockBudgets.reduce((s, b) => s + getBlockProjectAcceptanceCost(b.projectId, b.month), 0);
+                                const diffSum = totalBudgetSum - totalCostSum;
+                                return (
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
+                                    <div className="bg-white p-3 rounded-xl border border-purple-100/70 shadow-xs">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tổng ngân sách cấp</p>
+                                      <p className="text-sm sm:text-base font-black text-purple-700 font-mono mt-0.5">
+                                        {new Intl.NumberFormat('vi-VN').format(totalBudgetSum)} đ
+                                      </p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-xl border border-indigo-100/70 shadow-xs">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nghiệm thu MKT thực tế</p>
+                                      <p className="text-sm sm:text-base font-black text-indigo-700 font-mono mt-0.5">
+                                        {new Intl.NumberFormat('vi-VN').format(totalCostSum)} đ
+                                      </p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-xl border border-emerald-100/70 shadow-xs">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ngân sách còn lại</p>
+                                      <p className={`text-sm sm:text-base font-black font-mono mt-0.5 ${diffSum >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {new Intl.NumberFormat('vi-VN').format(diffSum)} đ
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                <Table>
+                                  <TableHeader className="bg-slate-50/70">
+                                    <TableRow>
+                                      <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                      <TableHead className="font-bold text-slate-800">Tháng</TableHead>
+                                      <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
+                                      <TableHead className="font-bold text-right text-slate-800">Ngân sách cấp</TableHead>
+                                      <TableHead className="font-bold text-right text-slate-800">Nghiệm thu MKT</TableHead>
+                                      <TableHead className="font-bold text-right text-slate-800">Còn lại</TableHead>
+                                      <TableHead className="font-bold text-center text-slate-800">Thao tác</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {filteredActiveBlockBudgets.map((b) => {
+                                      const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                      const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
+                                      const diff = (b.amount || 0) - acceptanceCost;
+                                      return (
+                                        <TableRow key={b.id} className="hover:bg-slate-50/50">
+                                          <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
+                                          <TableCell className="font-mono text-xs font-semibold text-slate-700">{b.month}</TableCell>
+                                          <TableCell className="text-xs font-mono text-slate-500">
+                                            {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                          </TableCell>
+                                          <TableCell className="text-right font-bold text-xs sm:text-sm text-purple-700 select-all font-mono">
+                                            {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
+                                          </TableCell>
+                                          <TableCell className="text-right font-semibold text-xs sm:text-sm text-indigo-600 select-all font-mono">
+                                            {new Intl.NumberFormat('vi-VN').format(acceptanceCost)} đ
+                                          </TableCell>
+                                          <TableCell className={`text-right font-black text-xs sm:text-sm select-all font-mono ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {new Intl.NumberFormat('vi-VN').format(diff)} đ
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            {canManageBlockBudget ? (
+                                              <div className="flex items-center justify-center gap-1.5">
+                                                <Button 
+                                                  size="xs" 
+                                                  variant="outline" 
+                                                  className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1"
+                                                  title="Chỉnh sửa ngân sách"
+                                                  onClick={() => handleOpenEditBlockBudget(b)}
+                                                >
+                                                  <Edit2 className="w-3.5 h-3.5" />
+                                                  <span>Sửa</span>
+                                                </Button>
+                                                <Button 
+                                                  size="xs" 
+                                                  variant="outline" 
+                                                  className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs"
+                                                  title="Xóa đăng ký ngân sách"
+                                                  onClick={() => handleDeleteBlockBudget(b)}
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
                             </div>
                           )}
                         </CardContent>
@@ -15178,206 +15326,6 @@ export default function App() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
-    </>
-  )}
-                </TabsContent>
-
-                {/* TAB 3: Cost list for block */}
-                <TabsContent value="block-costs" className="space-y-6">
-  {blockSubTab === 'block-costs' && (
-    <>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Nhập chi phí */}
-                    <Card className="border-slate-100 shadow-md col-span-1">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-black text-slate-900">Ghi Nhận Chi Phí Mới</CardTitle>
-                        <CardDescription>Cập nhật chi phí đầu vào tương thích với ngân sách của các nhóm.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Dự Án</Label>
-                          <SearchableSelectGeneric
-                            items={projects.map(p => ({
-                              id: p.id,
-                              name: `${p.name} (${p.projectCode || 'N/A'})`,
-                              code: p.projectCode
-                            }))}
-                            value={blockCostProject}
-                            onValueChange={setBlockCostProject}
-                            placeholder="Chọn dự án..."
-                            searchPlaceholder="Gõ tên hoặc mã dự án..."
-                            emptyMessage="Không tìm thấy dự án"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Nhóm Kinh Doanh</Label>
-                          <SearchableSelectGeneric
-                            items={myBlockTeams.map(t => ({
-                              id: t.id,
-                              name: `${t.name} (${t.teamCode || 'N/A'})`,
-                              code: t.teamCode
-                            }))}
-                            value={blockCostTeam}
-                            onValueChange={setBlockCostTeam}
-                            placeholder="Chọn nhóm..."
-                            searchPlaceholder="Gõ tên hoặc mã nhóm..."
-                            emptyMessage="Không tìm thấy nhóm"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <Label className="text-xs">Tháng MKT</Label>
-                            <Input 
-                              value={blockCostMonth}
-                              onChange={(e) => setBlockCostMonth(e.target.value)}
-                              placeholder="YYYY-MM"
-                              className="rounded-xl border-slate-200 h-9"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Tổng số chi phí (đ)</Label>
-                            <Input 
-                              placeholder="Tổng tiền..."
-                              value={blockCostAmount}
-                              onChange={(e) => setBlockCostAmount(e.target.value)}
-                              className="rounded-xl border-slate-200 h-9 font-bold text-slate-900"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Chi tiết kênh */}
-                        <div className="p-3 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-2 mt-2">
-                          <Label className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">Phân rã chi tiết kênh quảng cáo (Có thể điền 0)</Label>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="space-y-0.5">
-                              <Label className="text-[10px]">FB Ads (đ)</Label>
-                              <Input placeholder="0" value={blockCostFb} onChange={(e) => setBlockCostFb(e.target.value)} className="h-8 rounded-lg" />
-                            </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[10px]">Google Ads (đ)</Label>
-                              <Input placeholder="0" value={blockCostGoogle} onChange={(e) => setBlockCostGoogle(e.target.value)} className="h-8 rounded-lg" />
-                            </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[10px]">Zalo Ads (đ)</Label>
-                              <Input placeholder="0" value={blockCostZalo} onChange={(e) => setBlockCostZalo(e.target.value)} className="h-8 rounded-lg" />
-                            </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[10px]">Posting/Content (đ)</Label>
-                              <Input placeholder="0" value={blockCostPosting} onChange={(e) => setBlockCostPosting(e.target.value)} className="h-8 rounded-lg" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-xs">Ghi chú chi phí</Label>
-                          <Input 
-                            value={blockCostNote}
-                            onChange={(e) => setBlockCostNote(e.target.value)}
-                            placeholder="Mô tả mục chi phí..."
-                            className="rounded-xl border-slate-200 h-9"
-                          />
-                        </div>
-
-                        <Button 
-                          onClick={handleAddBlockCost}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold py-2 mt-2"
-                        >
-                          Thêm Chi Phí Thực Tế
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    {/* Danh sách */}
-                    <div className="lg:col-span-2">
-                      <Card className="border-slate-100 shadow-md">
-                        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 space-y-0">
-                          <CardTitle className="text-lg font-black text-slate-900">Chi Phí Đầu Vào Của Các Nhóm ({filteredBlockCosts.length})</CardTitle>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Lọc tháng:</span>
-                            <Select value={blockCostMonthFilter} onValueChange={setBlockCostMonthFilter}>
-                              <SelectTrigger className="w-[140px] rounded-xl text-xs h-8 bg-slate-50 border-slate-200">
-                                <SelectValue placeholder="Chọn tháng..." />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-xl">
-                                <SelectItem value="all">Tất cả các tháng</SelectItem>
-                                {availableCostMonths.map((m) => (
-                                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          {filteredBlockCosts.length === 0 ? (
-                            <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
-                              <TrendingUp className="w-10 h-10 mx-auto opacity-30 mb-2" />
-                              <p className="text-sm font-medium">Không tìm thấy ghi nhận thực chi phí nào cho tháng này</p>
-                            </div>
-                          ) : (
-                            <div className="overflow-x-auto rounded-xl border border-slate-100">
-                              <Table>
-                                <TableHeader className="bg-slate-50/70">
-                                  <TableRow>
-                                    <TableHead className="font-bold">Nhóm</TableHead>
-                                    <TableHead className="font-bold">Dự án/Kênh</TableHead>
-                                    <TableHead className="font-bold">Tháng MKT</TableHead>
-                                    <TableHead className="font-bold">Thuyết minh / Note</TableHead>
-                                    <TableHead className="font-bold text-right">Tổng thực chi</TableHead>
-                                    <TableHead className="font-bold text-center">Xóa</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {filteredBlockCosts.map((c) => {
-                                    const displayTeam = resolveTeamName(c.teamId, c.teamName);
-                                    const displayProj = resolveProjectName(c.projectId, c.projectName);
-                                    return (
-                                      <TableRow key={c.id} className="hover:bg-slate-50/50">
-                                        <TableCell className="font-semibold text-xs text-slate-700">{displayTeam}</TableCell>
-                                        <TableCell className="text-xs">
-                                          <div className="font-semibold text-indigo-600">{displayProj}</div>
-                                          {c.channels && (
-                                            <div className="text-[10px] text-slate-400 font-mono">
-                                              FB: {new Intl.NumberFormat('vi-VN').format(c.channels.fbAds || 0)} | 
-                                              GG: {new Intl.NumberFormat('vi-VN').format(c.channels.googleAds || 0)}
-                                            </div>
-                                          )}
-                                        </TableCell>
-                                        <TableCell className="font-mono text-xs">{c.month}</TableCell>
-                                        <TableCell className="text-xs text-slate-500 max-w-[150px] truncate">{c.note || 'N/A'}</TableCell>
-                                        <TableCell className="text-right font-black text-xs text-rose-600 select-all">
-                                          {new Intl.NumberFormat('vi-VN').format(c.amount)} đ
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                          <Button 
-                                            size="xs" 
-                                            variant="ghost" 
-                                            className="text-rose-600 hover:text-rose-700 hover:bg-slate-50 h-8 w-8 p-0"
-                                            onClick={async () => {
-                                              if (window.confirm("Bạn có chắc chắn muốn xóa chi phí này?")) {
-                                                try {
-                                                  await deleteDoc(doc(db, 'costs', c.id));
-                                                  await logAction('DELETE', 'costs', c.id, { id: c.id });
-                                                  toast.success("Xóa chi phí thành công!");
-                                                } catch (err) {
-                                                  handleFirestoreError(err, OperationType.DELETE, 'costs');
-                                                }
-                                              }
-                                            }}
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </Button>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
     </>
   )}
                 </TabsContent>
@@ -18934,6 +18882,15 @@ export default function App() {
                           <Button 
                             variant="outline" 
                             size="sm" 
+                            className="h-9 text-xs font-bold text-emerald-700 border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 rounded-xl"
+                            onClick={handleExportAdminBlockBudgetsExcel}
+                            title="Xuất file Excel tất cả bản ghi ngân sách Khối theo bộ lọc"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> Xuất Excel
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
                             className="h-9 text-xs font-bold text-purple-700 border-purple-200 hover:bg-purple-50 rounded-xl"
                             onClick={syncOldBudgetsToBlockBudgets}
                             title="Tạo bản ghi Ngân sách Khối từ ngân sách cũ của các team"
@@ -20450,33 +20407,7 @@ export default function App() {
                   <TabsContent value="register" className="space-y-8">
                     {adminSubTab === 'register' && (
                       <>
-            {unreadTeamNotifCount > 0 && (
-              <div className="p-4 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-blue-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-200 shrink-0">
-                    <BellRing className="w-5 h-5 animate-bounce" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
-                      Thông báo thay đổi ngân sách
-                      <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
-                        {unreadTeamNotifCount} mới
-                      </span>
-                    </h4>
-                    <p className="text-xs text-blue-800 font-medium mt-0.5">
-                      Có <strong className="text-blue-950 font-bold">{unreadTeamNotifCount}</strong> thông báo thay đổi hạn mức ngân sách mới cho các dự án của đội.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsTeamNotificationDialogOpen(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm cursor-pointer whitespace-nowrap self-end sm:self-center shrink-0"
-                >
-                  <Eye className="w-3.5 h-3.5 mr-1.5" /> Xem thông báo
-                </Button>
-              </div>
-            )}
+
 
             <Card className="border-none shadow-2xl shadow-slate-200/60 bg-white overflow-hidden">
               <div className="h-2 bg-gradient-to-r from-indigo-500 to-blue-600 w-full" />
@@ -23960,282 +23891,6 @@ export default function App() {
               Tổng cộng <strong className="text-slate-800">{historyToView?.length || 0}</strong> lần cập nhật
             </span>
             <Button onClick={() => setIsHistoryDialogOpen(false)} className="rounded-xl px-6">
-              Đóng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Team Notifications Dialog */}
-      <Dialog open={isTeamNotificationDialogOpen} onOpenChange={setIsTeamNotificationDialogOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[85vh] p-0 overflow-hidden flex flex-col rounded-2xl">
-          <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="flex items-center gap-2 text-base font-black text-slate-900">
-                <div className="p-2 bg-blue-100/80 rounded-xl text-blue-600">
-                  <Bell className="w-4 h-4" />
-                </div>
-                <span>Thông báo thay đổi ngân sách</span>
-                {unreadTeamNotifCount > 0 && (
-                  <Badge variant="outline" className="ml-1 bg-rose-50 border-rose-200 text-rose-600 text-[10px] font-black h-5 px-1.5">
-                    {unreadTeamNotifCount} chưa đọc
-                  </Badge>
-                )}
-              </DialogTitle>
-              {unreadTeamNotifCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={markAllTeamNotifsAsRead}
-                  className="text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-700 h-8 px-2.5 rounded-lg flex items-center gap-1.5"
-                >
-                  <CheckCheck className="w-3.5 h-3.5" /> Đánh dấu đã đọc tất cả
-                </Button>
-              )}
-            </div>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
-              Thông báo cập nhật hạn mức ngân sách được gửi đến bạn và thành viên trong Đội khi có thay đổi.
-            </DialogDescription>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1.5 pt-2">
-              <button
-                onClick={() => setNotifFilterTab('all')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  notifFilterTab === 'all'
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                Tất cả ({myTeamNotifications.length})
-              </button>
-              <button
-                onClick={() => setNotifFilterTab('unread')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer",
-                  notifFilterTab === 'unread'
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                <span>Chưa đọc</span>
-                {unreadTeamNotifCount > 0 && (
-                  <span className={cn(
-                    "px-1.5 py-0.2 rounded-full text-[9px] font-black",
-                    notifFilterTab === 'unread' ? "bg-white/20 text-white" : "bg-rose-500 text-white"
-                  )}>
-                    {unreadTeamNotifCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setNotifFilterTab('my_projects')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  notifFilterTab === 'my_projects'
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                Dự án của tôi ({myTeamNotifications.filter(n => {
-                  const uEmail = (user?.email || '').toLowerCase().trim();
-                  const recips = [
-                    ...safeArrayOfStrings(n.recipients),
-                    ...safeArrayOfStrings(n.previousRegistrants),
-                    ...safeArrayOfStrings(n.targetEmails)
-                  ];
-                  return recips.includes(uEmail) ||
-                         (n.creatorEmail && String(n.creatorEmail).toLowerCase().trim() === uEmail) ||
-                         (n.userEmail && String(n.userEmail).toLowerCase().trim() === uEmail) ||
-                         (n.createdBy && n.createdBy === user?.uid);
-                }).length})
-              </button>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 p-4 space-y-3 overflow-y-auto custom-scrollbar max-h-[500px]">
-            {(() => {
-              const uEmail = (user?.email || '').toLowerCase().trim();
-              const filteredList = myTeamNotifications.filter(n => {
-                const readList = safeArrayOfStrings(n.readBy);
-                const isRead = readList.includes(uEmail);
-                if (notifFilterTab === 'unread') return !isRead;
-                if (notifFilterTab === 'my_projects') {
-                  const recips = [
-                    ...safeArrayOfStrings(n.recipients),
-                    ...safeArrayOfStrings(n.previousRegistrants),
-                    ...safeArrayOfStrings(n.targetEmails)
-                  ];
-                  const isRecipient = recips.includes(uEmail) ||
-                                     (n.creatorEmail && String(n.creatorEmail).toLowerCase().trim() === uEmail) ||
-                                     (n.userEmail && String(n.userEmail).toLowerCase().trim() === uEmail) ||
-                                     (n.createdBy && n.createdBy === user?.uid);
-                  return isRecipient;
-                }
-                return true;
-              });
-
-              if (filteredList.length === 0) {
-                return (
-                  <div className="py-12 text-center text-slate-400 space-y-2">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-                      <Bell className="w-6 h-6" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-600">Không có thông báo nào</p>
-                    <p className="text-[11px] text-slate-400">
-                      {notifFilterTab === 'unread' ? 'Bạn đã đọc tất cả thông báo.' : 'Chưa có thông báo thay đổi ngân sách nào được ghi nhận.'}
-                    </p>
-                  </div>
-                );
-              }
-
-              return filteredList.map((notif: any) => {
-                const readList = safeArrayOfStrings(notif.readBy);
-                const isRead = readList.includes(uEmail);
-                const recips = [
-                  ...safeArrayOfStrings(notif.recipients),
-                  ...safeArrayOfStrings(notif.previousRegistrants),
-                  ...safeArrayOfStrings(notif.targetEmails)
-                ];
-                const isCreatorOrContributor = recips.includes(uEmail) ||
-                                              (notif.creatorEmail && String(notif.creatorEmail).toLowerCase().trim() === uEmail) ||
-                                              (notif.userEmail && String(notif.userEmail).toLowerCase().trim() === uEmail) ||
-                                              (notif.createdBy && notif.createdBy === user?.uid);
-
-                const timeStr = safeFormat(notif.createdAt, 'dd/MM/yyyy HH:mm') || 'Vừa xong';
-
-                const diff = (Number(notif.newAmount || 0) - Number(notif.oldAmount || 0));
-
-                return (
-                  <div 
-                    key={notif.id}
-                    className={cn(
-                      "p-4 rounded-2xl border transition-all space-y-3 relative group",
-                      !isRead 
-                        ? "bg-blue-50/60 border-blue-200/90 shadow-sm ring-1 ring-blue-100" 
-                        : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/50"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className={cn(
-                          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
-                          diff > 0 
-                            ? "bg-emerald-100 text-emerald-600" 
-                            : (diff < 0 ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600")
-                        )}>
-                          {diff > 0 ? <TrendingUp className="w-5 h-5" /> : (diff < 0 ? <TrendingUp className="w-5 h-5 rotate-180" /> : <Wallet className="w-5 h-5" />)}
-                        </div>
-
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-xs font-black text-slate-900 tracking-tight">
-                              {notif.projectName || 'Dự án'}
-                            </span>
-                            {notif.teamName && (
-                              <Badge variant="outline" className="text-[9px] font-bold bg-slate-100 text-slate-700 border-slate-200 h-4.5 px-1.5">
-                                {notif.teamName}
-                              </Badge>
-                            )}
-                            {notif.month && (
-                              <Badge variant="outline" className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border-indigo-100 h-4.5 px-1.5">
-                                {notif.month}
-                              </Badge>
-                            )}
-                            {isCreatorOrContributor && (
-                              <Badge variant="outline" className="text-[9px] font-bold bg-amber-50 text-amber-700 border-amber-200 h-4.5 px-1.5">
-                                Bản ghi của bạn
-                              </Badge>
-                            )}
-                            {!isRead && (
-                              <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse ml-0.5" title="Chưa đọc" />
-                            )}
-                          </div>
-
-                          <p className="text-xs text-slate-600 font-medium leading-snug">
-                            {notif.message || `Ngân sách dự án ${notif.projectName} đã được cập nhật.`}
-                          </p>
-                        </div>
-                      </div>
-
-                      <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
-                        {timeStr}
-                      </span>
-                    </div>
-
-                    {/* Amount Comparison Pill */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-150 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400 font-medium">Ngân sách:</span>
-                        <span className="line-through text-slate-400 font-medium">{formatCurrency(notif.oldAmount || 0)}</span>
-                        <ArrowRight className="w-3 h-3 text-slate-400" />
-                        <span className="font-extrabold text-indigo-700">{formatCurrency(notif.newAmount || 0)}</span>
-                        {diff !== 0 && (
-                          <span className={cn(
-                            "text-[10px] font-black px-1.5 py-0.2 rounded-md",
-                            diff > 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                          )}>
-                            {diff > 0 ? `+${formatCurrency(diff)}` : `-${formatCurrency(Math.abs(diff))}`}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-slate-400">Người sửa:</span>
-                        <span className="text-[11px] font-bold text-slate-700">{notif.editorName || notif.editorEmail || 'Thành viên'}</span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-end gap-2 pt-0.5">
-                      {!isRead && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => markTeamNotifAsRead(notif.id)}
-                          className="text-[11px] font-bold text-slate-500 hover:text-blue-600 hover:bg-blue-50 h-7 px-2.5 rounded-lg"
-                        >
-                          <Check className="w-3 h-3 mr-1" /> Đã đọc
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (!isRead) markTeamNotifAsRead(notif.id);
-                          setIsTeamNotificationDialogOpen(false);
-                          if (isAdmin || isSuperAdmin) {
-                            setActiveTab('admin');
-                            setAdminSubTab('register');
-                          } else {
-                            setActiveTab('process-doiung');
-                          }
-                          if (notif.projectId) setSelectedProjectId(notif.projectId);
-                          if (notif.month) setBudgetMonth(notif.month);
-                          toast.success(`Đã chuyển tới dự án ${notif.projectName}`);
-                        }}
-                        className="text-[11px] font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50 h-7 px-2.5 rounded-lg"
-                      >
-                        <Eye className="w-3 h-3 mr-1" /> Xem ngân sách
-                      </Button>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-
-          <DialogFooter className="p-3 px-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center w-full">
-            <span className="text-[11px] text-slate-400">
-              Tổng cộng {myTeamNotifications.length} thông báo
-            </span>
-            <Button 
-              variant="outline"
-              size="sm"
-              onClick={() => setIsTeamNotificationDialogOpen(false)} 
-              className="text-xs h-8 px-4 rounded-xl"
-            >
               Đóng
             </Button>
           </DialogFooter>

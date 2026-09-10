@@ -1198,8 +1198,7 @@ export const PERMISSION_GROUPS = [
       { key: 'report_nt.create', label: 'Tạo mới Nghiệm thu MKT', desc: 'Thêm dòng mới trong bảng Nghiệm thu MKT (Chỉ Admin và Mod).' },
       { key: 'report_nt.edit', label: 'Chỉnh sửa Nghiệm thu MKT', desc: 'Sửa số liệu các cột chi phí, VAT, người triển khai trong Nghiệm thu MKT (Chỉ Admin và Mod).' },
       { key: 'report_nt.delete', label: 'Xóa Nghiệm thu MKT', desc: 'Xóa đơn lẻ hoặc xóa hàng loạt bản ghi Nghiệm thu MKT (Chỉ Admin và Mod).' },
-      { key: 'report_nt.import', label: 'Nhập Excel Nghiệm thu', desc: 'Nhập dữ liệu nghiệm thu hàng loạt từ file Excel (Chỉ Admin và Mod).' },
-      { key: 'report_nt.sync', label: 'Đồng bộ Google Sheet', desc: 'Cập nhật và đồng bộ dữ liệu từ liên kết Google Spreadsheet.' }
+      { key: 'report_nt.import', label: 'Nhập Excel Nghiệm thu', desc: 'Nhập dữ liệu nghiệm thu hàng loạt từ file Excel (Chỉ Admin và Mod).' }
     ]
   },
   {
@@ -1783,8 +1782,8 @@ export default function App() {
   const [multiBudgetItems, setMultiBudgetItems] = useState<any[]>([]);
   const [isOverBudgetDetailOpen, setIsOverBudgetDetailOpen] = useState(false);
   const [systemSettings, setSystemSettings] = useState<any>(null);
-  const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('15');
-  const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('5');
+  const [adminBudgetStartDay, setAdminBudgetStartDay] = useState('14');
+  const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('19');
   const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
   const [isAlertManagementOpen, setIsAlertManagementOpen] = useState(false);
 
@@ -7780,9 +7779,56 @@ export default function App() {
     }
   };
 
+  const firebaseUserEmail = user?.email?.toLowerCase() || '';
+
+  const isWithinRegistrationWindow = () => {
+    if (isAdmin || isSuperAdmin || isInternalStaff || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
+    if (!systemSettings) return true;
+    
+    const now = new Date();
+    const day = now.getDate();
+    const start = Number(systemSettings.budgetStartDay || 14);
+    const end = Number(systemSettings.budgetEndDay || 19);
+
+    if (start > end) {
+      return day >= start || day <= end;
+    } else {
+      return day >= start && day <= end;
+    }
+  };
+
+  const checkBlockBudgetActionAllowed = (_bMonth?: string) => {
+    const isOverrideUser = 
+      isAdmin || 
+      isSuperAdmin || 
+      isInternalStaff || 
+      firebaseUserEmail === 'thienvu1108@gmail.com';
+
+    if (isOverrideUser) {
+      return { allowed: true };
+    }
+
+    const start = Number(systemSettings?.budgetStartDay || 14);
+    const end = Number(systemSettings?.budgetEndDay || 19);
+
+    if (!isWithinRegistrationWindow()) {
+      return {
+        allowed: false,
+        reason: `Ngoài thời gian đăng ký và chỉnh sửa Ngân sách Khối (Quy định: từ ngày ${start} đến ngày ${end} hàng tháng). Hiện tính năng đã tạm khóa đối với cấp Khối. Vui lòng liên hệ Ban Quản Trị nếu cần hỗ trợ!`
+      };
+    }
+
+    return { allowed: true };
+  };
+
   const handleAddBlockBudget = async () => {
     if (!canManageBlockBudget) {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền đăng ký ngân sách Khối!");
+      return;
+    }
+    const check = checkBlockBudgetActionAllowed(blockBudgetMonth);
+    if (!check.allowed) {
+      toast.error(check.reason);
       return;
     }
     const block = currentActiveBlock;
@@ -7844,6 +7890,11 @@ export default function App() {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
       return;
     }
+    const check = checkBlockBudgetActionAllowed(b.month);
+    if (!check.allowed) {
+      toast.error(check.reason);
+      return;
+    }
     setEditingBlockBudget(b);
     setEditBlockBudgetAmount(b.amount !== undefined && b.amount !== null ? b.amount.toString() : '');
     setEditBlockBudgetMonth(b.month || '');
@@ -7854,6 +7905,11 @@ export default function App() {
   const handleSaveEditBlockBudget = async () => {
     if (!canManageBlockBudget) {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
+      return;
+    }
+    const check = checkBlockBudgetActionAllowed(editBlockBudgetMonth);
+    if (!check.allowed) {
+      toast.error(check.reason);
       return;
     }
     if (!editingBlockBudget) return;
@@ -7894,6 +7950,11 @@ export default function App() {
   const handleDeleteBlockBudget = async (b: any) => {
     if (!canManageBlockBudget) {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền xóa ngân sách Khối!");
+      return;
+    }
+    const check = checkBlockBudgetActionAllowed(b.month);
+    if (!check.allowed) {
+      toast.error(check.reason);
       return;
     }
     const displayProj = resolveProjectName(b.projectId, b.projectName);
@@ -9292,24 +9353,6 @@ export default function App() {
     return count;
   };
 
-  const isWithinRegistrationWindow = () => {
-    if (isInternalStaff || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
-    if (!systemSettings) return true;
-    
-    const now = new Date();
-    const day = now.getDate();
-    const start = Number(systemSettings.budgetStartDay || 15);
-    const end = Number(systemSettings.budgetEndDay || 5);
-
-    if (start > end) {
-      return day >= start || day <= end;
-    } else {
-      return day >= start && day <= end;
-    }
-  };
-
-  const firebaseUserEmail = user?.email?.toLowerCase() || '';
-
   const checkBudgetActionAllowed = (bMonth: string) => {
     const roleStr = (userRole || userProfile?.role || '').toLowerCase().trim();
     const isSpecialAdmin = 
@@ -9343,25 +9386,7 @@ export default function App() {
       };
     }
     
-    // Check if bMonth is current period
-    if (bMonth === currentM) {
-      if (!isWithinRegistrationWindow()) {
-        return { 
-          allowed: false, 
-          reason: 'Ngoài thời gian đăng ký hoặc điều chỉnh ngân sách của kỳ hiện tại.' 
-        };
-      }
-      return { allowed: true };
-    }
-    
-    // If future period (bMonth > currentM)
-    if (!isWithinRegistrationWindow()) {
-      return { 
-        allowed: false, 
-        reason: 'Ngoài thời gian đăng ký hoặc điều chỉnh ngân sách.' 
-      };
-    }
-    
+    // Cơ chế mới: Khung thời gian đăng ký & chỉnh sửa áp dụng cho Ngân sách Khối thay vì ngân sách từng phòng.
     return { allowed: true };
   };
 
@@ -15021,6 +15046,49 @@ export default function App() {
                 <TabsContent value="block-budgets" className="space-y-6">
   {blockSubTab === 'block-budgets' && (
     <>
+                  {/* Banner Thời gian Đăng ký & Chỉnh sửa Ngân sách Khối */}
+                  {(() => {
+                    const isWindowOpen = isWithinRegistrationWindow();
+                    const startDay = Number(systemSettings?.budgetStartDay || 14);
+                    const endDay = Number(systemSettings?.budgetEndDay || 19);
+                    return (
+                      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        isWindowOpen 
+                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                          : 'bg-rose-50/70 border-rose-200 text-rose-950'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl shrink-0 ${isWindowOpen ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            <Clock className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black uppercase tracking-wider">
+                                Thời gian Đăng ký & Chỉnh sửa Ngân sách Khối:
+                              </span>
+                              <Badge className={`text-[10px] font-black border-none px-2.5 py-0.5 rounded-full ${
+                                isWindowOpen ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                              }`}>
+                                {isWindowOpen ? 'ĐANG MỞ' : 'ĐÃ KHÓA'}
+                              </Badge>
+                            </div>
+                            <p className="text-xs font-medium mt-0.5 text-slate-600">
+                              {isWindowOpen 
+                                ? `Hệ thống đang mở cho phép Khối đăng ký và chỉnh sửa ngân sách (từ ngày ${startDay} đến ngày ${endDay} hàng tháng).`
+                                : `Ngoài khung thời gian đăng ký & chỉnh sửa ngân sách Khối (quy định: từ ngày ${startDay} đến ngày ${endDay} hàng tháng). Các tính năng đã khóa đối với cấp Khối.`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        {(isAdmin || isSuperAdmin) && (
+                          <Badge variant="outline" className="text-[10px] font-bold border-indigo-200 text-indigo-700 bg-white/80 shrink-0 self-start sm:self-center">
+                            Quyền Admin: Cho phép chỉnh sửa
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Đăng ký ngân sách theo Khối */}
                     <Card className="border-slate-100 shadow-md">
@@ -15036,12 +15104,17 @@ export default function App() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {!canManageBlockBudget && (
+                        {!canManageBlockBudget ? (
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
                             <span>Chỉ Giám đốc Khối và Trợ lý mới có quyền tạo và chỉnh sửa ngân sách Khối.</span>
                           </div>
-                        )}
+                        ) : (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin) ? (
+                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium flex items-center gap-2">
+                            <Clock className="w-4 h-4 shrink-0 text-rose-600" />
+                            <span>Đã hết thời gian đăng ký & chỉnh sửa ngân sách Khối (Từ ngày {systemSettings?.budgetStartDay || 14} đến {systemSettings?.budgetEndDay || 19} hàng tháng).</span>
+                          </div>
+                        ) : null}
 
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-700">Dự Án Đăng Ký <span className="text-rose-500">*</span></Label>
@@ -15056,7 +15129,7 @@ export default function App() {
                             placeholder="Chọn dự án..."
                             searchPlaceholder="Gõ tên hoặc mã dự án..."
                             emptyMessage="Không tìm thấy dự án"
-                            disabled={!canManageBlockBudget}
+                            disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
                           />
                         </div>
 
@@ -15069,7 +15142,7 @@ export default function App() {
                               onChange={(e) => setBlockBudgetMonth(e.target.value)}
                               placeholder="YYYY-MM"
                               className="rounded-xl border-slate-200"
-                              disabled={!canManageBlockBudget}
+                              disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
                             />
                           </div>
                           <div className="space-y-2">
@@ -15079,17 +15152,29 @@ export default function App() {
                               value={blockBudgetAmount}
                               onChange={(e) => setBlockBudgetAmount(e.target.value)}
                               className="rounded-xl border-slate-200 font-semibold"
-                              disabled={!canManageBlockBudget}
+                              disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
                             />
                           </div>
                         </div>
 
                         <Button 
                           onClick={handleAddBlockBudget}
-                          disabled={!canManageBlockBudget}
-                          className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold py-2.5 transition-all shadow-md shadow-purple-100 cursor-pointer"
+                          disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
+                          className={`w-full text-white rounded-xl font-bold py-2.5 transition-all shadow-md cursor-pointer ${
+                            (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)
+                              ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed shadow-none'
+                              : 'bg-purple-600 hover:bg-purple-700 shadow-purple-100'
+                          }`}
                         >
-                          <Plus className="w-4 h-4 mr-1.5" /> Đăng Ký Ngân Sách Khối
+                          {(!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin) ? (
+                            <>
+                              <Clock className="w-4 h-4 mr-1.5" /> Đã Hết Hạn Đăng Ký (Ngày {systemSettings?.budgetStartDay || 14} - {systemSettings?.budgetEndDay || 19})
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-1.5" /> Đăng Ký Ngân Sách Khối
+                            </>
+                          )}
                         </Button>
                       </CardContent>
                     </Card>
@@ -18158,148 +18243,41 @@ export default function App() {
                 <TabsContent value="acceptance" className="space-y-6">
                   {adminSubTab === 'acceptance' && (
                     <div className="space-y-6">
-                      {/* Secondary navigation for NT styles */}
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <FileCheck className="w-6 h-6 text-emerald-600" />
-                          <div>
-                            <h3 className="text-base font-black text-slate-900 leading-none">Nghiệm thu Marketing (Nghiệm thu MKT)</h3>
-                            <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Tách biệt Dữ liệu trực tiếp và dữ liệu Google Sheet</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
-                          <button
-                            type="button"
-                            onClick={() => setReportNtSubTab('direct')}
-                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                              reportNtSubTab === 'direct'
-                                ? 'bg-white text-emerald-700 shadow-sm font-black'
-                                : 'text-slate-500 hover:text-slate-800 font-bold'
-                            }`}
-                          >
-                            <CheckSquare className="w-3.5 h-3.5" />
-                            Nhập trực tiếp
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReportNtSubTab('google-sheet')}
-                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                              reportNtSubTab === 'google-sheet'
-                                ? 'bg-white text-emerald-700 shadow-sm font-strong'
-                                : 'text-slate-500 hover:text-slate-800 font-bold'
-                            }`}
-                          >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                            Đồng bộ Google Sheet
-                          </button>
-                        </div>
-                      </div>
-
-                      {reportNtSubTab === 'direct' && (
-                        <AcceptanceManager 
-                          isAdmin={isAdmin}
-                          isSuperAdmin={isSuperAdmin}
-                          isMod={isMod}
-                          isAccountant={isAccountant}
-                          user={user}
-                          userProfile={userProfile}
-                          isGDKhoi={isGDKhoi}
-                          isTroLyKhoi={isTroLyKhoi}
-                          isAssistant={isAssistant}
-                          myBlock={myBlock}
-                          currentActiveBlock={currentActiveBlock}
-                          canCreate={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
-                          canEdit={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
-                          canDelete={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
-                          canImport={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
-                          teams={teams}
-                          uniqueTeams={uniqueTeams}
-                          projects={projects}
-                          regions={regions}
-                          acceptances={acceptances}
-                          finalAcceptances={finalAcceptances}
-                          teamMap={teamMap}
-                          projectMap={projectMap}
-                          formatCurrency={formatCurrency}
-                          getMarketingMonth={getMarketingMonth}
-                          handleFirestoreError={handleFirestoreError}
-                          formatCurrencyInput={formatCurrencyInput}
-                          isImportingAcceptances={isImportingAcceptances}
-                          setIsImportingAcceptances={setIsImportingAcceptances}
-                          isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
-                          setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
-                          handleImportAcceptancesCSV={handleImportAcceptancesCSV}
-                          blocks={blocks}
-                        />
-                      )}
-
-                      {reportNtSubTab === 'google-sheet' && (
-                        <Card className="border-none shadow-sm overflow-hidden bg-white">
-                          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-emerald-100">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                              <div>
-                                <h3 className="text-lg font-black text-emerald-950 flex items-center gap-2">
-                                  <FileCheck className="w-5 h-5 text-emerald-600 animate-pulse" />
-                                  Dữ liệu Nghiệm thu đồng bộ từ Google Sheet
-                                </h3>
-                                <p className="text-xs font-semibold text-emerald-700/80 mt-1 max-w-2xl">
-                                  Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
-                                </p>
-                              </div>
-                              
-                              {reportNTLastUpdated && (
-                                <div className="bg-white/80 backdrop-blur border border-emerald-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
-                                  <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                  </span>
-                                  <span className="text-[10px] font-black text-slate-600 tracking-tight">
-                                    Cập nhật: {reportNTLastUpdated ? (safeFormat(reportNTLastUpdated, 'HH:mm dd/MM/yyyy') || 'N/A') : 'N/A'}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <CardContent className="p-6 space-y-6">
-                            <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
-                              <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                  <Link className="w-3.5 h-3.5 text-slate-500" />
-                                  Liên kết Google Sheet nguồn
-                                </Label>
-                                <div className="flex flex-col sm:flex-row gap-2.5">
-                                  <Input
-                                    type="text"
-                                    placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
-                                    value={inputReportNTUrl}
-                                    onChange={(e) => setInputReportNTUrl(e.target.value)}
-                                    className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-emerald-500 text-xs sm:text-sm h-10"
-                                  />
-                                  <Button
-                                    onClick={handleSyncReportNT}
-                                    disabled={isSyncingReportNT}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-emerald-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
-                                  >
-                                    {isSyncingReportNT ? (
-                                      <>
-                                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                                        <span>Đang đồng bộ...</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <RefreshCw className="w-4 h-4" />
-                                        <span>Đồng bộ ngay</span>
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
+                      <AcceptanceManager 
+                        isAdmin={isAdmin}
+                        isSuperAdmin={isSuperAdmin}
+                        isMod={isMod}
+                        isAccountant={isAccountant}
+                        user={user}
+                        userProfile={userProfile}
+                        isGDKhoi={isGDKhoi}
+                        isTroLyKhoi={isTroLyKhoi}
+                        isAssistant={isAssistant}
+                        myBlock={myBlock}
+                        currentActiveBlock={currentActiveBlock}
+                        canCreate={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                        canEdit={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                        canDelete={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                        canImport={(isAdmin || isSuperAdmin || isMod) && !isGDKhoi && !isTroLyKhoi && !isAssistant}
+                        teams={teams}
+                        uniqueTeams={uniqueTeams}
+                        projects={projects}
+                        regions={regions}
+                        acceptances={acceptances}
+                        finalAcceptances={finalAcceptances}
+                        teamMap={teamMap}
+                        projectMap={projectMap}
+                        formatCurrency={formatCurrency}
+                        getMarketingMonth={getMarketingMonth}
+                        handleFirestoreError={handleFirestoreError}
+                        formatCurrencyInput={formatCurrencyInput}
+                        isImportingAcceptances={isImportingAcceptances}
+                        setIsImportingAcceptances={setIsImportingAcceptances}
+                        isImportAcceptancesDialogOpen={isImportAcceptancesDialogOpen}
+                        setIsImportAcceptancesDialogOpen={setIsImportAcceptancesDialogOpen}
+                        handleImportAcceptancesCSV={handleImportAcceptancesCSV}
+                        blocks={blocks}
+                      />
                     </div>
                   )}
                 </TabsContent>
@@ -19718,8 +19696,8 @@ export default function App() {
                             <Clock className="w-5 h-5 text-amber-600" />
                           </div>
                           <div>
-                            <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Cài đặt Thời gian Đăng ký</CardTitle>
-                            <CardDescription className="text-xs font-medium text-slate-500">Quy định khung thời gian user được phép đăng ký & chỉnh sửa ngân sách hàng tháng</CardDescription>
+                            <CardTitle className="text-xl font-black text-slate-900 tracking-tight">Cài đặt Thời gian Đăng ký & Chỉnh sửa Ngân sách Khối</CardTitle>
+                            <CardDescription className="text-xs font-medium text-slate-500">Quy định khung thời gian các Khối được phép đăng ký & chỉnh sửa ngân sách hàng tháng (Quy định: từ ngày 14 đến ngày 19 hàng tháng)</CardDescription>
                           </div>
                         </div>
                       </CardHeader>
@@ -19727,12 +19705,13 @@ export default function App() {
                         <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3">
                           <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
                           <div className="text-xs text-indigo-700 leading-relaxed font-medium">
-                            <p className="font-bold mb-1 underline">Cơ chế hoạt động:</p>
+                            <p className="font-bold mb-1 underline">Cơ chế áp dụng cho Ngân sách Khối:</p>
                             <ul className="list-disc list-inside space-y-1">
-                              <li>Users chỉ có thể <b>Đăng ký</b> hoặc <b>Chỉnh sửa</b> ngân sách trong khoảng từ ngày <b>Bắt đầu</b> đến ngày <b>Kết thúc</b>.</li>
-                              <li>Hỗ trợ cấu hình vắt qua tháng (Ví dụ: Bắt đầu từ ngày 15 tháng trước, Kết thúc vào ngày 5 của tháng tiếp theo).</li>
-                              <li>Ngoài khoảng thời gian này, các tính năng thêm/sửa ngân sách sẽ bị khóa.</li>
-                              <li><b>Admin</b> và các tài khoản được chỉ định vẫn có quyền chỉnh sửa bất cứ lúc nào.</li>
+                              <li><b>Cơ chế mới:</b> Thời gian đăng ký & chỉnh sửa áp dụng trực tiếp cho <b>Ngân sách Khối</b> (thay vì ngân sách của từng phòng trước đây).</li>
+                              <li>Cấp Khối (GĐ Khối, Trợ lý Khối) chỉ được phép <b>Đăng ký</b> hoặc <b>Chỉnh sửa / Xóa</b> ngân sách Khối trong khoảng từ ngày <b>Bắt đầu</b> đến ngày <b>Kết thúc</b> (Mặc định: ngày 14 đến ngày 19 hàng tháng).</li>
+                              <li>Hỗ trợ cấu hình trong cùng tháng (Ví dụ: Từ ngày 14 đến ngày 19) hoặc vắt qua tháng.</li>
+                              <li>Ngoài khoảng thời gian này, các tính năng thêm mới/sửa/xóa ngân sách Khối sẽ tự động khóa đối với cấp Khối.</li>
+                              <li><b>Admin / Super Admin</b> luôn có quyền ghi đè (Override), có thể can thiệp tạo và chỉnh sửa ngân sách Khối bất kỳ lúc nào.</li>
                             </ul>
                           </div>
                         </div>
@@ -19753,7 +19732,7 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
                               </div>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 15 tháng trước</p>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* Mặc định: Ngày 14 hàng tháng</p>
                           </div>
 
                           <div className="space-y-2">
@@ -19771,7 +19750,7 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase">Ngày</span>
                               </div>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-medium italic">* VD: Ngày 05 tháng tiếp theo</p>
+                            <p className="text-[10px] text-slate-400 font-medium italic">* Mặc định: Ngày 19 hàng tháng</p>
                           </div>
                         </div>
 
@@ -19795,7 +19774,7 @@ export default function App() {
                       </CardHeader>
                       <CardContent className="space-y-6">
                         <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                          <span className="text-sm font-medium text-slate-600">Trạng thái đăng ký:</span>
+                          <span className="text-sm font-medium text-slate-600">Đăng ký Ngân sách Khối:</span>
                           {isWithinRegistrationWindow() ? (
                             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 py-1 rounded-full font-bold flex items-center gap-1">
                               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -21497,47 +21476,7 @@ export default function App() {
           {/* Báo cáo NT Tab */}
           <TabsContent value="report-nt" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             {activeTab === 'report-nt' && (
-              <>
-                {/* Secondary navigation for NT styles */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <FileCheck className="w-6 h-6 text-indigo-600" />
-                    <div>
-                      <h3 className="text-base font-black text-slate-900 leading-none">Báo cáo Nghiệm thu (Báo cáo NT)</h3>
-                      <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Tách biệt Dữ liệu trực tiếp và dữ liệu Google Sheet</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
-                    <button
-                      type="button"
-                      onClick={() => setReportNtSubTab('direct')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                        reportNtSubTab === 'direct'
-                          ? 'bg-white text-indigo-700 shadow-sm font-black'
-                          : 'text-slate-500 hover:text-slate-800 font-bold'
-                      }`}
-                    >
-                      <CheckSquare className="w-3.5 h-3.5" />
-                      Nhập trực tiếp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReportNtSubTab('google-sheet')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                        reportNtSubTab === 'google-sheet'
-                          ? 'bg-white text-indigo-700 shadow-sm font-strong'
-                          : 'text-slate-500 hover:text-slate-800 font-bold'
-                      }`}
-                    >
-                      <FileSpreadsheet className="w-3.5 h-3.5" />
-                      Đồng bộ Google Sheet
-                    </button>
-                  </div>
-                </div>
-
-                {reportNtSubTab === 'direct' && (
-                  <AcceptanceManager 
+              <AcceptanceManager 
                     isAdmin={isAdmin}
                     isSuperAdmin={isSuperAdmin}
                     isMod={isMod}
@@ -21572,292 +21511,6 @@ export default function App() {
                     handleImportAcceptancesCSV={handleImportAcceptancesCSV}
                     blocks={blocks}
                   />
-                )}
-
-                {reportNtSubTab === 'google-sheet' && (
-                  <Card className="border-none shadow-sm overflow-hidden bg-white">
-                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 border-b border-indigo-100">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
-                            <FileCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
-                            Dữ liệu Nghiệm thu đồng bộ từ Google Sheet
-                          </h3>
-                          <p className="text-xs font-semibold text-indigo-700/80 mt-1 max-w-2xl">
-                            Hệ thống tự động đồng bộ và hiển thị dữ liệu trực tiếp từ liên kết Google Spreadsheet của bạn. Hàng 1 & 2 làm tiêu đề kết hợp thông minh, hàng 3 trở đi là bản ghi dữ liệu.
-                          </p>
-                        </div>
-                        
-                        {reportNTLastUpdated && (
-                          <div className="bg-white/80 backdrop-blur border border-indigo-200 py-1.5 px-3 rounded-xl flex items-center gap-2 self-start md:self-center">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                            <span className="text-[10px] font-black text-slate-600 tracking-tight">
-                              Cập nhật: {reportNTLastUpdated ? (safeFormat(reportNTLastUpdated, 'HH:mm dd/MM/yyyy') || 'N/A') : 'N/A'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <CardContent className="p-6 space-y-6">
-                      {/* Configuration form for sheet url */}
-                      <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
-                        <div className="flex flex-col gap-2">
-                          <Label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                            <Link className="w-3.5 h-3.5 text-slate-500" />
-                            Liên kết Google Sheet nguồn
-                          </Label>
-                          <div className="flex flex-col sm:flex-row gap-2.5">
-                            <Input
-                              type="text"
-                              placeholder="Dán link Google Sheet công khai vào đây (e.g. https://docs.google.com/spreadsheets/d/...)"
-                              value={inputReportNTUrl}
-                              onChange={(e) => setInputReportNTUrl(e.target.value)}
-                              className="flex-1 rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 text-xs sm:text-sm h-10"
-                            />
-                            <Button
-                              onClick={handleSyncReportNT}
-                              disabled={isSyncingReportNT}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl px-5 h-10 shadow-md shadow-indigo-100 flex items-center gap-2 text-xs sm:text-sm transition-all duration-300"
-                            >
-                              {isSyncingReportNT ? (
-                                <>
-                                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                                  <span>Đang đồng bộ...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <RefreshCw className="w-4 h-4" />
-                                  <span>Đồng bộ ngay</span>
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-slate-500 font-semibold leading-relaxed">
-                          <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">1</span>
-                            <div>
-                              <span className="font-bold text-slate-800">Chia sẻ công khai Sheet:</span> Hãy chắc chắn Google Sheet đã được chuyển chế độ <span className="text-indigo-600 font-bold">"Bất kỳ ai có liên kết đều có thể xem"</span> (Anyone with link can view).
-                            </div>
-                          </div>
-                          <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-black text-indigo-600 shrink-0 mt-0.5">2</span>
-                            <div>
-                              <span className="font-bold text-slate-800">Cấu trúc 2 hàng tiêu đề:</span> Hàng 1 và hàng 2 trong sheet gốc sẽ tự động kết hợp thông minh để tạo thành thẻ cột thông tin đại diện rõ ràng nhất.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {reportNTUrl && (
-                        <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 px-1 truncate">
-                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2 rounded-full text-[10px] font-bold shrink-0">ĐANG LIÊN KẾT</span>
-                          <a href={reportNTUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 truncate font-mono font-medium">
-                            {reportNTUrl}
-                            <ExternalLink className="w-3 h-3 inline shrink-0" />
-                          </a>
-                        </div>
-                      )}
-
-                      <div className="border-t border-slate-100 my-6"></div>
-
-                      {/* Records list section */}
-                      <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                          <div>
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                              <span>Bản ghi dữ liệu đã đưa lên</span>
-                              <Badge className="bg-indigo-100 hover:bg-indigo-100 text-indigo-800 border-none rounded-lg text-xs font-black px-2 py-0.5">
-                                {filteredNTRecords.length} dòng
-                              </Badge>
-                            </h4>
-                            <p className="text-xs text-slate-400 font-medium">Tìm kiếm thời gian thực toàn bộ các trường thông tin thông minh</p>
-                          </div>
-
-                          <div className="flex items-center gap-2 max-w-xs w-full self-stretch sm:self-auto">
-                            <div className="relative flex-1">
-                              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                              <Input
-                                placeholder="Tìm kiếm dòng thông tin..."
-                                value={reportNTSearch}
-                                onChange={(e) => setReportNTSearch(e.target.value)}
-                                className="pl-9 pr-8 py-1 h-9 rounded-xl border-slate-200 text-xs sm:text-sm focus:border-indigo-400"
-                              />
-                              {reportNTSearch && (
-                                <button
-                                  onClick={() => setReportNTSearch('')}
-                                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
-                                >
-                                  <X className="w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-full p-0.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {reportNTRecords.length === 0 ? (
-                          /* Zero status placeholder */
-                          <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-150 rounded-2xl bg-slate-25/50 text-center">
-                            <div className="h-16 w-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 animate-bounce">
-                              <FileSpreadsheet className="w-8 h-8" />
-                            </div>
-                            <h5 className="font-black text-slate-800 text-sm font-sans">Chưa có cơ sở dữ liệu Báo cáo NT</h5>
-                            <p className="text-xs text-slate-500 font-semibold max-w-sm mt-1 leading-normal font-sans">
-                              Vui lòng nhập liên kết Google Sheets đã được chia sẻ công khai và nhấp vào nút <span className="text-indigo-600 font-bold font-sans">"Đồng bộ ngay"</span> để tải và khởi tạo dữ liệu lên website.
-                            </p>
-                          </div>
-                        ) : filteredNTRecords.length === 0 ? (
-                          /* Search empty placeholder */
-                          <div className="text-center py-12 bg-slate-25/40 border border-slate-100 rounded-2xl">
-                            <p className="text-sm font-bold text-slate-500">Không tìm thấy bản ghi phù hợp với từ khóa tìm kiếm</p>
-                            <button onClick={() => setReportNTSearch('')} className="text-xs font-bold text-indigo-600 hover:underline mt-1 bg-indigo-50 py-1 px-3 rounded-lg border border-indigo-100">Xóa bộ lọc tìm kiếm</button>
-                          </div>
-                        ) : (
-                          /* Standard gorgeous custom data table */
-                          <div className="space-y-4">
-                            <div className="px-4 py-2 bg-indigo-50/40 border border-indigo-100/60 rounded-xl flex items-center justify-between text-[11px] font-medium text-indigo-750 font-sans">
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
-                                <span><strong>Mẹo cuộn dữ liệu:</strong> Nhấn giữ chuột trái kéo sang hai bên để trượt ngang, hoặc giữ phím <strong>Shift</strong> + cuộn chuột.</span>
-                              </div>
-                              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full uppercase">Kéo chuột trượt ngang</span>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200/70 overflow-hidden bg-white shadow-sm">
-                              <div 
-                                ref={googleSheetTableRef} 
-                                className="overflow-auto max-h-[600px] scrollbar-thin cursor-grab active:cursor-grabbing select-none"
-                              >
-                                <div className="select-text">
-                                  <Table className="w-full table-auto">
-                                  <TableHeader className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                                    <TableRow className="hover:bg-transparent">
-                                      <TableHead className="w-14 font-black text-slate-700 text-center bg-slate-50 border-r border-slate-200/60 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-200 text-[10px] sm:text-xs">
-                                        HÀNG
-                                      </TableHead>
-                                      {Object.keys(reportNTRecords[0])
-                                        .filter(k => k !== 'id_row')
-                                        .map((headerKey) => {
-                                          const isSorted = ntSortField === headerKey;
-                                          const isProj = isProjectKey(headerKey);
-                                          const isMoney = isMoneyKey(headerKey);
-                                          return (
-                                            <TableHead 
-                                              key={headerKey} 
-                                              onClick={() => handleToggleSortNT(headerKey)}
-                                              className={`font-black uppercase text-[10px] sm:text-xs px-2.5 py-2.5 cursor-pointer select-none transition-all duration-200 border-r border-slate-200/50 hover:bg-slate-100/80 active:bg-slate-200/50 relative group ${
-                                                isSorted ? 'bg-indigo-50/50 text-indigo-950 font-extrabold' : 'text-slate-600'
-                                              } ${isMoney ? 'text-right' : 'text-left'} ${
-                                                (isProj || isMoney) ? 'whitespace-nowrap' : 'min-w-[100px] max-w-[200px] break-words'
-                                              }`}
-                                            >
-                                              <div className={`flex items-center gap-1 ${isMoney ? 'justify-end' : 'justify-start'}`}>
-                                                <span className="truncate">{headerKey}</span>
-                                                <span className="shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors">
-                                                  {isSorted ? (
-                                                    ntSortDirection === 'asc' ? (
-                                                      <ChevronUp className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
-                                                    ) : (
-                                                      <ChevronDown className="w-3.5 h-3.5 text-indigo-600 inline font-extrabold" />
-                                                    )
-                                                  ) : (
-                                                    <ArrowUpDown className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 inline transition-opacity" />
-                                                  )}
-                                                </span>
-                                              </div>
-                                            </TableHead>
-                                          );
-                                        })}
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {paginatedNTRecords.map((record, rIdx) => {
-                                      const headersKeys = Object.keys(reportNTRecords[0]).filter(k => k !== 'id_row');
-                                      return (
-                                        <TableRow 
-                                          key={record.id_row || rIdx} 
-                                          className="hover:bg-indigo-50/30 transition-colors animate-in fade-in duration-200 even:bg-slate-50/35"
-                                        >
-                                          <TableCell className="font-extrabold font-mono text-center text-[10px] text-slate-500 bg-slate-50/50 border-r border-slate-200/60 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] shadow-slate-100 py-1.5 px-1">
-                                            {record.id_row || (rIdx + 3)}
-                                          </TableCell>
-                                          {headersKeys.map((headerKey) => {
-                                            const cellValue = record[headerKey];
-                                            const isProj = isProjectKey(headerKey);
-                                            const isMoney = isMoneyKey(headerKey);
-                                            const formatted = formatNTValue(cellValue);
-                                            return (
-                                              <TableCell 
-                                                key={headerKey} 
-                                                className={`text-[11px] sm:text-xs py-1.5 px-2.5 border-r border-slate-100 transition-colors ${
-                                                  isMoney 
-                                                    ? 'text-right font-black text-emerald-700 whitespace-nowrap bg-emerald-50/10' 
-                                                    : isProj 
-                                                      ? 'font-bold text-slate-900 whitespace-nowrap' 
-                                                      : 'text-slate-600 break-words font-semibold max-w-[180px]'
-                                                }`}
-                                              >
-                                                {formatted}
-                                              </TableCell>
-                                            );
-                                          })}
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            </div>
-                          </div>
-
-                            {/* Pagination UI footer elements */}
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 gap-4">
-                              <div className="text-xs font-semibold text-slate-500">
-                                Hiển thị <span className="font-extrabold text-slate-800">
-                                  {Math.min(filteredNTRecords.length, (ntPage - 1) * ntPageSize + 1)}
-                                </span> - <span className="font-extrabold text-slate-800">
-                                  {Math.min(filteredNTRecords.length, ntPage * ntPageSize)}
-                                </span> trên tổng số <span className="font-extrabold text-slate-800">{filteredNTRecords.length}</span> bản ghi đã lọc
-                              </div>
-
-                              <div className="flex items-center gap-1.5 self-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={ntPage === 1}
-                                  onClick={() => setNtPage(prev => Math.max(1, prev - 1))}
-                                  className="h-8 rounded-lg text-xs font-black px-3"
-                                >
-                                  Trước
-                                </Button>
-                                
-                                <div className="text-xs font-bold text-slate-700 px-3 bg-slate-100 h-8 flex items-center justify-center rounded-lg border border-slate-200 min-w-[70px]">
-                                  Trang {ntPage} / {totalNtPages}
-                                </div>
-
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={ntPage === totalNtPages}
-                                  onClick={() => setNtPage(prev => Math.min(totalNtPages, prev + 1))}
-                                  className="h-8 rounded-lg text-xs font-black px-3"
-                                >
-                                  Sau
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
             )}
           </TabsContent>
 

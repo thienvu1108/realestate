@@ -51,7 +51,8 @@ import {
   parseCurrencyFormula, 
   getRowComputed, 
   getSortValue, 
-  buildCostBreakdownsOfRecord 
+  buildCostBreakdownsOfRecord,
+  resolveBlockForTeam
 } from './acceptance/acceptanceUtils';
 
 export const AcceptanceManager = React.memo(({ 
@@ -189,6 +190,9 @@ export const AcceptanceManager = React.memo(({
     return () => clearTimeout(handler);
   }, [acceptanceSearch]);
 
+  const acceptancesRef = useRef(acceptances);
+  acceptancesRef.current = acceptances;
+
   // 🚀 Fast O(1) Lookups for Teams, Projects & Blocks to eliminate N^2 render/filter lag
   const teamLookup = useMemo(() => {
     const byId = new Map<string, any>();
@@ -313,6 +317,23 @@ export const AcceptanceManager = React.memo(({
     const selectedTeam = acceptanceTeamFilter !== 'all' ? teamLookup.byId.get(acceptanceTeamFilter) : null;
     const selectedProj = acceptanceProjectFilter !== 'all' ? projectLookup.byId.get(acceptanceProjectFilter) : null;
 
+    // Pre-calculate block teams for GĐK and Trợ lý ONCE outside the loop!
+    let blockTeamIds: Set<string> | null = null;
+    let blockTeamCodes: Set<string> | null = null;
+    let blockTeamNames: Set<string> | null = null;
+
+    if (isGDKorAssistant && activeTargetBlock) {
+      const blockTeamsList = (teams || []).filter((t: any) => {
+        if (t.blockId && (t.blockId === activeTargetBlock.id || t.blockId === activeTargetBlock.blockCode)) return true;
+        if (t.blockCode && (t.blockCode === activeTargetBlock.id || t.blockCode === activeTargetBlock.blockCode)) return true;
+        return false;
+      });
+      const sourceBlockTeams = blockTeamsList.length > 0 ? blockTeamsList : (teams || []);
+      blockTeamIds = new Set(sourceBlockTeams.map((t: any) => t.id));
+      blockTeamCodes = new Set(sourceBlockTeams.map((t: any) => (t.teamCode || '').toUpperCase().trim()));
+      blockTeamNames = new Set(sourceBlockTeams.map((t: any) => (t.name || '').toLowerCase().trim()));
+    }
+
     return (acceptances || []).filter((a: any) => {
       // Month match
       if (acceptanceMonthFilter !== 'all') {
@@ -335,21 +356,15 @@ export const AcceptanceManager = React.memo(({
       const tm = teamLookup.findTeam(a.teamId) || teamLookup.findTeam(a.teamCode) || teamLookup.findTeam(a.teamName);
 
       // Enforce block-level scoping for GĐK and Trợ lý
-      if (isGDKorAssistant && activeTargetBlock) {
-        const blockTeamsList = (teams || []).filter((t: any) => {
-          if (t.blockId && (t.blockId === activeTargetBlock.id || t.blockId === activeTargetBlock.blockCode)) return true;
-          if (t.blockCode && (t.blockCode === activeTargetBlock.id || t.blockCode === activeTargetBlock.blockCode)) return true;
-          return false;
-        });
-        const sourceBlockTeams = blockTeamsList.length > 0 ? blockTeamsList : (teams || []);
-        const blockTeamIds = new Set(sourceBlockTeams.map((t: any) => t.id));
-        const blockTeamCodes = new Set(sourceBlockTeams.map((t: any) => (t.teamCode || '').toUpperCase().trim()));
-        const blockTeamNames = new Set(sourceBlockTeams.map((t: any) => (t.name || '').toLowerCase().trim()));
-
+      if (isGDKorAssistant && activeTargetBlock && blockTeamIds && blockTeamCodes && blockTeamNames) {
         const aTeamCode = (a.teamCode || '').toUpperCase().trim();
         const aTeamName = (a.teamName || '').toLowerCase().trim();
+        const blkInfo = resolveBlockForTeam(tm || a, blocks, teams, teamLookup.findTeam);
 
         const belongsToBlock = 
+          (blkInfo.blockId && (blkInfo.blockId === activeTargetBlock.id || blkInfo.blockId === activeTargetBlock.blockCode)) ||
+          (blkInfo.blockCode && (blkInfo.blockCode === activeTargetBlock.id || blkInfo.blockCode === activeTargetBlock.blockCode)) ||
+          (blkInfo.block?.id === activeTargetBlock.id) ||
           (a.blockId && (a.blockId === activeTargetBlock.id || a.blockId === activeTargetBlock.blockCode)) ||
           (a.blockCode && (a.blockCode === activeTargetBlock.id || a.blockCode === activeTargetBlock.blockCode)) ||
           (a.teamId && blockTeamIds.has(a.teamId)) ||
@@ -366,7 +381,12 @@ export const AcceptanceManager = React.memo(({
 
       // Block match
       if (acceptanceBlockFilter !== 'all') {
-        const matchesBlock = a.blockId === acceptanceBlockFilter || 
+        const blkInfo = resolveBlockForTeam(tm || a, blocks, teams, teamLookup.findTeam);
+        const matchesBlock = 
+          blkInfo.blockId === acceptanceBlockFilter ||
+          blkInfo.blockCode === acceptanceBlockFilter ||
+          blkInfo.block?.id === acceptanceBlockFilter ||
+          a.blockId === acceptanceBlockFilter || 
           a.blockCode === acceptanceBlockFilter ||
           tm?.blockId === acceptanceBlockFilter ||
           tm?.blockCode === acceptanceBlockFilter;
@@ -404,6 +424,7 @@ export const AcceptanceManager = React.memo(({
 
       // Search term
       if (query) {
+        const blkInfo = resolveBlockForTeam(tm || a, blocks, teams, teamLookup.findTeam);
         const matchesSearch = (a.projectName || '').toLowerCase().includes(query) ||
           (a.teamName || '').toLowerCase().includes(query) ||
           (a.teamCode || '').toLowerCase().includes(query) ||
@@ -411,6 +432,8 @@ export const AcceptanceManager = React.memo(({
           (a.implementerName || '').toLowerCase().includes(query) ||
           (a.month || '').toLowerCase().includes(query) ||
           (a.notes || '').toLowerCase().includes(query) ||
+          (blkInfo.blockName || '').toLowerCase().includes(query) ||
+          (blkInfo.blockCode || '').toLowerCase().includes(query) ||
           (tm?.name || '').toLowerCase().includes(query) ||
           (tm?.teamCode || '').toLowerCase().includes(query);
         if (!matchesSearch) return false;
@@ -530,15 +553,16 @@ export const AcceptanceManager = React.memo(({
       const resolvedTeamCode = tm?.teamCode || (draftRow.teamCode && !draftRow.teamCode.startsWith('draft-') ? draftRow.teamCode : tm?.name || '');
       const resolvedProjectName = pr?.name || (draftRow.projectName && !draftRow.projectName.startsWith('draft-') ? draftRow.projectName : pr?.projectCode || '');
       const resolvedProjectCode = pr?.projectCode || (draftRow.projectCode && !draftRow.projectCode.startsWith('draft-') ? draftRow.projectCode : '');
+      const resolvedBlock = resolveBlockForTeam(tm || draftRow, blocks, teams, teamLookup.findTeam);
 
       const payload: any = {
         month: draftRow.month || 'Kì 1 - Tháng 8',
         teamId: tm?.id || draftRow.teamId || '',
         teamName: resolvedTeamName,
         teamCode: resolvedTeamCode,
-        blockId: tm?.blockId || draftRow.blockId || '',
-        blockCode: tm?.blockCode || draftRow.blockCode || '',
-        blockName: tm?.blockName || draftRow.blockName || '',
+        blockId: resolvedBlock.blockId || tm?.blockId || draftRow.blockId || '',
+        blockCode: resolvedBlock.blockCode || tm?.blockCode || draftRow.blockCode || '',
+        blockName: resolvedBlock.blockName || tm?.blockName || draftRow.blockName || '',
         gdkdName: draftRow.gdkdName || tm?.name || '',
         implementerName: draftRow.implementerName || '',
         projectId: pr?.id || draftRow.projectId || '',
@@ -670,7 +694,7 @@ export const AcceptanceManager = React.memo(({
         );
 
     try {
-      const oldItem = acceptances.find((a: any) => a.id === id);
+      const oldItem = acceptancesRef.current.find((a: any) => a.id === id);
       const oldHistory = Array.isArray(oldItem?.editHistory) ? oldItem.editHistory : [];
 
       const changesObj: any = {};
@@ -688,14 +712,16 @@ export const AcceptanceManager = React.memo(({
       const resolvedTeamCode = tm?.teamCode || (updatedState.teamCode && !updatedState.teamCode.startsWith('draft-') ? updatedState.teamCode : oldItem?.teamCode || tm?.name || '');
       const resolvedProjectName = pr?.name || (updatedState.projectName && !updatedState.projectName.startsWith('draft-') ? updatedState.projectName : oldItem?.projectName || pr?.projectCode || '');
       const resolvedProjectCode = pr?.projectCode || (updatedState.projectCode && !updatedState.projectCode.startsWith('draft-') ? updatedState.projectCode : oldItem?.projectCode || '');
+      const resolvedBlock = resolveBlockForTeam(tm || updatedState, blocks, teams, teamLookup.findTeam);
 
       const payload: any = {
         month: updatedState.month || oldItem?.month || 'Kì 1 - Tháng 8',
         teamId: tm?.id || updatedState.teamId || oldItem?.teamId || '',
         teamName: resolvedTeamName,
         teamCode: resolvedTeamCode,
-        blockId: tm?.blockId || updatedState.blockId || oldItem?.blockId || '',
-        blockCode: tm?.blockCode || updatedState.blockCode || oldItem?.blockCode || '',
+        blockId: resolvedBlock.blockId || tm?.blockId || updatedState.blockId || oldItem?.blockId || '',
+        blockCode: resolvedBlock.blockCode || tm?.blockCode || updatedState.blockCode || oldItem?.blockCode || '',
+        blockName: resolvedBlock.blockName || tm?.blockName || updatedState.blockName || oldItem?.blockName || '',
         gdkdName: updatedState.gdkdName || tm?.name || oldItem?.gdkdName || '',
         implementerName: updatedState.implementerName || oldItem?.implementerName || '',
         projectId: pr?.id || updatedState.projectId || oldItem?.projectId || '',
@@ -771,7 +797,7 @@ export const AcceptanceManager = React.memo(({
       console.error('Error updating acceptance:', err);
       toast.error('Lỗi khi cập nhật bản ghi');
     }
-  }, [canEdit, acceptances, user, teamLookup, projectLookup, teams, projects]);
+  }, [canEdit, user, teamLookup, projectLookup, teams, projects, blocks]);
 
   const handleSelectRow = useCallback((id: string, checked: boolean) => {
     setSelectedAcceptanceIds(prev => 
@@ -894,8 +920,10 @@ export const AcceptanceManager = React.memo(({
 
     const data = displayedRecords.map((a: any) => {
       const comp = getRowComputed(a);
+      const blkInfo = resolveBlockForTeam(a, blocks, teams, teamLookup.findTeam);
       return {
         'THÁNG': a.month || '',
+        'KHỐI': blkInfo.blockName || a.blockName || '',
         'MÃ TEAM': a.teamCode || '',
         'GĐKD': a.gdkdName || '',
         'NGƯỜI PHỤ TRÁCH': a.implementerName || '',
@@ -933,6 +961,67 @@ export const AcceptanceManager = React.memo(({
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Nghiệm thu MKT');
     XLSX.writeFile(workbook, `Bao_cao_Nghiem_thu_MKT_${format(new Date(), 'dd_MM_yyyy')}.xlsx`);
     toast.success('Đã xuất file Excel thành công');
+  };
+
+  // 🔄 Automatic / Manual synchronization of blocks based on teams
+  const [isSyncingBlocks, setIsSyncingBlocks] = useState<boolean>(false);
+
+  const handleSyncBlocks = async () => {
+    if (!canEdit || !db) return;
+    try {
+      setIsSyncingBlocks(true);
+      let updatedCount = 0;
+      let batch = writeBatch(db);
+      let batchOps = 0;
+
+      for (const item of acceptances) {
+        const resolved = resolveBlockForTeam(item, blocks, teams, teamLookup.findTeam);
+        const curBlockName = item.blockName || '';
+        const curBlockCode = item.blockCode || '';
+        const curBlockId = item.blockId || '';
+
+        const targetBlockName = resolved.blockName || '';
+        const targetBlockCode = resolved.blockCode || '';
+        const targetBlockId = resolved.blockId || '';
+
+        if (
+          (targetBlockName && targetBlockName !== curBlockName) ||
+          (targetBlockCode && targetBlockCode !== curBlockCode) ||
+          (targetBlockId && targetBlockId !== curBlockId)
+        ) {
+          const docRef = doc(db, 'acceptances', item.id);
+          batch.update(docRef, {
+            blockId: targetBlockId,
+            blockCode: targetBlockCode,
+            blockName: targetBlockName,
+            updatedAt: serverTimestamp()
+          });
+          updatedCount++;
+          batchOps++;
+
+          if (batchOps >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            batchOps = 0;
+          }
+        }
+      }
+
+      if (batchOps > 0) {
+        await batch.commit();
+      }
+
+      if (updatedCount > 0) {
+        toast.success(`Đã tự động đồng bộ thông tin Khối cho ${updatedCount} bản ghi nghiệm thu!`);
+      } else {
+        toast.info('Tất cả bản ghi nghiệm thu đã đồng bộ đúng thông tin Khối theo phòng kinh doanh.');
+      }
+    } catch (err: any) {
+      console.error('Error syncing blocks:', err);
+      toast.error(`Đồng bộ thất bại: ${err?.message || 'Có lỗi xảy ra'}`);
+    } finally {
+      setIsSyncingBlocks(false);
+    }
   };
 
   // Excel Import
@@ -1021,6 +1110,7 @@ export const AcceptanceManager = React.memo(({
 
         const tm = (teams || []).find((t: any) => t.teamCode === teamCode || t.name === teamCode);
         const pr = (projects || []).find((p: any) => p.name === projectName || p.projectCode === projectName);
+        const blkInfo = resolveBlockForTeam(tm || teamCode, blocks, teams, teamLookup.findTeam);
 
         const compDraft = {
           digitalFb: dFb, digitalZalo: dZalo, digitalTiktok: dTiktok, digitalKhac: dKhac,
@@ -1038,8 +1128,9 @@ export const AcceptanceManager = React.memo(({
           teamId: tm?.id || '',
           teamName: tm?.name || teamCode || '',
           teamCode: tm?.teamCode || teamCode || '',
-          blockId: tm?.blockId || '',
-          blockCode: tm?.blockCode || '',
+          blockId: blkInfo.blockId || tm?.blockId || '',
+          blockCode: blkInfo.blockCode || tm?.blockCode || '',
+          blockName: blkInfo.blockName || tm?.blockName || '',
           gdkdName: gdkdName || tm?.name || '',
           implementerName,
           projectId: pr?.id || '',
@@ -1320,6 +1411,19 @@ export const AcceptanceManager = React.memo(({
               className="border-slate-200 text-indigo-600 hover:bg-indigo-50 font-black text-xs h-9 px-3 rounded-2xl flex items-center gap-1.5"
             >
               <Upload className="w-3.5 h-3.5" /> Nhập Excel
+            </Button>
+          )}
+
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={handleSyncBlocks}
+              disabled={isSyncingBlocks}
+              title="Đồng bộ thông tin Khối cho các bản ghi dựa trên danh sách Team/Phòng kinh doanh"
+              className="border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 font-black text-xs h-9 px-3 rounded-2xl flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBlocks ? 'animate-spin text-indigo-600' : ''}`} />
+              {isSyncingBlocks ? 'Đang đồng bộ...' : 'Đồng bộ Khối'}
             </Button>
           )}
         </div>
@@ -1605,7 +1709,7 @@ export const AcceptanceManager = React.memo(({
                 {/* 2. Main Data Records (Paginated) */}
                 {displayedRecords.length === 0 && draftRows.length === 0 ? (
                   <tr>
-                    <td colSpan={27} className="text-center py-16 text-slate-400 font-semibold text-xs bg-slate-50/50">
+                    <td colSpan={28} className="text-center py-16 text-slate-400 font-semibold text-xs bg-slate-50/50">
                       Không có bản ghi nghiệm thu nào phù hợp với bộ lọc hiện tại.
                     </td>
                   </tr>

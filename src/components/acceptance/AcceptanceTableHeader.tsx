@@ -71,6 +71,9 @@ export const AcceptanceTableHeader: React.FC<HeaderProps> = React.memo(({
         {/* Col A: THÁNG */}
         {renderSortableCell('month', 'THÁNG', 'w-28 bg-slate-100 text-slate-900 border-slate-300 text-[11px]')}
 
+        {/* Col: KHỐI */}
+        {renderSortableCell('blockName', 'KHỐI', 'min-w-[120px] bg-slate-100 text-slate-900 border-slate-300 text-[11px]')}
+
         {/* Col B: MÃ TEAM */}
         {renderSortableCell('teamCode', 'MÃ TEAM', 'w-24 bg-slate-100 text-slate-900 border-slate-300 text-[11px]')}
 

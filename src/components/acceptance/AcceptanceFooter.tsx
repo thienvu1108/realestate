@@ -56,8 +56,8 @@ export const AcceptanceFooter: React.FC<FooterProps> = React.memo(({ records, fo
   return (
     <TableFooter className="bg-slate-100 font-black border-t-2 border-slate-300 z-10 sticky bottom-0">
       <TableRow className="border-t border-slate-300 text-[11px]">
-        {/* Col STT + A..E */}
-        <TableCell colSpan={6} className="text-right font-black text-slate-900 text-xs px-3 bg-slate-100 sticky left-0 z-20">
+        {/* Col STT + A..E + KHỐI = 7 cols */}
+        <TableCell colSpan={7} className="text-right font-black text-slate-900 text-xs px-3 bg-slate-100 sticky left-0 z-20">
           TỔNG CỘNG ({records.length} dòng):
         </TableCell>
 

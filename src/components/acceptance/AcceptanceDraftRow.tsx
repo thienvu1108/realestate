@@ -3,8 +3,9 @@ import { TableRow, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { Calculator, Save, Trash2, Loader2 } from 'lucide-react';
-import { getRowComputed, handleCostInputChange } from './acceptanceUtils';
+import { getRowComputed, handleCostInputChange, resolveBlockForTeam } from './acceptanceUtils';
 import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
 
 interface DraftRowProps {
@@ -85,6 +86,10 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
   }, [findProject, localDraft.projectId, localDraft.projectName, localDraft.projectCode, projects]);
 
   const currentDraftProjId = selectedProj?.id || localDraft.projectId || '';
+
+  const draftResolvedBlock = useMemo(() => {
+    return resolveBlockForTeam(selectedTeam || localDraft, blocks, teams, findTeam);
+  }, [selectedTeam, localDraft, blocks, teams, findTeam]);
 
   const teamItems = useMemo(() => {
     if (propTeamItems) return propTeamItems;
@@ -192,6 +197,17 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
         </Select>
       </TableCell>
 
+      {/* Col: KHỐI */}
+      <TableCell className="p-1 min-w-[110px] text-center">
+        {draftResolvedBlock.blockName ? (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold text-[11px] px-2 py-1 inline-flex items-center gap-1 justify-center whitespace-nowrap">
+            {draftResolvedBlock.blockName}
+          </Badge>
+        ) : (
+          <span className="text-slate-400 text-[11px] italic px-1 block text-center">Tự động</span>
+        )}
+      </TableCell>
+
       {/* Col B: MÃ TEAM */}
       <TableCell className="p-1 min-w-[150px]">
         <AcceptanceSearchableSelect
@@ -215,12 +231,14 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
               if (code && tmName.startsWith(code)) {
                 gdkd = tmName.substring(code.length).trim();
               }
+              const resolvedBlk = resolveBlockForTeam(tm, blocks, teams, findTeam);
               handleUpdateLocalFields({
                 teamId: tm.id,
                 teamCode: tm.teamCode || tm.name || '',
                 teamName: tm.name || tm.teamCode || '',
-                blockId: tm.blockId || '',
-                blockCode: tm.blockCode || '',
+                blockId: resolvedBlk.blockId || tm.blockId || '',
+                blockCode: resolvedBlk.blockCode || tm.blockCode || '',
+                blockName: resolvedBlk.blockName || tm.blockName || '',
                 gdkdName: gdkd
               });
             } else {

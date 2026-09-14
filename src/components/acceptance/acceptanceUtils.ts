@@ -166,12 +166,145 @@ export const getRowComputed = (row: any): ComputedRowValues => {
   };
 };
 
+export const resolveBlockForTeam = (
+  teamRef: any,
+  blocks: any[] = [],
+  teams: any[] = [],
+  findTeam?: (ref: string) => any
+): { block: any | null; blockName: string; blockCode: string; blockId: string } => {
+  if (!teamRef) {
+    return { block: null, blockName: '', blockCode: '', blockId: '' };
+  }
+
+  // 1. Locate team object
+  let tm: any = null;
+  if (typeof teamRef === 'object') {
+    if (teamRef.id && (teamRef.name || teamRef.teamCode)) {
+      tm = teamRef;
+    } else {
+      const tId = teamRef.teamId || teamRef.id;
+      const tCode = (teamRef.teamCode || '').toLowerCase().trim();
+      const tName = (teamRef.teamName || teamRef.name || '').toLowerCase().trim();
+
+      if (findTeam) {
+        tm = (tId && findTeam(tId)) || (tCode && findTeam(tCode)) || (tName && findTeam(tName)) || null;
+      }
+      if (!tm && teams && teams.length > 0) {
+        tm = teams.find((t: any) => 
+          (tId && (t.id === tId || t.teamCode === tId || t.name === tId)) ||
+          (tCode && (t.teamCode?.toLowerCase().trim() === tCode || t.id?.toLowerCase().trim() === tCode)) ||
+          (tName && (t.name?.toLowerCase().trim() === tName || t.id?.toLowerCase().trim() === tName))
+        ) || null;
+      }
+    }
+  } else if (typeof teamRef === 'string') {
+    const s = teamRef.toLowerCase().trim();
+    if (findTeam) tm = findTeam(s);
+    if (!tm && teams && teams.length > 0) {
+      tm = teams.find((t: any) => 
+        t.id?.toLowerCase().trim() === s ||
+        t.teamCode?.toLowerCase().trim() === s ||
+        t.name?.toLowerCase().trim() === s
+      ) || null;
+    }
+  }
+
+  // 2. Direct block match on team or record
+  const bId = tm?.blockId || (typeof teamRef === 'object' ? teamRef.blockId : '');
+  const bCode = (tm?.blockCode || (typeof teamRef === 'object' ? teamRef.blockCode : '') || '').trim().toUpperCase();
+  const bName = (tm?.blockName || (typeof teamRef === 'object' ? teamRef.blockName : '') || '').trim();
+
+  let matchedBlock: any = null;
+
+  if (bId) {
+    matchedBlock = (blocks || []).find((b: any) => b.id === bId || b.blockCode?.toUpperCase() === String(bId).toUpperCase());
+  }
+  if (!matchedBlock && bCode) {
+    matchedBlock = (blocks || []).find((b: any) => b.blockCode?.toUpperCase() === bCode || b.id === bCode);
+  }
+  if (!matchedBlock && bName) {
+    matchedBlock = (blocks || []).find((b: any) => b.name?.toLowerCase() === bName.toLowerCase());
+  }
+
+  // 3. Match against block's configured teamPrefix / blockCode prefix
+  if (!matchedBlock) {
+    const teamCode = (tm?.teamCode || (typeof teamRef === 'object' ? teamRef.teamCode : '') || '').trim().toUpperCase();
+    const teamName = (tm?.name || (typeof teamRef === 'object' ? teamRef.teamName : '') || '').trim();
+
+    for (const blk of (blocks || [])) {
+      if (!blk) continue;
+      // Direct blockId/blockCode match
+      if (tm?.blockId && (blk.id === tm.blockId || blk.blockCode === tm.blockId)) {
+        matchedBlock = blk;
+        break;
+      }
+      if (tm?.blockCode && (blk.blockCode === tm.blockCode || blk.id === tm.blockCode)) {
+        matchedBlock = blk;
+        break;
+      }
+
+      // Check configured teamPrefix or blockCode
+      const rawPfx = blk.teamPrefix || blk.blockCode || '';
+      if (rawPfx) {
+        const prefixes = String(rawPfx)
+          .split(/[,;/|\s]+/)
+          .map(p => p.trim().toUpperCase())
+          .map(p => p === 'MH' ? 'MAY' : p)
+          .filter(Boolean);
+
+        if (teamCode && prefixes.some(p => teamCode.startsWith(p))) {
+          matchedBlock = blk;
+          break;
+        }
+        if (teamName) {
+          const normName = teamName.toUpperCase();
+          if (prefixes.some(p => normName.startsWith(p))) {
+            matchedBlock = blk;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (matchedBlock) {
+    const isId = /^[a-zA-Z0-9]{20}$/.test(matchedBlock.name || '');
+    const displayName = (!matchedBlock.name || isId)
+      ? (matchedBlock.blockCode ? `Khối ${matchedBlock.blockCode}` : 'Khối')
+      : matchedBlock.name;
+
+    return {
+      block: matchedBlock,
+      blockName: displayName,
+      blockCode: matchedBlock.blockCode || '',
+      blockId: matchedBlock.id || ''
+    };
+  }
+
+  // Fallback if stored directly on item
+  if (typeof teamRef === 'object' && (teamRef.blockName || teamRef.blockCode)) {
+    return {
+      block: null,
+      blockName: teamRef.blockName || (teamRef.blockCode ? `Khối ${teamRef.blockCode}` : ''),
+      blockCode: teamRef.blockCode || '',
+      blockId: teamRef.blockId || ''
+    };
+  }
+
+  return { block: null, blockName: '', blockCode: '', blockId: '' };
+};
+
 export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: any[] = []) => {
   if (!item) return '';
 
   // Fast path for non-computed string/metadata fields to avoid expensive getRowComputed
   switch (key) {
     case 'month': return item.month || '';
+    case 'blockName':
+    case 'block': {
+      const resolved = resolveBlockForTeam(item, blocks, teams);
+      return resolved.blockName || item.blockName || item.blockCode || '';
+    }
     case 'teamCode': return item.teamCode || '';
     case 'teamName': return item.teamName || '';
     case 'gdkdName': return item.gdkdName || '';
@@ -179,14 +312,6 @@ export const getSortValue = (item: any, key: string, teams: any[] = [], blocks: 
     case 'projectName': return item.projectName || '';
     case 'status': return item.status || '';
     case 'notes': return item.notes || '';
-    case 'blockName': {
-      const teamObj = (teams || []).find((t: any) => t.id === item.teamId || t.name === item.teamName || (item.teamCode && t.teamCode === item.teamCode));
-      if (teamObj) {
-        const blk = (blocks || []).find((b: any) => b.id === teamObj.blockId || b.blockCode === teamObj.blockCode);
-        if (blk) return blk.name || blk.blockCode || '';
-      }
-      return item.blockName || item.blockCode || '';
-    }
   }
 
   // Fast path for pre-stored numeric values

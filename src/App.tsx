@@ -82,6 +82,7 @@ import {
   ChevronUp, ChevronUp as ChevronUpIcon,
   ExternalLink,
   LockKeyhole,
+  Lock,
   Save,
   Undo,
   X,
@@ -836,6 +837,35 @@ const getMarketingMonth = (date: Date | any) => {
   return safeFormat(copy, 'yyyy-MM');
 };
 
+const getOpenBlockBudgetMarketingMonth = (now: Date = new Date(), settings?: any): string | null => {
+  const startDay = Number(settings?.budgetStartDay ?? 14);
+  const endDay = Number(settings?.budgetEndDay ?? 19);
+  const day = now.getDate();
+
+  let isOpen = false;
+  if (startDay > endDay) {
+    isOpen = (day >= startDay || day <= endDay);
+  } else {
+    isOpen = (day >= startDay && day <= endDay);
+  }
+
+  if (!isOpen) return null;
+
+  const copy = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (startDay > endDay) {
+    if (day >= startDay) {
+      copy.setMonth(copy.getMonth() + 1);
+    }
+  } else {
+    if (startDay >= 10) {
+      copy.setMonth(copy.getMonth() + 1);
+    }
+  }
+  const y = copy.getFullYear();
+  const m = String(copy.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
 const formatYAxis = (value: number) => {
   return value.toLocaleString('vi-VN');
 };
@@ -1581,7 +1611,8 @@ export default function App() {
   const [selectedTeamToAddToBlock, setSelectedTeamToAddToBlock] = useState('');
   const [isCreateBlockDialogOpen, setIsCreateBlockDialogOpen] = useState(false);
   const [selectedTeamIdsForNewBlock, setSelectedTeamIdsForNewBlock] = useState<string[]>([]);
-  const [blockBudgetMonthFilter, setBlockBudgetMonthFilter] = useState<string>('all');
+  const [blockBudgetMonthFilter, setBlockBudgetMonthFilter] = useState<string>(() => getMarketingMonth(new Date()) || '');
+  const [hasUserManuallySetBlockBudgetMonthFilter, setHasUserManuallySetBlockBudgetMonthFilter] = useState(false);
   const [blockCostMonthFilter, setBlockCostMonthFilter] = useState<string>('all');
   const [isCreatingBlockTeam, setIsCreatingBlockTeam] = useState(false);
   const [teamBudgetMonthFilter, setTeamBudgetMonthFilter] = useState<string>('all');
@@ -1786,6 +1817,23 @@ export default function App() {
   const [adminBudgetEndDay, setAdminBudgetEndDay] = useState('19');
   const [isEditCostDialogOpen, setIsEditCostDialogOpen] = useState(false);
   const [isAlertManagementOpen, setIsAlertManagementOpen] = useState(false);
+
+  const currentOpenBlockBudgetMonth = useMemo(() => {
+    return getOpenBlockBudgetMarketingMonth(new Date(), systemSettings);
+  }, [systemSettings]);
+
+  const currentMarketingPeriod = useMemo(() => {
+    return currentOpenBlockBudgetMonth || getMarketingMonth(new Date());
+  }, [currentOpenBlockBudgetMonth]);
+
+  useEffect(() => {
+    if (!hasUserManuallySetBlockBudgetMonthFilter) {
+      const targetMonth = currentMarketingPeriod;
+      if (targetMonth) {
+        setBlockBudgetMonthFilter(targetMonth);
+      }
+    }
+  }, [currentMarketingPeriod, hasUserManuallySetBlockBudgetMonthFilter]);
 
   const [adminSubTab, setAdminSubTab] = useState('budgets');
   const [blockSubTab, setBlockSubTab] = useState('block-teams');
@@ -6877,10 +6925,15 @@ export default function App() {
   }, [myActiveBlockBudgets, blockBudgetMonthFilter]);
 
   const availableActiveBlockBudgetMonths = useMemo(() => {
-    const list = Array.from(new Set(myActiveBlockBudgets.map(b => b.month))).filter((m): m is string => typeof m === 'string' && !!m);
-    list.sort((a, b) => a.localeCompare(b));
+    const activeCurrentMonth = currentMarketingPeriod;
+    const monthSet = new Set<string>(myActiveBlockBudgets.map(b => b.month).filter((m): m is string => typeof m === 'string' && !!m));
+    if (activeCurrentMonth) {
+      monthSet.add(activeCurrentMonth);
+    }
+    const list: string[] = Array.from(monthSet);
+    list.sort((a, b) => b.localeCompare(a));
     return list;
-  }, [myActiveBlockBudgets]);
+  }, [myActiveBlockBudgets, currentMarketingPeriod]);
 
   const getBlockProjectAcceptanceCost = useCallback((projectId: string, month: string) => {
     if (!currentActiveBlock) return 0;
@@ -7765,7 +7818,7 @@ export default function App() {
   const firebaseUserEmail = user?.email?.toLowerCase() || '';
 
   const isWithinRegistrationWindow = () => {
-    if (isAdmin || isSuperAdmin || isInternalStaff || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
+    if (isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com') return true;
     if (!systemSettings) return true;
     
     const now = new Date();
@@ -7780,28 +7833,42 @@ export default function App() {
     }
   };
 
-  const checkBlockBudgetActionAllowed = (_bMonth?: string) => {
+  const checkBlockBudgetActionAllowed = (bMonth?: string): { allowed: boolean; reason?: string; openMonth?: string | null } => {
     const isOverrideUser = 
       isAdmin || 
       isSuperAdmin || 
-      isInternalStaff || 
       firebaseUserEmail === 'thienvu1108@gmail.com';
 
     if (isOverrideUser) {
-      return { allowed: true };
+      return { allowed: true, openMonth: getOpenBlockBudgetMarketingMonth(new Date(), systemSettings) };
     }
 
-    const start = Number(systemSettings?.budgetStartDay || 14);
-    const end = Number(systemSettings?.budgetEndDay || 19);
+    const start = Number(systemSettings?.budgetStartDay ?? 14);
+    const end = Number(systemSettings?.budgetEndDay ?? 19);
+    const openMonth = getOpenBlockBudgetMarketingMonth(new Date(), systemSettings);
 
-    if (!isWithinRegistrationWindow()) {
+    if (!openMonth) {
       return {
         allowed: false,
-        reason: `Ngoài thời gian đăng ký và chỉnh sửa Ngân sách Khối (Quy định: từ ngày ${start} đến ngày ${end} hàng tháng). Hiện tính năng đã tạm khóa đối với cấp Khối. Vui lòng liên hệ Ban Quản Trị nếu cần hỗ trợ!`
+        openMonth: null,
+        reason: `Ngoài thời gian đăng ký & chỉnh sửa Ngân sách Khối (Quy định: từ ngày ${start} đến ngày ${end} hàng tháng). Hiện tính năng đã tạm khóa đối với cấp Khối. Chỉ Admin mới có quyền thao tác!`
       };
     }
 
-    return { allowed: true };
+    if (bMonth) {
+      const cleanMonth = bMonth.trim();
+      if (cleanMonth !== openMonth) {
+        const periodDisplay = getMarketingMonthDisplayRange(cleanMonth) || `kỳ ${cleanMonth}`;
+        const openDisplay = getMarketingMonthDisplayRange(openMonth) || `kỳ ${openMonth}`;
+        return {
+          allowed: false,
+          openMonth,
+          reason: `${periodDisplay} đã khóa chỉnh sửa đối với cấp Khối (kỳ cũ). Hiện tại hệ thống chỉ cho phép GĐK và Trợ lý đăng ký & chỉnh sửa ngân sách ${openDisplay}. Chỉ Admin mới có quyền can thiệp ngân sách các kỳ cũ!`
+        };
+      }
+    }
+
+    return { allowed: true, openMonth };
   };
 
   const handleAddBlockBudget = async () => {
@@ -7809,7 +7876,10 @@ export default function App() {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền đăng ký ngân sách Khối!");
       return;
     }
-    const check = checkBlockBudgetActionAllowed(blockBudgetMonth);
+    const isOverrideUser = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com';
+    const effectiveMonth = (!isOverrideUser && currentOpenBlockBudgetMonth) ? currentOpenBlockBudgetMonth : blockBudgetMonth;
+
+    const check = checkBlockBudgetActionAllowed(effectiveMonth);
     if (!check.allowed) {
       toast.error(check.reason);
       return;
@@ -7819,7 +7889,7 @@ export default function App() {
       toast.error("Vui lòng chọn Khối trước khi đăng ký!");
       return;
     }
-    if (!blockBudgetProject || !blockBudgetAmount || !blockBudgetMonth) {
+    if (!blockBudgetProject || !blockBudgetAmount || !effectiveMonth) {
       toast.error("Vui lòng chọn Dự án, Tháng và nhập Mức ngân sách!");
       return;
     }
@@ -7833,10 +7903,10 @@ export default function App() {
     const existsInBlock = blockBudgets.some(
       b => (b.blockId === block.id || b.blockCode === block.blockCode) && 
            b.projectId === blockBudgetProject && 
-           b.month === blockBudgetMonth
+           b.month === effectiveMonth
     );
     if (existsInBlock) {
-      toast.error(`Khối "${block.name || block.blockCode}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${blockBudgetMonth}. Vui lòng chỉnh sửa bản đăng ký hiện có nếu cần thay đổi.`);
+      toast.error(`Khối "${block.name || block.blockCode}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${effectiveMonth}. Vui lòng chỉnh sửa bản đăng ký hiện có nếu cần thay đổi.`);
       return;
     }
     
@@ -7847,7 +7917,7 @@ export default function App() {
         blockName: block.name || '',
         projectId: blockBudgetProject,
         projectName: selectedProject?.name || 'N/A',
-        month: blockBudgetMonth,
+        month: effectiveMonth,
         amount: amt,
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
@@ -7859,7 +7929,7 @@ export default function App() {
         blockCode: block.blockCode, 
         projectName: selectedProject?.name, 
         amount: amt, 
-        month: blockBudgetMonth 
+        month: effectiveMonth 
       });
       toast.success(`Đăng ký ngân sách Khối thành công (${new Intl.NumberFormat('vi-VN').format(amt)} đ)!`);
       setBlockBudgetAmount('');
@@ -7890,12 +7960,18 @@ export default function App() {
       toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
       return;
     }
-    const check = checkBlockBudgetActionAllowed(editBlockBudgetMonth);
-    if (!check.allowed) {
-      toast.error(check.reason);
+    if (!editingBlockBudget) return;
+
+    const checkOriginal = checkBlockBudgetActionAllowed(editingBlockBudget.month);
+    if (!checkOriginal.allowed) {
+      toast.error(checkOriginal.reason);
       return;
     }
-    if (!editingBlockBudget) return;
+    const checkNew = checkBlockBudgetActionAllowed(editBlockBudgetMonth);
+    if (!checkNew.allowed) {
+      toast.error(checkNew.reason);
+      return;
+    }
     const amt = parseVal(editBlockBudgetAmount);
     if (amt <= 0) {
       toast.error("Vui lòng nhập ngân sách lớn hơn 0!");
@@ -15031,21 +15107,23 @@ export default function App() {
     <>
                   {/* Banner Thời gian Đăng ký & Chỉnh sửa Ngân sách Khối */}
                   {(() => {
-                    const isWindowOpen = isWithinRegistrationWindow();
-                    const startDay = Number(systemSettings?.budgetStartDay || 14);
-                    const endDay = Number(systemSettings?.budgetEndDay || 19);
+                    const startDay = Number(systemSettings?.budgetStartDay ?? 14);
+                    const endDay = Number(systemSettings?.budgetEndDay ?? 19);
+                    const openMonth = currentOpenBlockBudgetMonth;
+                    const isWindowOpen = !!openMonth;
+                    const openPeriodDisplay = openMonth ? (getMarketingMonthDisplayRange(openMonth) || `kỳ ${openMonth}`) : '';
                     return (
-                      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      <div className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
                         isWindowOpen 
                           ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
                           : 'bg-rose-50/70 border-rose-200 text-rose-950'
                       }`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl shrink-0 ${isWindowOpen ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${isWindowOpen ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                             <Clock className="w-5 h-5" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="text-xs font-black uppercase tracking-wider">
                                 Thời gian Đăng ký & Chỉnh sửa Ngân sách Khối:
                               </span>
@@ -15054,18 +15132,29 @@ export default function App() {
                               }`}>
                                 {isWindowOpen ? 'ĐANG MỞ' : 'ĐÃ KHÓA'}
                               </Badge>
+                              {openMonth && (
+                                <Badge variant="outline" className="text-[11px] font-bold border-emerald-300 text-emerald-800 bg-white/90">
+                                  ★ Kỳ đang mở: {openPeriodDisplay}
+                                </Badge>
+                              )}
                             </div>
-                            <p className="text-xs font-medium mt-0.5 text-slate-600">
-                              {isWindowOpen 
-                                ? `Hệ thống đang mở cho phép Khối đăng ký và chỉnh sửa ngân sách (từ ngày ${startDay} đến ngày ${endDay} hàng tháng).`
-                                : `Ngoài khung thời gian đăng ký & chỉnh sửa ngân sách Khối (quy định: từ ngày ${startDay} đến ngày ${endDay} hàng tháng). Các tính năng đã khóa đối với cấp Khối.`
-                              }
+                            <p className="text-xs font-medium mt-1 text-slate-600 leading-relaxed">
+                              {isWindowOpen ? (
+                                <>
+                                  Hệ thống đang mở cho phép Khối đăng ký & chỉnh sửa ngân sách cho <strong>{openPeriodDisplay}</strong> (Thời gian mở: ngày {startDay} đến hết ngày {endDay} hàng tháng).<br />
+                                  <span className="text-amber-800 font-semibold">Quy định phân quyền:</span> GĐK và Trợ lý <u>chỉ được phép sửa/xóa ngân sách của {openPeriodDisplay}</u>. Ngân sách các kỳ cũ đã đóng, chỉ Admin có quyền chỉnh sửa.
+                                </>
+                              ) : (
+                                <>
+                                  Hiện ngoài khung thời gian đăng ký & chỉnh sửa ngân sách Khối (quy định: từ ngày {startDay} đến hết ngày {endDay} hàng tháng). Toàn bộ tính năng chỉnh sửa đã tạm khóa đối với cấp Khối.
+                                </>
+                              )}
                             </p>
                           </div>
                         </div>
-                        {(isAdmin || isSuperAdmin) && (
-                          <Badge variant="outline" className="text-[10px] font-bold border-indigo-200 text-indigo-700 bg-white/80 shrink-0 self-start sm:self-center">
-                            Quyền Admin: Cho phép chỉnh sửa
+                        {(isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com') && (
+                          <Badge variant="outline" className="text-[10px] font-bold border-indigo-200 text-indigo-700 bg-white/90 shrink-0 self-start md:self-center">
+                            Quyền Admin: Cho phép chỉnh sửa tất cả các kỳ
                           </Badge>
                         )}
                       </div>
@@ -15092,7 +15181,7 @@ export default function App() {
                             <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
                             <span>Chỉ Giám đốc Khối và Trợ lý mới có quyền tạo và chỉnh sửa ngân sách Khối.</span>
                           </div>
-                        ) : (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin) ? (
+                        ) : (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com') ? (
                           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium flex items-center gap-2">
                             <Clock className="w-4 h-4 shrink-0 text-rose-600" />
                             <span>Đã hết thời gian đăng ký & chỉnh sửa ngân sách Khối (Từ ngày {systemSettings?.budgetStartDay || 14} đến {systemSettings?.budgetEndDay || 19} hàng tháng).</span>
@@ -15112,21 +15201,32 @@ export default function App() {
                             placeholder="Chọn dự án..."
                             searchPlaceholder="Gõ tên hoặc mã dự án..."
                             emptyMessage="Không tìm thấy dự án"
-                            disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
+                            disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                           />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label className="text-xs font-bold text-slate-700">Tháng Marketing <span className="text-rose-500">*</span></Label>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs font-bold text-slate-700">Tháng Marketing <span className="text-rose-500">*</span></Label>
+                              {currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && (
+                                <span className="text-[10px] text-purple-600 font-bold">Kỳ mở</span>
+                              )}
+                            </div>
                             <Input 
                               type="text"
-                              value={blockBudgetMonth}
+                              value={(!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com' && currentOpenBlockBudgetMonth) ? currentOpenBlockBudgetMonth : blockBudgetMonth}
                               onChange={(e) => setBlockBudgetMonth(e.target.value)}
                               placeholder="YYYY-MM"
-                              className="rounded-xl border-slate-200"
-                              disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
+                              className="rounded-xl border-slate-200 font-mono"
+                              disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
+                              readOnly={!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com'}
                             />
+                            {!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com' && currentOpenBlockBudgetMonth && (
+                              <p className="text-[10px] text-slate-400 italic">
+                                * Cấp Khối chỉ đăng ký kỳ đang mở ({currentOpenBlockBudgetMonth})
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs font-bold text-slate-700">Mức Ngân Sách (VNĐ) <span className="text-rose-500">*</span></Label>
@@ -15135,21 +15235,21 @@ export default function App() {
                               value={blockBudgetAmount}
                               onChange={(e) => setBlockBudgetAmount(e.target.value)}
                               className="rounded-xl border-slate-200 font-semibold"
-                              disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
+                              disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                             />
                           </div>
                         </div>
 
                         <Button 
                           onClick={handleAddBlockBudget}
-                          disabled={!canManageBlockBudget || (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)}
+                          disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                           className={`w-full text-white rounded-xl font-bold py-2.5 transition-all shadow-md cursor-pointer ${
-                            (!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin)
+                            (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')
                               ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed shadow-none'
                               : 'bg-purple-600 hover:bg-purple-700 shadow-purple-100'
                           }`}
                         >
-                          {(!isWithinRegistrationWindow() && !isAdmin && !isSuperAdmin) ? (
+                          {(!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com') ? (
                             <>
                               <Clock className="w-4 h-4 mr-1.5" /> Đã Hết Hạn Đăng Ký (Ngày {systemSettings?.budgetStartDay || 14} - {systemSettings?.budgetEndDay || 19})
                             </>
@@ -15167,8 +15267,18 @@ export default function App() {
                       <Card className="border-slate-100 shadow-md">
                         <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 space-y-0">
                           <div>
-                            <CardTitle className="text-lg font-black text-slate-900">
-                              Hồ sơ Ngân sách trong Khối ({filteredActiveBlockBudgets.length})
+                            <CardTitle className="text-lg font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                              <span>Hồ sơ Ngân sách trong Khối ({filteredActiveBlockBudgets.length})</span>
+                              {blockBudgetMonthFilter && blockBudgetMonthFilter !== 'all' && (
+                                <Badge variant="outline" className={`text-[11px] font-bold py-0.5 px-2 rounded-lg ${
+                                  blockBudgetMonthFilter === currentMarketingPeriod 
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}>
+                                  {blockBudgetMonthFilter === currentMarketingPeriod ? 'Kỳ hiện tại: ' : 'Kỳ: '}
+                                  {blockBudgetMonthFilter}
+                                </Badge>
+                              )}
                             </CardTitle>
                             <CardDescription className="text-xs text-slate-500">
                               Các bản ghi hạn mức Marketing được cấp theo dự án cho Khối
@@ -15197,17 +15307,42 @@ export default function App() {
                             )}
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Tháng:</span>
-                              <Select value={blockBudgetMonthFilter} onValueChange={setBlockBudgetMonthFilter}>
-                                <SelectTrigger className="w-[130px] rounded-xl text-xs h-8 bg-slate-50 border-slate-200">
+                              <Select 
+                                value={blockBudgetMonthFilter} 
+                                onValueChange={(val) => {
+                                  setBlockBudgetMonthFilter(val);
+                                  setHasUserManuallySetBlockBudgetMonthFilter(true);
+                                }}
+                              >
+                                <SelectTrigger className="w-[145px] rounded-xl text-xs h-8 bg-slate-50 border-slate-200">
                                   <SelectValue placeholder="Chọn tháng..." />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
                                   <SelectItem value="all">Tất cả tháng</SelectItem>
-                                  {availableActiveBlockBudgetMonths.map((m) => (
-                                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                                  ))}
+                                  {availableActiveBlockBudgetMonths.map((m) => {
+                                    const isCurrent = m === currentMarketingPeriod;
+                                    return (
+                                      <SelectItem key={m} value={m}>
+                                        {m} {isCurrent ? '(Kỳ hiện tại)' : ''}
+                                      </SelectItem>
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
+                              {blockBudgetMonthFilter !== currentMarketingPeriod && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setBlockBudgetMonthFilter(currentMarketingPeriod);
+                                    setHasUserManuallySetBlockBudgetMonthFilter(false);
+                                  }}
+                                  className="h-8 text-[11px] font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-50 px-2 rounded-lg"
+                                  title={`Quay về kỳ hiện tại (${currentMarketingPeriod})`}
+                                >
+                                  Kỳ hiện tại
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </CardHeader>
@@ -15215,10 +15350,18 @@ export default function App() {
                           {filteredActiveBlockBudgets.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
                               <Wallet className="w-10 h-10 mx-auto opacity-30 mb-2" />
-                              <p className="text-sm font-medium">Không tìm thấy bản đăng ký ngân sách Khối nào cho tháng này</p>
+                              <p className="text-sm font-medium">
+                                {blockBudgetMonthFilter && blockBudgetMonthFilter !== 'all'
+                                  ? `Không tìm thấy bản đăng ký ngân sách Khối nào cho kỳ ${blockBudgetMonthFilter}`
+                                  : 'Không tìm thấy bản đăng ký ngân sách Khối nào'
+                                }
+                              </p>
                               {canManageBlockBudget && (
-                                <p className="text-xs text-slate-400 mt-1">
-                                  Bấm "Đồng bộ từ bản cũ" nếu muốn tạo bản ghi từ các đăng ký cũ của các team thuộc Khối.
+                                <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto">
+                                  {blockBudgetMonthFilter === currentMarketingPeriod
+                                    ? 'Khối chưa có bản ghi ngân sách cho kỳ hiện tại này. Bạn có thể sử dụng form bên trái để đăng ký ngay.'
+                                    : 'Bạn có thể chọn "Tất cả tháng" ở bộ lọc phía trên để xem các bản ghi của kỳ khác, hoặc bấm "Đồng bộ từ bản cũ".'
+                                  }
                                 </p>
                               )}
                             </div>
@@ -15271,10 +15414,24 @@ export default function App() {
                                       const displayProj = resolveProjectName(b.projectId, b.projectName);
                                       const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
                                       const diff = (b.amount || 0) - acceptanceCost;
+                                      const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
                                       return (
                                         <TableRow key={b.id} className="hover:bg-slate-50/50">
                                           <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
-                                          <TableCell className="font-mono text-xs font-semibold text-slate-700">{b.month}</TableCell>
+                                          <TableCell className="font-mono text-xs font-semibold text-slate-700">
+                                            <div className="flex items-center gap-1.5">
+                                              <span>{b.month}</span>
+                                              {b.month === currentOpenBlockBudgetMonth ? (
+                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-200 text-emerald-700 bg-emerald-50">
+                                                  Kỳ này
+                                                </Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-500 bg-slate-50">
+                                                  Kỳ cũ
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </TableCell>
                                           <TableCell className="text-xs font-mono text-slate-500">
                                             {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
                                           </TableCell>
@@ -15289,27 +15446,45 @@ export default function App() {
                                           </TableCell>
                                           <TableCell className="text-center">
                                             {canManageBlockBudget ? (
-                                              <div className="flex items-center justify-center gap-1.5">
-                                                <Button 
-                                                  size="xs" 
-                                                  variant="outline" 
-                                                  className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1"
-                                                  title="Chỉnh sửa ngân sách"
-                                                  onClick={() => handleOpenEditBlockBudget(b)}
-                                                >
-                                                  <Edit2 className="w-3.5 h-3.5" />
-                                                  <span>Sửa</span>
-                                                </Button>
-                                                <Button 
-                                                  size="xs" 
-                                                  variant="outline" 
-                                                  className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs"
-                                                  title="Xóa đăng ký ngân sách"
-                                                  onClick={() => handleDeleteBlockBudget(b)}
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </Button>
-                                              </div>
+                                              isRowEditable ? (
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                  <Button 
+                                                    size="xs" 
+                                                    variant="outline" 
+                                                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
+                                                    title="Chỉnh sửa ngân sách"
+                                                    onClick={() => handleOpenEditBlockBudget(b)}
+                                                  >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    <span>Sửa</span>
+                                                  </Button>
+                                                  <Button 
+                                                    size="xs" 
+                                                    variant="outline" 
+                                                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
+                                                    title="Xóa đăng ký ngân sách"
+                                                    onClick={() => handleDeleteBlockBudget(b)}
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </Button>
+                                                </div>
+                                              ) : (
+                                                <div className="flex items-center justify-center">
+                                                  <Button 
+                                                    size="xs" 
+                                                    variant="ghost" 
+                                                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100/70 border border-dashed border-slate-200 h-8 px-2.5 rounded-lg text-xs font-medium gap-1 cursor-not-allowed"
+                                                    title={`Kỳ ${b.month} là kỳ cũ đã khóa chỉnh sửa đối với cấp Khối. Chỉ Admin mới có quyền chỉnh sửa!`}
+                                                    onClick={() => {
+                                                      const check = checkBlockBudgetActionAllowed(b.month);
+                                                      if (!check.allowed) toast.error(check.reason);
+                                                    }}
+                                                  >
+                                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Đã khóa</span>
+                                                  </Button>
+                                                </div>
+                                              )
                                             ) : (
                                               <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
                                             )}
@@ -15363,7 +15538,13 @@ export default function App() {
                             onChange={(e) => setEditBlockBudgetMonth(e.target.value)}
                             placeholder="YYYY-MM"
                             className="rounded-xl font-mono text-xs"
+                            disabled={!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com'}
                           />
+                          {!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com' && (
+                            <p className="text-[10px] text-slate-400 italic">
+                              * Cấp Khối không thể thay đổi kỳ marketing của ngân sách.
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-1.5">

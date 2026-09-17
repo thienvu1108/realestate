@@ -1061,6 +1061,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view', 'home.export',
     'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
     'block.view', 'block.create', 'block.edit', 'block.delete', 'block.approve',
+    'block_budget.view', 'block_budget.create', 'block_budget.edit', 'block_budget.delete',
     'team_mgmt.view', 'team_mgmt.create', 'team_mgmt.edit', 'team_mgmt.delete', 'team_mgmt.approve',
     'register.view', 'register.create', 'register.edit', 'register.delete', 'register.import',
     'actual.view', 'actual.create', 'actual.edit', 'actual.delete', 'actual.import',
@@ -1081,6 +1082,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view', 'home.export',
     'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
     'block.view', 'block.create', 'block.edit', 'block.delete', 'block.approve',
+    'block_budget.view', 'block_budget.create', 'block_budget.edit', 'block_budget.delete',
     'team_mgmt.view', 'team_mgmt.create', 'team_mgmt.edit', 'team_mgmt.delete', 'team_mgmt.approve',
     'register.view', 'register.create', 'register.edit', 'register.delete', 'register.import',
     'actual.view', 'actual.create', 'actual.edit', 'actual.delete', 'actual.import',
@@ -1100,7 +1102,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   mod: [
     'home.view',
     'report_nt.view', 'report_nt.create', 'report_nt.edit', 'report_nt.delete', 'report_nt.import', 'report_nt.sync',
-    'block.view',
+    'block.view', 'block_budget.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
@@ -1114,7 +1116,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   accountant: [
     'home.view', 'home.export',
     'report_nt.view',
-    'block.view',
+    'block.view', 'block_budget.view',
     'team_mgmt.view',
     'register.view',
     'actual.view',
@@ -1131,7 +1133,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   gdda: [
     'home.view',
     'report_nt.view',
-    'block.view',
+    'block.view', 'block_budget.view',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
@@ -1146,6 +1148,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view',
     'report_nt.view',
     'block.view', 'block.approve',
+    'block_budget.view', 'block_budget.create', 'block_budget.edit', 'block_budget.delete',
     'team_mgmt.view',
     'register.view',
     'actual.view',
@@ -1159,6 +1162,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view',
     'report_nt.view',
     'block.view', 'block.approve',
+    'block_budget.view', 'block_budget.create', 'block_budget.edit', 'block_budget.delete',
     'team_mgmt.view',
     'register.view',
     'actual.view',
@@ -1171,7 +1175,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   gdkd: [
     'home.view',
     'report_nt.view',
-    'block.view',
+    'block.view', 'block_budget.view',
     'team_mgmt.view', 'team_mgmt.approve',
     'register.view',
     'actual.view',
@@ -1185,6 +1189,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     'home.view', 'home.export',
     'report_nt.view',
     'block.view',
+    'block_budget.view', 'block_budget.create', 'block_budget.edit', 'block_budget.delete',
     'team_mgmt.view',
     'register.view', 'register.create', 'register.edit',
     'actual.view', 'actual.create', 'actual.edit',
@@ -1238,7 +1243,11 @@ export const PERMISSION_GROUPS = [
       { key: 'block.create', label: 'Tạo mới Khối kinh doanh', desc: 'Được phép tạo mới Khối trong hệ thống.' },
       { key: 'block.edit', label: 'Chỉnh sửa thông tin Khối', desc: 'Cập nhật tên khối, mã khối, phân bổ ngân sách khối.' },
       { key: 'block.delete', label: 'Xóa Khối kinh doanh', desc: 'Xóa Khối kinh doanh khỏi hệ thống.' },
-      { key: 'block.approve', label: 'Phê duyệt cấp Khối', desc: 'Ghi ý kiến phê duyệt / Đề xuất ngân sách liên phòng của Khối.' }
+      { key: 'block.approve', label: 'Phê duyệt cấp Khối', desc: 'Ghi ý kiến phê duyệt / Đề xuất ngân sách liên phòng của Khối.' },
+      { key: 'block_budget.view', label: 'Xem Ngân sách Khối', desc: 'Xem danh sách và chi tiết hồ sơ ngân sách Marketing của Khối.' },
+      { key: 'block_budget.create', label: 'Đăng ký mới Ngân sách Khối', desc: 'Đăng ký hạn mức ngân sách Marketing cho Khối theo từng dự án.' },
+      { key: 'block_budget.edit', label: 'Sửa Ngân sách Khối', desc: 'Chỉnh sửa hạn mức ngân sách Marketing đã đăng ký của Khối (trong kỳ cho phép).' },
+      { key: 'block_budget.delete', label: 'Xóa Ngân sách Khối', desc: 'Xóa bản ghi hạn mức ngân sách Marketing của Khối (trong kỳ cho phép).' }
     ]
   },
   {
@@ -1531,6 +1540,46 @@ export default function App() {
   const canManageBlockBudget = useMemo(() => {
     return isGDKhoi || isTroLyKhoi || isAssistant || isAdmin || isSuperAdmin;
   }, [isGDKhoi, isTroLyKhoi, isAssistant, isAdmin, isSuperAdmin]);
+
+  const canViewBlockBudget = useMemo(() => {
+    if (isAdmin || isSuperAdmin || user?.email === 'thienvu1108@gmail.com') return true;
+    const roleKey = (userRole || userProfile?.role || '').toLowerCase().trim();
+    const saved = rolePermissionsList.find(rp => rp.role === roleKey);
+    if (saved && Array.isArray(saved.permissions) && saved.permissions.some((p: string) => p.startsWith('block_budget.'))) {
+      return saved.permissions.includes('block_budget.view');
+    }
+    return hasPermission('block_budget.view') || hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant;
+  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant]);
+
+  const canCreateBlockBudget = useMemo(() => {
+    if (isAdmin || isSuperAdmin || user?.email === 'thienvu1108@gmail.com') return true;
+    const roleKey = (userRole || userProfile?.role || '').toLowerCase().trim();
+    const saved = rolePermissionsList.find(rp => rp.role === roleKey);
+    if (saved && Array.isArray(saved.permissions) && saved.permissions.some((p: string) => p.startsWith('block_budget.'))) {
+      return saved.permissions.includes('block_budget.create') || saved.permissions.includes('block_budget.edit');
+    }
+    return hasPermission('block_budget.create') || hasPermission('block_budget.edit') || isGDKhoi || isTroLyKhoi || isAssistant;
+  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant]);
+
+  const canEditBlockBudget = useMemo(() => {
+    if (isAdmin || isSuperAdmin || user?.email === 'thienvu1108@gmail.com') return true;
+    const roleKey = (userRole || userProfile?.role || '').toLowerCase().trim();
+    const saved = rolePermissionsList.find(rp => rp.role === roleKey);
+    if (saved && Array.isArray(saved.permissions) && saved.permissions.some((p: string) => p.startsWith('block_budget.'))) {
+      return saved.permissions.includes('block_budget.edit');
+    }
+    return hasPermission('block_budget.edit') || isGDKhoi || isTroLyKhoi || isAssistant;
+  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant]);
+
+  const canDeleteBlockBudget = useMemo(() => {
+    if (isAdmin || isSuperAdmin || user?.email === 'thienvu1108@gmail.com') return true;
+    const roleKey = (userRole || userProfile?.role || '').toLowerCase().trim();
+    const saved = rolePermissionsList.find(rp => rp.role === roleKey);
+    if (saved && Array.isArray(saved.permissions) && saved.permissions.some((p: string) => p.startsWith('block_budget.'))) {
+      return saved.permissions.includes('block_budget.delete');
+    }
+    return hasPermission('block_budget.delete') || isGDKhoi || isTroLyKhoi || isAssistant;
+  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant]);
 
   const isUser = useMemo(() => {
     if (isAdmin || isSuperAdmin || isMod || isAccountant || isGDDA || isGDKhoi || isTroLyKhoi || isAssistant || isGDKD) {
@@ -7872,8 +7921,8 @@ export default function App() {
   };
 
   const handleAddBlockBudget = async () => {
-    if (!canManageBlockBudget) {
-      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền đăng ký ngân sách Khối!");
+    if (!canCreateBlockBudget) {
+      toast.error("Tài khoản của bạn không có quyền đăng ký ngân sách Khối! Vui lòng liên hệ Admin.");
       return;
     }
     const isOverrideUser = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com';
@@ -7939,8 +7988,8 @@ export default function App() {
   };
 
   const handleOpenEditBlockBudget = (b: any) => {
-    if (!canManageBlockBudget) {
-      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
+    if (!canEditBlockBudget) {
+      toast.error("Tài khoản của bạn không có quyền chỉnh sửa ngân sách Khối! Vui lòng liên hệ Admin.");
       return;
     }
     const check = checkBlockBudgetActionAllowed(b.month);
@@ -7956,8 +8005,8 @@ export default function App() {
   };
 
   const handleSaveEditBlockBudget = async () => {
-    if (!canManageBlockBudget) {
-      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền chỉnh sửa ngân sách Khối!");
+    if (!canEditBlockBudget) {
+      toast.error("Tài khoản của bạn không có quyền chỉnh sửa ngân sách Khối! Vui lòng liên hệ Admin.");
       return;
     }
     if (!editingBlockBudget) return;
@@ -8007,8 +8056,8 @@ export default function App() {
   };
 
   const handleDeleteBlockBudget = async (b: any) => {
-    if (!canManageBlockBudget) {
-      toast.error("Chỉ Giám đốc Khối và Trợ lý mới có quyền xóa ngân sách Khối!");
+    if (!canDeleteBlockBudget) {
+      toast.error("Tài khoản của bạn không có quyền xóa ngân sách Khối! Vui lòng liên hệ Admin.");
       return;
     }
     const check = checkBlockBudgetActionAllowed(b.month);
@@ -8028,6 +8077,10 @@ export default function App() {
   };
 
   const syncOldBudgetsToBlockBudgets = async () => {
+    if (!canCreateBlockBudget) {
+      toast.error("Tài khoản của bạn không có quyền tạo/đồng bộ ngân sách Khối!");
+      return;
+    }
     if (blocks.length === 0 || budgets.length === 0) {
       toast.info("Chưa có dữ liệu Khối hoặc Ngân sách cũ để đồng bộ");
       return;
@@ -14333,9 +14386,11 @@ export default function App() {
                   <TabsTrigger value="block-teams" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <Users className="w-4 h-4 mr-2" /> Danh sách Nhóm
                   </TabsTrigger>
-                  <TabsTrigger value="block-budgets" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                    <Wallet className="w-4 h-4 mr-2" /> Đăng ký Ngân sách
-                  </TabsTrigger>
+                  {canViewBlockBudget && (
+                    <TabsTrigger value="block-budgets" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
+                      <Wallet className="w-4 h-4 mr-2" /> Đăng ký Ngân sách
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="block-nt" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
                     <FileCheck className="w-4 h-4 mr-2" /> Nghiệm thu Chi phí MKT
                   </TabsTrigger>
@@ -15176,10 +15231,10 @@ export default function App() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {!canManageBlockBudget ? (
+                        {!canCreateBlockBudget ? (
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-                            <span>Chỉ Giám đốc Khối và Trợ lý mới có quyền tạo và chỉnh sửa ngân sách Khối.</span>
+                            <span>Tài khoản của bạn không có quyền đăng ký ngân sách Khối.</span>
                           </div>
                         ) : (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com') ? (
                           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium flex items-center gap-2">
@@ -15201,7 +15256,7 @@ export default function App() {
                             placeholder="Chọn dự án..."
                             searchPlaceholder="Gõ tên hoặc mã dự án..."
                             emptyMessage="Không tìm thấy dự án"
-                            disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
+                            disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                           />
                         </div>
 
@@ -15219,7 +15274,7 @@ export default function App() {
                               onChange={(e) => setBlockBudgetMonth(e.target.value)}
                               placeholder="YYYY-MM"
                               className="rounded-xl border-slate-200 font-mono"
-                              disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
+                              disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                               readOnly={!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com'}
                             />
                             {!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com' && currentOpenBlockBudgetMonth && (
@@ -15235,14 +15290,14 @@ export default function App() {
                               value={blockBudgetAmount}
                               onChange={(e) => setBlockBudgetAmount(e.target.value)}
                               className="rounded-xl border-slate-200 font-semibold"
-                              disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
+                              disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                             />
                           </div>
                         </div>
 
                         <Button 
                           onClick={handleAddBlockBudget}
-                          disabled={!canManageBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
+                          disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                           className={`w-full text-white rounded-xl font-bold py-2.5 transition-all shadow-md cursor-pointer ${
                             (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')
                               ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed shadow-none'
@@ -15294,7 +15349,7 @@ export default function App() {
                             >
                               <FileSpreadsheet className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Xuất Excel
                             </Button>
-                            {canManageBlockBudget && (
+                            {canCreateBlockBudget && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -15356,7 +15411,7 @@ export default function App() {
                                   : 'Không tìm thấy bản đăng ký ngân sách Khối nào'
                                 }
                               </p>
-                              {canManageBlockBudget && (
+                              {canCreateBlockBudget && (
                                 <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto">
                                   {blockBudgetMonthFilter === currentMarketingPeriod
                                     ? 'Khối chưa có bản ghi ngân sách cho kỳ hiện tại này. Bạn có thể sử dụng form bên trái để đăng ký ngay.'
@@ -15445,28 +15500,32 @@ export default function App() {
                                             {new Intl.NumberFormat('vi-VN').format(diff)} đ
                                           </TableCell>
                                           <TableCell className="text-center">
-                                            {canManageBlockBudget ? (
+                                            {(canEditBlockBudget || canDeleteBlockBudget) ? (
                                               isRowEditable ? (
                                                 <div className="flex items-center justify-center gap-1.5">
-                                                  <Button 
-                                                    size="xs" 
-                                                    variant="outline" 
-                                                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
-                                                    title="Chỉnh sửa ngân sách"
-                                                    onClick={() => handleOpenEditBlockBudget(b)}
-                                                  >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                    <span>Sửa</span>
-                                                  </Button>
-                                                  <Button 
-                                                    size="xs" 
-                                                    variant="outline" 
-                                                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
-                                                    title="Xóa đăng ký ngân sách"
-                                                    onClick={() => handleDeleteBlockBudget(b)}
-                                                  >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                  </Button>
+                                                  {canEditBlockBudget && (
+                                                    <Button 
+                                                      size="xs" 
+                                                      variant="outline" 
+                                                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
+                                                      title="Chỉnh sửa ngân sách"
+                                                      onClick={() => handleOpenEditBlockBudget(b)}
+                                                    >
+                                                      <Edit2 className="w-3.5 h-3.5" />
+                                                      <span>Sửa</span>
+                                                    </Button>
+                                                  )}
+                                                  {canDeleteBlockBudget && (
+                                                    <Button 
+                                                      size="xs" 
+                                                      variant="outline" 
+                                                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
+                                                      title="Xóa đăng ký ngân sách"
+                                                      onClick={() => handleDeleteBlockBudget(b)}
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                  )}
                                                 </div>
                                               ) : (
                                                 <div className="flex items-center justify-center">

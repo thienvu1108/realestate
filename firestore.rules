@@ -217,6 +217,48 @@ service cloud.firestore {
     // ===============================================================
     // Block Budgets
     // ===============================================================
+    function getSystemSettings() {
+      return exists(/databases/$(database)/documents/settings/global)
+        ? get(/databases/$(database)/documents/settings/global).data
+        : {};
+    }
+
+    function getBudgetStartDay() {
+      return getSystemSettings().get('budgetStartDay', 14);
+    }
+
+    function getBudgetEndDay() {
+      return getSystemSettings().get('budgetEndDay', 19);
+    }
+
+    function isBlockBudgetWindowOpen() {
+      let startDay = getBudgetStartDay();
+      let endDay = getBudgetEndDay();
+      let day = request.time.day();
+      return startDay > endDay 
+        ? (day >= startDay || day <= endDay)
+        : (day >= startDay && day <= endDay);
+    }
+
+    function getOpenBlockBudgetMonth() {
+      let startDay = getBudgetStartDay();
+      let endDay = getBudgetEndDay();
+      let day = request.time.day();
+      let isNextMonth = startDay > endDay ? (day >= startDay) : (startDay >= 10);
+      let targetTime = isNextMonth ? (request.time + duration.value(20, 'd')) : request.time;
+      let y = string(targetTime.year());
+      let m = targetTime.month() < 10 ? ('0' + string(targetTime.month())) : string(targetTime.month());
+      return y + '-' + m;
+    }
+
+    function canModifyBlockBudget(month) {
+      return isAdmin() || isSuperAdmin() || (
+        isSignedIn() &&
+        isBlockBudgetWindowOpen() &&
+        month == getOpenBlockBudgetMonth()
+      );
+    }
+
     function isValidBlockBudget(data) {
       return (!('projectId' in data) || data.projectId is string) &&
              (!('month' in data) || data.month is string) &&
@@ -225,9 +267,11 @@ service cloud.firestore {
 
     match /block_budgets/{blockBudgetId} {
       allow read: if isSignedIn();
-      allow create: if (isAdmin() || isAccountant() || isGDKhoi() || isSignedIn()) && isValidBlockBudget(incoming());
-      allow update: if (isAdmin() || isAccountant() || isGDKhoi() || resource.data.get('createdBy', '') == request.auth.uid) && isValidBlockBudget(incoming());
-      allow delete: if isAdmin() || isAccountant() || isGDKhoi() || resource.data.get('createdBy', '') == request.auth.uid;
+      allow create: if canModifyBlockBudget(incoming().get('month', '')) && isValidBlockBudget(incoming());
+      allow update: if canModifyBlockBudget(resource.data.get('month', '')) && 
+                       (!('month' in incoming()) || incoming().month == resource.data.month) && 
+                       isValidBlockBudget(incoming());
+      allow delete: if canModifyBlockBudget(resource.data.get('month', ''));
     }
 
     // ===============================================================

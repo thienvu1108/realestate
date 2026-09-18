@@ -1,14 +1,14 @@
 {
-  "syncDate": "2026-09-18T02:26:26.382Z",
+  "syncDate": "2026-09-18T02:32:41.682Z",
   "syncedBy": "thienvu1108@gmail.com",
   "repository": "thienvu1108/realestate",
   "branch": "main",
   "folder": "backups",
   "totalCollections": 16,
-  "totalRecords": 5500,
+  "totalRecords": 5503,
   "collectionsSummary": {
     "reciprocal_budgets": 1,
-    "block_budgets": 694,
+    "block_budgets": 697,
     "blocks": 46,
     "teams": 232,
     "projects": 56,

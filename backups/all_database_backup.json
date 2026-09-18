@@ -1,15 +1,15 @@
 {
   "metadata": {
-    "syncDate": "2026-09-18T02:26:26.382Z",
+    "syncDate": "2026-09-18T02:32:41.682Z",
     "syncedBy": "thienvu1108@gmail.com",
     "repository": "thienvu1108/realestate",
     "branch": "main",
     "folder": "backups",
     "totalCollections": 16,
-    "totalRecords": 5500,
+    "totalRecords": 5503,
     "collectionsSummary": {
       "reciprocal_budgets": 1,
-      "block_budgets": 694,
+      "block_budgets": 697,
       "blocks": 46,
       "teams": 232,
       "projects": 56,
@@ -66,6 +66,60 @@
       }
     ],
     "block_budgets": [
+      {
+        "id": "LznZCcC7VTeQmVAVTEBw",
+        "creatorName": "Thuật Đoàn Tất",
+        "month": "2026-10",
+        "blockName": "E05",
+        "blockCode": "E05",
+        "projectId": "bAloreGW9xFhwJdQ42FD",
+        "amount": 20000000,
+        "projectName": "GRAND MARINA SAIGON",
+        "blockId": "MOInTce9ezj4H1eeNdfQ",
+        "createdBy": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "createdAt": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698738,
+          "nanoseconds": 661000000
+        },
+        "userEmail": "thuatbt.vnn@gmail.com"
+      },
+      {
+        "id": "HYaP70Re8YDKb4nObCKB",
+        "blockId": "MOInTce9ezj4H1eeNdfQ",
+        "blockName": "E05",
+        "projectId": "FdIvTeZTsRhvZlSiUEVO",
+        "blockCode": "E05",
+        "projectName": "PALM CITY",
+        "amount": 10000000,
+        "userEmail": "thuatbt.vnn@gmail.com",
+        "month": "2026-10",
+        "createdAt": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698714,
+          "nanoseconds": 881000000
+        },
+        "createdBy": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "creatorName": "Thuật Đoàn Tất"
+      },
+      {
+        "id": "pVph9jGEEukgBE1kWwB9",
+        "creatorName": "Thuật Đoàn Tất",
+        "projectId": "jvm19VpxPqz5Uqq3TPj8",
+        "blockCode": "E05",
+        "blockName": "E05",
+        "amount": 45000000,
+        "projectName": "THE GLOBAL CITY",
+        "userEmail": "thuatbt.vnn@gmail.com",
+        "blockId": "MOInTce9ezj4H1eeNdfQ",
+        "month": "2026-10",
+        "createdBy": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "createdAt": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698692,
+          "nanoseconds": 76000000
+        }
+      },
       {
         "id": "5h8WDlzqr4ucOaeV8pVW",
         "blockId": "KRAtod3rPPJ2bsVwHbfn",
@@ -316,21 +370,28 @@
       },
       {
         "id": "HxQ0vNt9GJ00B63zj3c2",
-        "userEmail": "cuongvan.vinhomes@gmail.com",
-        "blockId": "SkvVq1GZdIjyvNtsc1FA",
-        "blockName": "E41",
-        "createdBy": "nH6gVMUxTCMu70nPd4mONploKG42",
         "month": "2026-10",
         "projectId": "0TgaX4yQmxolmGwSn392",
         "creatorName": "Cường Văn",
-        "blockCode": "E41",
+        "updatedBy": "nH6gVMUxTCMu70nPd4mONploKG42",
+        "userEmail": "cuongvan.vinhomes@gmail.com",
+        "updatedByEmail": "cuongvan.vinhomes@gmail.com",
+        "updatedAt": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698599,
+          "nanoseconds": 128000000
+        },
         "createdAt": {
           "type": "firestore/timestamp/1.0",
           "seconds": 1789547369,
           "nanoseconds": 159000000
         },
-        "amount": 50000000,
-        "projectName": "VINHOMES WONDER CITY"
+        "amount": 65000000,
+        "projectName": "VINHOMES WONDER CITY",
+        "blockCode": "E41",
+        "blockName": "E41",
+        "createdBy": "nH6gVMUxTCMu70nPd4mONploKG42",
+        "blockId": "SkvVq1GZdIjyvNtsc1FA"
       },
       {
         "id": "Y5WneUTNg1FSBFM4BvlK",
@@ -249305,6 +249366,84 @@
     ],
     "auditLogs": [
       {
+        "id": "pc6OMz4CHDDpRDelYrmD",
+        "userId": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "docId": "LznZCcC7VTeQmVAVTEBw",
+        "collection": "block_budgets",
+        "action": "CREATE",
+        "data": {
+          "projectName": "GRAND MARINA SAIGON",
+          "amount": 20000000,
+          "blockCode": "E05",
+          "blockId": "MOInTce9ezj4H1eeNdfQ",
+          "month": "2026-10"
+        },
+        "userEmail": "thuatbt.vnn@gmail.com",
+        "timestamp": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698738,
+          "nanoseconds": 799000000
+        }
+      },
+      {
+        "id": "KrwWN3QAmdGsSKsPW6JL",
+        "collection": "block_budgets",
+        "docId": "HYaP70Re8YDKb4nObCKB",
+        "timestamp": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698715,
+          "nanoseconds": 31000000
+        },
+        "userId": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "action": "CREATE",
+        "data": {
+          "projectName": "PALM CITY",
+          "blockId": "MOInTce9ezj4H1eeNdfQ",
+          "blockCode": "E05",
+          "month": "2026-10",
+          "amount": 10000000
+        },
+        "userEmail": "thuatbt.vnn@gmail.com"
+      },
+      {
+        "id": "cHEf68C9kdpP58GgXzDW",
+        "action": "CREATE",
+        "data": {
+          "amount": 45000000,
+          "month": "2026-10",
+          "blockId": "MOInTce9ezj4H1eeNdfQ",
+          "blockCode": "E05",
+          "projectName": "THE GLOBAL CITY"
+        },
+        "userId": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+        "collection": "block_budgets",
+        "userEmail": "thuatbt.vnn@gmail.com",
+        "docId": "pVph9jGEEukgBE1kWwB9",
+        "timestamp": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698692,
+          "nanoseconds": 413000000
+        }
+      },
+      {
+        "id": "m2fnifIz1pZjiW3Pu71h",
+        "collection": "block_budgets",
+        "docId": "HxQ0vNt9GJ00B63zj3c2",
+        "userId": "nH6gVMUxTCMu70nPd4mONploKG42",
+        "data": {
+          "month": "2026-10",
+          "previousAmount": 50000000,
+          "newAmount": 65000000
+        },
+        "action": "UPDATE",
+        "userEmail": "cuongvan.vinhomes@gmail.com",
+        "timestamp": {
+          "type": "firestore/timestamp/1.0",
+          "seconds": 1789698599,
+          "nanoseconds": 251000000
+        }
+      },
+      {
         "id": "Cie80mDvbhZDydWILwMa",
         "data": {
           "approvedReciprocalBudget": 35000000,
@@ -251086,87 +251225,6 @@
         "data": {
           "blockId": "O14oX9Ncxt7ZsAjNmkhP",
           "blockCode": "E35"
-        }
-      },
-      {
-        "id": "OJdDpO0ll2OGywo2eqGi",
-        "collection": "teams",
-        "data": {
-          "name": "MAY35.39 Đào Xuân Cương",
-          "blockId": "",
-          "teamCode": "MAY35.39",
-          "blockCode": ""
-        },
-        "userEmail": "thienvu1108@gmail.com",
-        "action": "CREATE",
-        "docId": "4xngiFosXS1on3HjjMLy",
-        "timestamp": {
-          "type": "firestore/timestamp/1.0",
-          "seconds": 1789467756,
-          "nanoseconds": 278000000
-        },
-        "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
-      },
-      {
-        "id": "XyAqrgUMt6gx5d2FMnkm",
-        "docId": "GuWt3W1I6ifrFLDzhqHl",
-        "userEmail": "thienvu1108@gmail.com",
-        "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
-        "collection": "teams",
-        "action": "CREATE",
-        "timestamp": {
-          "type": "firestore/timestamp/1.0",
-          "seconds": 1789467755,
-          "nanoseconds": 343000000
-        },
-        "data": {
-          "blockId": "",
-          "name": "MAY35.48 Phạm Văn Tú",
-          "blockCode": "",
-          "teamCode": "MAY35.48"
-        }
-      },
-      {
-        "id": "KeSHMUPPF0luPvn3VGYL",
-        "timestamp": {
-          "type": "firestore/timestamp/1.0",
-          "seconds": 1789467754,
-          "nanoseconds": 405000000
-        },
-        "data": {
-          "name": "MAY35.68 Đỗ Xuân Phú",
-          "teamCode": "MAY35.68",
-          "blockId": "",
-          "blockCode": ""
-        },
-        "action": "CREATE",
-        "collection": "teams",
-        "userEmail": "thienvu1108@gmail.com",
-        "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
-        "docId": "rk4DATHvqQvmL07llicv"
-      },
-      {
-        "id": "VwEurEtWssybMOFI1V00",
-        "docId": "loKKDLdbFDFQ3HsKK1J6",
-        "collection": "projects",
-        "timestamp": {
-          "type": "firestore/timestamp/1.0",
-          "seconds": 1789465520,
-          "nanoseconds": 128000000
-        },
-        "action": "UPDATE",
-        "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
-        "userEmail": "thienvu1108@gmail.com",
-        "data": {
-          "type": "Cao tầng",
-          "name": "VINHOMES SÀIGÒN PARK",
-          "region": "Hồ Chí Minh",
-          "updatedAt": {
-            "type": "firestore/timestamp/1.0",
-            "seconds": 1789465520,
-            "nanoseconds": 128000000
-          },
-          "projectCode": "VINHOMES"
         }
       }
     ],

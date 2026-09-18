@@ -60,8 +60,38 @@ interface AdminReciprocalBudgetsProps {
   db: any;
 }
 
-type SortField = 'stt' | 'block' | 'director' | 'month' | 'totalBlockBudget' | 'companyCardBudget' | 'externalBudget' | 'approvedReciprocalBudget' | 'createdAt';
+type SortField = 'stt' | 'block' | 'director' | 'month' | 'totalBlockBudget' | 'companyCardBudget' | 'externalBudget' | 'approvedReciprocalBudget' | 'paymentStatus' | 'note' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
+
+export type PaymentStatusType = 'unpaid' | 'paid' | 'rejected';
+
+export const getPaymentStatusInfo = (status?: string) => {
+  if (status === 'paid' || status === 'Đã thanh toán') {
+    return {
+      value: 'paid' as PaymentStatusType,
+      label: 'Đã thanh toán',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold',
+      selectItemClass: 'text-emerald-800 font-bold',
+      dotClass: 'bg-emerald-500'
+    };
+  }
+  if (status === 'rejected' || status === 'Từ chối') {
+    return {
+      value: 'rejected' as PaymentStatusType,
+      label: 'Từ chối',
+      badgeClass: 'bg-rose-100 text-rose-800 border-rose-300 font-bold',
+      selectItemClass: 'text-rose-800 font-bold',
+      dotClass: 'bg-rose-500'
+    };
+  }
+  return {
+    value: 'unpaid' as PaymentStatusType,
+    label: 'Chưa thanh toán',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 font-bold',
+    selectItemClass: 'text-amber-800 font-bold',
+    dotClass: 'bg-amber-500'
+  };
+};
 
 export function AdminReciprocalBudgets({
   reciprocalBudgets,
@@ -95,6 +125,7 @@ export function AdminReciprocalBudgets({
   // Filters
   const [filterBlock, setFilterBlock] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Sorting
@@ -114,12 +145,42 @@ export function AdminReciprocalBudgets({
   const [formCompanyCardInput, setFormCompanyCardInput] = useState<string>('');
   const [formExternalInput, setFormExternalInput] = useState<string>('');
   const [formApprovedInput, setFormApprovedInput] = useState<string>('');
+  const [formPaymentStatus, setFormPaymentStatus] = useState<PaymentStatusType>('unpaid');
   const [formNote, setFormNote] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Delete Dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
   const [recordToDelete, setRecordToDelete] = useState<any | null>(null);
+
+  // Quick Update Payment Status
+  const handleQuickUpdatePaymentStatus = async (record: any, newStatus: string) => {
+    if (!hasEditPerm) {
+      toast.error('Bạn không có quyền cập nhật trạng thái thanh toán!');
+      return;
+    }
+    try {
+      const statusInfo = getPaymentStatusInfo(newStatus);
+      await updateDoc(doc(db, 'reciprocal_budgets', record.id), {
+        paymentStatus: statusInfo.value,
+        updatedAt: serverTimestamp(),
+        updatedBy: user?.email || 'Admin',
+        updatedByName: userProfile?.displayName || user?.displayName || user?.email || 'Admin'
+      });
+
+      await logAction('UPDATE_PAYMENT_STATUS_RECIPROCAL', 'reciprocal_budgets', record.id, {
+        blockCode: record.blockCode,
+        month: record.month,
+        previousStatus: record.paymentStatus || 'unpaid',
+        newStatus: statusInfo.value
+      });
+
+      toast.success(`Đã cập nhật trạng thái thanh toán: "${statusInfo.label}" cho khối ${record.blockName || record.blockCode} (Kỳ ${record.month})`);
+    } catch (err: any) {
+      console.error('Error updating payment status:', err);
+      toast.error('Lỗi khi cập nhật thanh toán: ' + (err.message || ''));
+    }
+  };
 
   // Helper to compute block total budget for a block and month
   const computeBlockTotalBudget = (targetBlock: any, targetMonth: string) => {
@@ -192,6 +253,12 @@ export function AdminReciprocalBudgets({
         if (rec.month !== filterMonth) return false;
       }
 
+      // Filter Payment Status
+      if (filterPaymentStatus !== 'all') {
+        const pStatus = getPaymentStatusInfo(rec.paymentStatus).value;
+        if (pStatus !== filterPaymentStatus) return false;
+      }
+
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -199,15 +266,16 @@ export function AdminReciprocalBudgets({
         const bCode = (rec.blockCode || '').toLowerCase();
         const dName = (rec.directorName || getBlockDirectorName(rec.blockId || rec.blockCode, '')).toLowerCase();
         const note = (rec.note || '').toLowerCase();
+        const pLabel = getPaymentStatusInfo(rec.paymentStatus).label.toLowerCase();
         const creator = (rec.createdByName || rec.createdBy || '').toLowerCase();
-        if (!bName.includes(q) && !bCode.includes(q) && !dName.includes(q) && !note.includes(q) && !creator.includes(q)) {
+        if (!bName.includes(q) && !bCode.includes(q) && !dName.includes(q) && !note.includes(q) && !pLabel.includes(q) && !creator.includes(q)) {
           return false;
         }
       }
 
       return true;
     });
-  }, [reciprocalBudgets, filterBlock, filterMonth, searchQuery, blocks, allUsers]);
+  }, [reciprocalBudgets, filterBlock, filterMonth, filterPaymentStatus, searchQuery, blocks, allUsers]);
 
   // Sorted list
   const sortedRecords = useMemo(() => {
@@ -245,6 +313,14 @@ export function AdminReciprocalBudgets({
           valA = Number(a.approvedReciprocalBudget || 0);
           valB = Number(b.approvedReciprocalBudget || 0);
           return sortDirection === 'asc' ? valA - valB : valB - valA;
+        case 'paymentStatus':
+          valA = getPaymentStatusInfo(a.paymentStatus).label;
+          valB = getPaymentStatusInfo(b.paymentStatus).label;
+          return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case 'note':
+          valA = a.note || '';
+          valB = b.note || '';
+          return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
         case 'createdAt':
           valA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           valB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -334,6 +410,7 @@ export function AdminReciprocalBudgets({
       setFormCompanyCardInput(record.companyCardBudget ? formatCurrencyInput(String(record.companyCardBudget)) : '0');
       setFormExternalInput(record.externalBudget ? formatCurrencyInput(String(record.externalBudget)) : '0');
       setFormApprovedInput(record.approvedReciprocalBudget ? formatCurrencyInput(String(record.approvedReciprocalBudget)) : '0');
+      setFormPaymentStatus(getPaymentStatusInfo(record.paymentStatus).value);
       setFormNote(record.note || '');
     } else {
       setEditingRecord(null);
@@ -342,6 +419,7 @@ export function AdminReciprocalBudgets({
       setFormCompanyCardInput('0');
       setFormExternalInput('0');
       setFormApprovedInput('0');
+      setFormPaymentStatus('unpaid');
       setFormNote('');
     }
     setIsFormDialogOpen(true);
@@ -396,6 +474,7 @@ export function AdminReciprocalBudgets({
         externalBudget: extVal,
         approvedReciprocalBudget: appVal,
         approvalStatus: appVal > 0 ? 'approved' : 'pending',
+        paymentStatus: formPaymentStatus || 'unpaid',
         note: formNote.trim(),
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || 'Admin',
@@ -495,7 +574,8 @@ export function AdminReciprocalBudgets({
         'Ngân sách qua thẻ Mayhomes': Number(r.companyCardBudget || 0),
         'Ngân sách chạy ngoài': Number(r.externalBudget || 0),
         'Ngân sách đối ứng được duyệt': Number(r.approvedReciprocalBudget || 0),
-        'Trạng thái': (r.approvedReciprocalBudget || 0) > 0 ? 'Đã duyệt' : 'Chờ duyệt',
+        'Trạng thái duyệt': (r.approvedReciprocalBudget || 0) > 0 ? 'Đã duyệt' : 'Chờ duyệt',
+        'Thanh toán': getPaymentStatusInfo(r.paymentStatus).label,
         'Ghi chú': r.note || '',
         'Thời gian đăng ký': safeFormat(r.createdAt, 'HH:mm dd/MM/yyyy') || '',
         'Người đăng ký': r.createdByName || r.createdBy || ''
@@ -513,7 +593,8 @@ export function AdminReciprocalBudgets({
       'Ngân sách qua thẻ Mayhomes': summaryTotals.totalCard,
       'Ngân sách chạy ngoài': summaryTotals.totalExternal,
       'Ngân sách đối ứng được duyệt': summaryTotals.totalApproved,
-      'Trạng thái': '',
+      'Trạng thái duyệt': '',
+      'Thanh toán': '',
       'Ghi chú': '',
       'Thời gian đăng ký': '',
       'Người đăng ký': ''
@@ -534,8 +615,9 @@ export function AdminReciprocalBudgets({
       { wch: 24 }, // NS qua thẻ
       { wch: 22 }, // NS chạy ngoài
       { wch: 24 }, // NS đối ứng duyệt
-      { wch: 14 }, // Trạng thái
-      { wch: 25 }, // Ghi chú
+      { wch: 16 }, // Trạng thái duyệt
+      { wch: 18 }, // Thanh toán
+      { wch: 30 }, // Ghi chú
       { wch: 18 }, // Thời gian
       { wch: 20 }, // Người tạo
     ];
@@ -663,11 +745,11 @@ export function AdminReciprocalBudgets({
           </div>
 
           {/* Search and Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
-                placeholder="Tìm khối, giám đốc, người tạo..."
+                placeholder="Tìm khối, giám đốc, ghi chú..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 h-10 rounded-xl border-slate-200 text-xs font-semibold"
@@ -705,6 +787,36 @@ export function AdminReciprocalBudgets({
                     Tháng {m} {m === currentMarketingPeriod ? '★ (Hiện tại)' : ''}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filter by Payment Status */}
+            <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-semibold">
+                <SelectValue placeholder="Trạng thái thanh toán" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs font-semibold">
+                  Tất cả thanh toán
+                </SelectItem>
+                <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Chưa thanh toán</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Đã thanh toán</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span>Từ chối</span>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -814,9 +926,31 @@ export function AdminReciprocalBudgets({
                     </div>
                   </TableHead>
 
-                  {/* TRẠNG THÁI & GHI CHÚ */}
+                  {/* THANH TOÁN (3 TRẠNG THÁI: Chưa thanh toán / Đã thanh toán / Từ chối) */}
+                  <TableHead 
+                    onClick={() => handleSort('paymentStatus')}
+                    className="cursor-pointer select-none text-[11px] font-black uppercase text-slate-700 hover:text-amber-600 transition-colors min-w-[155px]"
+                  >
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span>Thanh Toán</span>
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                  </TableHead>
+
+                  {/* GHI CHÚ */}
+                  <TableHead 
+                    onClick={() => handleSort('note')}
+                    className="cursor-pointer select-none text-[11px] font-black uppercase text-slate-700 hover:text-amber-600 transition-colors min-w-[140px]"
+                  >
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span>Ghi Chú</span>
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                  </TableHead>
+
+                  {/* TRẠNG THÁI DUYỆT */}
                   <TableHead className="text-[11px] font-black uppercase text-slate-600">
-                    Trạng Thái
+                    Trạng Thái Duyệt
                   </TableHead>
 
                   {/* THAO TÁC */}
@@ -829,7 +963,7 @@ export function AdminReciprocalBudgets({
               <TableBody>
                 {sortedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-44 text-center">
+                    <TableCell colSpan={12} className="h-44 text-center">
                       <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
                         <Receipt className="w-8 h-8 text-slate-300" />
                         <span className="font-semibold text-sm">Không tìm thấy bản ghi ngân sách đối ứng nào</span>
@@ -914,7 +1048,62 @@ export function AdminReciprocalBudgets({
                           </div>
                         </TableCell>
 
-                        {/* Trạng thái */}
+                        {/* Thanh toán (3 trạng thái: Chưa thanh toán / Đã thanh toán / Từ chối) */}
+                        <TableCell className="whitespace-nowrap py-3.5">
+                          {hasEditPerm ? (
+                            <Select 
+                              value={getPaymentStatusInfo(item.paymentStatus).value}
+                              onValueChange={(val) => handleQuickUpdatePaymentStatus(item, val)}
+                            >
+                              <SelectTrigger className={`h-8 w-[148px] text-xs font-bold rounded-xl border ${
+                                getPaymentStatusInfo(item.paymentStatus).badgeClass
+                              }`}>
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${getPaymentStatusInfo(item.paymentStatus).dotClass}`} />
+                                  <span className="truncate">{getPaymentStatusInfo(item.paymentStatus).label}</span>
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                    <span>Chưa thanh toán</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    <span>Đã thanh toán</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                    <span>Từ chối</span>
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge className={getPaymentStatusInfo(item.paymentStatus).badgeClass}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getPaymentStatusInfo(item.paymentStatus).dotClass}`} />
+                              {getPaymentStatusInfo(item.paymentStatus).label}
+                            </Badge>
+                          )}
+                        </TableCell>
+
+                        {/* Ghi chú */}
+                        <TableCell className="py-3.5 max-w-[200px]">
+                          {item.note ? (
+                            <div className="text-xs text-slate-700 truncate" title={item.note}>
+                              {item.note}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Trạng thái duyệt */}
                         <TableCell className="whitespace-nowrap py-3.5">
                           <Badge 
                             className={

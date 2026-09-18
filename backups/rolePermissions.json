@@ -1,0 +1,144 @@
+[
+  {
+    "id": "assistant",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1781425473,
+      "nanoseconds": 604000000
+    },
+    "role": "assistant",
+    "updatedBy": "thienvu1108@gmail.com",
+    "permissions": [
+      "home.view",
+      "home.export",
+      "register.view",
+      "actual.view",
+      "actual.create",
+      "history.view",
+      "history.export",
+      "mkt_efficiency.view",
+      "mkt_efficiency.export",
+      "mkt_efficiency.filter",
+      "admin.projects.view",
+      "support.create",
+      "admin.costs.view",
+      "admin.budgets.view",
+      "admin.teams.view"
+    ]
+  },
+  {
+    "id": "gd_khoi",
+    "updatedBy": "thienvu1108@gmail.com",
+    "role": "gd_khoi",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618845,
+      "nanoseconds": 889000000
+    },
+    "permissions": [
+      "home.view",
+      "block.view",
+      "block.approve",
+      "actual.view",
+      "support.create",
+      "process_doiung.approve",
+      "process_mkt.approve",
+      "team_mgmt.view",
+      "team_mgmt.approve",
+      "admin.projects.view"
+    ]
+  },
+  {
+    "id": "gdda",
+    "updatedBy": "thienvu1108@gmail.com",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1780649199,
+      "nanoseconds": 405000000
+    },
+    "permissions": [
+      "home.view",
+      "admin.projects.view",
+      "register.view",
+      "register.create",
+      "register.edit",
+      "actual.view",
+      "actual.create",
+      "actual.edit",
+      "history.view",
+      "report_nt.view",
+      "support.create",
+      "admin.budgets.view",
+      "admin.costs.view"
+    ],
+    "role": "gdda"
+  },
+  {
+    "id": "mod",
+    "updatedBy": "thienvu1108@gmail.com",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618997,
+      "nanoseconds": 478000000
+    },
+    "permissions": [
+      "report_nt.view",
+      "block.view",
+      "team_mgmt.view",
+      "admin.projects.view",
+      "admin.teams.view",
+      "process_mkt.view",
+      "support.create",
+      "report_nt.create",
+      "report_nt.edit"
+    ],
+    "role": "mod"
+  },
+  {
+    "id": "tro_ly_khoi",
+    "permissions": [
+      "home.view",
+      "report_nt.view",
+      "block.view",
+      "block.approve",
+      "team_mgmt.view",
+      "register.view",
+      "history.view",
+      "support.view",
+      "support.create",
+      "process_mkt.view",
+      "process_mkt.create",
+      "process_mkt.approve",
+      "process_doiung.view",
+      "process_doiung.create",
+      "process_doiung.approve",
+      "block.edit",
+      "team_mgmt.edit",
+      "team_mgmt.approve"
+    ],
+    "role": "tro_ly_khoi",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1788617852,
+      "nanoseconds": 751000000
+    },
+    "updatedBy": "thienvu1108@gmail.com"
+  },
+  {
+    "id": "user",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1788573682,
+      "nanoseconds": 378000000
+    },
+    "permissions": [
+      "support.create",
+      "process_mkt.create",
+      "process_mkt.approve",
+      "process_doiung.approve",
+      "process_doiung.create"
+    ],
+    "role": "user",
+    "updatedBy": "thienvu1108@gmail.com"
+  }
+]

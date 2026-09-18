@@ -1,0 +1,27 @@
+{
+  "syncDate": "2026-09-18T02:26:26.382Z",
+  "syncedBy": "thienvu1108@gmail.com",
+  "repository": "thienvu1108/realestate",
+  "branch": "main",
+  "folder": "backups",
+  "totalCollections": 16,
+  "totalRecords": 5500,
+  "collectionsSummary": {
+    "reciprocal_budgets": 1,
+    "block_budgets": 694,
+    "blocks": 46,
+    "teams": 232,
+    "projects": 56,
+    "budgets": 1091,
+    "costs": 398,
+    "acceptances": 1330,
+    "finalAcceptances": 673,
+    "efficiencyReports": 341,
+    "docProcessing": 143,
+    "auditLogs": 100,
+    "supportRequests": 1,
+    "users": 388,
+    "rolePermissions": 6,
+    "systemSettings": 0
+  }
+}

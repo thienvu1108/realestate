@@ -1,0 +1,1867 @@
+[
+  {
+    "id": "Cie80mDvbhZDydWILwMa",
+    "data": {
+      "approvedReciprocalBudget": 35000000,
+      "blockCode": "E10",
+      "month": "2026-10"
+    },
+    "docId": "mij86AghqLHMvpuaqycW",
+    "action": "APPROVE_RECIPROCAL_BUDGET",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789697334,
+      "nanoseconds": 998000000
+    },
+    "collection": "reciprocal_budgets"
+  },
+  {
+    "id": "EpdoMIgNJsPZ1M5t7GX8",
+    "data": {
+      "month": "2026-10",
+      "externalBudget": 65000000,
+      "companyCardBudget": 10000000,
+      "blockCode": "E10",
+      "totalBlockBudget": 75000000
+    },
+    "docId": "mij86AghqLHMvpuaqycW",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789697083,
+      "nanoseconds": 934000000
+    },
+    "action": "CREATE_RECIPROCAL_BUDGET",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "reciprocal_budgets"
+  },
+  {
+    "id": "Fp13xkNJQUFP9GUarQr2",
+    "docId": "jQs7YrMeFqbSOLimV7A2BYCdpVd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789696835,
+      "nanoseconds": 904000000
+    },
+    "collection": "users",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "role": "admin",
+      "assignedProjects": []
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_ROLE"
+  },
+  {
+    "id": "s3S2O635s2dtEGjgnWHo",
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "role": "admin",
+      "assignedProjects": []
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789696799,
+      "nanoseconds": 952000000
+    },
+    "docId": "9s7jvmoGhRPVkh0cQ62Nh93q8nZ2",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users"
+  },
+  {
+    "id": "jDByklU3R16ThZZRTd8x",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789696711,
+      "nanoseconds": 566000000
+    },
+    "action": "DELETE_RECIPROCAL_BUDGET",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "mPsZOPRFco8L1sVp8ZZY",
+    "collection": "reciprocal_budgets",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "blockCode": "E10",
+      "month": "2026-10"
+    }
+  },
+  {
+    "id": "QI5LPgYPj4kczS743Zmt",
+    "docId": "mPsZOPRFco8L1sVp8ZZY",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789696700,
+      "nanoseconds": 353000000
+    },
+    "data": {
+      "approvedReciprocalBudget": 25000000,
+      "blockCode": "E10",
+      "month": "2026-10"
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "APPROVE_RECIPROCAL_BUDGET",
+    "collection": "reciprocal_budgets"
+  },
+  {
+    "id": "AnHdYAuXleIGTVe3emHV",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789696677,
+      "nanoseconds": 703000000
+    },
+    "data": {
+      "totalBlockBudget": 75000000,
+      "blockCode": "E10",
+      "companyCardBudget": 10000000,
+      "month": "2026-10",
+      "externalBudget": 65000000
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "reciprocal_budgets",
+    "action": "CREATE_RECIPROCAL_BUDGET",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "mPsZOPRFco8L1sVp8ZZY"
+  },
+  {
+    "id": "nrj3R43I8DJLTAVbYDs3",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "block_budgets",
+    "docId": "636RD5YQ1pT81C3PobpE",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "month": "2026-10",
+      "newAmount": 210000000,
+      "previousAmount": 10000000
+    },
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789694679,
+      "nanoseconds": 691000000
+    }
+  },
+  {
+    "id": "feeP0hK6fbJedhcUMAh9",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789694675,
+      "nanoseconds": 308000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "month": "2026-10",
+      "newAmount": 160000000,
+      "previousAmount": 10000000
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "5h8WDlzqr4ucOaeV8pVW",
+    "action": "UPDATE",
+    "collection": "block_budgets"
+  },
+  {
+    "id": "j9QSZZ6TaGp4LLI9v82q",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789694645,
+      "nanoseconds": 973000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "blockCode": "E14",
+      "projectName": "VINHOMES HA LONG XANH",
+      "month": "2026-10",
+      "amount": 10000000,
+      "blockId": "KRAtod3rPPJ2bsVwHbfn"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "CREATE",
+    "docId": "5h8WDlzqr4ucOaeV8pVW",
+    "collection": "block_budgets"
+  },
+  {
+    "id": "rfCROGtA3yo9vvYMqrUQ",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789694626,
+      "nanoseconds": 374000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "block_budgets",
+    "docId": "636RD5YQ1pT81C3PobpE",
+    "action": "CREATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "blockCode": "E14",
+      "month": "2026-10",
+      "amount": 10000000,
+      "blockId": "KRAtod3rPPJ2bsVwHbfn",
+      "projectName": "PRIMA BAY HẠ LONG"
+    }
+  },
+  {
+    "id": "LzXdfiqUHpSgzVq0WzxP",
+    "collection": "blocks",
+    "userEmail": "daokhanhlinh.2907@gmail.com",
+    "userId": "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+    "data": {
+      "assistantUids": [
+        "LvynEOMG0WctOtt33eJJ38VjgKs1",
+        "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+        "MPLoE2uV5SV1xkkS3qq2mNwSOZW2",
+        "kIGr6mlqljXYqGEJZAYKqfdxlXT2"
+      ],
+      "teamPrefix": "MAY45",
+      "blockCode": "E45",
+      "directorUid": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+      "name": "E45"
+    },
+    "docId": "ozw7beeafcYdiKjLxtsr",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789658452,
+      "nanoseconds": 246000000
+    },
+    "action": "UPDATE"
+  },
+  {
+    "id": "8s4rvTOAPpGNdBG5mwEi",
+    "userId": "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+    "docId": "ozw7beeafcYdiKjLxtsr",
+    "collection": "blocks",
+    "data": {
+      "assistantUids": [
+        "LvynEOMG0WctOtt33eJJ38VjgKs1",
+        "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+        "MPLoE2uV5SV1xkkS3qq2mNwSOZW2"
+      ],
+      "name": "E45",
+      "blockCode": "E45",
+      "teamPrefix": "MAY45",
+      "directorUid": "HIEOVnXhVoMGDMgt78MMA3qUMA62"
+    },
+    "userEmail": "daokhanhlinh.2907@gmail.com",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789658433,
+      "nanoseconds": 334000000
+    }
+  },
+  {
+    "id": "ANL3KdxODoRtJgc0RRly",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789633143,
+      "nanoseconds": 263000000
+    },
+    "action": "DELETE",
+    "data": {
+      "id": "vdWosnCdbFYbAMqomLFE",
+      "projectName": "VINHOMES GRAND PARK",
+      "amount": 5000000
+    },
+    "docId": "vdWosnCdbFYbAMqomLFE"
+  },
+  {
+    "id": "QUrhdLZVsY0yJAvB7XV8",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "blocks",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789631145,
+      "nanoseconds": 930000000
+    },
+    "data": {
+      "assistantUids": [
+        "LvynEOMG0WctOtt33eJJ38VjgKs1",
+        "TdusZYUZ8bRM7P1AwLAp6csV3wr2"
+      ],
+      "directorUid": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+      "blockCode": "E45",
+      "name": "E45",
+      "teamPrefix": "MAY45"
+    },
+    "action": "UPDATE",
+    "docId": "ozw7beeafcYdiKjLxtsr"
+  },
+  {
+    "id": "7WOsm4NqOqHGBkrxDWBP",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "yjeIt2faUWOBplUDdKgvtvTEytI2",
+    "action": "UPDATE_USER_ROLE",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789630557,
+      "nanoseconds": 220000000
+    },
+    "collection": "users"
+  },
+  {
+    "id": "qqu5eS7UUueGAqnyi9bj",
+    "action": "UPDATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "month": "2026-09",
+      "previousAmount": 30000000,
+      "newAmount": 1
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789627910,
+      "nanoseconds": 838000000
+    },
+    "collection": "block_budgets",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "q2WP6epcnjtnI6LJV9AY"
+  },
+  {
+    "id": "eVIeAULU2ZClBaGA7SsF",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789627852,
+      "nanoseconds": 756000000
+    },
+    "action": "UPDATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "X5xhWZYzJqQVZHiaLtuq",
+    "collection": "block_budgets",
+    "data": {
+      "month": "2026-09",
+      "previousAmount": 60000000,
+      "newAmount": 35000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "cMtM9Imjy2P66UQXINbc",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    },
+    "docId": "zgpihlQww3Z5jHBCMU53fBbNvvy2",
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620460,
+      "nanoseconds": 397000000
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users"
+  },
+  {
+    "id": "P03juLur7g3To1Y8VEtu",
+    "action": "UPDATE_USER_ROLE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620444,
+      "nanoseconds": 815000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "users",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "goxHhW0aVteVMk5PKQosSn4OwmD3",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    }
+  },
+  {
+    "id": "eDj9GuMd4a3wgCH6TeRO",
+    "data": {
+      "teamName": "Phòng Digital"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620379,
+      "nanoseconds": 375000000
+    },
+    "collection": "users",
+    "action": "UPDATE_USER_TEAM",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "jMZx9aAGKeOuYbDNAbdPBCkX2l23"
+  },
+  {
+    "id": "wRNjRSlQ88v6qHbbm78G",
+    "userEmail": "thienvu1108@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620377,
+      "nanoseconds": 998000000
+    },
+    "collection": "users",
+    "docId": "jMZx9aAGKeOuYbDNAbdPBCkX2l23",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_ROLE"
+  },
+  {
+    "id": "q8jHkaF18ZuxFHAbS2Cj",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620371,
+      "nanoseconds": 297000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_TEAM",
+    "docId": "IhapklsWGyZCpU2tXgUGntfPoky1",
+    "data": {
+      "teamName": "Phòng Digital"
+    }
+  },
+  {
+    "id": "pm4kqizmFwdJySGxiFiN",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620369,
+      "nanoseconds": 603000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_ROLE",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "IhapklsWGyZCpU2tXgUGntfPoky1",
+    "collection": "users"
+  },
+  {
+    "id": "nP1XEtsW7AaXurWlz5I1",
+    "docId": "6uJ2glxvEZRXiuOr9nfM",
+    "userId": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "action": "CREATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620313,
+      "nanoseconds": 801000000
+    },
+    "data": {
+      "month": "2026-10",
+      "amount": 30000000,
+      "blockCode": "E10",
+      "projectName": "VINHOMES HA LONG XANH",
+      "blockId": "fMmu52DCkEcE1epcjU8u"
+    },
+    "collection": "block_budgets",
+    "userEmail": "phamlam1104@gmail.com"
+  },
+  {
+    "id": "g3GN3U0f0AblY5GsEQ5Z",
+    "docId": "sfF7eUKYg3dziz0ZoukkJsPX73s2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620274,
+      "nanoseconds": 680000000
+    },
+    "collection": "users",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "v6OfdZ23pXZFhqAEdYaW",
+    "data": {
+      "assignedProjects": [],
+      "role": "admin"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE_USER_ROLE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620273,
+      "nanoseconds": 399000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "users",
+    "docId": "sfF7eUKYg3dziz0ZoukkJsPX73s2"
+  },
+  {
+    "id": "2Eul1mmCFc0GERLuGCSV",
+    "userId": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "action": "CREATE",
+    "data": {
+      "amount": 20000000,
+      "blockCode": "E10",
+      "month": "2026-10",
+      "projectName": "VINHOMES OCEAN PARK 2-3",
+      "blockId": "fMmu52DCkEcE1epcjU8u"
+    },
+    "docId": "moinijlK3TGcsXEKWJI4",
+    "userEmail": "phamlam1104@gmail.com",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620271,
+      "nanoseconds": 460000000
+    }
+  },
+  {
+    "id": "q2NsVe5JbmA74ocoMolM",
+    "docId": "pCrUmM1VCrmZWnnAdnG3",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620244,
+      "nanoseconds": 412000000
+    },
+    "action": "CREATE",
+    "userId": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "data": {
+      "amount": 25000000,
+      "blockCode": "E10",
+      "projectName": "VINHOMES WONDER CITY",
+      "blockId": "fMmu52DCkEcE1epcjU8u",
+      "month": "2026-10"
+    },
+    "collection": "block_budgets",
+    "userEmail": "phamlam1104@gmail.com"
+  },
+  {
+    "id": "b0skm5PWfTbz9w2brquf",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE",
+    "data": {
+      "type": "Cao tầng",
+      "updatedAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1789620229,
+        "nanoseconds": 716000000
+      },
+      "region": "BẮC NINH",
+      "name": "VINHOMES KING PARK",
+      "projectCode": "VINHOMES"
+    },
+    "docId": "QfMYF8drFM7DSI2U9hoA",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "projects",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620229,
+      "nanoseconds": 716000000
+    }
+  },
+  {
+    "id": "obwYDOoXSSiEuGe14ZmP",
+    "docId": "KaKwAoMUo7R1BDEqcElR86BVdq62",
+    "collection": "users",
+    "userEmail": "duyly298@gmail.com",
+    "data": {
+      "fullName": "Lý Ngọc Duy",
+      "role": "mod"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620220,
+      "nanoseconds": 22000000
+    },
+    "action": "UPDATE",
+    "userId": "KaKwAoMUo7R1BDEqcElR86BVdq62"
+  },
+  {
+    "id": "js96vfBkgWYxfpiVo8Am",
+    "collection": "users",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620211,
+      "nanoseconds": 765000000
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "UiK44LkjujdMBG6wrKL0wBFMvXl1"
+  },
+  {
+    "id": "IWl8Bf4J27GVIhloB6oD",
+    "docId": "UiK44LkjujdMBG6wrKL0wBFMvXl1",
+    "data": {
+      "teamName": "Phòng Digital"
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_TEAM",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620210,
+      "nanoseconds": 932000000
+    }
+  },
+  {
+    "id": "kQDJkcmp4dRDOnufveZg",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "m9xjzrUPy3xlSVPqufir",
+    "data": {
+      "name": "BẮC NINH"
+    },
+    "collection": "regions",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620164,
+      "nanoseconds": 133000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "CREATE"
+  },
+  {
+    "id": "9zRon7ohiVSc8mwsCxzU",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620111,
+      "nanoseconds": 172000000
+    },
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    },
+    "collection": "users",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE_USER_ROLE",
+    "docId": "XvkUFim29ofbaatIJBGtYf4N2iI3",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "0bbsnlsgMMq8v16wTyXx",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "collection": "users",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "MgHc6KF0cygdSqtAXOwokMszj8B3",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620099,
+      "nanoseconds": 615000000
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "LfZBrx0w4dFkVhV3wCO5",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789620083,
+      "nanoseconds": 528000000
+    },
+    "collection": "users",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_ROLE",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "sZpA5AbSP3X4WA5wAp3Kualg4gW2",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    }
+  },
+  {
+    "id": "TJA2NRWGUeQ4wjLZSrl7",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619913,
+      "nanoseconds": 130000000
+    },
+    "docId": "ggpnr7TdtiazI36uKDWGRpMdQVk2",
+    "data": {
+      "teamName": "Phòng Digital"
+    },
+    "action": "UPDATE_USER_TEAM",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "0V5QDwMSLEmu22aUwSN1",
+    "docId": "ggpnr7TdtiazI36uKDWGRpMdQVk2",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "UPDATE_USER_ROLE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619911,
+      "nanoseconds": 632000000
+    },
+    "collection": "users",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    }
+  },
+  {
+    "id": "5YnLWPH6q8OdvGo6HoyB",
+    "collection": "users",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619903,
+      "nanoseconds": 6000000
+    },
+    "docId": "KaKwAoMUo7R1BDEqcElR86BVdq62",
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "fuROogwvJSwd1eduASxb",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619879,
+      "nanoseconds": 218000000
+    },
+    "action": "UPDATE_USER_TEAM",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "teamName": "Phòng Digital"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "or3xk2Cdq6NTncRgOJ2WSUwsNQk1",
+    "collection": "users"
+  },
+  {
+    "id": "6nMckya1DYd3oaS2PAXQ",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "teamName": null
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619877,
+      "nanoseconds": 546000000
+    },
+    "docId": "or3xk2Cdq6NTncRgOJ2WSUwsNQk1",
+    "action": "UPDATE_USER_TEAM",
+    "collection": "users",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "vyIjYKhA81YsIBXhWEoM",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "users",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619876,
+      "nanoseconds": 228000000
+    },
+    "docId": "or3xk2Cdq6NTncRgOJ2WSUwsNQk1",
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "Ns9Q6QzSf3THDEWvvnEv",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789619231,
+      "nanoseconds": 709000000
+    },
+    "data": {
+      "assignedProjects": [],
+      "role": "mod"
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "dU5FfH8ZkpgNV3Vv8lsQMBcDmci2",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "users"
+  },
+  {
+    "id": "r8YHpQq4xM9ER1FrFs6M",
+    "collection": "rolePermissions",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "permissionsCount": 9,
+      "role": "mod"
+    },
+    "docId": "mod",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618997,
+      "nanoseconds": 740000000
+    }
+  },
+  {
+    "id": "LPXzkUfdS7O7QQoweHgf",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618939,
+      "nanoseconds": 370000000
+    },
+    "data": {
+      "role": "mod",
+      "permissionsCount": 10
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "rolePermissions",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "mod",
+    "action": "UPDATE"
+  },
+  {
+    "id": "x9KWnzbPlii0JQn7n1cu",
+    "collection": "rolePermissions",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618846,
+      "nanoseconds": 220000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "role": "gd_khoi",
+      "permissionsCount": 10
+    },
+    "action": "UPDATE",
+    "docId": "gd_khoi"
+  },
+  {
+    "id": "Nxjbge4ROM0QUIF1nSjt",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618722,
+      "nanoseconds": 329000000
+    },
+    "collection": "rolePermissions",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE",
+    "data": {
+      "role": "mod",
+      "permissionsCount": 11
+    },
+    "docId": "mod"
+  },
+  {
+    "id": "CLvXIcYvyFKtB1TPqFtj",
+    "docId": "mod",
+    "data": {
+      "role": "mod",
+      "permissionsCount": 13
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618668,
+      "nanoseconds": 416000000
+    },
+    "action": "UPDATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "rolePermissions"
+  },
+  {
+    "id": "3qEj3P43KGUKyI1zM5Rn",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "QfMYF8drFM7DSI2U9hoA",
+    "action": "CREATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618600,
+      "nanoseconds": 235000000
+    },
+    "collection": "projects",
+    "data": {
+      "projectCode": "VINHOMES",
+      "name": "VINHOMES KING PARK",
+      "region": "Hà Nội",
+      "type": "Cao tầng"
+    }
+  },
+  {
+    "id": "tZZtdiLIjhKOPjgc7vcQ",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618376,
+      "nanoseconds": 57000000
+    },
+    "docId": "ozw7beeafcYdiKjLxtsr",
+    "data": {
+      "teamPrefix": "MAY45",
+      "name": "E45",
+      "directorUid": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+      "assistantUids": [
+        "LvynEOMG0WctOtt33eJJ38VjgKs1"
+      ],
+      "blockCode": "E45"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "blocks"
+  },
+  {
+    "id": "7FSFBm1gdfPcnAjDhBYZ",
+    "data": {
+      "projectName": "FOURS TOWER",
+      "blockCode": "E92",
+      "month": "2026-10",
+      "amount": 30000000,
+      "blockId": "ijYWp25mIGenK2t3Lrhd"
+    },
+    "docId": "WWnN5vhjOUQsFXvs2yER",
+    "userEmail": "km.voquocvuong910@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618335,
+      "nanoseconds": 731000000
+    },
+    "collection": "block_budgets",
+    "action": "CREATE",
+    "userId": "KUNQiNjm0jMlkVvmNWgKWFmAQKw1"
+  },
+  {
+    "id": "fYoEw8X24mNzgJ3jN66o",
+    "userEmail": "km.voquocvuong910@gmail.com",
+    "docId": "S8g1tQr4Lgj30rV7nTtI",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618313,
+      "nanoseconds": 125000000
+    },
+    "action": "CREATE",
+    "data": {
+      "blockId": "ijYWp25mIGenK2t3Lrhd",
+      "month": "2026-10",
+      "amount": 50000000,
+      "blockCode": "E92",
+      "projectName": "VINHOMES HAI VAN BAY"
+    },
+    "userId": "KUNQiNjm0jMlkVvmNWgKWFmAQKw1",
+    "collection": "block_budgets"
+  },
+  {
+    "id": "OtV0dg5nZcePFBK6zIes",
+    "collection": "block_budgets",
+    "data": {
+      "month": "2026-10",
+      "blockId": "I4gLWkN6sJPBKpdItWiv",
+      "blockCode": "E79",
+      "projectName": "IMPERIA SENSA PARK",
+      "amount": 50000000
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789617983,
+      "nanoseconds": 516000000
+    },
+    "userId": "bxt1Rh2c19QfIw9pKXzlTBl3iPI2",
+    "docId": "hj4n8MozTQqX188tY5V4",
+    "action": "CREATE",
+    "userEmail": "tanh040404@gmail.com"
+  },
+  {
+    "id": "I6c0NbzNrwmn7fuNKa7x",
+    "docId": "BHsr03eYqxEI1gpxqX1O",
+    "action": "CREATE",
+    "userId": "bxt1Rh2c19QfIw9pKXzlTBl3iPI2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789617929,
+      "nanoseconds": 486000000
+    },
+    "collection": "block_budgets",
+    "userEmail": "tanh040404@gmail.com",
+    "data": {
+      "amount": 20000000,
+      "blockId": "I4gLWkN6sJPBKpdItWiv",
+      "projectName": "THE GLOBAL CITY",
+      "blockCode": "E79",
+      "month": "2026-10"
+    }
+  },
+  {
+    "id": "p2o2ve3xHDXuuh4oxrkX",
+    "action": "UPDATE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789615839,
+      "nanoseconds": 466000000
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "aYX6CAEmEA1ofqDjEnHv",
+    "data": {
+      "blockCode": "E91",
+      "directorUid": "4MDa4O1zLIb718hUeIjLv82KlUH3",
+      "assistantUids": [],
+      "teamPrefix": "MAY91",
+      "name": "E91"
+    },
+    "collection": "blocks"
+  },
+  {
+    "id": "vjhsGHEJQqpBuksjdSDI",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789615681,
+      "nanoseconds": 89000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "blockCode": "",
+      "name": "MAY91.99 Hồ Mạnh Linh",
+      "blockId": "",
+      "teamCode": "MAY91.99"
+    },
+    "docId": "pig8BMRgHMK5FJijueGB",
+    "action": "CREATE",
+    "collection": "teams",
+    "userEmail": "thienvu1108@gmail.com"
+  },
+  {
+    "id": "SNUkHnZ2YE5h4U6HXeIW",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789615680,
+      "nanoseconds": 130000000
+    },
+    "collection": "teams",
+    "action": "CREATE",
+    "docId": "QXLqZslr6B7fgwjUz4Hl",
+    "data": {
+      "name": "MAY91.28 Nguyễn Thị Thanh Hằng",
+      "blockId": "",
+      "blockCode": "",
+      "teamCode": "MAY91.28"
+    }
+  },
+  {
+    "id": "Qqmc00ivECJcjXdNAO4L",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789615046,
+      "nanoseconds": 148000000
+    },
+    "userId": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+    "data": {
+      "amount": 200000000,
+      "blockId": "ozw7beeafcYdiKjLxtsr",
+      "blockCode": "E45",
+      "projectName": "VINHOMES OCEAN PARK 2-3",
+      "month": "2026-10"
+    },
+    "docId": "RqxWq4ybCfAgJltYL3zY",
+    "userEmail": "tuhaithanhmai@gmail.com",
+    "collection": "block_budgets",
+    "action": "CREATE"
+  },
+  {
+    "id": "e0GVDE28HKEkW7VlsJfQ",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "ko4Vm3twxvmLMZD07Kzk",
+    "action": "UPDATE",
+    "collection": "blocks",
+    "data": {
+      "assistantUids": [
+        "VOmEqwOTlpXDTcAgl8MhW8tQgmI2"
+      ],
+      "name": "E12",
+      "directorUid": null,
+      "teamPrefix": "MAY12",
+      "blockCode": "E12"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789614656,
+      "nanoseconds": 527000000
+    }
+  },
+  {
+    "id": "m7bL5i8CqPPBjDiVmQlC",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789614445,
+      "nanoseconds": 273000000
+    },
+    "collection": "blocks",
+    "data": {
+      "directorUid": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+      "name": "E45",
+      "assistantUids": [
+        "LvynEOMG0WctOtt33eJJ38VjgKs1"
+      ],
+      "teamPrefix": "MAY45",
+      "blockCode": "E45"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "ozw7beeafcYdiKjLxtsr"
+  },
+  {
+    "id": "R5Z3vGRLVOfPe19T11Z0",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE",
+    "collection": "blocks",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789614272,
+      "nanoseconds": 103000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "directorUid": null,
+      "assistantUids": [
+        "HIEOVnXhVoMGDMgt78MMA3qUMA62"
+      ],
+      "blockCode": "E45",
+      "name": "E45",
+      "teamPrefix": "MAY45"
+    },
+    "docId": "ozw7beeafcYdiKjLxtsr"
+  },
+  {
+    "id": "bUsQtaEU1ayAGJcbeQRy",
+    "data": {
+      "permissionsCount": 13,
+      "role": "mod"
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE",
+    "collection": "rolePermissions",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789613980,
+      "nanoseconds": 368000000
+    },
+    "docId": "mod",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "msYjWqarjqSf0ErdR0h8",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "teams",
+    "data": {
+      "blockId": "",
+      "blockCode": "",
+      "teamCode": "",
+      "name": "Phòng Digital"
+    },
+    "action": "CREATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789613781,
+      "nanoseconds": 905000000
+    },
+    "docId": "lqNYfb1LQXfAhJpCANBi"
+  },
+  {
+    "id": "Aat6xXeFCNauDojCDp7C",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789613760,
+      "nanoseconds": 861000000
+    },
+    "action": "UPDATE_USER_ROLE",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "jQs7YrMeFqbSOLimV7A2BYCdpVd2",
+    "data": {
+      "role": "mod",
+      "assignedProjects": []
+    },
+    "collection": "users"
+  },
+  {
+    "id": "rLNQZ4wPW1G5EmmRb5Fh",
+    "docId": "uFiYVH46oC16lo2H5LYF",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789613049,
+      "nanoseconds": 705000000
+    },
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "data": {
+      "implementerName": "Dương Văn Hưởng",
+      "projectId": "vXTJlhxG4L24KPKjKvbw",
+      "amount": 50000000
+    },
+    "collection": "costs",
+    "action": "CREATE",
+    "userEmail": "anhvanpham92@gmail.com"
+  },
+  {
+    "id": "kyRRmb8jU4UMgY7PesLj",
+    "data": {
+      "teamName": "MAY35.26 Dương Văn Hưởng",
+      "fullName": "Dương Văn Hưởng",
+      "role": "user",
+      "email": "Huong.hathanhland@gmail.com"
+    },
+    "collection": "users",
+    "userEmail": "anhvanpham92@gmail.com",
+    "action": "CREATE",
+    "docId": "ISX0ucaRn0T2GAOub6ta",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789613013,
+      "nanoseconds": 835000000
+    },
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62"
+  },
+  {
+    "id": "SzWO1zuPouwBkhZMD07r",
+    "userEmail": "anhvanpham92@gmail.com",
+    "collection": "block_budgets",
+    "data": {
+      "previousAmount": 80000000,
+      "newAmount": 130000000,
+      "month": "2026-10"
+    },
+    "action": "UPDATE",
+    "docId": "Y5WneUTNg1FSBFM4BvlK",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789612625,
+      "nanoseconds": 3000000
+    },
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62"
+  },
+  {
+    "id": "xXTkztU2BKYFkXuvZGrb",
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789612432,
+      "nanoseconds": 278000000
+    },
+    "docId": "vKgoPrkm14MRGqzfZgw0",
+    "action": "CREATE",
+    "userEmail": "anhvanpham92@gmail.com",
+    "data": {
+      "implementerName": "Dương Hà Ánh",
+      "amount": 90000000,
+      "projectId": "6dTQCe7XK6TATtCSB4oh"
+    },
+    "collection": "costs"
+  },
+  {
+    "id": "fqRNy9sFywS9dosbxoFe",
+    "collection": "costs",
+    "data": {
+      "implementerName": "Trương Thị Hồng Nhung",
+      "projectId": "vXTJlhxG4L24KPKjKvbw",
+      "amount": 80000000
+    },
+    "userEmail": "anhvanpham92@gmail.com",
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "docId": "0G33toInAhJnpQYMObFM",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789612397,
+      "nanoseconds": 68000000
+    },
+    "action": "CREATE"
+  },
+  {
+    "id": "DBN7X5s0wkfda24KxGXZ",
+    "collection": "block_budgets",
+    "data": {
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "month": "2026-10",
+      "amount": 90000000,
+      "projectName": "VINHOMES HÒA LONG BẮC NINH",
+      "blockCode": "E35"
+    },
+    "userEmail": "anhvanpham92@gmail.com",
+    "userId": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "docId": "SscRoniPQjBjCa6iM45J",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789612173,
+      "nanoseconds": 991000000
+    },
+    "action": "CREATE"
+  },
+  {
+    "id": "ZPOV8sQFXy4fbiUFdPcJ",
+    "userEmail": "nguyentheanhdhv@gmail.com",
+    "userId": "Q72uJxIjt5Yxuwci1OGRWWlr82C3",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789558115,
+      "nanoseconds": 504000000
+    },
+    "action": "CREATE",
+    "data": {
+      "month": "2026-10",
+      "blockCode": "E48",
+      "blockId": "ROoenVb4QGDshSauh822",
+      "amount": 30000000,
+      "projectName": "VINHOMES HAI VAN BAY"
+    },
+    "docId": "A20MPWa9kIO2siPKPkXQ"
+  },
+  {
+    "id": "GGSqIoJuLZ1yauO5Wk0t",
+    "action": "CREATE",
+    "collection": "block_budgets",
+    "userEmail": "nguyentheanhdhv@gmail.com",
+    "docId": "OGc1pPUr7A8EujWoNjkp",
+    "userId": "Q72uJxIjt5Yxuwci1OGRWWlr82C3",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789558061,
+      "nanoseconds": 724000000
+    },
+    "data": {
+      "amount": 15000000,
+      "blockCode": "E48",
+      "projectName": "VINHOMES GLOBAL GATE",
+      "month": "2026-10",
+      "blockId": "ROoenVb4QGDshSauh822"
+    }
+  },
+  {
+    "id": "3c3FlpUt2zhKuX3FR41q",
+    "userEmail": "cuongvan.vinhomes@gmail.com",
+    "action": "CREATE",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789547369,
+      "nanoseconds": 336000000
+    },
+    "userId": "nH6gVMUxTCMu70nPd4mONploKG42",
+    "data": {
+      "blockId": "SkvVq1GZdIjyvNtsc1FA",
+      "month": "2026-10",
+      "blockCode": "E41",
+      "amount": 50000000,
+      "projectName": "VINHOMES WONDER CITY"
+    },
+    "docId": "HxQ0vNt9GJ00B63zj3c2"
+  },
+  {
+    "id": "EgGkbIgOUjPGho1HiRnO",
+    "userEmail": "nhungzeni2@gmail.com",
+    "docId": "Y5WneUTNg1FSBFM4BvlK",
+    "action": "CREATE",
+    "data": {
+      "projectName": "VINHOMES GLOBAL GATE",
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "month": "2026-10",
+      "amount": 80000000,
+      "blockCode": "E35"
+    },
+    "userId": "507y026kSgcXunJffxH0HlUO8Uv1",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789546161,
+      "nanoseconds": 301000000
+    },
+    "collection": "block_budgets"
+  },
+  {
+    "id": "r0tXfBVlVnnwc1Wu9Fzb",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE",
+    "docId": "nGueNC2sxxuUkyupgqfG",
+    "data": {
+      "teamPrefix": "MAY99.02",
+      "name": "MAY99.02",
+      "blockCode": "E99.02",
+      "assistantUids": [],
+      "directorUid": "_empty"
+    },
+    "collection": "blocks",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789544869,
+      "nanoseconds": 853000000
+    }
+  },
+  {
+    "id": "iu1lJArHqqg261a4PaXZ",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789544852,
+      "nanoseconds": 810000000
+    },
+    "data": {
+      "blockCode": "E35",
+      "assistantUids": [],
+      "directorUid": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+      "teamPrefix": "MAY35",
+      "name": "E35"
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "O14oX9Ncxt7ZsAjNmkhP",
+    "collection": "blocks",
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "UPDATE"
+  },
+  {
+    "id": "hd6Z8iEJlpjNp1fXwI4X",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789544649,
+      "nanoseconds": 600000000
+    },
+    "action": "CREATE",
+    "collection": "teams",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "name": "MAY35.26 Dương Văn Hưởng",
+      "teamCode": "MAY35.26",
+      "blockCode": "E35"
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "AzDv6Y9lBGEOghPFIa99"
+  },
+  {
+    "id": "yF8OVjfJaBrkuOHOe6QJ",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789544648,
+      "nanoseconds": 548000000
+    },
+    "docId": "G1RccmoI6QYFhLRs5wT2",
+    "data": {
+      "name": "MAY35.99 Trương Thị Hồng Nhung",
+      "blockCode": "E35",
+      "teamCode": "MAY35.99",
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP"
+    },
+    "action": "CREATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "teams"
+  },
+  {
+    "id": "OQK4VFb4kDTAcY3d36t5",
+    "action": "CREATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "docId": "OaWBvcps1MVkPX49DRXf",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "name": "MAY35.98  Hà Ánh Dương",
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "blockCode": "E35",
+      "teamCode": "MAY35.98"
+    },
+    "collection": "teams",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789544647,
+      "nanoseconds": 760000000
+    }
+  },
+  {
+    "id": "1d6ajjcLqf2l7WTu8LTZ",
+    "docId": "7du8JCH1LcB3zo83RHJO",
+    "action": "CREATE",
+    "data": {
+      "implementerName": "Nguyễn Hạnh Hoa",
+      "month": "2026-10",
+      "teamId": "ZNgHT41btU1tsbK9J42r",
+      "amount": 160000000,
+      "projectId": "vXTJlhxG4L24KPKjKvbw",
+      "projectName": "VINHOMES HA LONG XANH",
+      "tempId": "dtbqlapnv",
+      "teamName": "MAY14\tNguyễn Hạnh Hoa"
+    },
+    "userId": "M0YH1g6SESfIRXuQtUIrl68oOK12",
+    "userEmail": "hanhhoa.jp@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789540912,
+      "nanoseconds": 473000000
+    },
+    "collection": "budgets"
+  },
+  {
+    "id": "xuko2GNgLDD0ZTtLh6OF",
+    "action": "CREATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789540763,
+      "nanoseconds": 362000000
+    },
+    "userEmail": "hanhhoa.jp@gmail.com",
+    "collection": "budgets",
+    "data": {
+      "projectId": "MnNBCB5ie1Upl7ivYT9g",
+      "tempId": "56tpyrbxl",
+      "teamId": "ZNgHT41btU1tsbK9J42r",
+      "amount": 210000000,
+      "projectName": "PRIMA BAY HẠ LONG",
+      "month": "2026-10",
+      "teamName": "MAY14\tNguyễn Hạnh Hoa",
+      "implementerName": "Nguyễn Hạnh Hoa"
+    },
+    "userId": "M0YH1g6SESfIRXuQtUIrl68oOK12",
+    "docId": "yQfneljG7Lu5AhvExAuj"
+  },
+  {
+    "id": "d6uHYVbQgqPSCaHFNhdp",
+    "userEmail": "linhphi.vip@gmail.com",
+    "action": "UPDATE",
+    "userId": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "docId": "gcLtRQM8ggOVlj96jENJ",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789532640,
+      "nanoseconds": 528000000
+    },
+    "data": {
+      "newAmount": 25000000,
+      "previousAmount": 40000000,
+      "month": "2026-09"
+    }
+  },
+  {
+    "id": "1hVzHC57qAeKEoN0uLJf",
+    "data": {
+      "newAmount": 15000000,
+      "month": "2026-09",
+      "previousAmount": 20000000
+    },
+    "userEmail": "linhphi.vip@gmail.com",
+    "collection": "block_budgets",
+    "docId": "o94cL7wpAhz6ntCDm4ol",
+    "userId": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789532627,
+      "nanoseconds": 934000000
+    }
+  },
+  {
+    "id": "TWvFQrn0Ioy63KVaHBO8",
+    "userEmail": "linhphi.vip@gmail.com",
+    "action": "UPDATE",
+    "userId": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "data": {
+      "month": "2026-09",
+      "previousAmount": 70000000,
+      "newAmount": 50000000
+    },
+    "docId": "Ahis4XNorJ3wTHOSXxSe",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789532613,
+      "nanoseconds": 593000000
+    }
+  },
+  {
+    "id": "Jvss5FwyrPwzEZnjfRxk",
+    "data": {
+      "id": "HdcKKrQJiUMYoudUWvI4",
+      "projectName": "VINHOMES SAIGON PARK",
+      "amount": 60000000
+    },
+    "userEmail": "linhphi.vip@gmail.com",
+    "userId": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "action": "DELETE",
+    "collection": "block_budgets",
+    "docId": "HdcKKrQJiUMYoudUWvI4",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789532453,
+      "nanoseconds": 803000000
+    }
+  },
+  {
+    "id": "NSNryUaI2bvSREpsdjh0",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789525619,
+      "nanoseconds": 368000000
+    },
+    "userEmail": "tadinh.bds@gmail.com",
+    "action": "UPDATE",
+    "docId": "qGsYLv8YLK0zBWEt5ruu",
+    "collection": "block_budgets",
+    "userId": "oNuhpBhziYWG87INJPPW1syyi7T2",
+    "data": {
+      "previousAmount": 115000000,
+      "newAmount": 100000000,
+      "month": "2026-09"
+    }
+  },
+  {
+    "id": "Sfq6ZNYxs96GH3Rs3Ygm",
+    "userEmail": "mayhomes.ads@gmail.com",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789523729,
+      "nanoseconds": 999000000
+    },
+    "action": "UPDATE",
+    "docId": "0jGleieC5T0lActenVvR",
+    "data": {
+      "newAmount": 5001,
+      "previousAmount": 500,
+      "month": "2026-09"
+    },
+    "userId": "jQs7YrMeFqbSOLimV7A2BYCdpVd2"
+  },
+  {
+    "id": "XoGXYjWnhJlqEfgAZz7X",
+    "userId": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "docId": "1gtpDdUrdy17MIsWrMl4",
+    "data": {
+      "projectName": "VINHOMES ROYAL ISLAND",
+      "amount": 25000000,
+      "id": "1gtpDdUrdy17MIsWrMl4"
+    },
+    "action": "DELETE",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789481709,
+      "nanoseconds": 192000000
+    },
+    "userEmail": "vuongps1402@gmail.com"
+  },
+  {
+    "id": "0aOtFkKtlGcQDdWtsTqR",
+    "userId": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "collection": "block_budgets",
+    "userEmail": "vuongps1402@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789481701,
+      "nanoseconds": 777000000
+    },
+    "action": "DELETE",
+    "data": {
+      "projectName": "VINHOMES ROYAL ISLAND",
+      "id": "pS8XD0qeR0fyFO3M78u5",
+      "amount": 80000000
+    },
+    "docId": "pS8XD0qeR0fyFO3M78u5"
+  },
+  {
+    "id": "qIMbTP5lP7d5qF23yRos",
+    "docId": "Y7dZqBcPuQJY6HjXVgEY",
+    "action": "CREATE",
+    "userId": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "collection": "block_budgets",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789481637,
+      "nanoseconds": 856000000
+    },
+    "userEmail": "vuongps1402@gmail.com",
+    "data": {
+      "blockId": "FKGKqGScX6DeBkPhKDtz",
+      "month": "2026-10",
+      "projectName": "THE HARBOR SKYLINE - MIK VŨ YÊN",
+      "blockCode": "E15",
+      "amount": 15000000
+    }
+  },
+  {
+    "id": "BhWx0CKWSVqWM2m7Dm9f",
+    "action": "UPDATE",
+    "collection": "teams",
+    "userEmail": "vuongps1402@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789481511,
+      "nanoseconds": 11000000
+    },
+    "userId": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "data": {
+      "blockCode": "unassigned",
+      "blockId": "unassigned"
+    },
+    "docId": "DUTgPAKMT4AM5QSEAQFM"
+  },
+  {
+    "id": "bUYXemoCcwD9t6MU1d43",
+    "docId": "O14oX9Ncxt7ZsAjNmkhP",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "action": "CREATE",
+    "userEmail": "thienvu1108@gmail.com",
+    "collection": "blocks",
+    "data": {
+      "assistantUids": [],
+      "blockCode": "E35",
+      "name": "E35"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467802,
+      "nanoseconds": 60000000
+    }
+  },
+  {
+    "id": "0sDJAChXLQGGUoxcbQrt",
+    "action": "UPDATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467801,
+      "nanoseconds": 893000000
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "data": {
+      "blockCode": "E35",
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP"
+    },
+    "docId": "rk4DATHvqQvmL07llicv",
+    "collection": "teams"
+  },
+  {
+    "id": "U9eumoVn9z1dKKfkf0ij",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "GuWt3W1I6ifrFLDzhqHl",
+    "collection": "teams",
+    "action": "UPDATE",
+    "data": {
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "blockCode": "E35"
+    },
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467801,
+      "nanoseconds": 338000000
+    },
+    "userEmail": "thienvu1108@gmail.com"
+  },
+  {
+    "id": "S8XBR8vi5Sbu9KYD35GI",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "4xngiFosXS1on3HjjMLy",
+    "userEmail": "thienvu1108@gmail.com",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467800,
+      "nanoseconds": 769000000
+    },
+    "action": "UPDATE",
+    "collection": "teams",
+    "data": {
+      "blockId": "O14oX9Ncxt7ZsAjNmkhP",
+      "blockCode": "E35"
+    }
+  },
+  {
+    "id": "OJdDpO0ll2OGywo2eqGi",
+    "collection": "teams",
+    "data": {
+      "name": "MAY35.39 Đào Xuân Cương",
+      "blockId": "",
+      "teamCode": "MAY35.39",
+      "blockCode": ""
+    },
+    "userEmail": "thienvu1108@gmail.com",
+    "action": "CREATE",
+    "docId": "4xngiFosXS1on3HjjMLy",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467756,
+      "nanoseconds": 278000000
+    },
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2"
+  },
+  {
+    "id": "XyAqrgUMt6gx5d2FMnkm",
+    "docId": "GuWt3W1I6ifrFLDzhqHl",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "collection": "teams",
+    "action": "CREATE",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467755,
+      "nanoseconds": 343000000
+    },
+    "data": {
+      "blockId": "",
+      "name": "MAY35.48 Phạm Văn Tú",
+      "blockCode": "",
+      "teamCode": "MAY35.48"
+    }
+  },
+  {
+    "id": "KeSHMUPPF0luPvn3VGYL",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789467754,
+      "nanoseconds": 405000000
+    },
+    "data": {
+      "name": "MAY35.68 Đỗ Xuân Phú",
+      "teamCode": "MAY35.68",
+      "blockId": "",
+      "blockCode": ""
+    },
+    "action": "CREATE",
+    "collection": "teams",
+    "userEmail": "thienvu1108@gmail.com",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "docId": "rk4DATHvqQvmL07llicv"
+  },
+  {
+    "id": "VwEurEtWssybMOFI1V00",
+    "docId": "loKKDLdbFDFQ3HsKK1J6",
+    "collection": "projects",
+    "timestamp": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789465520,
+      "nanoseconds": 128000000
+    },
+    "action": "UPDATE",
+    "userId": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "userEmail": "thienvu1108@gmail.com",
+    "data": {
+      "type": "Cao tầng",
+      "name": "VINHOMES SÀIGÒN PARK",
+      "region": "Hồ Chí Minh",
+      "updatedAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1789465520,
+        "nanoseconds": 128000000
+      },
+      "projectCode": "VINHOMES"
+    }
+  }
+]

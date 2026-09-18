@@ -1,0 +1,38 @@
+[
+  {
+    "id": "mij86AghqLHMvpuaqycW",
+    "approvedBy": "thienvu1108@gmail.com",
+    "updatedBy": "thienvu1108@gmail.com",
+    "createdBy": "thienvu1108@gmail.com",
+    "blockName": "E10",
+    "approvalStatus": "approved",
+    "externalBudget": 65000000,
+    "month": "2026-10",
+    "createdAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789697083,
+      "nanoseconds": 734000000
+    },
+    "directorUid": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "companyCardBudget": 10000000,
+    "approvedByName": "Phong Vũ",
+    "blockId": "fMmu52DCkEcE1epcjU8u",
+    "approvedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789697334,
+      "nanoseconds": 815000000
+    },
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789697334,
+      "nanoseconds": 815000000
+    },
+    "updatedByName": "Phong Vũ",
+    "totalBlockBudget": 75000000,
+    "createdByName": "Phong Vũ",
+    "approvedReciprocalBudget": 35000000,
+    "directorName": "Lam Phạm",
+    "blockCode": "E10",
+    "note": ""
+  }
+]

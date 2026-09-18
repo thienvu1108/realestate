@@ -275,6 +275,15 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Reciprocal Budgets (Ngân sách đối ứng Khối)
+    // ===============================================================
+    match /reciprocal_budgets/{reciprocalBudgetId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin() || isSuperAdmin() || isAccountant() || isGDKhoi();
+    }
+
+    // ===============================================================
     // Costs
     // ===============================================================
     match /costs/{costId} {

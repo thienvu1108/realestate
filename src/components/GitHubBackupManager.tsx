@@ -19,7 +19,9 @@ import {
   Database,
   GitCommit,
   ShieldCheck,
-  Info
+  Info,
+  Rocket,
+  Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { doc, getDoc, setDoc } from '../firestore-proxy';
@@ -77,6 +79,19 @@ export function GitHubBackupManager({
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
   const [copiedSha, setCopiedSha] = useState<boolean>(false);
+
+  // Code Sync & Vercel Deploy state
+  const [isSyncingCode, setIsSyncingCode] = useState<boolean>(false);
+  const [codeSyncResult, setCodeSyncResult] = useState<{
+    commitSha: string;
+    commitShortSha: string;
+    commitUrl: string;
+    repoUrl: string;
+    message: string;
+    syncedAt: string;
+  } | null>(null);
+  const [deployments, setDeployments] = useState<any[]>([]);
+  const [isLoadingDeployments, setIsLoadingDeployments] = useState<boolean>(false);
 
   // Last sync info
   const [lastSyncResult, setLastSyncResult] = useState<{
@@ -309,6 +324,87 @@ export function GitHubBackupManager({
       toast.error(err.message || 'Lỗi đồng bộ dữ liệu sang GitHub');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Fetch Vercel Deployments from GitHub
+  const fetchDeployments = async () => {
+    if (!token.trim()) return;
+    try {
+      setIsLoadingDeployments(true);
+      const res = await fetch('/api/backup/github/deploy-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: token.trim(),
+          owner,
+          repo
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.deployments) {
+          setDeployments(data.deployments);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch deployments error:', err);
+    } finally {
+      setIsLoadingDeployments(false);
+    }
+  };
+
+  // Sync Whole Source Code to GitHub & Trigger Vercel Deploy
+  const handleSyncCodeToGitHub = async () => {
+    if (!token.trim()) {
+      toast.error('Vui lòng cung cấp Personal Access Token (PAT) trước!');
+      return;
+    }
+    setIsSyncingCode(true);
+    toast.info('Đang kiểm tra và đẩy toàn bộ mã nguồn ứng dụng lên GitHub...');
+    try {
+      const res = await fetch('/api/backup/github/sync-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: token.trim(),
+          owner,
+          repo,
+          branch: branch.trim() || 'main',
+          commitMessage: `feat: Cập nhật giao diện Ngân sách đối ứng & Phân quyền [deploy vercel] - ${new Date().toLocaleString('vi-VN')}`
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Đồng bộ mã nguồn thất bại');
+      }
+
+      const syncObj = {
+        commitSha: data.commitSha,
+        commitShortSha: data.commitShortSha || data.commitSha?.slice(0, 7),
+        commitUrl: data.commitUrl,
+        repoUrl: data.repoUrl,
+        message: data.message,
+        syncedAt: data.syncedAt || new Date().toISOString()
+      };
+      setCodeSyncResult(syncObj);
+
+      if (data.alreadyUpToDate) {
+        toast.info(data.message || 'Mã nguồn đã đồng bộ hoàn toàn với GitHub!');
+      } else {
+        toast.success(`Đã đẩy mã nguồn lên GitHub thành công! Commit: ${syncObj.commitShortSha}. Vercel đang tự động build và deploy.`);
+      }
+
+      // Auto-refresh deployment status after 6s
+      setTimeout(() => {
+        fetchDeployments();
+      }, 6000);
+    } catch (err: any) {
+      console.error('Code sync error:', err);
+      toast.error(err.message || 'Lỗi đồng bộ mã nguồn');
+    } finally {
+      setIsSyncingCode(false);
     }
   };
 
@@ -555,15 +651,125 @@ export function GitHubBackupManager({
             </div>
           )}
 
-          {/* Main Action: Sync Now */}
+          {/* Action 1: Deploy Source Code to GitHub & Vercel */}
+          <div className="p-5 bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-2xl shadow-xl space-y-4 border border-indigo-700/40">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-400/30">
+                    <Rocket className="w-5 h-5 text-indigo-400" />
+                  </span>
+                  <h4 className="text-base font-black tracking-tight text-white">
+                    Đồng bộ Mã nguồn & Triển khai Vercel (Source Code Deploy)
+                  </h4>
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                    Tự động Deploy Vercel
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-300 font-medium leading-relaxed max-w-2xl">
+                  Đẩy toàn bộ file code mới nhất (bao gồm: Tính năng Ngân sách đối ứng, Phân quyền chi tiết, Quản lý Khối & Admin) lên nhánh <code className="text-amber-300 font-mono font-bold bg-white/10 px-1 py-0.5 rounded">{branch || 'main'}</code> của repository GitHub. Vercel sẽ tự động phát hiện và tiến hành build web production.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={fetchDeployments}
+                  disabled={isLoadingDeployments || !token}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 font-bold text-xs h-11 px-4 rounded-xl"
+                  title="Tải lại trạng thái Vercel Deploy"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1.5 ${isLoadingDeployments ? 'animate-spin' : ''}`} />
+                  Kiểm tra Vercel
+                </Button>
+
+                <Button
+                  onClick={handleSyncCodeToGitHub}
+                  disabled={isSyncingCode || !token}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm h-11 px-6 rounded-xl shadow-lg shadow-emerald-950/50 transition-all hover:scale-[1.02]"
+                >
+                  <Rocket className={`w-4 h-4 mr-2 ${isSyncingCode ? 'animate-spin' : ''}`} />
+                  {isSyncingCode ? 'Đang đẩy Code lên GitHub...' : 'Đẩy Code & Deploy Vercel'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Code Sync Result Banner */}
+            {codeSyncResult && (
+              <div className="p-3 bg-white/10 border border-white/15 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-emerald-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{codeSyncResult.message}</span>
+                </div>
+                <div className="flex items-center gap-3 font-mono">
+                  <span className="text-slate-300 text-[11px]">Commit: <strong>{codeSyncResult.commitShortSha}</strong></span>
+                  <a 
+                    href={codeSyncResult.commitUrl} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-indigo-300 hover:text-white underline font-bold"
+                  >
+                    Xem Commit trên GitHub <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Live Vercel Deployments status */}
+            {deployments.length > 0 && (
+              <div className="pt-3 border-t border-white/10 space-y-2">
+                <p className="text-[11px] font-bold text-indigo-200 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                  Các phiên bản Deploy Vercel gần nhất từ GitHub:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {deployments.map((dep: any) => (
+                    <div key={dep.id} className="p-2.5 bg-black/25 border border-white/10 rounded-xl flex items-center justify-between text-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white text-[11px] truncate max-w-[180px]">{dep.environment}</span>
+                          <span className={`px-1.5 py-0.2 text-[9px] font-black rounded uppercase ${
+                            dep.state === 'success' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' :
+                            dep.state === 'error' || dep.state === 'failure' ? 'bg-rose-500/30 text-rose-300' :
+                            'bg-amber-500/30 text-amber-300'
+                          }`}>
+                            {dep.state}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                          <span>SHA: {dep.shortSha}</span>
+                          <span>•</span>
+                          <span>{new Date(dep.createdAt).toLocaleTimeString('vi-VN')}</span>
+                        </div>
+                      </div>
+
+                      {dep.targetUrl && (
+                        <a 
+                          href={dep.targetUrl} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg font-bold text-[11px] inline-flex items-center gap-1 transition-colors"
+                        >
+                          Mở Web <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action 2: Sync Firestore Database Data */}
           <div className="p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <h4 className="text-base font-black tracking-tight flex items-center gap-2">
-                <UploadCloud className="w-5 h-5 text-indigo-400" />
-                Sao lưu & Đồng bộ ngay lên GitHub
+                <Database className="w-5 h-5 text-indigo-400" />
+                Sao lưu Dữ liệu Firestore (JSON Data Backup)
               </h4>
               <p className="text-xs text-slate-300 font-medium">
-                Đẩy toàn bộ 15+ danh mục dữ liệu (Ngân sách đối ứng, Ngân sách khối, Chi phí, Nghiệm thu, Thành viên, ...) sang GitHub
+                Đẩy toàn bộ 15+ danh mục dữ liệu (Ngân sách đối ứng, Ngân sách khối, Chi phí, Nghiệm thu, Thành viên, ...) sang thư mục <span className="text-amber-300 font-mono font-bold">{targetFolder || 'backups'}</span> trên GitHub
               </p>
             </div>
 
@@ -573,7 +779,7 @@ export function GitHubBackupManager({
               className="bg-indigo-500 hover:bg-indigo-600 text-white font-black text-sm h-11 px-6 rounded-xl shadow-lg shadow-indigo-900/50 transition-all hover:scale-[1.02] shrink-0"
             >
               <UploadCloud className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Đang đẩy commit...' : 'Đồng bộ ngay'}
+              {isSyncing ? 'Đang đẩy dữ liệu...' : 'Sao lưu Dữ liệu ngay'}
             </Button>
           </div>
 

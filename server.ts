@@ -5,6 +5,10 @@ import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import session from 'express-session';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 dotenv.config();
 
@@ -411,6 +415,122 @@ async function startServer() {
     } catch (error: any) {
       console.error('GitHub sync error:', error);
       res.status(500).json({ error: 'Đồng bộ GitHub thất bại: ' + (error.message || String(error)) });
+    }
+  });
+
+  // Direct Source Code Sync & Vercel Deploy Trigger Endpoint
+  app.post('/api/backup/github/sync-code', async (req, res) => {
+    try {
+      const token = req.body.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
+      if (!token) {
+        return res.status(400).json({ error: 'Vui lòng cung cấp Personal Access Token (PAT) của GitHub.' });
+      }
+      let { owner, repo, branch, commitMessage } = req.body;
+      owner = owner || 'thienvu1108';
+      repo = repo || 'realestate';
+      branch = branch || 'main';
+
+      const commitMsg = commitMessage || `feat: Đồng bộ toàn bộ mã nguồn ứng dụng Mayhomes - ${new Date().toLocaleString('vi-VN')}`;
+      const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+
+      await execAsync(`git config user.name "thienvu1108" && git config user.email "thienvu1108@gmail.com"`);
+      await execAsync(`git remote set-url origin "${remoteUrl}" || git remote add origin "${remoteUrl}"`);
+      await execAsync(`git add -A`);
+
+      const { stdout: statusOut } = await execAsync(`git status --porcelain`);
+      if (!statusOut.trim()) {
+        const { stdout: currentSha } = await execAsync(`git rev-parse HEAD`);
+        const cleanSha = currentSha.trim();
+        return res.json({
+          success: true,
+          alreadyUpToDate: true,
+          commitSha: cleanSha,
+          commitShortSha: cleanSha.substring(0, 7),
+          commitUrl: `https://github.com/${owner}/${repo}/commit/${cleanSha}`,
+          repoUrl: `https://github.com/${owner}/${repo}`,
+          branch,
+          message: 'Mã nguồn hiện tại đã trùng khớp 100% với commit mới nhất trên GitHub, không có thay đổi cục bộ nào cần đẩy thêm.'
+        });
+      }
+
+      await execAsync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
+      await execAsync(`git push origin ${branch}`);
+
+      const { stdout: commitSha } = await execAsync(`git rev-parse HEAD`);
+      const cleanSha = commitSha.trim();
+
+      res.json({
+        success: true,
+        commitSha: cleanSha,
+        commitShortSha: cleanSha.substring(0, 7),
+        commitUrl: `https://github.com/${owner}/${repo}/commit/${cleanSha}`,
+        repoUrl: `https://github.com/${owner}/${repo}`,
+        branch,
+        message: 'Đồng bộ toàn bộ mã nguồn lên GitHub thành công! Vercel sẽ tự động kích hoạt tiến trình build & deploy phiên bản mới.',
+        syncedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error('Code sync error:', err);
+      res.status(500).json({ error: 'Lỗi đồng bộ mã nguồn: ' + (err.stderr || err.message) });
+    }
+  });
+
+  // Check Vercel Deployment status from GitHub
+  app.post('/api/backup/github/deploy-status', async (req, res) => {
+    try {
+      const token = req.body.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
+      if (!token) {
+        return res.status(400).json({ error: 'Vui lòng cung cấp Personal Access Token (PAT).' });
+      }
+      let { owner, repo } = req.body;
+      owner = owner || 'thienvu1108';
+      repo = repo || 'realestate';
+
+      const depRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/deployments?per_page=5`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'Mayhomes-App'
+        }
+      });
+
+      if (!depRes.ok) {
+        return res.json({ deployments: [] });
+      }
+
+      const deps = await depRes.json() as any[];
+      const detailedDeployments = [];
+
+      for (const dep of (Array.isArray(deps) ? deps.slice(0, 3) : [])) {
+        let statusObj = null;
+        if (dep.statuses_url) {
+          const sRes = await fetch(dep.statuses_url, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'Mayhomes-App'
+            }
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json() as any[];
+            statusObj = sData[0] || null;
+          }
+        }
+        detailedDeployments.push({
+          id: dep.id,
+          environment: dep.environment,
+          sha: dep.sha,
+          shortSha: dep.sha ? dep.sha.substring(0, 7) : '',
+          createdAt: dep.created_at,
+          state: statusObj?.state || 'pending',
+          targetUrl: statusObj?.target_url || null,
+          description: statusObj?.description || ''
+        });
+      }
+
+      res.json({ success: true, deployments: detailedDeployments });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể lấy trạng thái deployment: ' + err.message });
     }
   });
 

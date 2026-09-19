@@ -124,7 +124,9 @@ import {
   Loader2,
   Edit,
   MapPin,
-  Receipt
+  Receipt,
+  LayoutGrid,
+  Table as TableIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -781,6 +783,55 @@ const normalizeMonth = (val: any): string => {
     if (year.length === 4 && (parseInt(month) >= 1 && parseInt(month) <= 12)) return `${year}-${month}`;
   }
   return str;
+};
+
+const normalizeBlockIdentifier = (val: string | undefined | null): string => {
+  if (!val) return '';
+  return String(val)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Strip accents (khối -> khoi)
+    .replace(/^(khoi|block|k\.|k)\s*/i, '') // Strip prefix "khoi", "block", "k."
+    .replace(/[^a-z0-9]/gi, '') // Keep alphanumeric only
+    .trim();
+};
+
+const isBlockMatch = (b: any, block: any): boolean => {
+  if (!b || !block) return false;
+  if (b.blockId && block.id && b.blockId === block.id) return true;
+
+  const bId = (block.id || '').toLowerCase().trim();
+  const bCode = (block.blockCode || '').toLowerCase().trim();
+  const bName = (block.name || '').toLowerCase().trim();
+
+  const recId = (b.blockId || '').toLowerCase().trim();
+  const recCode = (b.blockCode || '').toLowerCase().trim();
+  const recName = (b.blockName || '').toLowerCase().trim();
+
+  if (recId && (recId === bId || (bCode && recId === bCode))) return true;
+  if (recCode && (recCode === bCode || (bId && recCode === bId))) return true;
+  if (recName && bName && recName === bName) return true;
+
+  const blockNormCode = normalizeBlockIdentifier(block.blockCode);
+  const blockNormName = normalizeBlockIdentifier(block.name);
+  const blockNormId = normalizeBlockIdentifier(block.id);
+
+  const recNormCode = normalizeBlockIdentifier(b.blockCode);
+  const recNormName = normalizeBlockIdentifier(b.blockName);
+  const recNormId = normalizeBlockIdentifier(b.blockId);
+
+  const blockTokens = [blockNormCode, blockNormName, blockNormId].filter(Boolean);
+  const recTokens = [recNormCode, recNormName, recNormId].filter(Boolean);
+
+  for (const bt of blockTokens) {
+    for (const rt of recTokens) {
+      if (bt === rt) return true;
+      if (bt.length >= 2 && rt.length >= 2 && (bt.includes(rt) || rt.includes(bt))) {
+        return true;
+      }
+    }
+  }
+  return false;
 };
 
 const parseTimestampToDate = (val: any): Date | null => {
@@ -1568,8 +1619,8 @@ export default function App() {
     if (saved && Array.isArray(saved.permissions) && saved.permissions.some((p: string) => p.startsWith('block_budget.'))) {
       return saved.permissions.includes('block_budget.view');
     }
-    return hasPermission('block_budget.view') || hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant;
-  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant]);
+    return hasPermission('block_budget.view') || hasPermission('block.view') || isGDKhoi || isTroLyKhoi || isAssistant || isAccountant;
+  }, [isAdmin, isSuperAdmin, user, userRole, userProfile, rolePermissionsList, hasPermission, isGDKhoi, isTroLyKhoi, isAssistant, isAccountant]);
 
   const canCreateBlockBudget = useMemo(() => {
     if (isAdmin || isSuperAdmin || user?.email === 'thienvu1108@gmail.com') return true;
@@ -1946,6 +1997,14 @@ export default function App() {
 
   const [adminSubTab, setAdminSubTab] = useState('budgets');
   const [blockSubTab, setBlockSubTab] = useState('block-teams');
+  const [blockBudgetViewMode, setBlockBudgetViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'cards';
+    return 'table';
+  });
+  const [adminBlockBudgetViewMode, setAdminBlockBudgetViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'cards';
+    return 'table';
+  });
   const [teamSubTab, setTeamSubTab] = useState('team-members');
 
   // Báo cáo NT states
@@ -5207,7 +5266,7 @@ export default function App() {
     if (!user) return;
 
     // Listen to teams - load all teams to ensure mapping and search work perfectly
-    const qTeams = query(collection(db, 'teams'), orderBy('createdAt', 'desc'));
+    const qTeams = collection(db, 'teams');
     const unsubTeams = onSnapshot(qTeams, (snapshot) => {
       const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       const sanitized = raw.map(t => ({
@@ -5215,35 +5274,53 @@ export default function App() {
         name: normalizeTeamName(t.name),
         teamCode: normalizeTeamCode(t.teamCode || extractTeamCode(t.name))
       }));
+      sanitized.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+        return tB - tA;
+      });
       setTeams(sanitized);
       updateCachedTeams(sanitized);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'teams'));
 
     // Listen to blocks
-    const qBlocks = query(collection(db, 'blocks'), orderBy('name', 'asc'));
+    const qBlocks = collection(db, 'blocks');
     const unsubBlocks = onSnapshot(qBlocks, (snapshot) => {
       const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       const sanitized = raw.map(b => ({
         ...b,
         teamPrefix: String(b.teamPrefix || '').toUpperCase().trim() === 'MH' ? 'MAY' : convertMhToMay(b.teamPrefix)
       }));
+      sanitized.sort((a, b) => (a.name || a.blockCode || '').localeCompare(b.name || b.blockCode || ''));
       setBlocks(sanitized);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'blocks'));
 
     // Listen to regions
-    const qRegions = query(collection(db, 'regions'), orderBy('createdAt', 'desc'));
+    const qRegions = collection(db, 'regions');
     const unsubRegions = onSnapshot(qRegions, (snapshot) => {
-      setRegions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a: any, b: any) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        return tB - tA;
+      });
+      setRegions(list);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'regions'));
 
     // Listen to types
-    const qTypes = query(collection(db, 'types'), orderBy('createdAt', 'desc'));
+    const qTypes = collection(db, 'types');
     const unsubTypes = onSnapshot(qTypes, (snapshot) => {
-      setTypes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a: any, b: any) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        return tB - tA;
+      });
+      setTypes(list);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'types'));
 
     // Listen to budgets - load all relevant budgets to ensure mapping and team visibility work perfectly
-    const qBudgets = query(collection(db, 'budgets'), orderBy('createdAt', 'desc'));
+    const qBudgets = collection(db, 'budgets');
     const unsubBudgets = onSnapshot(qBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const d = { id: doc.id, ...doc.data() as any };
@@ -5253,25 +5330,40 @@ export default function App() {
           teamCode: convertMhToMay(d.teamCode)
         };
       });
+      data.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+        return tB - tA;
+      });
       setBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'budgets'));
 
     // Listen to block_budgets - block-level marketing budget registrations
-    const qBlockBudgets = query(collection(db, 'block_budgets'), orderBy('createdAt', 'desc'));
+    const qBlockBudgets = collection(db, 'block_budgets');
     const unsubBlockBudgets = onSnapshot(qBlockBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      data.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+        return tB - tA;
+      });
       setBlockBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'block_budgets'));
 
     // Listen to reciprocal_budgets - block reciprocal budget registrations
-    const qReciprocalBudgets = query(collection(db, 'reciprocal_budgets'), orderBy('createdAt', 'desc'));
+    const qReciprocalBudgets = collection(db, 'reciprocal_budgets');
     const unsubReciprocalBudgets = onSnapshot(qReciprocalBudgets, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      data.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+        return tB - tA;
+      });
       setReciprocalBudgets(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'reciprocal_budgets'));
 
     // Listen to costs - load all relevant costs to ensure mapping, team visibility, and actual costs work perfectly
-    const qCosts = query(collection(db, 'costs'), orderBy('createdAt', 'desc'));
+    const qCosts = collection(db, 'costs');
     const unsubCosts = onSnapshot(qCosts, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const d = { id: doc.id, ...doc.data() as any };
@@ -5280,6 +5372,11 @@ export default function App() {
           teamName: convertMhToMay(d.teamName),
           teamCode: convertMhToMay(d.teamCode)
         };
+      });
+      data.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+        return tB - tA;
       });
       setCosts(data);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'costs'));
@@ -7038,12 +7135,13 @@ export default function App() {
   const myActiveBlockBudgets = useMemo(() => {
     const block = currentActiveBlock;
     if (!block) return [];
-    return blockBudgets.filter(b => b.blockId === block.id || b.blockCode === block.blockCode);
+    return blockBudgets.filter(b => isBlockMatch(b, block));
   }, [currentActiveBlock, blockBudgets]);
 
   const filteredActiveBlockBudgets = useMemo(() => {
     if (!blockBudgetMonthFilter || blockBudgetMonthFilter === 'all') return myActiveBlockBudgets;
-    return myActiveBlockBudgets.filter(b => b.month === blockBudgetMonthFilter);
+    const normFilter = normalizeMonth(blockBudgetMonthFilter);
+    return myActiveBlockBudgets.filter(b => normalizeMonth(b.month) === normFilter);
   }, [myActiveBlockBudgets, blockBudgetMonthFilter]);
 
   const availableActiveBlockBudgetMonths = useMemo(() => {
@@ -7095,10 +7193,12 @@ export default function App() {
   const filteredAdminBlockBudgets = useMemo(() => {
     let list = [...blockBudgets];
     if (adminBlockBudgetFilterBlock && adminBlockBudgetFilterBlock !== 'all') {
-      list = list.filter(b => b.blockId === adminBlockBudgetFilterBlock);
+      const targetBlock = blocks.find(blk => blk.id === adminBlockBudgetFilterBlock || blk.blockCode === adminBlockBudgetFilterBlock);
+      list = list.filter(b => targetBlock ? isBlockMatch(b, targetBlock) : (b.blockId === adminBlockBudgetFilterBlock || b.blockCode === adminBlockBudgetFilterBlock));
     }
     if (adminBlockBudgetFilterMonth && adminBlockBudgetFilterMonth !== 'all') {
-      list = list.filter(b => b.month === adminBlockBudgetFilterMonth);
+      const normMonth = normalizeMonth(adminBlockBudgetFilterMonth);
+      list = list.filter(b => normalizeMonth(b.month) === normMonth);
     }
     if (adminBlockBudgetFilterProject && adminBlockBudgetFilterProject !== 'all') {
       list = list.filter(b => b.projectId === adminBlockBudgetFilterProject);
@@ -14336,6 +14436,71 @@ export default function App() {
                   </div>
                 </>
               )}
+
+              {/* Collapsible Block Management sub-tabs directly inside the mobile drawer menu! */}
+              {activeTab === 'block-mgmt' && (
+                <>
+                  <div className="h-px bg-slate-100 my-3 mx-2" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC QUẢN LÝ KHỐI</p>
+                  
+                  <div className="space-y-1 pl-1">
+                    <button
+                      onClick={() => { setBlockSubTab('block-teams'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        blockSubTab === 'block-teams' ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <Users className="w-3.5 h-3.5 shrink-0" />
+                      <span>Danh sách Nhóm</span>
+                    </button>
+
+                    {canViewBlockBudget && (
+                      <button
+                        onClick={() => { setBlockSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                          blockSubTab === 'block-budgets' ? "bg-purple-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Wallet className="w-3.5 h-3.5 shrink-0" />
+                          <span>Đăng ký Ngân sách Khối</span>
+                        </div>
+                        {filteredActiveBlockBudgets.length > 0 && (
+                          <span className={cn("px-1.5 py-0.5 rounded-full text-[10px] font-black", blockSubTab === 'block-budgets' ? "bg-white/20 text-white" : "bg-purple-100 text-purple-700")}>
+                            {filteredActiveBlockBudgets.length}
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    {canViewReciprocalBudget && (
+                      <button
+                        onClick={() => { setBlockSubTab('block-reciprocal'); setIsMobileMenuOpen(false); }}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                          blockSubTab === 'block-reciprocal' ? "bg-amber-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        <Receipt className="w-3.5 h-3.5 shrink-0" />
+                        <span>Đăng ký đối ứng Khối</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => { setBlockSubTab('block-nt'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        blockSubTab === 'block-nt' ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                      <span>Nghiệm thu Chi phí MKT</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Drawer Footer */}
@@ -14590,77 +14755,71 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* Stats Overview moved below menus */}
-          {!isUser && (
+          {/* Sub-menu for Block Management if active */}
+          {activeTab === 'block-mgmt' && (
             <motion.div 
+              initial={false}
               animate={{ 
-                y: isHeaderVisible ? 0 : -60,
-                marginTop: isMenuCollapsed ? '0px' : '24px'
+                height: 'auto',
+                opacity: 1,
+                translateY: isHeaderVisible ? 0 : -100
               }}
-              className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 animate-in fade-in slide-in-from-top-4 duration-500"
+              className="md:sticky z-35 transition-all duration-300 mb-3"
+              style={isMobile ? undefined : {
+                top: isScrolled ? '64px' : '96px'
+              }}
             >
-              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-                <div className="h-1.5 w-full bg-indigo-500" />
-                <CardHeader className="pb-3 pt-4">
-                  <CardDescription className="flex items-center gap-2 font-black text-indigo-600/70 uppercase tracking-[0.1em] text-[10px]">
-                    <Building2 className="w-4 h-4" /> TỔNG DỰ ÁN
-                  </CardDescription>
-                  <CardTitle className="text-3xl font-black text-slate-900">{dashboardStats.projectCount}</CardTitle>
-                </CardHeader>
-              </Card>
-              
-              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-                <div className="h-1.5 w-full bg-emerald-500" />
-                <CardHeader className="pb-3 pt-4">
-                  <CardDescription className="flex items-center gap-2 font-black text-emerald-600/70 uppercase tracking-[0.1em] text-[10px]">
-                    <Wallet className="w-4 h-4" /> NGÂN SÁCH {dashboardStats.monthLabel}
-                  </CardDescription>
-                  <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 flex flex-col items-start leading-[1.1] pt-1">
-                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.budget)}
-                    <span className="text-slate-300 text-lg font-medium">đ</span>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-     
-              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-                <div className="h-1.5 w-full bg-orange-500" />
-                <CardHeader className="pb-3 pt-4">
-                  <CardDescription className="flex items-center gap-2 font-black text-orange-600/70 uppercase tracking-[0.1em] text-[10px]">
-                    <TrendingUp className="w-4 h-4" /> CHI PHÍ {dashboardStats.monthLabel}
-                  </CardDescription>
-                  <CardTitle className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.cost)} <span className="text-lg font-bold text-slate-300 ml-1">đ</span>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-     
-              <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:translate-y-[-4px] transition-all duration-300">
-                <div className="h-1.5 w-full bg-blue-500" />
-                <CardHeader className="pb-3 pt-4">
-                  <CardDescription className="flex items-center gap-2 font-black text-blue-600/70 uppercase tracking-[0.1em] text-[10px]">
-                    <Building2 className="w-4 h-4" /> CĂN BÁN {dashboardStats.monthLabel}
-                  </CardDescription>
-                  <CardTitle className="text-3xl font-black text-slate-900">
-                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.sales)} <span className="text-lg font-bold text-slate-400 ml-1">Căn</span>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-     
-              <Card className="border-none shadow-xl shadow-indigo-200/50 bg-indigo-600 overflow-hidden group hover:translate-y-[-4px] transition-all duration-400 relative">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-white/20 transition-all duration-700" />
-                <div className="h-1.5 w-full bg-white opacity-20" />
-                <CardHeader className="pb-3 pt-4">
-                  <CardDescription className="flex items-center gap-2 font-black text-indigo-100 uppercase tracking-[0.1em] text-[10px]">
-                    <TrendingUp className="w-4 h-4" /> TỔNG DOANH SỐ {dashboardStats.monthLabel}
-                  </CardDescription>
-                  <CardTitle className="text-2xl sm:text-3xl font-black text-white leading-tight">
-                    {new Intl.NumberFormat('vi-VN').format(dashboardStats.revenue)} <span className="text-lg font-bold text-indigo-300 ml-1">đ</span>
-                  </CardTitle>
-                </CardHeader>
-              </Card>
+              <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 p-2 rounded-2xl shadow-lg border-t-0 rounded-t-none shadow-slate-200/40 overflow-x-auto scrollbar-hide">
+                <div className="flex items-center gap-2 min-w-max">
+                  <Button 
+                    variant={blockSubTab === 'block-teams' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    className={`rounded-xl h-10 px-4 font-bold ${blockSubTab === 'block-teams' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                    onClick={() => setBlockSubTab('block-teams')}
+                  >
+                    <Users className="mr-2 h-4 w-4" /> Danh sách Nhóm
+                  </Button>
+
+                  {canViewBlockBudget && (
+                    <Button 
+                      variant={blockSubTab === 'block-budgets' ? 'secondary' : 'ghost'} 
+                      size="sm" 
+                      className={`rounded-xl h-10 px-4 font-bold flex items-center gap-1.5 ${blockSubTab === 'block-budgets' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600'}`}
+                      onClick={() => setBlockSubTab('block-budgets')}
+                    >
+                      <Wallet className="h-4 w-4" />
+                      <span>Đăng ký Ngân sách Khối</span>
+                      {filteredActiveBlockBudgets.length > 0 && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${blockSubTab === 'block-budgets' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700'}`}>
+                          {filteredActiveBlockBudgets.length}
+                        </span>
+                      )}
+                    </Button>
+                  )}
+
+                  {canViewReciprocalBudget && (
+                    <Button 
+                      variant={blockSubTab === 'block-reciprocal' ? 'secondary' : 'ghost'} 
+                      size="sm" 
+                      className={`rounded-xl h-10 px-4 font-bold ${blockSubTab === 'block-reciprocal' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600'}`}
+                      onClick={() => setBlockSubTab('block-reciprocal')}
+                    >
+                      <Receipt className="mr-2 h-4 w-4" /> Đăng ký đối ứng Khối
+                    </Button>
+                  )}
+
+                  <Button 
+                    variant={blockSubTab === 'block-nt' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    className={`rounded-xl h-10 px-4 font-bold ${blockSubTab === 'block-nt' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                    onClick={() => setBlockSubTab('block-nt')}
+                  >
+                    <FileCheck className="mr-2 h-4 w-4" /> Nghiệm thu Chi phí MKT
+                  </Button>
+                </div>
+              </div>
             </motion.div>
           )}
-
 
           {/* Home / Dashboard Tab */}
           <TabsContent value="home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -15178,24 +15337,32 @@ export default function App() {
 
               {/* Sub tabs style */}
               <Tabs value={blockSubTab} onValueChange={setBlockSubTab} className="space-y-6">
-                <TabsList className="bg-slate-100 p-1 rounded-2xl h-auto inline-flex shadow-sm">
-                  <TabsTrigger value="block-teams" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                    <Users className="w-4 h-4 mr-2" /> Danh sách Nhóm
-                  </TabsTrigger>
-                  {canViewBlockBudget && (
-                    <TabsTrigger value="block-budgets" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                      <Wallet className="w-4 h-4 mr-2" /> Đăng ký Ngân sách
+                <div className="overflow-x-auto w-full max-w-full pb-1 scrollbar-none">
+                  <TabsList className="bg-slate-100 p-1 rounded-2xl h-auto inline-flex shadow-sm min-w-max">
+                    <TabsTrigger value="block-teams" className="rounded-xl px-4 sm:px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
+                      <Users className="w-4 h-4 mr-2" /> Danh sách Nhóm
                     </TabsTrigger>
-                  )}
-                  {canViewReciprocalBudget && (
-                    <TabsTrigger value="block-reciprocal" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                      <Receipt className="w-4 h-4 mr-2" /> Đăng ký đối ứng
+                    {canViewBlockBudget && (
+                      <TabsTrigger value="block-budgets" className="rounded-xl px-4 sm:px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm flex items-center gap-1.5">
+                        <Wallet className="w-4 h-4" />
+                        <span>Đăng ký Ngân sách</span>
+                        {filteredActiveBlockBudgets.length > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 text-purple-700 font-black">
+                            {filteredActiveBlockBudgets.length}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    )}
+                    {canViewReciprocalBudget && (
+                      <TabsTrigger value="block-reciprocal" className="rounded-xl px-4 sm:px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
+                        <Receipt className="w-4 h-4 mr-2" /> Đăng ký đối ứng
+                      </TabsTrigger>
+                    )}
+                    <TabsTrigger value="block-nt" className="rounded-xl px-4 sm:px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
+                      <FileCheck className="w-4 h-4 mr-2" /> Nghiệm thu Chi phí MKT
                     </TabsTrigger>
-                  )}
-                  <TabsTrigger value="block-nt" className="rounded-xl px-5 py-2 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-indigo-600 font-bold transition-all text-xs sm:text-sm">
-                    <FileCheck className="w-4 h-4 mr-2" /> Nghiệm thu Chi phí MKT
-                  </TabsTrigger>
-                </TabsList>
+                  </TabsList>
+                </div>
 
                 {/* TAB 1: Teams (Thêm, Sửa, Xóa nhóm trong Khối) */}
                 <TabsContent value="block-teams" className="space-y-6">
@@ -15207,7 +15374,7 @@ export default function App() {
                       {/* System-wide Block List & Modal Trigger (For Admin / Accountant) */}
                       {(isAdmin || isAccountant) && (
                         <Card className="border-slate-100 shadow-md">
-                          <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
+                          <CardHeader className="pb-3 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                               <CardTitle className="text-sm font-black text-indigo-700 flex items-center gap-2 uppercase tracking-wider">
                                 <Layers className="w-4 h-4 text-indigo-600" /> Danh sách Khối ({blocks.length})
@@ -15414,7 +15581,7 @@ export default function App() {
                       {currentActiveBlock ? (
                         <div className="space-y-6">
                           <Card className="border-slate-100 shadow-md">
-                            <CardHeader className="pb-3 border-b border-slate-50 flex items-center justify-between flex-row space-y-0">
+                            <CardHeader className="pb-3 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                               <div>
                                 <CardTitle className="text-sm font-black text-indigo-700 uppercase tracking-wider flex items-center gap-2">
                                   <Layers className="w-4 h-4 text-indigo-600" /> Chi tiết Khối
@@ -16061,7 +16228,7 @@ export default function App() {
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <Label className="text-xs font-bold text-slate-700">Tháng Marketing <span className="text-rose-500">*</span></Label>
@@ -16074,7 +16241,7 @@ export default function App() {
                               value={(!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com' && currentOpenBlockBudgetMonth) ? currentOpenBlockBudgetMonth : blockBudgetMonth}
                               onChange={(e) => setBlockBudgetMonth(e.target.value)}
                               placeholder="YYYY-MM"
-                              className="rounded-xl border-slate-200 font-mono"
+                              className="rounded-xl border-slate-200 font-mono h-10 text-sm"
                               disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                               readOnly={!isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com'}
                             />
@@ -16090,7 +16257,7 @@ export default function App() {
                               placeholder="Nhập số tiền..."
                               value={blockBudgetAmount}
                               onChange={(e) => setBlockBudgetAmount(e.target.value)}
-                              className="rounded-xl border-slate-200 font-semibold"
+                              className="rounded-xl border-slate-200 font-semibold h-10 text-sm"
                               disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
                             />
                           </div>
@@ -16099,7 +16266,7 @@ export default function App() {
                         <Button 
                           onClick={handleAddBlockBudget}
                           disabled={!canCreateBlockBudget || (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')}
-                          className={`w-full text-white rounded-xl font-bold py-2.5 transition-all shadow-md cursor-pointer ${
+                          className={`w-full min-h-[44px] text-white rounded-xl font-bold py-2.5 transition-all shadow-md touch-manipulation cursor-pointer ${
                             (!currentOpenBlockBudgetMonth && !isAdmin && !isSuperAdmin && firebaseUserEmail !== 'thienvu1108@gmail.com')
                               ? 'bg-slate-400 hover:bg-slate-400 cursor-not-allowed shadow-none'
                               : 'bg-purple-600 hover:bg-purple-700 shadow-purple-100'
@@ -16141,6 +16308,35 @@ export default function App() {
                             </CardDescription>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setBlockBudgetViewMode('table')}
+                                className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                                  blockBudgetViewMode === 'table'
+                                    ? 'bg-white text-slate-800 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                                title="Chế độ xem bảng"
+                              >
+                                <TableIcon className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Bảng</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBlockBudgetViewMode('cards')}
+                                className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                                  blockBudgetViewMode === 'cards'
+                                    ? 'bg-white text-slate-800 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                                title="Chế độ xem thẻ (tối ưu cho di động)"
+                              >
+                                <LayoutGrid className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Thẻ</span>
+                              </button>
+                            </div>
+
                             <Button
                               size="sm"
                               variant="outline"
@@ -16204,16 +16400,30 @@ export default function App() {
                         </CardHeader>
                         <CardContent>
                           {filteredActiveBlockBudgets.length === 0 ? (
-                            <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
+                            <div className="text-center py-10 px-4 text-slate-400 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
                               <Wallet className="w-10 h-10 mx-auto opacity-30 mb-2" />
-                              <p className="text-sm font-medium">
+                              <p className="text-sm font-bold text-slate-700">
                                 {blockBudgetMonthFilter && blockBudgetMonthFilter !== 'all'
                                   ? `Không tìm thấy bản đăng ký ngân sách Khối nào cho kỳ ${blockBudgetMonthFilter}`
                                   : 'Không tìm thấy bản đăng ký ngân sách Khối nào'
                                 }
                               </p>
+                              {myActiveBlockBudgets.length > 0 && blockBudgetMonthFilter !== 'all' && (
+                                <div className="mt-3">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setBlockBudgetMonthFilter('all');
+                                      setHasUserManuallySetBlockBudgetMonthFilter(true);
+                                    }}
+                                    className="h-8 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-xs"
+                                  >
+                                    <Calendar className="w-3.5 h-3.5 mr-1.5" /> Xem tất cả các kỳ ({myActiveBlockBudgets.length} bản ghi)
+                                  </Button>
+                                </div>
+                              )}
                               {canCreateBlockBudget && (
-                                <p className="text-xs text-slate-400 mt-1.5 max-w-md mx-auto">
+                                <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto">
                                   {blockBudgetMonthFilter === currentMarketingPeriod
                                     ? 'Khối chưa có bản ghi ngân sách cho kỳ hiện tại này. Bạn có thể sử dụng form bên trái để đăng ký ngay.'
                                     : 'Bạn có thể chọn "Tất cả tháng" ở bộ lọc phía trên để xem các bản ghi của kỳ khác, hoặc bấm "Đồng bộ từ bản cũ".'
@@ -16252,64 +16462,68 @@ export default function App() {
                                 );
                               })()}
 
-                              <div className="overflow-x-auto rounded-xl border border-slate-100">
-                                <Table>
-                                  <TableHeader className="bg-slate-50/70">
-                                    <TableRow>
-                                      <TableHead className="font-bold text-slate-800">Dự án</TableHead>
-                                      <TableHead className="font-bold text-slate-800">Tháng</TableHead>
-                                      <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
-                                      <TableHead className="font-bold text-right text-slate-800">Ngân sách cấp</TableHead>
-                                      <TableHead className="font-bold text-right text-slate-800">Nghiệm thu MKT</TableHead>
-                                      <TableHead className="font-bold text-right text-slate-800">Còn lại</TableHead>
-                                      <TableHead className="font-bold text-center text-slate-800">Thao tác</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {filteredActiveBlockBudgets.map((b) => {
-                                      const displayProj = resolveProjectName(b.projectId, b.projectName);
-                                      const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
-                                      const diff = (b.amount || 0) - acceptanceCost;
-                                      const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
-                                      return (
-                                        <TableRow key={b.id} className="hover:bg-slate-50/50">
-                                          <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
-                                          <TableCell className="font-mono text-xs font-semibold text-slate-700">
-                                            <div className="flex items-center gap-1.5">
-                                              <span>{b.month}</span>
-                                              {b.month === currentOpenBlockBudgetMonth ? (
-                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-200 text-emerald-700 bg-emerald-50">
-                                                  Kỳ này
-                                                </Badge>
-                                              ) : (
-                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-500 bg-slate-50">
-                                                  Kỳ cũ
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="text-xs font-mono text-slate-500">
-                                            {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
-                                          </TableCell>
-                                          <TableCell className="text-right font-bold text-xs sm:text-sm text-purple-700 select-all font-mono">
-                                            {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
-                                          </TableCell>
-                                          <TableCell className="text-right font-semibold text-xs sm:text-sm text-indigo-600 select-all font-mono">
-                                            {new Intl.NumberFormat('vi-VN').format(acceptanceCost)} đ
-                                          </TableCell>
-                                          <TableCell className={`text-right font-black text-xs sm:text-sm select-all font-mono ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                            {new Intl.NumberFormat('vi-VN').format(diff)} đ
-                                          </TableCell>
-                                          <TableCell className="text-center">
+                              {/* Responsive display: Card View or Table View */}
+                              {blockBudgetViewMode === 'cards' ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                  {filteredActiveBlockBudgets.map((b) => {
+                                    const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                    const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
+                                    const diff = (b.amount || 0) - acceptanceCost;
+                                    const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
+                                    return (
+                                      <div key={b.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-200 transition-all space-y-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Dự án</span>
+                                            <h4 className="font-black text-sm text-indigo-900 leading-tight mt-0.5 truncate" title={displayProj}>{displayProj}</h4>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <Badge variant="outline" className="font-mono text-xs font-bold bg-slate-50 border-slate-200">
+                                              {b.month}
+                                            </Badge>
+                                            {b.month === currentOpenBlockBudgetMonth ? (
+                                              <Badge className="bg-emerald-500 text-white text-[9px] font-black py-0 px-1.5">
+                                                Kỳ này
+                                              </Badge>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-100 text-center">
+                                          <div>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase">Cấp</p>
+                                            <p className="text-xs font-black text-purple-700 font-mono mt-0.5">
+                                              {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase">Nghiệm thu</p>
+                                            <p className="text-xs font-black text-indigo-700 font-mono mt-0.5">
+                                              {new Intl.NumberFormat('vi-VN').format(acceptanceCost)} đ
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase">Còn lại</p>
+                                            <p className={`text-xs font-black font-mono mt-0.5 ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                              {new Intl.NumberFormat('vi-VN').format(diff)} đ
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400 border-t border-slate-100">
+                                          <div className="flex items-center gap-1 truncate font-mono">
+                                            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                            <span>{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
+                                          </div>
+                                          <div>
                                             {(canEditBlockBudget || canDeleteBlockBudget) ? (
                                               isRowEditable ? (
-                                                <div className="flex items-center justify-center gap-1.5">
+                                                <div className="flex items-center gap-1.5">
                                                   {canEditBlockBudget && (
-                                                    <Button 
-                                                      size="xs" 
-                                                      variant="outline" 
-                                                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
-                                                      title="Chỉnh sửa ngân sách"
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
                                                       onClick={() => handleOpenEditBlockBudget(b)}
                                                     >
                                                       <Edit2 className="w-3.5 h-3.5" />
@@ -16317,44 +16531,134 @@ export default function App() {
                                                     </Button>
                                                   )}
                                                   {canDeleteBlockBudget && (
-                                                    <Button 
-                                                      size="xs" 
-                                                      variant="outline" 
-                                                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
-                                                      title="Xóa đăng ký ngân sách"
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
                                                       onClick={() => handleDeleteBlockBudget(b)}
                                                     >
                                                       <Trash2 className="w-3.5 h-3.5" />
+                                                      <span>Xóa</span>
                                                     </Button>
                                                   )}
                                                 </div>
                                               ) : (
-                                                <div className="flex items-center justify-center">
-                                                  <Button 
-                                                    size="xs" 
-                                                    variant="ghost" 
-                                                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100/70 border border-dashed border-slate-200 h-8 px-2.5 rounded-lg text-xs font-medium gap-1 cursor-not-allowed"
-                                                    title={`Kỳ ${b.month} là kỳ cũ đã khóa chỉnh sửa đối với cấp Khối. Chỉ Admin mới có quyền chỉnh sửa!`}
-                                                    onClick={() => {
-                                                      const check = checkBlockBudgetActionAllowed(b.month);
-                                                      if (!check.allowed) toast.error(check.reason);
-                                                    }}
-                                                  >
-                                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                                    <span>Đã khóa</span>
-                                                  </Button>
-                                                </div>
+                                                <span className="text-[10px] text-slate-400 italic bg-slate-100 px-2 py-0.5 rounded-md">Đã khóa</span>
                                               )
                                             ) : (
-                                              <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
+                                              <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
                                             )}
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                  <Table>
+                                    <TableHeader className="bg-slate-50/70">
+                                      <TableRow>
+                                        <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                        <TableHead className="font-bold text-slate-800">Tháng</TableHead>
+                                        <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
+                                        <TableHead className="font-bold text-right text-slate-800">Ngân sách cấp</TableHead>
+                                        <TableHead className="font-bold text-right text-slate-800">Nghiệm thu MKT</TableHead>
+                                        <TableHead className="font-bold text-right text-slate-800">Còn lại</TableHead>
+                                        <TableHead className="font-bold text-center text-slate-800">Thao tác</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {filteredActiveBlockBudgets.map((b) => {
+                                        const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                        const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
+                                        const diff = (b.amount || 0) - acceptanceCost;
+                                        const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
+                                        return (
+                                          <TableRow key={b.id} className="hover:bg-slate-50/50">
+                                            <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
+                                            <TableCell className="font-mono text-xs font-semibold text-slate-700">
+                                              <div className="flex items-center gap-1.5">
+                                                <span>{b.month}</span>
+                                                {b.month === currentOpenBlockBudgetMonth ? (
+                                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-200 text-emerald-700 bg-emerald-50">
+                                                    Kỳ này
+                                                  </Badge>
+                                                ) : (
+                                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-500 bg-slate-50">
+                                                    Kỳ cũ
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs font-mono text-slate-500">
+                                              {safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right font-bold text-xs sm:text-sm text-purple-700 select-all font-mono">
+                                              {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold text-xs sm:text-sm text-indigo-600 select-all font-mono">
+                                              {new Intl.NumberFormat('vi-VN').format(acceptanceCost)} đ
+                                            </TableCell>
+                                            <TableCell className={`text-right font-black text-xs sm:text-sm select-all font-mono ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                              {new Intl.NumberFormat('vi-VN').format(diff)} đ
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                              {(canEditBlockBudget || canDeleteBlockBudget) ? (
+                                                isRowEditable ? (
+                                                  <div className="flex items-center justify-center gap-1.5">
+                                                    {canEditBlockBudget && (
+                                                      <Button 
+                                                        size="xs" 
+                                                        variant="outline" 
+                                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
+                                                        title="Chỉnh sửa ngân sách"
+                                                        onClick={() => handleOpenEditBlockBudget(b)}
+                                                      >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                        <span>Sửa</span>
+                                                      </Button>
+                                                    )}
+                                                    {canDeleteBlockBudget && (
+                                                      <Button 
+                                                        size="xs" 
+                                                        variant="outline" 
+                                                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
+                                                        title="Xóa đăng ký ngân sách"
+                                                        onClick={() => handleDeleteBlockBudget(b)}
+                                                      >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                      </Button>
+                                                    )}
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex items-center justify-center">
+                                                    <Button 
+                                                      size="xs" 
+                                                      variant="ghost" 
+                                                      className="text-slate-400 hover:text-slate-600 hover:bg-slate-100/70 border border-dashed border-slate-200 h-8 px-2.5 rounded-lg text-xs font-medium gap-1 cursor-not-allowed"
+                                                      title={`Kỳ ${b.month} là kỳ cũ đã khóa chỉnh sửa đối với cấp Khối. Chỉ Admin mới có quyền chỉnh sửa!`}
+                                                      onClick={() => {
+                                                        const check = checkBlockBudgetActionAllowed(b.month);
+                                                        if (!check.allowed) toast.error(check.reason);
+                                                      }}
+                                                    >
+                                                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                                      <span>Đã khóa</span>
+                                                    </Button>
+                                                  </div>
+                                                )
+                                              ) : (
+                                                <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
                             </div>
                           )}
                         </CardContent>
@@ -17179,7 +17483,7 @@ export default function App() {
                     {/* Right Column List Table */}
                     <div className="lg:col-span-2">
                       <Card className="border-slate-100 shadow-md">
-                        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 space-y-0">
+                        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                           <CardTitle className="text-lg font-black text-slate-900">
                             Hồ sơ Ngân sách thành viên ({filteredTeamBudgets.length})
                           </CardTitle>
@@ -17280,7 +17584,7 @@ export default function App() {
                     {/* Right Column List Table */}
                     <div className="lg:col-span-2">
                       <Card className="border-slate-100 shadow-md">
-                        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 space-y-0">
+                        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                           <CardTitle className="text-lg font-black text-slate-900">
                             Hồ sơ Chi phí thành viên ({filteredTeamActualCosts.length})
                           </CardTitle>
@@ -17724,15 +18028,15 @@ export default function App() {
                             </Table>
                           </div>
                           {/* Pagination Bar for Marketing Efficiency */}
-                          <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-100 pt-4 mt-4 px-2">
                             <div className="text-xs text-slate-500 font-medium font-sans">
                               Trang {efficiencyPage} (Hiển thị tối đa 20 dòng báo cáo)
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-slate-200"
+                                className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                                 disabled={efficiencyPage === 1}
                                 onClick={() => setEfficiencyPage(p => Math.max(1, p - 1))}
                               >
@@ -17741,7 +18045,7 @@ export default function App() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-slate-200"
+                                className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                                 disabled={filteredEfficiencyReports.length <= efficiencyPage * 20}
                                 onClick={() => setEfficiencyPage(p => p + 1)}
                               >
@@ -18305,15 +18609,15 @@ export default function App() {
                           </Table>
                         </div>
                         {/* Pagination Bar */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-100 pt-4 mt-4 px-2">
                           <div className="text-xs text-slate-500 font-medium">
                             Trang {projectPage} (Hiển thị tối đa 20 dự án)
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 rounded-xl border-slate-200"
+                              className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                               disabled={projectPage === 1}
                               onClick={() => setProjectPage(p => Math.max(1, p - 1))}
                             >
@@ -18322,7 +18626,7 @@ export default function App() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 rounded-xl border-slate-200"
+                              className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                               disabled={sortedProjects.length <= projectPage * 20}
                               onClick={() => setProjectPage(p => p + 1)}
                             >
@@ -19167,12 +19471,12 @@ export default function App() {
     <>
                   <div className="space-y-6">
                     <Card className="border-none shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                          <CardTitle>Quản lý Ngân sách đã đăng ký</CardTitle>
-                          <CardDescription>Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
+                          <CardTitle className="text-lg font-bold text-slate-900">Quản lý Ngân sách đã đăng ký</CardTitle>
+                          <CardDescription className="text-xs text-slate-500">Xóa hoặc xem danh sách ngân sách của các team</CardDescription>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -19533,15 +19837,15 @@ export default function App() {
                           </Table>
                         </div>
                         {/* Pagination Bar for Budgets */}
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-4 px-2">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-100 pt-4 mt-4 px-2">
                           <div className="text-xs text-slate-500 font-medium">
                             Trang {budgetPage} (Hiển thị tối đa 20 dòng ngân sách)
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 rounded-xl border-slate-200"
+                              className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                               disabled={budgetPage === 1}
                               onClick={() => setBudgetPage(p => Math.max(1, p - 1))}
                             >
@@ -19550,7 +19854,7 @@ export default function App() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 rounded-xl border-slate-200"
+                              className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                               disabled={adminFilteredBudgets.length <= budgetPage * 20}
                               onClick={() => setBudgetPage(p => p + 1)}
                             >
@@ -19563,14 +19867,14 @@ export default function App() {
 
                     {/* Unbudgeted Acceptance Teams Card */}
                     <Card className="border-amber-200 bg-amber-50/20 shadow-sm">
-                      <CardHeader className="flex flex-row items-center justify-between pb-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3">
+                        <div className="space-y-1.5 w-full sm:w-auto">
+                          <div className="flex flex-wrap items-center gap-2">
                             <CardTitle className="text-base font-bold text-amber-900 flex items-center gap-2">
                               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                              Các Đội phát sinh Chi phí MKT nhưng Không có Ngân sách đăng ký
+                              <span>Các Đội phát sinh Chi phí MKT nhưng Không có Ngân sách đăng ký</span>
                             </CardTitle>
-                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-xs px-2.5 py-0.5 rounded-full">
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-xs px-2.5 py-0.5 rounded-full shrink-0">
                               {filteredUnbudgetedAcceptances.length} đội/dự án
                             </Badge>
                           </div>
@@ -19581,7 +19885,7 @@ export default function App() {
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          className="h-8 text-[11px] font-bold text-amber-800 border-amber-300 hover:bg-amber-100/80 bg-white shadow-xs"
+                          className="h-8 text-[11px] font-bold text-amber-800 border-amber-300 hover:bg-amber-100/80 bg-white shadow-xs shrink-0 w-full sm:w-auto"
                           onClick={handleExportUnbudgetedAcceptances}
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-amber-600" /> Xuất Excel chưa ĐK
@@ -19685,15 +19989,15 @@ export default function App() {
                         </div>
                         {/* Pagination Bar for Unbudgeted Table */}
                         {filteredUnbudgetedAcceptances.length > 20 && (
-                          <div className="flex items-center justify-between pt-2 px-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 px-2">
                             <div className="text-xs text-amber-800 font-medium">
                               Trang {unbudgetedPage} / {Math.ceil(filteredUnbudgetedAcceptances.length / 20)}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900"
+                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900 flex-1 sm:flex-none"
                                 disabled={unbudgetedPage === 1}
                                 onClick={() => setUnbudgetedPage(p => Math.max(1, p - 1))}
                               >
@@ -19702,7 +20006,7 @@ export default function App() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900"
+                                className="h-8 rounded-xl border-amber-200 bg-white hover:bg-amber-50 text-amber-900 flex-1 sm:flex-none"
                                 disabled={filteredUnbudgetedAcceptances.length <= unbudgetedPage * 20}
                                 onClick={() => setUnbudgetedPage(p => p + 1)}
                               >
@@ -19736,6 +20040,35 @@ export default function App() {
                           </CardDescription>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setAdminBlockBudgetViewMode('table')}
+                              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                                adminBlockBudgetViewMode === 'table'
+                                  ? 'bg-white text-slate-800 shadow-xs'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                              title="Chế độ xem bảng"
+                            >
+                              <TableIcon className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Bảng</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAdminBlockBudgetViewMode('cards')}
+                              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                                adminBlockBudgetViewMode === 'cards'
+                                  ? 'bg-white text-slate-800 shadow-xs'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                              title="Chế độ xem thẻ (tối ưu cho di động)"
+                            >
+                              <LayoutGrid className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Thẻ</span>
+                            </button>
+                          </div>
+
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -19891,6 +20224,64 @@ export default function App() {
                               Bạn có thể bấm "Đồng bộ từ bản ghi cũ" để tự động tạo ngân sách Khối từ ngân sách các team cũ.
                             </p>
                           </div>
+                        ) : adminBlockBudgetViewMode === 'cards' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                            {paginatedAdminBlockBudgets.map((b) => {
+                              const displayProj = resolveProjectName(b.projectId, b.projectName);
+                              const displayBlock = blocks.find(blk => blk.id === b.blockId)?.name || b.blockName || b.blockCode || 'Khối N/A';
+                              return (
+                                <div key={b.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-200 transition-all space-y-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 text-purple-700">
+                                        <Layers className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="text-xs font-black truncate">{displayBlock}</span>
+                                      </div>
+                                      <h4 className="font-bold text-sm text-indigo-950 mt-1 leading-tight truncate" title={displayProj}>{displayProj}</h4>
+                                    </div>
+                                    <Badge variant="outline" className="font-mono text-xs font-bold bg-slate-50 border-slate-200 shrink-0">
+                                      {b.month}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100/60 flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Mức ngân sách</span>
+                                    <span className="text-sm font-black text-emerald-600 font-mono">
+                                      {new Intl.NumberFormat('vi-VN').format(b.amount || 0)} đ
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400 border-t border-slate-100">
+                                    <div className="flex items-center gap-1 truncate font-mono">
+                                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-7 px-2 rounded-lg text-xs font-bold gap-1"
+                                        title="Chỉnh sửa ngân sách Khối"
+                                        onClick={() => handleOpenEditBlockBudget(b)}
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>Sửa</span>
+                                      </Button>
+                                      <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-7 px-1.5 rounded-lg text-xs"
+                                        title="Xóa ngân sách Khối"
+                                        onClick={() => handleDeleteBlockBudget(b)}
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <div className="overflow-x-auto rounded-xl border border-slate-200">
                             <Table>
@@ -19966,15 +20357,15 @@ export default function App() {
 
                         {/* Pagination */}
                         {filteredAdminBlockBudgets.length > 20 && (
-                          <div className="flex items-center justify-between pt-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
                             <p className="text-xs font-medium text-slate-500">
                               Trang {adminBlockBudgetPage} / {totalAdminBlockBudgetPages} ({filteredAdminBlockBudgets.length} bản ghi)
                             </p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-slate-200"
+                                className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                                 disabled={adminBlockBudgetPage <= 1}
                                 onClick={() => setAdminBlockBudgetPage(p => Math.max(1, p - 1))}
                               >
@@ -19983,7 +20374,7 @@ export default function App() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 rounded-xl border-slate-200"
+                                className="h-8 rounded-xl border-slate-200 flex-1 sm:flex-none"
                                 disabled={adminBlockBudgetPage >= totalAdminBlockBudgetPages}
                                 onClick={() => setAdminBlockBudgetPage(p => Math.min(totalAdminBlockBudgetPages, p + 1))}
                               >
@@ -20120,12 +20511,12 @@ export default function App() {
   {adminSubTab === 'users' && (
     <>
                   <Card className="border-none shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <CardTitle>Quản lý Người dùng</CardTitle>
                         <CardDescription>Phân quyền và gán dự án cho người dùng</CardDescription>
                       </div>
-                      <div className="relative w-64">
+                      <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <DebouncedInput 
                           placeholder="Tìm người dùng..." 
@@ -20367,15 +20758,15 @@ export default function App() {
   {adminSubTab === 'audit' && (
     <>
                   <Card className="border-none shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between">
+                    <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <CardTitle className="text-xl font-black text-slate-900">Nhật ký hệ thống</CardTitle>
-                        <CardDescription className="text-slate-500 font-medium font-inter flex items-center gap-2">
+                        <CardDescription className="text-slate-500 font-medium font-inter flex flex-wrap items-center gap-2">
                           Theo dõi chi tiết các thay đổi dữ liệu và lịch sử hoạt động
                           <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] h-4">Tự động đồng bộ lên Sheets</Badge>
                         </CardDescription>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                         <Button 
                           variant="outline" 
                           size="sm" 

@@ -3,7 +3,9 @@ import { getAuth } from 'firebase/auth';
 import { 
   initializeFirestore, 
   persistentLocalCache, 
+  persistentSingleTabManager,
   persistentMultipleTabManager, 
+  memoryLocalCache,
   getFirestore,
   doc, 
   getDocFromServer 
@@ -12,16 +14,33 @@ import firebaseConfig from '@/firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
+// Detect iOS or Safari browsers where persistentMultipleTabManager / Web Locks often deadlock or hang
+const isIOSOrSafari = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+  /^((?!chrome|android).)*safari/i.test(navigator.userAgent || '')
+);
+
 let firestoreDb;
 try {
+  // Use persistentSingleTabManager on iOS/Safari to completely eliminate Web Locks / BroadcastChannel hangs
+  const tabManager = isIOSOrSafari ? persistentSingleTabManager({}) : persistentMultipleTabManager();
   firestoreDb = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
     localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
+      tabManager
     })
   }, firebaseConfig.firestoreDatabaseId);
-} catch (e) {
-  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+} catch (e1) {
+  console.warn("Falling back to single tab / memory cache for Firestore:", e1);
+  try {
+    firestoreDb = initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      localCache: memoryLocalCache()
+    }, firebaseConfig.firestoreDatabaseId);
+  } catch (e2) {
+    firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
 }
 
 export const db = firestoreDb;

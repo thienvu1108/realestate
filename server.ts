@@ -420,8 +420,8 @@ async function startServer() {
 
   // Direct Source Code Sync & Vercel Deploy Trigger Endpoint
   app.post('/api/backup/github/sync-code', async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
     try {
-      const token = req.body.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
       if (!token) {
         return res.status(400).json({ error: 'Vui lòng cung cấp Personal Access Token (PAT) của GitHub.' });
       }
@@ -433,14 +433,67 @@ async function startServer() {
       const commitMsg = commitMessage || `feat: Đồng bộ toàn bộ mã nguồn ứng dụng Mayhomes - ${new Date().toLocaleString('vi-VN')}`;
       const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
 
-      await execAsync(`git config user.name "thienvu1108" && git config user.email "thienvu1108@gmail.com"`);
+      // 1. Ensure git safe directory
+      try {
+        await execAsync(`git config --global --add safe.directory "*"`);
+      } catch (safeErr: any) {
+        console.warn('Set safe.directory warning:', safeErr?.message || safeErr);
+      }
+
+      // 2. Ensure git repository is initialized
+      try {
+        await execAsync(`git rev-parse --is-inside-work-tree`);
+      } catch {
+        await execAsync(`git init`);
+      }
+
+      // 3. Configure git user & performance
+      await execAsync(`git config user.name "thienvu1108"`);
+      await execAsync(`git config user.email "thienvu1108@gmail.com"`);
+      await execAsync(`git config http.postBuffer 524288000`);
+      await execAsync(`git config pull.rebase false`);
+
+      // 4. Set remote URL
       await execAsync(`git remote set-url origin "${remoteUrl}" || git remote add origin "${remoteUrl}"`);
+
+      // 5. Try fetching remote branch so commits are based properly on remote HEAD
+      let hasRemoteBranch = false;
+      try {
+        await execAsync(`git fetch origin ${branch} --depth=1`);
+        hasRemoteBranch = true;
+      } catch (fetchErr: any) {
+        console.warn(`[Sync-Code] Could not fetch remote branch ${branch}, proceeding with local initialization:`, fetchErr?.message || fetchErr);
+      }
+
+      if (hasRemoteBranch) {
+        try {
+          await execAsync(`git branch -M ${branch}`);
+          // Reset HEAD & index to origin/branch without modifying working tree files
+          await execAsync(`git reset origin/${branch}`);
+        } catch (resetErr: any) {
+          console.warn('[Sync-Code] Reset to origin error:', resetErr?.message || resetErr);
+        }
+      } else {
+        try {
+          await execAsync(`git checkout -B ${branch}`);
+        } catch (bErr: any) {
+          console.warn('[Sync-Code] Branch checkout error:', bErr?.message || bErr);
+        }
+      }
+
+      // 6. Stage all changes
       await execAsync(`git add -A`);
 
+      // 7. Check if there are changes to commit
       const { stdout: statusOut } = await execAsync(`git status --porcelain`);
       if (!statusOut.trim()) {
-        const { stdout: currentSha } = await execAsync(`git rev-parse HEAD`);
-        const cleanSha = currentSha.trim();
+        let cleanSha = '';
+        try {
+          const { stdout: currentSha } = await execAsync(`git rev-parse HEAD`);
+          cleanSha = currentSha.trim();
+        } catch {
+          cleanSha = 'up-to-date';
+        }
         return res.json({
           success: true,
           alreadyUpToDate: true,
@@ -453,8 +506,15 @@ async function startServer() {
         });
       }
 
+      // 8. Commit and Push
       await execAsync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
-      await execAsync(`git push origin ${branch}`);
+
+      try {
+        await execAsync(`git push origin ${branch}`);
+      } catch (pushErr: any) {
+        console.warn('[Sync-Code] Standard push failed, retrying with force push:', pushErr?.message);
+        await execAsync(`git push origin ${branch} --force`);
+      }
 
       const { stdout: commitSha } = await execAsync(`git rev-parse HEAD`);
       const cleanSha = commitSha.trim();
@@ -471,7 +531,9 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error('Code sync error:', err);
-      res.status(500).json({ error: 'Lỗi đồng bộ mã nguồn: ' + (err.stderr || err.message) });
+      const rawError = err.stderr || err.message || String(err);
+      const safeError = token ? rawError.replace(new RegExp(token, 'g'), '***') : rawError;
+      res.status(500).json({ error: 'Lỗi đồng bộ mã nguồn: ' + safeError });
     }
   });
 

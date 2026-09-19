@@ -825,8 +825,8 @@ export function AdminReciprocalBudgets({
 
       {/* DRAGGABLE TABLE SECTION (Tính năng kéo như mục Nghiệm thu MKT) */}
       <Card className="border-slate-100 shadow-md rounded-3xl overflow-hidden bg-white">
-        <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
+        <CardHeader className="pb-3 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base font-black text-slate-900">
               Danh Sách Ngân Sách Đối Ứng Các Khối ({sortedRecords.length})
             </CardTitle>
@@ -1342,6 +1342,39 @@ export function AdminReciprocalBudgets({
                   VNĐ
                 </span>
               </div>
+            </div>
+
+            {/* Payment Status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">Trạng thái thanh toán</Label>
+              <Select
+                value={formPaymentStatus}
+                onValueChange={(val: PaymentStatusType) => setFormPaymentStatus(val)}
+              >
+                <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-semibold">
+                  <SelectValue placeholder="Chọn trạng thái thanh toán" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <span>Chưa thanh toán (Mặc định)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>Đã thanh toán</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      <span>Từ chối</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Note */}

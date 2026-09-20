@@ -1174,7 +1174,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   accountant: [
     'home.view', 'home.export',
     'report_nt.view',
-    'block.view', 'block_budget.view', 'reciprocal_budget.view', 'reciprocal_budget.edit',
+    'block.view', 'block_budget.view', 'reciprocal_budget.view', 'reciprocal_budget.create', 'reciprocal_budget.edit', 'reciprocal_budget.delete',
     'team_mgmt.view',
     'register.view',
     'actual.view',
@@ -1315,8 +1315,8 @@ export const PERMISSION_GROUPS = [
     category: 'Ngân sách đối ứng (Reciprocal Budget)',
     items: [
       { key: 'reciprocal_budget.view', label: 'Xem Ngân sách đối ứng', desc: 'Xem danh sách và chi tiết các bản kê khai, hạn mức ngân sách đối ứng của Khối.' },
-      { key: 'reciprocal_budget.create', label: 'Thêm Ngân sách đối ứng', desc: 'Đăng ký hoặc tạo mới bản ghi ngân sách đối ứng theo tháng cho Khối.' },
-      { key: 'reciprocal_budget.edit', label: 'Sửa Ngân sách đối ứng', desc: 'Chỉnh sửa phân bổ ngân sách qua thẻ / ngoài và cập nhật hạn mức đối ứng được duyệt.' },
+      { key: 'reciprocal_budget.create', label: 'Thêm Ngân sách đối ứng', desc: 'Tạo mới hoặc thêm bản ghi ngân sách đối ứng theo tháng cho Khối trong Quản trị đối ứng.' },
+      { key: 'reciprocal_budget.edit', label: 'Sửa Ngân sách đối ứng & Trạng thái thanh toán', desc: 'Chỉnh sửa phân bổ ngân sách, duyệt hạn mức đối ứng và cập nhật trạng thái thanh toán (Chưa thanh toán / Đã thanh toán / Từ chối).' },
       { key: 'reciprocal_budget.delete', label: 'Xóa Ngân sách đối ứng', desc: 'Xóa bản ghi ngân sách đối ứng của Khối khỏi hệ thống.' }
     ]
   },

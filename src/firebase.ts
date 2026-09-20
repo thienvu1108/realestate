@@ -7,14 +7,35 @@ import {
   persistentMultipleTabManager, 
   memoryLocalCache,
   getFirestore,
+  setLogLevel,
   doc, 
   getDocFromServer 
 } from 'firebase/firestore';
 import firebaseConfig from '@/firebase-applet-config.json';
 
+// Silence Firestore internal diagnostic log warnings (including multi-tab lease clock skew warnings)
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore
+}
+
+// Intercept benign Firestore multi-tab lease clock drift warning
+if (typeof window !== 'undefined') {
+  const origConsoleError = console.error;
+  console.error = function (...args: any[]) {
+    const msg = args.map(a => (typeof a === 'string' ? a : (a?.message || ''))).join(' ');
+    if (msg.includes('Detected an update time that is in the future')) {
+      return;
+    }
+    origConsoleError.apply(console, args);
+  };
+}
+
 const app = initializeApp(firebaseConfig);
 
-// Detect iOS or Safari browsers where persistentMultipleTabManager / Web Locks often deadlock or hang
+// Detect iframe or iOS or Safari where persistentMultipleTabManager / Web Locks often conflict or deadlock
+const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 const isIOSOrSafari = typeof navigator !== 'undefined' && (
   /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
@@ -23,8 +44,8 @@ const isIOSOrSafari = typeof navigator !== 'undefined' && (
 
 let firestoreDb;
 try {
-  // Use persistentSingleTabManager on iOS/Safari to completely eliminate Web Locks / BroadcastChannel hangs
-  const tabManager = isIOSOrSafari ? persistentSingleTabManager({}) : persistentMultipleTabManager();
+  // Use persistentSingleTabManager in iframes or on iOS/Safari to completely eliminate lease conflicts and clock skew warnings
+  const tabManager = (isIframe || isIOSOrSafari) ? persistentSingleTabManager({}) : persistentMultipleTabManager();
   firestoreDb = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
     localCache: persistentLocalCache({

@@ -117,10 +117,10 @@ export function AdminReciprocalBudgets({
   logAction,
   db
 }: AdminReciprocalBudgetsProps) {
-  const hasViewPerm = canView ?? (isAdmin || isSuperAdmin || isAccountant);
-  const hasCreatePerm = canCreate ?? (isAdmin || isSuperAdmin);
-  const hasEditPerm = canEdit ?? (isAdmin || isSuperAdmin || isAccountant);
-  const hasDeletePerm = canDelete ?? (isAdmin || isSuperAdmin);
+  const hasViewPerm = canView !== undefined ? canView : (isAdmin || isSuperAdmin || isAccountant);
+  const hasCreatePerm = canCreate !== undefined ? canCreate : (isAdmin || isSuperAdmin || isAccountant);
+  const hasEditPerm = canEdit !== undefined ? canEdit : (isAdmin || isSuperAdmin || isAccountant);
+  const hasDeletePerm = canDelete !== undefined ? canDelete : (isAdmin || isSuperAdmin || isAccountant);
 
   // Filters
   const [filterBlock, setFilterBlock] = useState<string>('all');
@@ -156,7 +156,7 @@ export function AdminReciprocalBudgets({
   // Quick Update Payment Status
   const handleQuickUpdatePaymentStatus = async (record: any, newStatus: string) => {
     if (!hasEditPerm) {
-      toast.error('Bạn không có quyền cập nhật trạng thái thanh toán!');
+      toast.error('Bạn không có quyền cập nhật trạng thái thanh toán! Chỉ Admin, Kế toán hoặc người được phân quyền mới có thể cập nhật.');
       return;
     }
     try {
@@ -369,6 +369,10 @@ export function AdminReciprocalBudgets({
 
   // Save Approved Reciprocal Budget
   const handleSaveApproval = async () => {
+    if (!hasEditPerm) {
+      toast.error('Bạn không có quyền phê duyệt ngân sách đối ứng!');
+      return;
+    }
     if (!approvalRecord) return;
     const approvedVal = parseVal(approvalAmountInput);
     if (approvedVal < 0) {
@@ -403,6 +407,14 @@ export function AdminReciprocalBudgets({
 
   // Open Add / Edit Form Modal
   const handleOpenFormModal = (record?: any) => {
+    if (record && !hasEditPerm) {
+      toast.error('Bạn không có quyền chỉnh sửa ngân sách đối ứng!');
+      return;
+    }
+    if (!record && !hasCreatePerm) {
+      toast.error('Bạn không có quyền thêm mới ngân sách đối ứng!');
+      return;
+    }
     if (record) {
       setEditingRecord(record);
       setFormBlockId(record.blockId || record.blockCode);
@@ -442,6 +454,14 @@ export function AdminReciprocalBudgets({
   // Submit Add / Edit Form
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingRecord && !hasEditPerm) {
+      toast.error('Bạn không có quyền chỉnh sửa ngân sách đối ứng!');
+      return;
+    }
+    if (!editingRecord && !hasCreatePerm) {
+      toast.error('Bạn không có quyền thêm mới ngân sách đối ứng!');
+      return;
+    }
     if (!selectedFormBlock) {
       toast.error('Vui lòng chọn Khối!');
       return;
@@ -509,6 +529,10 @@ export function AdminReciprocalBudgets({
   // Confirm Delete
   const handleConfirmDelete = async () => {
     if (!recordToDelete) return;
+    if (!hasDeletePerm) {
+      toast.error('Bạn không có quyền xóa ngân sách đối ứng!');
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'reciprocal_budgets', recordToDelete.id));
       await logAction('ADMIN_DELETE_RECIPROCAL_BUDGET', 'reciprocal_budgets', recordToDelete.id, {

@@ -109,7 +109,6 @@ export function BlockReciprocalRegistration({
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMarketingPeriod || '');
   const [companyCardBudgetInput, setCompanyCardBudgetInput] = useState<string>('');
   const [externalBudgetInput, setExternalBudgetInput] = useState<string>('');
-  const [paymentStatusInput, setPaymentStatusInput] = useState<PaymentStatusType>('unpaid');
   const [noteInput, setNoteInput] = useState<string>('');
   const [historyViewMode, setHistoryViewMode] = useState<'table' | 'cards'>('table');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -175,13 +174,11 @@ export function BlockReciprocalRegistration({
       setEditingRecordId(existingRecord.id);
       setCompanyCardBudgetInput(existingRecord.companyCardBudget ? formatCurrencyInput(String(existingRecord.companyCardBudget)) : '0');
       setExternalBudgetInput(existingRecord.externalBudget ? formatCurrencyInput(String(existingRecord.externalBudget)) : '0');
-      setPaymentStatusInput(getPaymentStatusInfo(existingRecord.paymentStatus).value);
       setNoteInput(existingRecord.note || '');
     } else {
       setEditingRecordId(null);
       setCompanyCardBudgetInput('');
       setExternalBudgetInput('');
-      setPaymentStatusInput('unpaid');
       setNoteInput('');
     }
   }, [existingRecord, selectedMonth, formatCurrencyInput]);
@@ -260,6 +257,9 @@ export function BlockReciprocalRegistration({
       const directorName = blockDirector?.displayName || blockDirector?.email || currentActiveBlock.directorName || 'Chưa gán';
       const directorUid = currentActiveBlock.directorUid || '';
 
+      // Preserve existing payment status on update, default to 'unpaid' for new records
+      const preservedPaymentStatus = editingRecordId ? (existingRecord?.paymentStatus || 'unpaid') : 'unpaid';
+
       const payload = {
         blockId: currentActiveBlock.id,
         blockCode: currentActiveBlock.blockCode,
@@ -270,7 +270,7 @@ export function BlockReciprocalRegistration({
         totalBlockBudget,
         companyCardBudget: parsedCompanyCard,
         externalBudget: parsedExternal,
-        paymentStatus: paymentStatusInput || 'unpaid',
+        paymentStatus: preservedPaymentStatus,
         note: noteInput.trim(),
         updatedAt: serverTimestamp(),
         updatedBy: user?.email || 'N/A',
@@ -286,7 +286,7 @@ export function BlockReciprocalRegistration({
           totalBlockBudget,
           companyCardBudget: parsedCompanyCard,
           externalBudget: parsedExternal,
-          paymentStatus: paymentStatusInput || 'unpaid'
+          paymentStatus: preservedPaymentStatus
         });
         toast.success(`Đã cập nhật Đăng ký đối ứng kỳ ${selectedMonth} thành công!`);
       } else {
@@ -295,7 +295,7 @@ export function BlockReciprocalRegistration({
           ...payload,
           approvedReciprocalBudget: 0,
           approvalStatus: 'pending',
-          paymentStatus: paymentStatusInput || 'unpaid',
+          paymentStatus: 'unpaid',
           createdAt: serverTimestamp(),
           createdBy: user?.email || 'N/A',
           createdByName: userProfile?.displayName || user?.displayName || user?.email || 'N/A'
@@ -306,7 +306,7 @@ export function BlockReciprocalRegistration({
           totalBlockBudget,
           companyCardBudget: parsedCompanyCard,
           externalBudget: parsedExternal,
-          paymentStatus: paymentStatusInput || 'unpaid'
+          paymentStatus: 'unpaid'
         });
         toast.success(`Đã gửi Đăng ký đối ứng kỳ ${selectedMonth} thành công!`);
       }
@@ -318,34 +318,6 @@ export function BlockReciprocalRegistration({
     }
   };
 
-  // Quick Update Payment Status (real-time sync)
-  const handleQuickUpdatePaymentStatus = async (record: any, newStatus: string) => {
-    if (!hasEditPerm) {
-      toast.error('Bạn không có quyền cập nhật trạng thái thanh toán!');
-      return;
-    }
-    try {
-      const statusInfo = getPaymentStatusInfo(newStatus);
-      await updateDoc(doc(db, 'reciprocal_budgets', record.id), {
-        paymentStatus: statusInfo.value,
-        updatedAt: serverTimestamp(),
-        updatedBy: user?.email || 'N/A',
-        updatedByName: userProfile?.displayName || user?.displayName || user?.email || 'N/A'
-      });
-
-      await logAction('UPDATE_PAYMENT_STATUS_RECIPROCAL', 'reciprocal_budgets', record.id, {
-        blockCode: record.blockCode,
-        month: record.month,
-        previousStatus: record.paymentStatus || 'unpaid',
-        newStatus: statusInfo.value
-      });
-
-      toast.success(`Đã cập nhật trạng thái thanh toán: "${statusInfo.label}" (Kỳ ${record.month})`);
-    } catch (err: any) {
-      console.error('Error updating payment status:', err);
-      toast.error('Lỗi khi cập nhật thanh toán: ' + (err.message || ''));
-    }
-  };
 
   // Handle Delete
   const handleConfirmDelete = async () => {
@@ -610,51 +582,6 @@ export function BlockReciprocalRegistration({
                   />
                 </div>
 
-                {/* 7. Trạng thái thanh toán (Đồng bộ với mục Ngân sách đối ứng) */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-slate-700">Trạng thái thanh toán</Label>
-                    <span className="text-[10px] text-slate-400 font-semibold">Mặc định: Chưa thanh toán</span>
-                  </div>
-                  {hasEditPerm ? (
-                    <Select
-                      value={paymentStatusInput}
-                      onValueChange={(val: PaymentStatusType) => setPaymentStatusInput(val)}
-                    >
-                      <SelectTrigger className="h-11 rounded-2xl border-slate-200 text-xs font-semibold">
-                        <SelectValue placeholder="Chọn trạng thái thanh toán" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
-                            <span>Chưa thanh toán (Mặc định)</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span>Đã thanh toán</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-rose-500" />
-                            <span>Từ chối</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center">
-                      <Badge className={getPaymentStatusInfo(paymentStatusInput).badgeClass}>
-                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${getPaymentStatusInfo(paymentStatusInput).dotClass}`} />
-                        {getPaymentStatusInfo(paymentStatusInput).label}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-
                 {/* Approved Reciprocal Budget Info (if Admin has approved) */}
                 {existingRecord && existingRecord.approvedReciprocalBudget > 0 && (
                   <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center justify-between">
@@ -837,48 +764,12 @@ export function BlockReciprocalRegistration({
                               )}
                             </TableCell>
 
-                            {/* CỘT THANH TOÁN (3 TRẠNG THÁI: Chưa thanh toán / Đã thanh toán / Từ chối) */}
+                            {/* CỘT THANH TOÁN (Chỉ xem trạng thái; chỉnh sửa trạng thái được thực hiện trong Quản trị đối ứng) */}
                             <TableCell className="whitespace-nowrap py-3.5">
-                              {hasEditPerm ? (
-                                <Select 
-                                  value={paymentInfo.value}
-                                  onValueChange={(val) => handleQuickUpdatePaymentStatus(item, val)}
-                                >
-                                  <SelectTrigger className={`h-7 w-[140px] text-xs font-bold rounded-xl border ${
-                                    paymentInfo.badgeClass
-                                  }`}>
-                                    <div className="flex items-center gap-1.5 truncate">
-                                      <span className={`w-2 h-2 rounded-full shrink-0 ${paymentInfo.dotClass}`} />
-                                      <span className="truncate">{paymentInfo.label}</span>
-                                    </div>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                                        <span>Chưa thanh toán</span>
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                        <span>Đã thanh toán</span>
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
-                                      <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-rose-500" />
-                                        <span>Từ chối</span>
-                                      </div>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Badge className={paymentInfo.badgeClass}>
-                                  <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${paymentInfo.dotClass}`} />
-                                  {paymentInfo.label}
-                                </Badge>
-                              )}
+                              <Badge className={paymentInfo.badgeClass}>
+                                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${paymentInfo.dotClass}`} />
+                                {paymentInfo.label}
+                              </Badge>
                             </TableCell>
 
                             {/* CỘT GHI CHÚ */}
@@ -917,7 +808,6 @@ export function BlockReciprocalRegistration({
                                       setEditingRecordId(item.id);
                                       setCompanyCardBudgetInput(formatCurrencyInput(String(item.companyCardBudget || 0)));
                                       setExternalBudgetInput(formatCurrencyInput(String(item.externalBudget || 0)));
-                                      setPaymentStatusInput(paymentInfo.value);
                                       setNoteInput(item.note || '');
                                       toast.info(`Đang chỉnh sửa bản ghi kỳ ${item.month}`);
                                     }}
@@ -984,47 +874,11 @@ export function BlockReciprocalRegistration({
                               {hasApproved ? 'Đã duyệt đối ứng' : 'Chờ Admin duyệt'}
                             </Badge>
 
-                            {/* Quick Payment Status in Card Header */}
-                            {hasEditPerm ? (
-                              <Select 
-                                value={paymentInfo.value}
-                                onValueChange={(val) => handleQuickUpdatePaymentStatus(item, val)}
-                              >
-                                <SelectTrigger className={`h-7 w-[138px] text-[11px] font-bold rounded-xl border ${
-                                  paymentInfo.badgeClass
-                                }`}>
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span className={`w-2 h-2 rounded-full shrink-0 ${paymentInfo.dotClass}`} />
-                                    <span className="truncate">{paymentInfo.label}</span>
-                                  </div>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="unpaid" className="text-xs font-semibold text-amber-800">
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-amber-500" />
-                                      <span>Chưa thanh toán</span>
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="paid" className="text-xs font-semibold text-emerald-800">
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                      <span>Đã thanh toán</span>
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="rejected" className="text-xs font-semibold text-rose-800">
-                                    <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                                      <span>Từ chối</span>
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Badge className={paymentInfo.badgeClass}>
-                                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${paymentInfo.dotClass}`} />
-                                {paymentInfo.label}
-                              </Badge>
-                            )}
+                            {/* Payment Status in Card Header (Read-only badge in Block Management) */}
+                            <Badge className={paymentInfo.badgeClass}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${paymentInfo.dotClass}`} />
+                              {paymentInfo.label}
+                            </Badge>
                           </div>
 
                           <div className="flex items-center gap-1.5 self-end sm:self-auto">
@@ -1037,7 +891,6 @@ export function BlockReciprocalRegistration({
                                   setEditingRecordId(item.id);
                                   setCompanyCardBudgetInput(formatCurrencyInput(String(item.companyCardBudget || 0)));
                                   setExternalBudgetInput(formatCurrencyInput(String(item.externalBudget || 0)));
-                                  setPaymentStatusInput(paymentInfo.value);
                                   setNoteInput(item.note || '');
                                   toast.info(`Đang chỉnh sửa bản ghi kỳ ${item.month}`);
                                 }}

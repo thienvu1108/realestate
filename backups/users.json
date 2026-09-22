@@ -1,0 +1,3764 @@
+[
+  {
+    "id": "g0TeRyRjycYpQD0xNP3TDag04pw2",
+    "uid": "g0TeRyRjycYpQD0xNP3TDag04pw2",
+    "email": "nguyenld.191@gmail.com",
+    "fullName": "Lê Đình Nguyên",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "f3CqMpnpZbYsgne98AVATF9U31S2",
+    "uid": "f3CqMpnpZbYsgne98AVATF9U31S2",
+    "email": "lehongtruong8888@gmail.com",
+    "fullName": "Trường",
+    "role": "user",
+    "teamName": "MAY15.01\tLê Thị Thanh Vân",
+    "assignedProjects": []
+  },
+  {
+    "id": "RVWoRTXORcPpptXsmb7dgh4fxUz1",
+    "uid": "RVWoRTXORcPpptXsmb7dgh4fxUz1",
+    "email": "lamhongphuongbds@gmail.com",
+    "fullName": "Phượng Lâm Hồng",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "ewZyWjcokHNsHUEZ3hTOvL3ERLO2",
+    "uid": "ewZyWjcokHNsHUEZ3hTOvL3ERLO2",
+    "email": "tiephc@gmail.com",
+    "fullName": "My Love",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "djpZ9fVeG9U6aTAoZovl4s2ndxn1",
+    "uid": "djpZ9fVeG9U6aTAoZovl4s2ndxn1",
+    "email": "trandang273@gmail.com",
+    "fullName": "Truong Dang",
+    "role": "gd_khoi",
+    "teamName": "MAY72.61 Hoàng Thị Thu/Nguyễn Ngọc Duy Hiếu",
+    "assignedBlock": "E72",
+    "assignedProjects": []
+  },
+  {
+    "id": "ZtjTiZmljUZD5NGd56lCty8lYBu2",
+    "uid": "ZtjTiZmljUZD5NGd56lCty8lYBu2",
+    "email": "minhquangt436@gmail.com",
+    "fullName": "MinhQuang17 Trinh",
+    "role": "gd_khoi",
+    "teamName": "MAY66\tĐoàn Thị Hồng Nhung",
+    "assignedBlock": "unassigned",
+    "assignedProjects": []
+  },
+  {
+    "id": "eYV6jkYd6qQU05nwEyGSVznc0Wg2",
+    "uid": "eYV6jkYd6qQU05nwEyGSVznc0Wg2",
+    "email": "dungdang245@gmail.com",
+    "fullName": "Dung Dang",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY42.01 Nguyễn Bá Quý",
+    "assignedBlock": "E42",
+    "assignedBlocks": [
+      "E42",
+      "jOXy5Z8xJXYfqgtxnlq7"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "y1WzM2t9ecQi8hvf6jKkOy22W1F3",
+    "uid": "y1WzM2t9ecQi8hvf6jKkOy22W1F3",
+    "email": "chiakiphuongvinhomes@gmail.com",
+    "fullName": "Nguyễn Phương",
+    "role": "gd_khoi",
+    "teamName": "MAY68.01 Đặng Văn Huynh",
+    "assignedBlock": "E68",
+    "assignedProjects": []
+  },
+  {
+    "id": "8LSJA2ea1PPbg8kEnsrvDhEGsZG2",
+    "uid": "8LSJA2ea1PPbg8kEnsrvDhEGsZG2",
+    "email": "vantuyen230590@gmail.com",
+    "fullName": "Nguyễn Văn Tuyến",
+    "role": "gd_khoi",
+    "teamName": "MAY05.89\tNguyễn Văn Tuyến",
+    "assignedBlock": "E89",
+    "assignedProjects": []
+  },
+  {
+    "id": "0mx5pI7mtuO0RpI0hLdwRQ24qNH2",
+    "uid": "0mx5pI7mtuO0RpI0hLdwRQ24qNH2",
+    "email": "bachcongdung56@gmail.com",
+    "fullName": "Dũng Bạch Công",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY09.01\tLương Văn Công",
+    "assignedBlock": "E09",
+    "assignedBlocks": [
+      "E09",
+      "uONkKMP6gLMXqNpG8MpH"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "hiPIXEUDm9OEL5xuqqLboTOPoao2",
+    "uid": "hiPIXEUDm9OEL5xuqqLboTOPoao2",
+    "email": "tranghuyendsth@gmail.com",
+    "fullName": "TRANG NGUYEN THI THU",
+    "role": "gd_khoi",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedBlock": "E12",
+    "assignedProjects": []
+  },
+  {
+    "id": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+    "uid": "3LKSCZ9Z8ZQQkeQVX2dZVP2J3P03",
+    "email": "thuatbt.vnn@gmail.com",
+    "fullName": "Đoàn Tất Thuật",
+    "role": "user",
+    "teamName": "MAY05.19 - Nguyễn Đức Huy",
+    "assignedBlock": "E05",
+    "assignedProjects": []
+  },
+  {
+    "id": "Gg7LFzVjJwV8uuapykVHJkWWpdI2",
+    "uid": "Gg7LFzVjJwV8uuapykVHJkWWpdI2",
+    "email": "phuongvu.neu.9@gmail.com",
+    "fullName": "PHUONG VU",
+    "role": "user",
+    "teamName": "MAY07.01 Đỗ Thị Thủy",
+    "assignedProjects": []
+  },
+  {
+    "id": "WtdTL7F27cMfzz85ydGH2XqmWaD2",
+    "uid": "WtdTL7F27cMfzz85ydGH2XqmWaD2",
+    "email": "phongnt15989@gmail.com",
+    "fullName": "Phong Nguyễn Trọng",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY14\tNguyễn Hạnh Hoa",
+    "assignedBlock": "E14",
+    "assignedBlocks": [
+      "E14",
+      "KRAtod3rPPJ2bsVwHbfn"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "UiK44LkjujdMBG6wrKL0wBFMvXl1",
+    "uid": "UiK44LkjujdMBG6wrKL0wBFMvXl1",
+    "email": "quangkhanh285@gmail.com",
+    "fullName": "Khanh Quang",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "h4B8fW3dM2hc8qKA6TqmekYNyBG2",
+    "uid": "h4B8fW3dM2hc8qKA6TqmekYNyBG2",
+    "email": "huyenlethu590@gmail.com",
+    "fullName": "Huyền Lê Thu",
+    "role": "user",
+    "teamName": "MAY07.01 Đỗ Thị Thủy",
+    "assignedProjects": []
+  },
+  {
+    "id": "IzF2tV3WiNyY9skLbots",
+    "uid": "IzF2tV3WiNyY9skLbots",
+    "email": "giangbdsvinhoms989@gmail.com",
+    "fullName": "Hồ Sỹ Giang",
+    "role": "user",
+    "teamName": "MAY35.99 Trương Thị Hồng Nhung"
+  },
+  {
+    "id": "mcqfXDUpKWXum5qAiGDMlEWRrVx1",
+    "uid": "mcqfXDUpKWXum5qAiGDMlEWRrVx1",
+    "email": "ketoan.southhomes@gmail.com",
+    "fullName": "Quyết Nguyễn",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "Pr35yq6C3lOPIWlNjqBCzmCKwUE3",
+    "uid": "Pr35yq6C3lOPIWlNjqBCzmCKwUE3",
+    "email": "ttpa.mayhomes@gmail.com",
+    "fullName": "Phuong Anh Tran",
+    "role": "user",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "zgpihlQww3Z5jHBCMU53fBbNvvy2",
+    "uid": "zgpihlQww3Z5jHBCMU53fBbNvvy2",
+    "email": "nghiadodaihocvip@gmail.com",
+    "fullName": "Nghĩa Đoàn",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "IhapklsWGyZCpU2tXgUGntfPoky1",
+    "uid": "IhapklsWGyZCpU2tXgUGntfPoky1",
+    "email": "hellomaidoan@gmail.com",
+    "fullName": "Mai Doãn",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "goxHhW0aVteVMk5PKQosSn4OwmD3",
+    "uid": "goxHhW0aVteVMk5PKQosSn4OwmD3",
+    "email": "conmin0002@gmail.com",
+    "fullName": "Min Min",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "yjeIt2faUWOBplUDdKgvtvTEytI2",
+    "uid": "yjeIt2faUWOBplUDdKgvtvTEytI2",
+    "email": "sontungmkt.work@gmail.com",
+    "fullName": "Phạm Sơn Tùng",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "sfF7eUKYg3dziz0ZoukkJsPX73s2",
+    "uid": "sfF7eUKYg3dziz0ZoukkJsPX73s2",
+    "email": "vungan1782003@gmail.com",
+    "fullName": "Kim Ngân",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "ggpnr7TdtiazI36uKDWGRpMdQVk2",
+    "uid": "ggpnr7TdtiazI36uKDWGRpMdQVk2",
+    "email": "nguyensinh231002@gmail.com",
+    "fullName": "Sinh Nguyên",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "MgHc6KF0cygdSqtAXOwokMszj8B3",
+    "uid": "MgHc6KF0cygdSqtAXOwokMszj8B3",
+    "email": "uccuteno1@gmail.com",
+    "fullName": "Ngô Văn Hoàng",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "XvkUFim29ofbaatIJBGtYf4N2iI3",
+    "uid": "XvkUFim29ofbaatIJBGtYf4N2iI3",
+    "email": "nguyenthutrang01012005@gmail.com",
+    "fullName": "THU TRANG NGUYỄN",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "KaKwAoMUo7R1BDEqcElR86BVdq62",
+    "uid": "KaKwAoMUo7R1BDEqcElR86BVdq62",
+    "email": "duyly298@gmail.com",
+    "fullName": "Lý Ngọc Duy",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "or3xk2Cdq6NTncRgOJ2WSUwsNQk1",
+    "uid": "or3xk2Cdq6NTncRgOJ2WSUwsNQk1",
+    "email": "namnam150505@gmail.com",
+    "fullName": "Nam Trương",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "sZpA5AbSP3X4WA5wAp3Kualg4gW2",
+    "uid": "sZpA5AbSP3X4WA5wAp3Kualg4gW2",
+    "email": "chuminh1005@gmail.com",
+    "fullName": "MinhNT",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "w8ngJ8MPwvWZeW3mFzxWCSBUt3Y2",
+    "uid": "w8ngJ8MPwvWZeW3mFzxWCSBUt3Y2",
+    "email": "thuytienlandnhatrang@gmail.com",
+    "fullName": "Lê Thị Thủy Tiên",
+    "role": "user",
+    "teamName": "MAY98.01 - Nguyễn Thị Nhật",
+    "assignedProjects": []
+  },
+  {
+    "id": "X41ddwdFVlgdwhmA383ZbOTmR6Q2",
+    "uid": "X41ddwdFVlgdwhmA383ZbOTmR6Q2",
+    "email": "thanhhuynh18795@gmail.com",
+    "fullName": "Thành Huỳnh",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "ISX0ucaRn0T2GAOub6ta",
+    "uid": "ISX0ucaRn0T2GAOub6ta",
+    "email": "huong.hathanhland@gmail.com",
+    "fullName": "Dương Văn Hưởng",
+    "role": "user",
+    "teamName": "MAY35.26 Dương Văn Hưởng"
+  },
+  {
+    "id": "9qAeJmwr4dVd9GYP06d9UvGmQRy2",
+    "uid": "9qAeJmwr4dVd9GYP06d9UvGmQRy2",
+    "email": "sunshine121295@gmail.com",
+    "fullName": "Dương Hà Ánh",
+    "role": "user",
+    "teamName": "MAY35.98  Hà Ánh Dương",
+    "assignedBlock": "O14oX9Ncxt7ZsAjNmkhP",
+    "assignedProjects": []
+  },
+  {
+    "id": "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+    "uid": "TdusZYUZ8bRM7P1AwLAp6csV3wr2",
+    "email": "daokhanhlinh.2907@gmail.com",
+    "fullName": "Khánh Linh Đào",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY45.08\tHoàng Công Quyền",
+    "assignedBlock": "E45",
+    "assignedBlocks": [
+      "E45",
+      "ozw7beeafcYdiKjLxtsr"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+    "uid": "HIEOVnXhVoMGDMgt78MMA3qUMA62",
+    "email": "tuhaithanhmai@gmail.com",
+    "fullName": "Từ Thuỳ",
+    "role": "gd_khoi",
+    "teamName": "MAY45.66 Vũ Văn Phương",
+    "assignedBlock": "E45",
+    "assignedBlocks": [
+      "E45",
+      "ozw7beeafcYdiKjLxtsr"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "rI2PLOiDqEdtQLjO1wrTAMknrKd2",
+    "uid": "rI2PLOiDqEdtQLjO1wrTAMknrKd2",
+    "email": "quyetnv221293@gmail.com",
+    "fullName": "Nguyễn Văn Quyết",
+    "role": "user",
+    "teamName": "MAY35.48 Phạm Văn Tú",
+    "assignedBlock": "O14oX9Ncxt7ZsAjNmkhP",
+    "assignedProjects": []
+  },
+  {
+    "id": "4MDa4O1zLIb718hUeIjLv82KlUH3",
+    "uid": "4MDa4O1zLIb718hUeIjLv82KlUH3",
+    "email": "hainamta2@gmail.com",
+    "fullName": "Trần Hải Nam E91",
+    "role": "gd_khoi",
+    "teamName": "Team Khác",
+    "assignedBlock": "E91",
+    "assignedProjects": []
+  },
+  {
+    "id": "507y026kSgcXunJffxH0HlUO8Uv1",
+    "uid": "507y026kSgcXunJffxH0HlUO8Uv1",
+    "email": "nhungzeni2@gmail.com",
+    "fullName": "Trương Thị Hồng Nhung",
+    "role": "user",
+    "teamName": "MAY35.99 Trương Thị Hồng Nhung",
+    "assignedBlock": "O14oX9Ncxt7ZsAjNmkhP",
+    "assignedProjects": []
+  },
+  {
+    "id": "yT7nj6wBmDSAO7aqwkt3glI8dun1",
+    "uid": "yT7nj6wBmDSAO7aqwkt3glI8dun1",
+    "email": "hongnhung3489@gmail.com",
+    "fullName": "Nhung Thị Trương Hồng",
+    "role": "user",
+    "teamName": "MAY99.02\tPhạm Anh Vân",
+    "assignedProjects": []
+  },
+  {
+    "id": "LvynEOMG0WctOtt33eJJ38VjgKs1",
+    "uid": "LvynEOMG0WctOtt33eJJ38VjgKs1",
+    "email": "leyenkbt@gmail.com",
+    "fullName": "Lê Yến",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY45.68 Vũ Quốc Việt",
+    "assignedBlock": "E45",
+    "assignedBlocks": [
+      "E45",
+      "ozw7beeafcYdiKjLxtsr"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "TCi5jGK2LFY9LVlzFWUuySfFSjE3",
+    "uid": "TCi5jGK2LFY9LVlzFWUuySfFSjE3",
+    "email": "phamvantu29121991@gmail.com",
+    "fullName": "Tú Phạm",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "FYgJrYpmdYP2hnLvzFv3qvbSwo23",
+    "uid": "FYgJrYpmdYP2hnLvzFv3qvbSwo23",
+    "email": "vuonglanhp@gmail.com",
+    "fullName": "Lan Vương",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "vXQ8hx9eGTV1R2MtQtfjVyiUwrq1",
+    "uid": "vXQ8hx9eGTV1R2MtQtfjVyiUwrq1",
+    "email": "nghiemthumkt@gmail.com",
+    "fullName": "MAYHOMES",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "jmdLfytDYxU5Ta0NuaQtqtD7gDI2",
+    "uid": "jmdLfytDYxU5Ta0NuaQtqtD7gDI2",
+    "email": "nguyenquockhanhbdsvn@gmail.com",
+    "fullName": "Nguyen Khanh",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "wWEUnnmAFheim6iaaeKZ5gAuQ0Z2",
+    "uid": "wWEUnnmAFheim6iaaeKZ5gAuQ0Z2",
+    "email": "vinhomesnguyentrai2017@gmail.com",
+    "fullName": "Lê Hoài Nam",
+    "role": "user",
+    "teamName": "MAY46.07\tLã Thế Hùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "bwCLhkYEcAXAPZLK9b8myktsPCt1",
+    "uid": "bwCLhkYEcAXAPZLK9b8myktsPCt1",
+    "email": "vphuoc1511@gmail.com",
+    "fullName": "To Thi Uyen",
+    "role": "user",
+    "teamName": "MAY36.39 Nguyễn Thị Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "WOZxUZyyokO7TQENrqnsGwQFOmo2",
+    "uid": "WOZxUZyyokO7TQENrqnsGwQFOmo2",
+    "email": "nhaphovinhomes@gmail.com",
+    "fullName": "Vinhomes NhaPho",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "2ZghOWvLFya5CVWPcY0xlS34FPm1",
+    "uid": "2ZghOWvLFya5CVWPcY0xlS34FPm1",
+    "email": "trolyeagle17@gmail.com",
+    "fullName": "TRỢ LÝ E17",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY17.01 Vũ Thị Hiền",
+    "assignedBlock": "E17",
+    "assignedBlocks": [
+      "E17",
+      "3h3uusPGWVG9bkZ4mspQ"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "Nj5QhUYREETFYOLj6NkSgZU24c62",
+    "uid": "Nj5QhUYREETFYOLj6NkSgZU24c62",
+    "email": "tranbinh.hvtc@gmail.com",
+    "fullName": "binh tran",
+    "role": "gd_khoi",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedBlock": "E13",
+    "assignedProjects": []
+  },
+  {
+    "id": "o0B9xZE1GZg0yYu78w5EgmDVhJI2",
+    "uid": "o0B9xZE1GZg0yYu78w5EgmDVhJI2",
+    "email": "vuviethome@gmail.com",
+    "fullName": "Viet Vu",
+    "role": "user",
+    "teamName": "MAY45.68 Vũ Quốc Việt",
+    "assignedProjects": []
+  },
+  {
+    "id": "Hgaq5YFA04SEuA2tAPq1BnNsLgI2",
+    "uid": "Hgaq5YFA04SEuA2tAPq1BnNsLgI2",
+    "email": "huyenthuong289@gmail.com",
+    "fullName": "Trần Thị Huyền Thương",
+    "role": "gd_khoi",
+    "teamName": "MAY98.02 - Đàm Đình Hiệu",
+    "assignedBlock": "E98",
+    "assignedProjects": []
+  },
+  {
+    "id": "z7AXGrMUt1ZfuVoKEgQirwyYMnR2",
+    "uid": "z7AXGrMUt1ZfuVoKEgQirwyYMnR2",
+    "email": "tuannv.vinahomes@gmail.com",
+    "fullName": "Nguyễn Văn Tuấn",
+    "role": "user",
+    "teamName": "MAY39.39 Nguyễn Quang Huy",
+    "assignedProjects": []
+  },
+  {
+    "id": "zR4KqP5JKBbUiJmF0kwe1UGc6gv1",
+    "uid": "zR4KqP5JKBbUiJmF0kwe1UGc6gv1",
+    "email": "gauxinh2509@gmail.com",
+    "fullName": "Nguyễn Thị Thuý An",
+    "role": "user",
+    "teamName": "MAY45.08\tHoàng Công Quyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "XyCEGU18ZMNqGpUAvF593gVfsQW2",
+    "uid": "XyCEGU18ZMNqGpUAvF593gVfsQW2",
+    "email": "trantam050295@gmail.com",
+    "fullName": "Thị Tâm Trần",
+    "role": "user",
+    "teamName": "MAY41.04 Bùi Đình Khiêm",
+    "assignedProjects": []
+  },
+  {
+    "id": "fUsZR7WczNRPsDhx5Su8ZMoCcbo2",
+    "uid": "fUsZR7WczNRPsDhx5Su8ZMoCcbo2",
+    "email": "phamphong.vinhomes@gmail.com",
+    "fullName": "Phong Phạm",
+    "role": "gd_khoi",
+    "teamName": "",
+    "assignedBlock": "E79",
+    "assignedProjects": []
+  },
+  {
+    "id": "KGduopLS4TaTStOrs7XX0WhqqHI2",
+    "uid": "KGduopLS4TaTStOrs7XX0WhqqHI2",
+    "email": "tuantran1396@gmail.com",
+    "fullName": "Trần Tuấn Yên",
+    "role": "user",
+    "teamName": "MAY36.01\tLê Văn Quang",
+    "assignedProjects": []
+  },
+  {
+    "id": "d0a3v6aigsdGRjY8o6EFPLkV3Jm1",
+    "uid": "d0a3v6aigsdGRjY8o6EFPLkV3Jm1",
+    "email": "trantrungdung2708@gmail.com",
+    "fullName": "Trần Trung Dũng",
+    "role": "user",
+    "teamName": "MAY93.06 - Vương Minh Hoàng",
+    "assignedProjects": []
+  },
+  {
+    "id": "f57GGHrbFEdW1PQVpeVFiCBQ68v1",
+    "uid": "f57GGHrbFEdW1PQVpeVFiCBQ68v1",
+    "email": "longvuhvhomevn@gmail.com",
+    "fullName": "Phạm Long Vũ",
+    "role": "user",
+    "teamName": "MAY93.68 -  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "vwb01RHwdQRz5FiHOMIUBW2MxUB2",
+    "uid": "vwb01RHwdQRz5FiHOMIUBW2MxUB2",
+    "email": "sxuandat99@gmail.com",
+    "fullName": "Đạt Sầm",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "DY7L5TUI1ehBQp6mVtFEL3But7m2",
+    "uid": "DY7L5TUI1ehBQp6mVtFEL3But7m2",
+    "email": "hoangthuybinh34@gmail.com",
+    "fullName": "Hoàng Thủy Bình",
+    "role": "user",
+    "teamName": "MAY14.01 Hoàng Thủy Bình",
+    "assignedProjects": []
+  },
+  {
+    "id": "jQs7YrMeFqbSOLimV7A2BYCdpVd2",
+    "uid": "jQs7YrMeFqbSOLimV7A2BYCdpVd2",
+    "email": "mayhomes.ads@gmail.com",
+    "fullName": "Tài khoản Test Mayhomes Ads",
+    "role": "admin",
+    "teamName": "BO GĐDA",
+    "assignedBlock": "E99.01",
+    "assignedProjects": []
+  },
+  {
+    "id": "e1HKAIlDuyZR61DI97BtQ9RTVXP2",
+    "uid": "e1HKAIlDuyZR61DI97BtQ9RTVXP2",
+    "email": "nguyenthinhat.dxnt@gmail.com",
+    "fullName": "Nguyễn Thị Nhật",
+    "role": "user",
+    "teamName": "MAY98.01 - Nguyễn Thịt Nhật",
+    "assignedProjects": []
+  },
+  {
+    "id": "yYvVBqu3n2UZY0yzoymn0SOpvnE3",
+    "uid": "yYvVBqu3n2UZY0yzoymn0SOpvnE3",
+    "email": "hoangbinh03041989@gmail.com",
+    "fullName": "binh hoàng",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "zTlbja7GizbC8ASvWBtJsPz1i7l2",
+    "uid": "zTlbja7GizbC8ASvWBtJsPz1i7l2",
+    "email": "damhieu1207@gmail.com",
+    "fullName": "Đàm Đình Hiệu",
+    "role": "user",
+    "teamName": "MAY98.02 - Đàm Đình Hiệu",
+    "assignedProjects": []
+  },
+  {
+    "id": "5VVDyBS59tYg2i7DntmwuWyJQh12",
+    "uid": "5VVDyBS59tYg2i7DntmwuWyJQh12",
+    "email": "quanghuypy1998@gmail.com",
+    "fullName": "Nguyễn Quang Huy",
+    "role": "user",
+    "teamName": "MAY39.39 Nguyễn Đình Mạnh Linh",
+    "assignedProjects": []
+  },
+  {
+    "id": "yBjWcRFDWIaycRYW10fgncXerZG3",
+    "uid": "yBjWcRFDWIaycRYW10fgncXerZG3",
+    "email": "hienvien1104@gmail.com",
+    "fullName": "Việt Anh",
+    "role": "user",
+    "teamName": "MAY44.10\tTrần Thị Minh Thuý",
+    "assignedProjects": []
+  },
+  {
+    "id": "1ptxZASrtiatZQpWwHlFO4I0Jvl1",
+    "uid": "1ptxZASrtiatZQpWwHlFO4I0Jvl1",
+    "email": "vananhdam.ms@gmail.com",
+    "fullName": "Đàm Thị Vân Anh",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY14.02 Đàm Thị Vân Anh",
+    "assignedBlock": "E14",
+    "assignedBlocks": [
+      "E14",
+      "KRAtod3rPPJ2bsVwHbfn"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "9m2WOnLrTuVfRf0lo46h15uExvG2",
+    "uid": "9m2WOnLrTuVfRf0lo46h15uExvG2",
+    "email": "dathitech71@gmail.com",
+    "fullName": "Nguyễn Văn Đạt",
+    "role": "user",
+    "teamName": "MAY46.05 Nguyễn Thị THanh Thúy",
+    "assignedProjects": []
+  },
+  {
+    "id": "jlHVijDENXOhhVfFytY4iMiHJWb2",
+    "uid": "jlHVijDENXOhhVfFytY4iMiHJWb2",
+    "email": "nguyentung177@gmail.com",
+    "fullName": "Nguyễn Thế Tùng",
+    "role": "user",
+    "teamName": "MAY46.09 Trần Thu Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "a2HaYJhZvqW31TmkqTUXl57WgPU2",
+    "uid": "a2HaYJhZvqW31TmkqTUXl57WgPU2",
+    "email": "quynhmaicoemmasterise@gmail.com",
+    "fullName": "Nguyễn Thị Quỳnh Mai",
+    "role": "user",
+    "teamName": "MAY46.09 Trần Thu Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "HNiKpLYQIcVj5NLIQ6G8aqiBiyL2",
+    "uid": "HNiKpLYQIcVj5NLIQ6G8aqiBiyL2",
+    "email": "lecuc081297@gmail.com",
+    "fullName": "Lê Thị Phương Cúc",
+    "role": "user",
+    "teamName": "MAY46.09 Trần Thu Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "9EZtccZhTLMPwCROEpHMg3mmbmp1",
+    "uid": "9EZtccZhTLMPwCROEpHMg3mmbmp1",
+    "email": "nghiavantho1991@gmail.com",
+    "fullName": "Thọ Nghĩa",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "bTSWoJM7njOJFtHH4hhGKSZduDT2",
+    "uid": "bTSWoJM7njOJFtHH4hhGKSZduDT2",
+    "email": "uyenthudao97@gmail.com",
+    "fullName": "Đào Thị Thu Uyên",
+    "role": "user",
+    "teamName": "MAY46.07\tLã Thế Hùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "acfzTj5Mh5M8w2oopUEXe1KfruR2",
+    "uid": "acfzTj5Mh5M8w2oopUEXe1KfruR2",
+    "email": "nguyenthienminh171104@gmail.com",
+    "fullName": "Việt Anh",
+    "role": "user",
+    "teamName": "MAY11.13\tNguyễn Việt Anh/Biện Sang",
+    "assignedProjects": []
+  },
+  {
+    "id": "gPPoqlwb0HS91QP4uagODEMUZtt2",
+    "uid": "gPPoqlwb0HS91QP4uagODEMUZtt2",
+    "email": "happyhuy2812@gmail.com",
+    "fullName": "Nguyễn Đức Huy",
+    "role": "user",
+    "teamName": "MAY05.19 - Nguyễn Đức Huy",
+    "assignedProjects": []
+  },
+  {
+    "id": "7Lxj8djcYFSH5TqckLRO6oIRcgF3",
+    "uid": "7Lxj8djcYFSH5TqckLRO6oIRcgF3",
+    "email": "bdsquang1809@gmail.com",
+    "fullName": "Đặng Lê Quang",
+    "role": "user",
+    "teamName": "MAY07.13 Trần Thị Phương Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "TM2AtBNAU7dl25xd8N9YMx7dIhY2",
+    "uid": "TM2AtBNAU7dl25xd8N9YMx7dIhY2",
+    "email": "nguyenthuha.ahs@gmail.com",
+    "fullName": "Nguyễn Thu Hà",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "hTwN9LMEDBhlhC96pqdEGjCqL3d2",
+    "uid": "hTwN9LMEDBhlhC96pqdEGjCqL3d2",
+    "email": "ngovandaobn99@gmail.com",
+    "fullName": "Ngô Văn Đạo",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "OwVvxhskR9RpFUFa25cDoKeJQyB2",
+    "uid": "OwVvxhskR9RpFUFa25cDoKeJQyB2",
+    "email": "trinhquynhanh1986@gmail.com",
+    "fullName": "Trịnh Thị Quỳnh Anh",
+    "role": "user",
+    "teamName": "MAY17.18 Phạm Thị Thu",
+    "assignedProjects": []
+  },
+  {
+    "id": "ZkQQMEV47yM7dDFTvfT08DN5o8y2",
+    "uid": "ZkQQMEV47yM7dDFTvfT08DN5o8y2",
+    "email": "nguyendanghungptm@gmail.com",
+    "fullName": "Nguyễn Hưng",
+    "role": "user",
+    "teamName": "MAY01.01\tĐào Hương Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "S7pQTE6V0PQqyQBiFI4IOeunPl62",
+    "uid": "S7pQTE6V0PQqyQBiFI4IOeunPl62",
+    "email": "phamphuonghomes@gmail.com",
+    "fullName": "Phạm Ngọc Phương",
+    "role": "user",
+    "teamName": "MAY83.08\tLương Thị Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "08ZpvqhC0DMZ17R03gHIozft8Km2",
+    "uid": "08ZpvqhC0DMZ17R03gHIozft8Km2",
+    "email": "vutrantran0504@gmail.com",
+    "fullName": "Vũ Trần",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "QHE6CvjqNARKsO8CeY9CaSWlstW2",
+    "uid": "QHE6CvjqNARKsO8CeY9CaSWlstW2",
+    "email": "khanhlinhfb.3663@gmail.com",
+    "fullName": "nguyễn thị thuỳ linh",
+    "role": "user",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedProjects": []
+  },
+  {
+    "id": "xwoOjhFsjaalYDnJ5RI36hv7gMe2",
+    "uid": "xwoOjhFsjaalYDnJ5RI36hv7gMe2",
+    "email": "vietphhd@gmail.com",
+    "fullName": "Phạm Huy Viết",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "ScLK7mfu9rcTAs9XdwcIw38T5zJ3",
+    "uid": "ScLK7mfu9rcTAs9XdwcIw38T5zJ3",
+    "email": "thanglv1826@gmail.com",
+    "fullName": "Lê Viết Thắng",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "MTOhvb3jTTbr0Vj62K5IaWSK08P2",
+    "uid": "MTOhvb3jTTbr0Vj62K5IaWSK08P2",
+    "email": "bdtuan.fdm@gmail.com",
+    "fullName": "Bùi Duy Tuấn",
+    "role": "user",
+    "teamName": "MAY11.13\tNguyễn Việt Anh/Biện Sang",
+    "assignedProjects": []
+  },
+  {
+    "id": "TWzcQMJEeJflxkHTzKl0hiXpSNz2",
+    "uid": "TWzcQMJEeJflxkHTzKl0hiXpSNz2",
+    "email": "dovietkhoi100522@gmail.com",
+    "fullName": "Đỗ Xuân Phú",
+    "role": "user",
+    "teamName": "MAY15.68 - Đỗ Xuân Phú",
+    "assignedProjects": []
+  },
+  {
+    "id": "CVnj74ZBY6WkMhm5MjUane5IWUw2",
+    "uid": "CVnj74ZBY6WkMhm5MjUane5IWUw2",
+    "email": "vuquocviet88@gmail.com",
+    "fullName": "Vũ Quốc Việt",
+    "role": "user",
+    "teamName": "MAY45.67 Vũ Thị Mai Phương",
+    "assignedProjects": []
+  },
+  {
+    "id": "ckR8b7Zc9Vdyp58QLzpJ09Q8lTZ2",
+    "uid": "ckR8b7Zc9Vdyp58QLzpJ09Q8lTZ2",
+    "email": "nguyenphuongtu2192k3@gmail.com",
+    "fullName": "Nguyễn Phương Tú",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "BegsxukpkSY11VMXzRhhotUCNji1",
+    "uid": "BegsxukpkSY11VMXzRhhotUCNji1",
+    "email": "mrkheu129@gmail.com",
+    "fullName": "Kuan Design",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "ORRaIiECWnYuM4AdecZG5mYQZqV2",
+    "uid": "ORRaIiECWnYuM4AdecZG5mYQZqV2",
+    "email": "nhatvankhoa0323@gmail.com",
+    "fullName": "Phạm Văn Khoa",
+    "role": "user",
+    "teamName": "MAY06.28 Phạm Văn Khoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "QtQBu0O7NRXkl6OqCYOpRVQsLtD2",
+    "uid": "QtQBu0O7NRXkl6OqCYOpRVQsLtD2",
+    "email": "leminhthubds6868@gmail.com",
+    "fullName": "MinhThu Le",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "50AhYpmFdGfhrAQDR2q90BjkwW73",
+    "uid": "50AhYpmFdGfhrAQDR2q90BjkwW73",
+    "email": "dung.lethimy216@gmail.com",
+    "fullName": "Le Dung",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "tLLRsQlvbWNj9edQnifBcqZz8ha2",
+    "uid": "tLLRsQlvbWNj9edQnifBcqZz8ha2",
+    "email": "lethuyduong282@gmail.com",
+    "fullName": "Lê Thị Thuỳ Dương",
+    "role": "user",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedProjects": []
+  },
+  {
+    "id": "IOYAacaRhGfbqzTU8lFTgZw8yoB2",
+    "uid": "IOYAacaRhGfbqzTU8lFTgZw8yoB2",
+    "email": "chaikoxeko@gmail.com",
+    "fullName": "Điền Thị Thu Hương",
+    "role": "user",
+    "teamName": "MAY03.26 Dương Thị Hồng Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "8DaIrVudx2NxdAn3ujYfXZB98VT2",
+    "uid": "8DaIrVudx2NxdAn3ujYfXZB98VT2",
+    "email": "tuanna2286@gmail.com",
+    "fullName": "NGUYEN ANH TUAN",
+    "role": "user",
+    "teamName": "MAY17.09 Trần Tuấn Anh",
+    "assignedProjects": []
+  },
+  {
+    "id": "5lXoolKHhlQFNbURaO6JXl4vo343",
+    "uid": "5lXoolKHhlQFNbURaO6JXl4vo343",
+    "email": "honghiep93apa@gmail.com",
+    "fullName": "Nguyễn Thị Hồng Hiệp",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "JNb4u13MPzR54EhQSJsSpYBW6NJ3",
+    "uid": "JNb4u13MPzR54EhQSJsSpYBW6NJ3",
+    "email": "vantoann1996@gmail.com",
+    "fullName": "Lê Văn Toàn",
+    "role": "user",
+    "teamName": "MAY12.03\tQuách Hằng Ngân",
+    "assignedProjects": []
+  },
+  {
+    "id": "XPI361HYPyRdreleYVxTKgDfXgO2",
+    "uid": "XPI361HYPyRdreleYVxTKgDfXgO2",
+    "email": "caomanhvinhomescamranh@gmail.com",
+    "fullName": "Cao Như Mạnh",
+    "role": "user",
+    "teamName": "MAY36.68 Cao Như Mạnh",
+    "assignedProjects": []
+  },
+  {
+    "id": "HaDnfHP1IxTLT5oAWZG8SuipJOs2",
+    "uid": "HaDnfHP1IxTLT5oAWZG8SuipJOs2",
+    "email": "vumanh2305@gmail.com",
+    "fullName": "Manh Vu",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "3SfhnYoFVrXdue35mX8KxowrXoZ2",
+    "uid": "3SfhnYoFVrXdue35mX8KxowrXoZ2",
+    "email": "dominhquan.namthang0@gmail.com",
+    "fullName": "đỗ minh quân",
+    "role": "user",
+    "teamName": "MAY39.28 Đồng Thị Minh Khuê",
+    "assignedProjects": []
+  },
+  {
+    "id": "O7F9P5OQKGV411n7rYlmcn0XhpE2",
+    "uid": "O7F9P5OQKGV411n7rYlmcn0XhpE2",
+    "email": "baonguyenlevu@gmail.com",
+    "fullName": "Nguyễn Lê Vũ Bảo",
+    "role": "user",
+    "teamName": "MAY39.28 Đồng Thị Minh Khuê",
+    "assignedProjects": []
+  },
+  {
+    "id": "o68TWmWAV8f6wnlWMH3K5LrbOD22",
+    "uid": "o68TWmWAV8f6wnlWMH3K5LrbOD22",
+    "email": "tu.ctt.96@gmail.com",
+    "fullName": "Chu Trí Tú",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "OxlQqKWhcVQWQxCuGTod2thP3on1",
+    "uid": "OxlQqKWhcVQWQxCuGTod2thP3on1",
+    "email": "nqnam293@gmail.com",
+    "fullName": "Nam Nguyen",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "5Z2hmWkO9tYLjZsN25mqhv7fom62",
+    "uid": "5Z2hmWkO9tYLjZsN25mqhv7fom62",
+    "email": "phuongthaovu1303@gmail.com",
+    "fullName": "Vũ Thị Phương Thảo",
+    "role": "user",
+    "teamName": "MAY12.06\tVũ Thị Phương Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "K9MM1I3dUafOnjtODHrqth6ndrB2",
+    "uid": "K9MM1I3dUafOnjtODHrqth6ndrB2",
+    "email": "maihuong172005@gmail.com",
+    "fullName": "Trần Thị Mai Hương",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "9s7jvmoGhRPVkh0cQ62Nh93q8nZ2",
+    "uid": "9s7jvmoGhRPVkh0cQ62Nh93q8nZ2",
+    "email": "nguyennk9398@gmail.com",
+    "fullName": "Nguyễn Khắc Nguyên",
+    "role": "admin",
+    "teamName": "BO - Phan Văn Phong",
+    "assignedProjects": []
+  },
+  {
+    "id": "VOmEqwOTlpXDTcAgl8MhW8tQgmI2",
+    "uid": "VOmEqwOTlpXDTcAgl8MhW8tQgmI2",
+    "email": "thuongtt.68@gmail.com",
+    "fullName": "Trịnh Thương",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedBlock": "E12",
+    "assignedBlocks": [
+      "E12",
+      "ko4Vm3twxvmLMZD07Kzk"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "HGwkAhqXJhUb6kr2LhK6v33YPX23",
+    "uid": "HGwkAhqXJhUb6kr2LhK6v33YPX23",
+    "email": "quochuy0891@gmail.com",
+    "fullName": "Nguyễn Quốc Huy",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "P1GSW1KB1IU3a4RM1eYqlj67kTg1",
+    "uid": "P1GSW1KB1IU3a4RM1eYqlj67kTg1",
+    "email": "ptphuong.land@gmail.com",
+    "fullName": "Phùng Tú Phương",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "7O524KWrD6X1OpxYmCe4ejYeAIN2",
+    "uid": "7O524KWrD6X1OpxYmCe4ejYeAIN2",
+    "email": "dovandong3101994@gmail.com",
+    "fullName": "Đỗ Văn Động",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "MugF4v5aIUVl1MMe6APmUHYIdgw1",
+    "uid": "MugF4v5aIUVl1MMe6APmUHYIdgw1",
+    "email": "nvlan3199@gmail.com",
+    "fullName": "Nguyễn Văn Lân",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "IVa3tbKDL9Or71tHnhrNJvveVAD2",
+    "uid": "IVa3tbKDL9Or71tHnhrNJvveVAD2",
+    "email": "xuanson.c11@gmail.com",
+    "fullName": "Phạm Xuân Sơn",
+    "role": "user",
+    "teamName": "MAY41.02 Đinh Văn Thành",
+    "assignedProjects": []
+  },
+  {
+    "id": "rr1jJxLsOJZuzZB2CNePSLk8EEq2",
+    "uid": "rr1jJxLsOJZuzZB2CNePSLk8EEq2",
+    "email": "nhan01216871@gmail.com",
+    "fullName": "Nhân Nguyễn Trọng",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "BDFSqB5bs1QJoiVXoG1YwAWwiC82",
+    "uid": "BDFSqB5bs1QJoiVXoG1YwAWwiC82",
+    "email": "thanh.mayhomes@gmail.com",
+    "fullName": "Thành Huỳnh Ngọc",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "6hH6duyrryadSZsSRxsuFim3BNT2",
+    "uid": "6hH6duyrryadSZsSRxsuFim3BNT2",
+    "email": "phuongntl.vinhomes@gmail.com",
+    "fullName": "Nguyễn Thị Lan Phương",
+    "role": "user",
+    "teamName": "MAY45.08\tHoàng Công Quyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "zaKE5J6msRfGmQlFFkFaORlkBCI2",
+    "uid": "zaKE5J6msRfGmQlFFkFaORlkBCI2",
+    "email": "tranlam11600@gmail.com",
+    "fullName": "Trần Mai Lâm",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "aXn51MGU8lQPwRLBraLLSF0UF8j1",
+    "uid": "aXn51MGU8lQPwRLBraLLSF0UF8j1",
+    "email": "tatienhuy196@gmail.com",
+    "fullName": "Tạ Tiến Huy",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "OmbTDvcEDdQOuZDXzBvw2hPXmJj2",
+    "uid": "OmbTDvcEDdQOuZDXzBvw2hPXmJj2",
+    "email": "haiyenhy210894@gmail.com",
+    "fullName": "Chu Thị Hải Yến",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "m6DQiRBzLhWuTt346xuXUwJ3SU83",
+    "uid": "m6DQiRBzLhWuTt346xuXUwJ3SU83",
+    "email": "lucmaihuongpoka@gmail.com",
+    "fullName": "Lục Mai Hương",
+    "role": "user",
+    "teamName": "MAY93.68-  Tạ Văn Định",
+    "assignedProjects": []
+  },
+  {
+    "id": "KwJGrzTN8oRrL0jjVGlYNuWQCsX2",
+    "uid": "KwJGrzTN8oRrL0jjVGlYNuWQCsX2",
+    "email": "buyen1161@gmail.com",
+    "fullName": "Tô Thị Uyên",
+    "role": "user",
+    "teamName": "MAY36.39 Nguyễn Thị Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "tvME24wkAsgCMNKZ9T9jx3Qmm7z1",
+    "uid": "tvME24wkAsgCMNKZ9T9jx3Qmm7z1",
+    "email": "nguyendinhmanhlinh68@gmail.com",
+    "fullName": "Nguyễn Đình Mạnh Linh",
+    "role": "user",
+    "teamName": "MAY39.39 Nguyễn Đình Mạnh Linh",
+    "assignedProjects": []
+  },
+  {
+    "id": "wuoXaoi3BYMq6FVW642Uf2FJ6613",
+    "uid": "wuoXaoi3BYMq6FVW642Uf2FJ6613",
+    "email": "vuongkhachoang@gmail.com",
+    "fullName": "Vương Minh Hoàng",
+    "role": "user",
+    "teamName": "MAY93.06 - Vương Minh Hoàng",
+    "assignedProjects": []
+  },
+  {
+    "id": "exFsOAaaffWRSNWt9bA9zJTz0Iv2",
+    "uid": "exFsOAaaffWRSNWt9bA9zJTz0Iv2",
+    "email": "ngoctran.22041997@gmail.com",
+    "fullName": "Trần Thị Ngọc",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY72.68 Phạm Thùy Long Giang",
+    "assignedBlock": "EG93",
+    "assignedBlocks": [
+      "EG93",
+      "ClSHUDnhBvL9SYvn6yaN"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "oNuhpBhziYWG87INJPPW1syyi7T2",
+    "uid": "oNuhpBhziYWG87INJPPW1syyi7T2",
+    "email": "tadinh.bds@gmail.com",
+    "fullName": "Định Tạ",
+    "role": "gd_khoi",
+    "teamName": "MAY72.68 Phạm Thùy Long Giang",
+    "assignedBlock": "EG93",
+    "assignedProjects": []
+  },
+  {
+    "id": "2PnXVxZ2b1R9PrRhep1Ba8dCl1d2",
+    "uid": "2PnXVxZ2b1R9PrRhep1Ba8dCl1d2",
+    "email": "ladipagehung@gmail.com",
+    "fullName": "Vũ Đình Hưng",
+    "role": "user",
+    "teamName": "MAY07.01 Đỗ Tuyết Minh",
+    "assignedProjects": []
+  },
+  {
+    "id": "EvsbSKRuifMZ7jpGnCuHthVIiB22",
+    "uid": "EvsbSKRuifMZ7jpGnCuHthVIiB22",
+    "email": "phamque2512@gmail.com",
+    "fullName": "Quế Phạm",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY11.13\tNguyễn Việt Anh/Biện Sang",
+    "assignedBlock": "E03",
+    "assignedBlocks": [
+      "E88",
+      "E03",
+      "j8bwB9GzIwnaRuBdDneQ"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "MPLoE2uV5SV1xkkS3qq2mNwSOZW2",
+    "uid": "MPLoE2uV5SV1xkkS3qq2mNwSOZW2",
+    "email": "daolen1402@gmail.com",
+    "fullName": "Đào Thị Len",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY45.06\tĐào Thị Ly",
+    "assignedBlock": "E45",
+    "assignedBlocks": [
+      "E45",
+      "ozw7beeafcYdiKjLxtsr"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "V10xjdx8tpN4SkwO7ftbukNULfv1",
+    "uid": "V10xjdx8tpN4SkwO7ftbukNULfv1",
+    "email": "nhungttp89@gmail.com",
+    "fullName": "Trần Thị Phương Nhung",
+    "role": "user",
+    "teamName": "MAY07.13 Trần Thị Phương Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "Mp5wdkT5SsZkQblnxtgJtqvTHNl2",
+    "uid": "Mp5wdkT5SsZkQblnxtgJtqvTHNl2",
+    "email": "bachtrinh1990@gmail.com",
+    "fullName": "Trịnh Công Bách",
+    "role": "user",
+    "teamName": "MAY01.36 Trịnh Công Bách",
+    "assignedProjects": []
+  },
+  {
+    "id": "zGkMLKXYd9bowbskstXDKbCxhU02",
+    "uid": "zGkMLKXYd9bowbskstXDKbCxhU02",
+    "email": "nguyenchicong01022001@gmail.com",
+    "fullName": "cong nguyen",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "5JaCyoaSCHgazHJm7UjlrBHSHtT2",
+    "uid": "5JaCyoaSCHgazHJm7UjlrBHSHtT2",
+    "email": "khuongvinhomes1822@gmail.com",
+    "fullName": "Đặng Bá Khương",
+    "role": "user",
+    "teamName": "MAY06.28 Phạm Văn Khoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "km2tjVUuXrM8fky2QtzWmy2scin1",
+    "uid": "km2tjVUuXrM8fky2QtzWmy2scin1",
+    "email": "vannkhoa96@gmail.com",
+    "fullName": "Phạm Văn Khoa",
+    "role": "user",
+    "teamName": "MAY06.68\tPhan Văn Đang",
+    "assignedProjects": []
+  },
+  {
+    "id": "fRRsPU33hiSYLR6wjRTOEpEU6g83",
+    "uid": "fRRsPU33hiSYLR6wjRTOEpEU6g83",
+    "email": "thuthaonguyen102002.dau@gmail.com",
+    "fullName": "Thảo Nguyễn Thu",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "9X7AScvnKfQwnXBLdEviJbQLXpi2",
+    "uid": "9X7AScvnKfQwnXBLdEviJbQLXpi2",
+    "email": "minthuw80@gmail.com",
+    "fullName": "Thư Minh",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "4uEvcJbyZFNngsE0F5aoUVqiEcV2",
+    "uid": "4uEvcJbyZFNngsE0F5aoUVqiEcV2",
+    "email": "leelitran1995@gmail.com",
+    "fullName": "Trần thị hà ly",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "4WL5DfYoUEZT71f7zVVXdsrwA0n2",
+    "uid": "4WL5DfYoUEZT71f7zVVXdsrwA0n2",
+    "email": "mohamadkadafi9353@gmail.com",
+    "fullName": "Mohamad kada fi",
+    "role": "user",
+    "teamName": "MAY36.39 Nguyễn Thị Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "9LA1zOyepfbB4ILes9KEoYsWN5e2",
+    "uid": "9LA1zOyepfbB4ILes9KEoYsWN5e2",
+    "email": "huynhhien.pkd@gmail.com",
+    "fullName": "Huỳnh Thị Dịu Hiền",
+    "role": "user",
+    "teamName": "MAY36.39 Nguyễn Thị Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "ATVM6vMCdcaEWyxCUJS31Tfk9wx2",
+    "uid": "ATVM6vMCdcaEWyxCUJS31Tfk9wx2",
+    "email": "camhabt.mkt@gmail.com",
+    "fullName": "Nguyễn Văn Viết",
+    "role": "user",
+    "teamName": "MAY09.68\tNguyễn Văn Viết",
+    "assignedProjects": []
+  },
+  {
+    "id": "NUBxJC3f5faTqks60CkGGNlm3o22",
+    "uid": "NUBxJC3f5faTqks60CkGGNlm3o22",
+    "email": "phamdiepthu@gmail.com",
+    "fullName": "Phạm Thị Thu",
+    "role": "user",
+    "teamName": "MAY17.18 Phạm Thị Thu",
+    "assignedProjects": []
+  },
+  {
+    "id": "KUFUQdfvczS34QQ3cm0ZDBtr3Z33",
+    "uid": "KUFUQdfvczS34QQ3cm0ZDBtr3Z33",
+    "email": "nguyenhaiphatloc@gmail.com",
+    "fullName": "Nguyễn Quang Hải",
+    "role": "user",
+    "teamName": "MAY03.88\tNgô Văn Lê / Nguyễn Quang Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "of0nMCR2HGd7eaKD3PoyUBi57Is2",
+    "uid": "of0nMCR2HGd7eaKD3PoyUBi57Is2",
+    "email": "thanhhaido125@gmail.com",
+    "fullName": "Đỗ Thị Thanh Hải",
+    "role": "user",
+    "teamName": "09.86 Đỗ Thanh Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "NxtTPmXThTRjoYGeZatizxKcmfH2",
+    "uid": "NxtTPmXThTRjoYGeZatizxKcmfH2",
+    "email": "ad.giaoluucaulong@gmail.com",
+    "fullName": "Test",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "Bsp4fpv7qNb3Ja9k8UEedAbPJYe2",
+    "uid": "Bsp4fpv7qNb3Ja9k8UEedAbPJYe2",
+    "email": "mydung300721@gmail.com",
+    "fullName": "Nguyễn Thị Mỹ Dung",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "209sAypaHbbCd9gzoT1Vq9xRSBF2",
+    "uid": "209sAypaHbbCd9gzoT1Vq9xRSBF2",
+    "email": "tuananh.dautuvillas@gmail.com",
+    "fullName": "Trần tuấn anh",
+    "role": "user",
+    "teamName": "MAY17\tĐặng Đình Hoàng",
+    "assignedProjects": []
+  },
+  {
+    "id": "uy8dvYeOj4ZhZOTNjicY7xSZjPD3",
+    "uid": "uy8dvYeOj4ZhZOTNjicY7xSZjPD3",
+    "email": "ddinhhoang.bds@gmail.com",
+    "fullName": "Đình Hoàng Đặng",
+    "role": "user",
+    "teamName": "MAY17.01 Vũ Thị Hiền",
+    "assignedProjects": []
+  },
+  {
+    "id": "iBVrTUl0hAY5ZFSSJHJaMTLqTVQ2",
+    "uid": "iBVrTUl0hAY5ZFSSJHJaMTLqTVQ2",
+    "email": "quan8386.realestate@gmail.com",
+    "fullName": "Chu Thị Nguyên",
+    "role": "user",
+    "teamName": "MAY39.33. Chu Thị Nguyên",
+    "assignedProjects": []
+  },
+  {
+    "id": "CAKrMnvaQBh0duYnIpVMfcmm1pv2",
+    "uid": "CAKrMnvaQBh0duYnIpVMfcmm1pv2",
+    "email": "dinhphuongxd@gmail.com",
+    "fullName": "Nguyễn Đình Phương",
+    "role": "user",
+    "teamName": "MAY41.03 Nguyễn Quốc Khánh",
+    "assignedProjects": []
+  },
+  {
+    "id": "MvP51UWFR6Sn7IZz4xrSmZ1JHzi2",
+    "uid": "MvP51UWFR6Sn7IZz4xrSmZ1JHzi2",
+    "email": "tuannguyen.tgy@gmail.com",
+    "fullName": "Nguyễn Văn Tuấn",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "CslmmSYIwweHhjnBl3L6BpWqKHs2",
+    "uid": "CslmmSYIwweHhjnBl3L6BpWqKHs2",
+    "email": "trungnd.vinhomes@gmail.com",
+    "fullName": "Nguyen Duy Trung",
+    "role": "user",
+    "teamName": "MAY79.26\tNguyễn Duy Trung",
+    "assignedProjects": []
+  },
+  {
+    "id": "CJroC9di51MFc4w9UX9qtBzPKrE3",
+    "uid": "CJroC9di51MFc4w9UX9qtBzPKrE3",
+    "email": "daoanhtuan81283@gmail.com",
+    "fullName": "Anh Tuấn Đào",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "kPjL3y6U2IPwrfYcvId9aB9ODno2",
+    "uid": "kPjL3y6U2IPwrfYcvId9aB9ODno2",
+    "email": "haihvtc04@gmail.com",
+    "fullName": "Nguyễn Văn Hải",
+    "role": "user",
+    "teamName": "MAY02.13\tNguyễn Việt Anh/Biện Sang",
+    "assignedProjects": []
+  },
+  {
+    "id": "lQIHfk5Oyoc7DSwFs2lXF5PRwAX2",
+    "uid": "lQIHfk5Oyoc7DSwFs2lXF5PRwAX2",
+    "email": "lethitrang5566@gmail.com",
+    "fullName": "Lê Trang",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "M0YH1g6SESfIRXuQtUIrl68oOK12",
+    "uid": "M0YH1g6SESfIRXuQtUIrl68oOK12",
+    "email": "hanhhoa.jp@gmail.com",
+    "fullName": "Nguyễn Hạnh Hoa",
+    "role": "gd_khoi",
+    "teamName": "MAY14\tNguyễn Hạnh Hoa",
+    "assignedBlock": "E14",
+    "assignedProjects": []
+  },
+  {
+    "id": "8qEzO2lHBwYcdPdKCMnHTtRQARA2",
+    "uid": "8qEzO2lHBwYcdPdKCMnHTtRQARA2",
+    "email": "linhho260388@gmail.com",
+    "fullName": "Hồ Mạnh Linh",
+    "role": "user",
+    "teamName": "MAY41.04 Bùi Đình Khiêm",
+    "assignedProjects": []
+  },
+  {
+    "id": "iXShqrHf7MVhPnz7ANyiGySqv8y2",
+    "uid": "iXShqrHf7MVhPnz7ANyiGySqv8y2",
+    "email": "nguyentrinh.kd109@gmail.com",
+    "fullName": "Nguyễn Thị Thu Trinh",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "PQWQJoz6R4XU7lRrWHQJLUSLEOY2",
+    "uid": "PQWQJoz6R4XU7lRrWHQJLUSLEOY2",
+    "email": "duongvanthanhbds1986@gmail.com",
+    "fullName": "Dương Văn Thành",
+    "role": "user",
+    "teamName": "MAY08.08 Nguyễn Thị Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "JLu6Y07S5UVaYfwOxHkMyoddQYE3",
+    "uid": "JLu6Y07S5UVaYfwOxHkMyoddQYE3",
+    "email": "daovutb@gmail.com",
+    "fullName": "Đào Văn Vũ",
+    "role": "user",
+    "teamName": "MAY45.09 Đào Văn Vũ / Lê Văn Tùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "8kw7HlK4qQXEgGICPu6htwMKlSb2",
+    "uid": "8kw7HlK4qQXEgGICPu6htwMKlSb2",
+    "email": "khanhlinhbds88@gmail.com",
+    "fullName": "Dương Thị Thắm",
+    "role": "gd_khoi",
+    "teamName": "MAY08.08 Nguyễn Thị Thắm",
+    "assignedBlock": "E08",
+    "assignedProjects": []
+  },
+  {
+    "id": "HJFehEm2jUQHGTOic3SmqdUkbgQ2",
+    "uid": "HJFehEm2jUQHGTOic3SmqdUkbgQ2",
+    "email": "duongdung.hr@gmail.com",
+    "fullName": "Dương Ngọc Dũng",
+    "role": "user",
+    "teamName": "MAY02.13\tNguyễn Việt Anh/Biện Sang",
+    "assignedProjects": []
+  },
+  {
+    "id": "XtsEHYPe27PUkdxgS8hPBlhJc202",
+    "uid": "XtsEHYPe27PUkdxgS8hPBlhJc202",
+    "email": "nguyenthanhgiang1110@gmail.com",
+    "fullName": "Nguyễn Thanh Giang",
+    "role": "user",
+    "teamName": "MAY38.29 Nguyễn Thanh Giang",
+    "assignedProjects": []
+  },
+  {
+    "id": "N9TGDometUQ9VJecIBHN1wmkRFN2",
+    "uid": "N9TGDometUQ9VJecIBHN1wmkRFN2",
+    "email": "hungbds179@gmail.com",
+    "fullName": "Huỳnh Ngọc Hùng",
+    "role": "user",
+    "teamName": "MAY66\tĐoàn Thị Hồng Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "yn8C5ubBm6NyiMC316gzV5oFKWW2",
+    "uid": "yn8C5ubBm6NyiMC316gzV5oFKWW2",
+    "email": "tranquangthe6593@gmail.com",
+    "fullName": "Trần Quang Thế",
+    "role": "user",
+    "teamName": "MAY07.68 Trần Thanh Tùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "mbcOHUIMdhb1ux2iKqj560Fm1N92",
+    "uid": "mbcOHUIMdhb1ux2iKqj560Fm1N92",
+    "email": "liemnguyen67.k41@gmail.com",
+    "fullName": "thanh liêm nguyễn",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "OLMX54qPwSbCqBBLxFMNuCzCCck2",
+    "uid": "OLMX54qPwSbCqBBLxFMNuCzCCck2",
+    "email": "tuanbadosa@gmail.com",
+    "fullName": "Tuấn Cá",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "Vv9IJ2QJe2MfSsNvzQKNI0CmBCC3",
+    "uid": "Vv9IJ2QJe2MfSsNvzQKNI0CmBCC3",
+    "email": "ms.luuthuy@gmail.com",
+    "fullName": "Lưu Thị Thuý",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "G1100hHT47SLrVjnL87kDWBRH2V2",
+    "uid": "G1100hHT47SLrVjnL87kDWBRH2V2",
+    "email": "ngohoang.gl11@gmail.com",
+    "fullName": "Ngô Văn Hoàng",
+    "role": "assistant",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "oqM41hPelFXPZ6Pkd5H6RPFEjLx1",
+    "uid": "oqM41hPelFXPZ6Pkd5H6RPFEjLx1",
+    "email": "doxuantung20022017@gmail.com",
+    "fullName": "Đỗ tuấn anh",
+    "role": "user",
+    "teamName": "MAY88.03 Đỗ Tuấn Anh",
+    "assignedProjects": []
+  },
+  {
+    "id": "bxt1Rh2c19QfIw9pKXzlTBl3iPI2",
+    "uid": "bxt1Rh2c19QfIw9pKXzlTBl3iPI2",
+    "email": "tanh040404@gmail.com",
+    "fullName": "Phạm Văn Tuấn Anh",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY36.01\tLê Văn Quang",
+    "assignedBlock": "E79",
+    "assignedProjects": []
+  },
+  {
+    "id": "LFkb6DAl9dcdaafIVUrXdzA2kyE3",
+    "uid": "LFkb6DAl9dcdaafIVUrXdzA2kyE3",
+    "email": "vuthihoai1206@gmail.com",
+    "fullName": "Ngô Văn Lê",
+    "role": "user",
+    "teamName": "MAY03.88\tNgô Văn Lê / Nguyễn Quang Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "rsdPX6Vg7NgdoFam8kAOh775bDY2",
+    "uid": "rsdPX6Vg7NgdoFam8kAOh775bDY2",
+    "email": "ngoxuanphanbds@gmail.com",
+    "fullName": "Ngô Xuân Phán",
+    "role": "user",
+    "teamName": "MAY03.39 Ngô Xuân Phán",
+    "assignedProjects": []
+  },
+  {
+    "id": "ChjrfTZud8Td2kSUjeuTro5RhSD3",
+    "uid": "ChjrfTZud8Td2kSUjeuTro5RhSD3",
+    "email": "phamduc13.work@gmail.com",
+    "fullName": "Đức Phạm",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "eTjcIOZhrEVWpd2zSj7GnztNlIk2",
+    "uid": "eTjcIOZhrEVWpd2zSj7GnztNlIk2",
+    "email": "lethanhtrungtlu@gmail.com",
+    "fullName": "Lê Thành Trung",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "6qzpjZQk9MXNM1TKCpKhLNvhYXD2",
+    "uid": "6qzpjZQk9MXNM1TKCpKhLNvhYXD2",
+    "email": "huyenbui.tran@gmail.com",
+    "fullName": "Bùi Thị Thu Huyền",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "SNONQdHhcSNQs2siRSpxOroDBTB3",
+    "uid": "SNONQdHhcSNQs2siRSpxOroDBTB3",
+    "email": "nhunghongmkt@gmail.com",
+    "fullName": "Dương Thị Hồng Nhung",
+    "role": "gd_khoi",
+    "teamName": "MAY03.26 Dương Thị Hồng Nhung",
+    "assignedBlock": "E03",
+    "assignedProjects": []
+  },
+  {
+    "id": "854Z6aJUf8NfWarnX62UcLHSMhW2",
+    "uid": "854Z6aJUf8NfWarnX62UcLHSMhW2",
+    "email": "anhthuan89@gmail.com",
+    "fullName": "Tạ Quang Thuận",
+    "role": "user",
+    "teamName": "MAY86.99  Tạ Quang Thuận",
+    "assignedProjects": []
+  },
+  {
+    "id": "lvTJRnUUU1UYyzpEDRux2Idu6ro2",
+    "uid": "lvTJRnUUU1UYyzpEDRux2Idu6ro2",
+    "email": "bienxuansang1102@gmail.com",
+    "fullName": "Biện Xuân Sang",
+    "role": "gdda",
+    "teamName": "BO GĐDA",
+    "assignedProjects": [
+      "igqUmCivzJ3jT0gdiFXx"
+    ]
+  },
+  {
+    "id": "18rh85BYv1UPKMU8IuUaYy4qa1s1",
+    "uid": "18rh85BYv1UPKMU8IuUaYy4qa1s1",
+    "email": "tieungoc1712@gmail.com",
+    "fullName": "Lê Thị Tiểu Ngọc",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "oZ2ogkC4Dmh50Bi6726X4ZZunj92",
+    "uid": "oZ2ogkC4Dmh50Bi6726X4ZZunj92",
+    "email": "letieungoc966988@gmail.com",
+    "fullName": "Lê Thị Tiểu Ngọc",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "IdSSZFKPgde8QKqDXZPVWObv0Uk1",
+    "uid": "IdSSZFKPgde8QKqDXZPVWObv0Uk1",
+    "email": "huongsenmeco@gmail.com",
+    "fullName": "Nguyễn Thị Hương Sen",
+    "role": "user",
+    "teamName": "MAY11.06 Nguyễn Thị Hương Sen",
+    "assignedProjects": []
+  },
+  {
+    "id": "IDfyBCkKimZKz5bYlz0TBEXP5ql2",
+    "uid": "IDfyBCkKimZKz5bYlz0TBEXP5ql2",
+    "email": "phamtuancuongftu@gmail.com",
+    "fullName": "Phạm Tuấn Cường",
+    "role": "user",
+    "teamName": "MAY01.01\tĐào Hương Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "sPcbpQkuzhaa6IHy87zxqnRLWpr2",
+    "uid": "sPcbpQkuzhaa6IHy87zxqnRLWpr2",
+    "email": "lelan.225@gmail.com",
+    "fullName": "Phan Văn Phong",
+    "role": "tro_ly_khoi",
+    "teamName": "BO GĐDA",
+    "assignedBlock": "E03",
+    "assignedBlocks": [
+      "E11",
+      "E03",
+      "j8bwB9GzIwnaRuBdDneQ"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "EJ28yIg9JPYabrXReu3vnVC4zhg2",
+    "uid": "EJ28yIg9JPYabrXReu3vnVC4zhg2",
+    "email": "nhariengofficial@gmail.com",
+    "fullName": "NGUYỄN HỮU THƠ",
+    "role": "user",
+    "teamName": "MAY36.38 Nguyễn Hữu Tho",
+    "assignedProjects": []
+  },
+  {
+    "id": "T1l3tq5PA6frj99Soe2BI4lfsQQ2",
+    "uid": "T1l3tq5PA6frj99Soe2BI4lfsQQ2",
+    "email": "nguyenbaquy9x@gmail.com",
+    "fullName": "Nguyễn Bá Quý",
+    "role": "gd_khoi",
+    "teamName": "MAY42.01 Nguyễn Bá Quý",
+    "assignedBlock": "E42",
+    "assignedProjects": []
+  },
+  {
+    "id": "C0ADKkkO7LejcnaBdLbtQL9wyPp1",
+    "uid": "C0ADKkkO7LejcnaBdLbtQL9wyPp1",
+    "email": "thanguae.fortunato@gmail.com",
+    "fullName": "Nguyễn Đức Thắng",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "4MeyYLKvoCcP3RWjmbiejRZam8D2",
+    "uid": "4MeyYLKvoCcP3RWjmbiejRZam8D2",
+    "email": "phamxuanhai.na@gmail.com",
+    "fullName": "Phạm Xuân Hải",
+    "role": "user",
+    "teamName": "MAY42.01 Nguyễn Bá Quý",
+    "assignedProjects": []
+  },
+  {
+    "id": "jOqlkP5waTWhBisMcEu2VFdXcaR2",
+    "uid": "jOqlkP5waTWhBisMcEu2VFdXcaR2",
+    "email": "vuthuymega.vn@gmail.com",
+    "fullName": "Vũ Thị Thuỷ",
+    "role": "user",
+    "teamName": "MAY86.01 Vũ Thị Thủy",
+    "assignedProjects": []
+  },
+  {
+    "id": "uoZiEOT9jqPq7jmdMa9FQunGsKE3",
+    "uid": "uoZiEOT9jqPq7jmdMa9FQunGsKE3",
+    "email": "thangutc1311@gmail.com",
+    "fullName": "Thắng Nguyễn",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "tQT6gGvRnYfoQAc4JNlcNjvdCli2",
+    "uid": "tQT6gGvRnYfoQAc4JNlcNjvdCli2",
+    "email": "ducthaind127@gmail.com",
+    "fullName": "Nguyễn Đức Thái",
+    "role": "user",
+    "teamName": "MAY86.99  Tạ Quang Thuận",
+    "assignedProjects": []
+  },
+  {
+    "id": "k5Gwf8A0ZVRHZ5rSeimNja8ksH63",
+    "uid": "k5Gwf8A0ZVRHZ5rSeimNja8ksH63",
+    "email": "hanhmx0308@gmail.com",
+    "fullName": "Hà Thị Nhiệt",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY86.53 Hà Thị Nhiệt",
+    "assignedBlock": "E86",
+    "assignedProjects": []
+  },
+  {
+    "id": "3I1lXtWtevcee2aXOD57sJwl8kf1",
+    "uid": "3I1lXtWtevcee2aXOD57sJwl8kf1",
+    "email": "lequangthiep1@gmail.com",
+    "fullName": "nguyễn việt vương",
+    "role": "user",
+    "teamName": "MAY06.68\tPhan Văn Đang",
+    "assignedProjects": []
+  },
+  {
+    "id": "wZ2OjyUjzcM3iKqAMQNHfnSKnR23",
+    "uid": "wZ2OjyUjzcM3iKqAMQNHfnSKnR23",
+    "email": "duongceo.dp@gmail.com",
+    "fullName": "Nguyễn Trọng Hải Dương",
+    "role": "user",
+    "teamName": "MAY41.05 Nguyễn Văn Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "SKVL9dUMWdcZnQOBCzLA2kDpaX02",
+    "uid": "SKVL9dUMWdcZnQOBCzLA2kDpaX02",
+    "email": "trangnguyenqn712@gmail.com",
+    "fullName": "Nguyễn Thị Trang",
+    "role": "user",
+    "teamName": "MAY36.39 Nguyễn Thị Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "9a5rCCglFCXrxFeEdKuogBe2qkH3",
+    "uid": "9a5rCCglFCXrxFeEdKuogBe2qkH3",
+    "email": "huantran.mayhomes@gmail.com",
+    "fullName": "Trần Minh Huấn",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "9MzPzx1wnWVnHcOtyb0G0iviSAx1",
+    "uid": "9MzPzx1wnWVnHcOtyb0G0iviSAx1",
+    "email": "khongnhu277@gmail.com",
+    "fullName": "Khổng Thiên Như",
+    "role": "assistant",
+    "teamName": "MAY36.78 Trần Văn Thương",
+    "assignedProjects": []
+  },
+  {
+    "id": "svTKzVazmaMwUtJHgWxTRHZqZxJ2",
+    "uid": "svTKzVazmaMwUtJHgWxTRHZqZxJ2",
+    "email": "longdh.tbc@gmail.com",
+    "fullName": "Đinh Hoàng Long",
+    "role": "user",
+    "teamName": "MAY09.09\tĐinh Hoàng Long",
+    "assignedProjects": []
+  },
+  {
+    "id": "FwxLoXH95sXSq0bx5mZYlk1pUbd2",
+    "uid": "FwxLoXH95sXSq0bx5mZYlk1pUbd2",
+    "email": "nguyenquangtrung8@gmail.com",
+    "fullName": "Nguyễn Quang Trung",
+    "role": "user",
+    "teamName": "MAY19.08 Nguyễn Quang Trung",
+    "assignedProjects": []
+  },
+  {
+    "id": "3rhgCNbMjGV3RO9Wm3pBqR933YI3",
+    "uid": "3rhgCNbMjGV3RO9Wm3pBqR933YI3",
+    "email": "vananhle1809shopee@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "user",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "U9nqSLvWWZMbPI5teyNwsk3fbwG2",
+    "uid": "U9nqSLvWWZMbPI5teyNwsk3fbwG2",
+    "email": "nguyenvanngocueh@gmail.com",
+    "fullName": "Nguyễn Văn Ngọc",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "8FMK5O267qcf7Ml6NbAB5Vo624Z2",
+    "uid": "8FMK5O267qcf7Ml6NbAB5Vo624Z2",
+    "email": "giagiangiang@gmail.com",
+    "fullName": "Nguyễn Thanh Giang",
+    "role": "user",
+    "teamName": "MAY79.38\tVõ Văn Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "a50uHY3hxUUBmwcLU9hWnyJcxfL2",
+    "uid": "a50uHY3hxUUBmwcLU9hWnyJcxfL2",
+    "email": "mshongnhungtran@gmail.com",
+    "fullName": "Trần Thị Hồng Nhung",
+    "role": "user",
+    "teamName": "MAY84\tTrần Thị Hồng Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "YeVMuITsQyQfDmjeF1BuPmHv87q1",
+    "uid": "YeVMuITsQyQfDmjeF1BuPmHv87q1",
+    "email": "vanlinh2xxxxom4@gmail.com",
+    "fullName": "Nguyễn Văn Linh",
+    "role": "user",
+    "teamName": "MAY12.01\tVũ Thị Ngân",
+    "assignedProjects": []
+  },
+  {
+    "id": "h74WlyQrMWTUAaiVdXZjT0axSca2",
+    "uid": "h74WlyQrMWTUAaiVdXZjT0axSca2",
+    "email": "tranhoa280180@gmail.com",
+    "fullName": "Lâm Mỹ Tiên",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "25s6HqsKDFZ1XhYIyGEGxZ0YCQA3",
+    "uid": "25s6HqsKDFZ1XhYIyGEGxZ0YCQA3",
+    "email": "thuha200168@gmail.com",
+    "fullName": "Nguyễn Thị Thu Hà",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY04.44\tLê Xuân Hiệp",
+    "assignedBlock": "E46",
+    "assignedBlocks": [
+      "E46",
+      "lmfISB5MHLONUZz7WLrz"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "snU1N3e0xYYLBy9ea62Ca5hdAA23",
+    "uid": "snU1N3e0xYYLBy9ea62Ca5hdAA23",
+    "email": "ngockim.bui@gmail.com",
+    "fullName": "BÙI NGỌC KIM",
+    "role": "user",
+    "teamName": "MAY83.35\tNguyễn Thuỳ Luôn",
+    "assignedProjects": []
+  },
+  {
+    "id": "BSqQmPfIGIXbQwXaFJYOEu5lDgz2",
+    "uid": "BSqQmPfIGIXbQwXaFJYOEu5lDgz2",
+    "email": "nghiemhoa1311@gmail.com",
+    "fullName": "hoa nghiêm",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "bZEzrvtzwWgMw5qqeiHCYgxG18V2",
+    "uid": "bZEzrvtzwWgMw5qqeiHCYgxG18V2",
+    "email": "nthoa0690@gmail.com",
+    "fullName": "Nguyễn Thị Hòa",
+    "role": "gdda",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "9v2yj97rlXOfZ9wZh5D2RLUoCJv1",
+    "uid": "9v2yj97rlXOfZ9wZh5D2RLUoCJv1",
+    "email": "dunglt129@gmail.com",
+    "fullName": "Lý Thế Dũng",
+    "role": "user",
+    "teamName": "MAY07.09 Đỗ Tuyết Minh",
+    "assignedProjects": []
+  },
+  {
+    "id": "KUNQiNjm0jMlkVvmNWgKWFmAQKw1",
+    "uid": "KUNQiNjm0jMlkVvmNWgKWFmAQKw1",
+    "email": "km.voquocvuong910@gmail.com",
+    "fullName": "Võ Quốc Vương",
+    "role": "gd_khoi",
+    "teamName": "MAY92\tVõ Quốc Vương",
+    "assignedBlock": "E92",
+    "assignedProjects": []
+  },
+  {
+    "id": "GJwJn45VkkWkzoOWLanS9BxEBRW2",
+    "uid": "GJwJn45VkkWkzoOWLanS9BxEBRW2",
+    "email": "truongleduyquang@gmail.com",
+    "fullName": "trương lê duy quang",
+    "role": "gd_khoi",
+    "teamName": "MAY38\tTrương Lê Duy Quang",
+    "assignedBlock": "E38",
+    "assignedProjects": []
+  },
+  {
+    "id": "ETcl4zSOK0asHzfTHQWpdpSx3RT2",
+    "uid": "ETcl4zSOK0asHzfTHQWpdpSx3RT2",
+    "email": "tangthemanhvpp@gmail.com",
+    "fullName": "Cao Như Mạnh",
+    "role": "user",
+    "teamName": "MAY79.36\tLê Văn Quang",
+    "assignedProjects": []
+  },
+  {
+    "id": "hFzRHFScNGS6SZanY5XsvL4fB0R2",
+    "uid": "hFzRHFScNGS6SZanY5XsvL4fB0R2",
+    "email": "phuongnt01.ilika@gmail.com",
+    "fullName": "Nguyễn Thị Phương",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY88.02 GDKD Lê Văn Thao/Nguyễn Hữu Ngọc",
+    "assignedBlock": "E86",
+    "assignedProjects": []
+  },
+  {
+    "id": "Ej6BD1ecDOhYCruwMBPSizhCvLw1",
+    "uid": "Ej6BD1ecDOhYCruwMBPSizhCvLw1",
+    "email": "thestarcry@gmail.com",
+    "fullName": "Phạm Hồng Trị",
+    "role": "user",
+    "teamName": "MAY79.38\tVõ Văn Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "W5mqZM1jcQQJEq2lzVEzMHNmQmx1",
+    "uid": "W5mqZM1jcQQJEq2lzVEzMHNmQmx1",
+    "email": "thuongtran1002922@gmail.com",
+    "fullName": "Trần Văn Thương",
+    "role": "user",
+    "teamName": "MAY79.36\tLê Văn Quang",
+    "assignedProjects": []
+  },
+  {
+    "id": "vfIOV96ozLdnelhFnAqP4lBaSnF3",
+    "uid": "vfIOV96ozLdnelhFnAqP4lBaSnF3",
+    "email": "batdongsan661668@gmail.com",
+    "fullName": "Lưu Vă Huy",
+    "role": "user",
+    "teamName": "MAY04.02\tTrang Nhung/Bá Quý",
+    "assignedProjects": []
+  },
+  {
+    "id": "AE0YxbK6PCQqMGJ0SiGZJ4ZoSRi2",
+    "uid": "AE0YxbK6PCQqMGJ0SiGZJ4ZoSRi2",
+    "email": "huygiang09@gmail.com",
+    "fullName": "Tạ Hữu Huy",
+    "role": "user",
+    "teamName": "MAY15.83 Tạ Hữu Huy",
+    "assignedProjects": []
+  },
+  {
+    "id": "ALyNesWnF4Ro8qZizKYHQzy6Q3s1",
+    "uid": "ALyNesWnF4Ro8qZizKYHQzy6Q3s1",
+    "email": "huynh.batdongsan123@gmail.com",
+    "fullName": "Huynh Guru",
+    "role": "user",
+    "teamName": "MAY79.38\tVõ Văn Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "xLJS1T1VVFZSabqyrPebYpGBWaF3",
+    "uid": "xLJS1T1VVFZSabqyrPebYpGBWaF3",
+    "email": "dotrieu.condotel@gmail.com",
+    "fullName": "Đỗ Đình Triệu",
+    "role": "gd_khoi",
+    "teamName": "MAY01.06 Trần Xuân Hùng",
+    "assignedBlock": "E01",
+    "assignedProjects": []
+  },
+  {
+    "id": "sDEa75j1juRnKeqdyiaO7sapVkT2",
+    "uid": "sDEa75j1juRnKeqdyiaO7sapVkT2",
+    "email": "btdocong@gmail.com",
+    "fullName": "Đỗ Trung Thông",
+    "role": "user",
+    "teamName": "MAY86.88 Đỗ Trung Thông",
+    "assignedProjects": []
+  },
+  {
+    "id": "fB1y7NhT9JdvXTwlW108AFkIOH23",
+    "uid": "fB1y7NhT9JdvXTwlW108AFkIOH23",
+    "email": "thienvu.fb@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "user",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "i5C71wYTgocfoVa2pMJG8MbUljo1",
+    "uid": "i5C71wYTgocfoVa2pMJG8MbUljo1",
+    "email": "vohai.wh@gmail.com",
+    "fullName": "Võ Văn Hải",
+    "role": "user",
+    "teamName": "MAY79.38\tVõ Văn Hải",
+    "assignedProjects": []
+  },
+  {
+    "id": "zgYxInEJikNBGlhlNZdrwAG2hfN2",
+    "uid": "zgYxInEJikNBGlhlNZdrwAG2hfN2",
+    "email": "minhtienbds03@gmail.com",
+    "fullName": "Bùi Đình Khiêm",
+    "role": "user",
+    "teamName": "MAY41.04 Bùi Đình Khiêm",
+    "assignedProjects": []
+  },
+  {
+    "id": "tjg3hNywekXE26cc7BCqcKp50I12",
+    "uid": "tjg3hNywekXE26cc7BCqcKp50I12",
+    "email": "nhungk54neu@gmail.com",
+    "fullName": "Nguyễn Thị Hồng Nhung",
+    "role": "user",
+    "teamName": "MAY02.26\tPhạm Xim/Mai Hương",
+    "assignedProjects": []
+  },
+  {
+    "id": "yhGQPcL9TgfB1WW1myaS83iEYie2",
+    "uid": "yhGQPcL9TgfB1WW1myaS83iEYie2",
+    "email": "thanhnha2162002@gmail.com",
+    "fullName": "Lê Thị Thanh Nhã",
+    "role": "user",
+    "teamName": "MAY21\tVũ Quang Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "kjjOHEdHUhQK6RbGKZ1YEG2UJgy2",
+    "uid": "kjjOHEdHUhQK6RbGKZ1YEG2UJgy2",
+    "email": "phankieuanh251124@gmail.com",
+    "fullName": "Phan Thị Kiều Anh",
+    "role": "user",
+    "teamName": "MAY21\tVũ Quang Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "smcPK6dnM9PV86R3lBUDwXDiunC3",
+    "uid": "smcPK6dnM9PV86R3lBUDwXDiunC3",
+    "email": "tucaobien2216@gmail.com",
+    "fullName": "từ cao biền",
+    "role": "user",
+    "teamName": "MAY19.01\tTừ Cao Biền/Đặng Thị Thu Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "XM9WuhWI9hbneWRlEmoJ9rgNKV82",
+    "uid": "XM9WuhWI9hbneWRlEmoJ9rgNKV82",
+    "email": "quyenbdsdatvang@gmail.com",
+    "fullName": "vũ đình quyền",
+    "role": "user",
+    "teamName": "MAY18.07\tVũ Đình Quyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "CZx54A1pQbPhUiY8V2nv0YKugI03",
+    "uid": "CZx54A1pQbPhUiY8V2nv0YKugI03",
+    "email": "dangphan93@gmail.com",
+    "fullName": "dang phan",
+    "role": "gd_khoi",
+    "teamName": "MAY06.68\tPhan Văn Đang",
+    "assignedBlock": "E06",
+    "assignedProjects": []
+  },
+  {
+    "id": "04bjf0IR2yblDTpUcjs9141k83B2",
+    "uid": "04bjf0IR2yblDTpUcjs9141k83B2",
+    "email": "phuongthao.avh@gmail.com",
+    "fullName": "Phạm Phương Thảo",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "FNK7HgJuK0ZhwgXnJkx4FSfnoMb2",
+    "uid": "FNK7HgJuK0ZhwgXnJkx4FSfnoMb2",
+    "email": "lemailinh541852@gmail.com",
+    "fullName": "Lê Mai Linh",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "PW3jqTgxEDWJqxhlIJDAUHEF9us1",
+    "uid": "PW3jqTgxEDWJqxhlIJDAUHEF9us1",
+    "email": "hoanghuong0414@gmail.com",
+    "fullName": "Hoàng Hương Pharma",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "ZSPewIMywweywx8eCW12TtdYcnC3",
+    "uid": "ZSPewIMywweywx8eCW12TtdYcnC3",
+    "email": "huongkt.haiphatquangninh@gmail.com",
+    "fullName": "Kiều Tiến Hưởng",
+    "role": "user",
+    "teamName": "MAY02.08 Kiều Tiến Hưởng",
+    "assignedProjects": []
+  },
+  {
+    "id": "pdrhxnKipHP6MTRQu2NDCRHYMi93",
+    "uid": "pdrhxnKipHP6MTRQu2NDCRHYMi93",
+    "email": "quangduydatxanh1@gmail.com",
+    "fullName": "Vũ Quang DUy",
+    "role": "user",
+    "teamName": "MAY21\tVũ Quang Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "fFchREE5guOIdjjFzsJgXRUPoFV2",
+    "uid": "fFchREE5guOIdjjFzsJgXRUPoFV2",
+    "email": "chauvokim92@gmail.com",
+    "fullName": "Võ Thị Kim Châu",
+    "role": "user",
+    "teamName": "MAY21\tVũ Quang Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "Ct5AzW1ULEYxSKOw297U5y1PKGq2",
+    "uid": "Ct5AzW1ULEYxSKOw297U5y1PKGq2",
+    "email": "vinhnuce437@gmail.com",
+    "fullName": "Nguyễn Bá Vinh",
+    "role": "user",
+    "teamName": "MAY88.01 GDKD Nguyễn Bá Vinh",
+    "assignedProjects": []
+  },
+  {
+    "id": "W44BQDExz0UKDiqk7WgJFFLogv03",
+    "uid": "W44BQDExz0UKDiqk7WgJFFLogv03",
+    "email": "adityaalmond.13718@gmail.com",
+    "fullName": "Lam Vu",
+    "role": "user",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "EM12unYYAiV1sL9UphRqoFiSOyk1",
+    "uid": "EM12unYYAiV1sL9UphRqoFiSOyk1",
+    "email": "hoangdinhtuann@gmail.com",
+    "fullName": "Hoàng Đình Tuấn",
+    "role": "mod",
+    "teamName": "MAY17\tĐặng Đình Hoàng",
+    "assignedProjects": []
+  },
+  {
+    "id": "v93UNRU3TqaiMhua5wscUYuFOwm1",
+    "uid": "v93UNRU3TqaiMhua5wscUYuFOwm1",
+    "email": "ngovietha2010@gmail.com",
+    "fullName": "Ngô Việt Hà",
+    "role": "user",
+    "teamName": "MAY01.28\tPhùng Văn Phong",
+    "assignedProjects": []
+  },
+  {
+    "id": "JkTs0AJIemUcFkWPxGxIcLyKEb72",
+    "uid": "JkTs0AJIemUcFkWPxGxIcLyKEb72",
+    "email": "vannam.neu@gmail.com",
+    "fullName": "dong van nam",
+    "role": "user",
+    "teamName": "MAY09.68\tNguyễn Văn Viết",
+    "assignedProjects": []
+  },
+  {
+    "id": "6OoLc4L5fpZqaCkJxlIJndyHv323",
+    "uid": "6OoLc4L5fpZqaCkJxlIJndyHv323",
+    "email": "trannavvy@gmail.com",
+    "fullName": "Trần Thu Thắng",
+    "role": "user",
+    "teamName": "MAY05.06\tTrần Thu Thắng",
+    "assignedProjects": []
+  },
+  {
+    "id": "1eqCuk0tRaMz8Njw4ULzIAtNmJr2",
+    "uid": "1eqCuk0tRaMz8Njw4ULzIAtNmJr2",
+    "email": "minh1105990@gmail.com",
+    "fullName": "lê quang minh",
+    "role": "user",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "r4wgMMZ3pbTJcoxUXV9v0yqclXj1",
+    "uid": "r4wgMMZ3pbTJcoxUXV9v0yqclXj1",
+    "email": "xuanviet95gocde@gmail.com",
+    "fullName": "Nguyễn Văn Viết",
+    "role": "user",
+    "teamName": "MAY09.68\tNguyễn Văn Viết",
+    "assignedProjects": []
+  },
+  {
+    "id": "UWjIW1CKEaZZRUTetvEMeX2q0gp2",
+    "uid": "UWjIW1CKEaZZRUTetvEMeX2q0gp2",
+    "email": "louistran4527@gmail.com",
+    "fullName": "Trần Hoàng Lân",
+    "role": "user",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "Cz11YX840ohmvt48rmJizy8g4u43",
+    "uid": "Cz11YX840ohmvt48rmJizy8g4u43",
+    "email": "hanhtinhvinhomes@gmail.com",
+    "fullName": "Trần Xuân Hùng",
+    "role": "user",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "9Z6DKq4AcdbwfW4MbWTdLnz0uVY2",
+    "uid": "9Z6DKq4AcdbwfW4MbWTdLnz0uVY2",
+    "email": "luxehomes.vinhomes@gmail.com",
+    "fullName": "Mkt",
+    "role": "user",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedProjects": []
+  },
+  {
+    "id": "yfSwNyyucaYn2CcgptfjW3wTaOs1",
+    "uid": "yfSwNyyucaYn2CcgptfjW3wTaOs1",
+    "email": "xuanbui.tera@gmail.com",
+    "fullName": "Bùi Thanh Xuân",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "RD8uwMi6hQUpJhpZw0H7kWiGgb53",
+    "uid": "RD8uwMi6hQUpJhpZw0H7kWiGgb53",
+    "email": "ngocdong1912@gmail.com",
+    "fullName": "Hồ Ngọc Đông",
+    "role": "user",
+    "teamName": "MAY05.06\tTrần Thu Thắng",
+    "assignedProjects": []
+  },
+  {
+    "id": "eo4wL8GfLIUo7ZuytfQuuSEm3r63",
+    "uid": "eo4wL8GfLIUo7ZuytfQuuSEm3r63",
+    "email": "anhcv128@gmail.com",
+    "fullName": "CAO VĂN ANH",
+    "role": "user",
+    "teamName": "MAY10.01\tCao Văn Anh",
+    "assignedProjects": []
+  },
+  {
+    "id": "RwQ3SMT3XGPfAoeJuGYnbn4xtXo2",
+    "uid": "RwQ3SMT3XGPfAoeJuGYnbn4xtXo2",
+    "email": "infocattuongnhadat@gmail.com",
+    "fullName": "Nguyễn Tuấn Sơn",
+    "role": "user",
+    "teamName": "MAY36.66 Nguyễn Tuấn Sơn",
+    "assignedProjects": []
+  },
+  {
+    "id": "1qta1Oe7OFPVfph4d7jAVo5l0Hw1",
+    "uid": "1qta1Oe7OFPVfph4d7jAVo5l0Hw1",
+    "email": "nguyennaman1508@gmail.com",
+    "fullName": "Nguyễn Thị Nam An",
+    "role": "user",
+    "teamName": "MAY05.02 Lưu Thị Thúy - Bùi Thanh Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "trT0JeZuOnNqe1GOFBr0OPzK63k2",
+    "uid": "trT0JeZuOnNqe1GOFBr0OPzK63k2",
+    "email": "vttlan.hp@gmail.com",
+    "fullName": "Lan Vuong",
+    "role": "user",
+    "teamName": "BO GĐDA",
+    "assignedProjects": []
+  },
+  {
+    "id": "Bt72eX7FdGQlx0zlgrDxRbQ1XN82",
+    "uid": "Bt72eX7FdGQlx0zlgrDxRbQ1XN82",
+    "email": "trungnd.mayhomes@gmail.com",
+    "fullName": "Nguyen Duy Trung",
+    "role": "user",
+    "teamName": "MAY79.26\tNguyễn Duy Trung",
+    "assignedProjects": []
+  },
+  {
+    "id": "QzrGzL26f3WgN7CQtZ8QmNImnnK2",
+    "uid": "QzrGzL26f3WgN7CQtZ8QmNImnnK2",
+    "email": "tranly140995@gmail.com",
+    "fullName": "Trần thị hà ly",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "uid": "eAL3ClbBSuhXiNdJ6x0Gp3P9XzT2",
+    "email": "phamlam1104@gmail.com",
+    "fullName": "Phạm Văn Lam",
+    "role": "gd_khoi",
+    "teamName": "MAY10.18\tPhạm Văn Lam",
+    "assignedBlock": "E10",
+    "assignedProjects": []
+  },
+  {
+    "id": "P3wJHR1rHsa6IZa3YUATU1J9uip2",
+    "uid": "P3wJHR1rHsa6IZa3YUATU1J9uip2",
+    "email": "gianghuong.doan@gmail.com",
+    "fullName": "Đoàn Thị Giáng Hương",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "jMZx9aAGKeOuYbDNAbdPBCkX2l23",
+    "uid": "jMZx9aAGKeOuYbDNAbdPBCkX2l23",
+    "email": "marrymartinn14@gmail.com",
+    "fullName": "Bùi Thanh Mai",
+    "role": "mod",
+    "teamName": "Phòng Digital",
+    "assignedProjects": []
+  },
+  {
+    "id": "v2jYufRIomMXDRiy9sifx1vcSui1",
+    "uid": "v2jYufRIomMXDRiy9sifx1vcSui1",
+    "email": "truongace@gmail.com",
+    "fullName": "Nguyễn Trọng Trường",
+    "role": "user",
+    "teamName": "MAY13.04 Nguyễn Trọng Trường",
+    "assignedProjects": []
+  },
+  {
+    "id": "W9FJ1hT8VxgG9hn7SdwRAK7uBhm1",
+    "uid": "W9FJ1hT8VxgG9hn7SdwRAK7uBhm1",
+    "email": "nguyenhongna21@gmail.com",
+    "fullName": "Nguyễn Thị Hồng",
+    "role": "admin",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "paV8a1VnlhbceR2SovaB9idRIQs1",
+    "uid": "paV8a1VnlhbceR2SovaB9idRIQs1",
+    "email": "nngocdiem1997@gmail.com",
+    "fullName": "Diễm",
+    "role": "mod",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "liLlLq3lj7NNsg4jahT8A4gHvqD3",
+    "uid": "liLlLq3lj7NNsg4jahT8A4gHvqD3",
+    "email": "trangtrang28122000@gmail.com",
+    "fullName": "Vũ Thị Ngân",
+    "role": "user",
+    "teamName": "MAY12.01\tVũ Thị Ngân",
+    "assignedProjects": []
+  },
+  {
+    "id": "3DtM1BncA3c0j78aiiUjKIlVS1g2",
+    "uid": "3DtM1BncA3c0j78aiiUjKIlVS1g2",
+    "email": "haison.realty@gmail.com",
+    "fullName": "Phan Hải Sơn",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "cGyL3BID5jbJsgxQ9QNPyzltFTq1",
+    "uid": "cGyL3BID5jbJsgxQ9QNPyzltFTq1",
+    "email": "ducthephanoi2021@gmail.com",
+    "fullName": "duy duc dao",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "JDnUAerOs3Qa6vRg831Rs3OJWnd2",
+    "uid": "JDnUAerOs3Qa6vRg831Rs3OJWnd2",
+    "email": "lamlam.16.2014@gmail.com",
+    "fullName": "Vương Thu Trang",
+    "role": "user",
+    "teamName": "MAY02.58\tVương Thu Trang",
+    "assignedProjects": []
+  },
+  {
+    "id": "pwpc0eXaw6O5mFqQFMhFrMAocKA2",
+    "uid": "pwpc0eXaw6O5mFqQFMhFrMAocKA2",
+    "email": "phankhanhmhg@gmail.com",
+    "fullName": "Phan Quốc Khánh",
+    "role": "gd_khoi",
+    "teamName": "MAY92\tVõ Quốc Vương",
+    "assignedBlock": "E68",
+    "assignedProjects": []
+  },
+  {
+    "id": "NoOzn99rSlQIJItvk7zh24pLNUx2",
+    "uid": "NoOzn99rSlQIJItvk7zh24pLNUx2",
+    "email": "thuypt.tlc@gmail.com",
+    "fullName": "Thu Thuỷ",
+    "role": "mod",
+    "teamName": "Team Khác",
+    "assignedProjects": [
+      "0TgaX4yQmxolmGwSn392",
+      "iNsp401WLCsJ95meS2Z9",
+      "Zk5I4PevZruQFumdfC0X"
+    ]
+  },
+  {
+    "id": "0kATtbxv0XMwVVD36yhKOOD4Z7h2",
+    "uid": "0kATtbxv0XMwVVD36yhKOOD4Z7h2",
+    "email": "thuyluon0410@gmail.com",
+    "fullName": "Nguyễn Thuỳ Luôn",
+    "role": "user",
+    "teamName": "MAY08.35\tNguyễn Thuỳ Luôn",
+    "assignedProjects": []
+  },
+  {
+    "id": "JZ75MKjVPSNcQboNMOq4UxeStWE2",
+    "uid": "JZ75MKjVPSNcQboNMOq4UxeStWE2",
+    "email": "vythao110903@gmail.com",
+    "fullName": "Phạm Thảo Vy",
+    "role": "user",
+    "teamName": "MAY39.96 Nguyễn Duy Công",
+    "assignedProjects": []
+  },
+  {
+    "id": "W8IJ7mCus2MhFXaIK0vUzTpQf4j1",
+    "uid": "W8IJ7mCus2MhFXaIK0vUzTpQf4j1",
+    "email": "thanhgt.k54@gmail.com",
+    "fullName": "Trịnh Viết Thành",
+    "role": "gd_khoi",
+    "teamName": "MAY08.01\tTrịnh Viết Thành",
+    "assignedBlock": "E88",
+    "assignedProjects": []
+  },
+  {
+    "id": "0rSZXuqRarU37IMKiMXHW59pzuu2",
+    "uid": "0rSZXuqRarU37IMKiMXHW59pzuu2",
+    "email": "vuthidiep8888@gmail.com",
+    "fullName": "Vũ thị Điệp",
+    "role": "user",
+    "teamName": "MAY04.12\tHoàng Công Quyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "mjSUEOBfLnNetdlHenWKVJuWf4j2",
+    "uid": "mjSUEOBfLnNetdlHenWKVJuWf4j2",
+    "email": "quyen.hoangcong@gmail.com",
+    "fullName": "Hoang Cong Quyen",
+    "role": "user",
+    "teamName": "MAY04.12\tHoàng Công Quyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "aTnIQOH8mFWGoIeGXh2jmqU56rn2",
+    "uid": "aTnIQOH8mFWGoIeGXh2jmqU56rn2",
+    "email": "luuhai3004@gmail.com",
+    "fullName": "Lưu Xuân Hải",
+    "role": "user",
+    "teamName": "MAY08.02\tLưu Xuân Quang",
+    "assignedProjects": []
+  },
+  {
+    "id": "vddHu2Zfh5dPeNPRDZ0aNRRv3O22",
+    "uid": "vddHu2Zfh5dPeNPRDZ0aNRRv3O22",
+    "email": "quanlv.win@gmail.com",
+    "fullName": "Phan Hải Sơn",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "lvP9pqJKySWqX0107Rwpsh5CMos1",
+    "uid": "lvP9pqJKySWqX0107Rwpsh5CMos1",
+    "email": "thao.nuce.150897@gmail.com",
+    "fullName": "Lê văn Thao",
+    "role": "user",
+    "teamName": "MAY88.02 Lê Văn Thao/Nguyễn Hữu Ngọc",
+    "assignedProjects": []
+  },
+  {
+    "id": "kq0cAyFp7UfgFfmcn1UppZix3n12",
+    "uid": "kq0cAyFp7UfgFfmcn1UppZix3n12",
+    "email": "mcnguyenhuy95@gmail.com",
+    "fullName": "Nguyễn Ngọc Huy",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "8sesJMlyYBPncwBsbcl5MXtYAm62",
+    "uid": "8sesJMlyYBPncwBsbcl5MXtYAm62",
+    "email": "phamthanhnam53@gmail.com",
+    "fullName": "Phạm Thành Nam",
+    "role": "user",
+    "teamName": "MAY08.03\tVương Tiến Hiếu",
+    "assignedProjects": []
+  },
+  {
+    "id": "gJGNrCbw8UNjWflkXHv50mU4UW42",
+    "uid": "gJGNrCbw8UNjWflkXHv50mU4UW42",
+    "email": "hoanglongdlk6th@gmail.com",
+    "fullName": "Hoàng Thanh Long",
+    "role": "user",
+    "teamName": "MAY08.03\tVương Tiến Hiếu",
+    "assignedProjects": []
+  },
+  {
+    "id": "jgEXWSBYfdeWQuSvFEl2EfyRZtq2",
+    "uid": "jgEXWSBYfdeWQuSvFEl2EfyRZtq2",
+    "email": "galaxy.cuong90@gmail.com",
+    "fullName": "Lê Minh Cường",
+    "role": "user",
+    "teamName": "MAY12.55 Lê Minh Cường",
+    "assignedProjects": []
+  },
+  {
+    "id": "Jgm2YTLTw3W2TAGYTRuz6MHMwky2",
+    "uid": "Jgm2YTLTw3W2TAGYTRuz6MHMwky2",
+    "email": "vuongtienhieu1996@gmail.com",
+    "fullName": "Vuong Tien Hieu",
+    "role": "user",
+    "teamName": "MAY08.03\tVương Tiến Hiếu",
+    "assignedProjects": []
+  },
+  {
+    "id": "7JiDUmIWabNUfbxGx3RoTFoV7yA3",
+    "uid": "7JiDUmIWabNUfbxGx3RoTFoV7yA3",
+    "email": "betun88888888@gmail.com",
+    "fullName": "Trần Gia Bảo",
+    "role": "user",
+    "teamName": "MAY08.26\tLê Kim Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "31AHk778VQO0aJOzxpUvmptf3pj2",
+    "uid": "31AHk778VQO0aJOzxpUvmptf3pj2",
+    "email": "daihiepland@gmail.com",
+    "fullName": "Phung Đại Hiệp",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "u9ZX7148b1WQC4bPRUFAOpWKb0h1",
+    "uid": "u9ZX7148b1WQC4bPRUFAOpWKb0h1",
+    "email": "tonydung3619902025@gmail.com",
+    "fullName": "Nguyễn Văn Dũng",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "w9BMcY1GGgZiFhsVPQmO2HIGzQM2",
+    "uid": "w9BMcY1GGgZiFhsVPQmO2HIGzQM2",
+    "email": "nguyenthuyhuong2812@gmail.com",
+    "fullName": "Nguyễn Thuý Hường",
+    "role": "user",
+    "teamName": "MAY01.08\tAnh Minh / Thúy Hường",
+    "assignedProjects": []
+  },
+  {
+    "id": "5uGRdXiVQgVITBLDsRQHTfvZzvh2",
+    "uid": "5uGRdXiVQgVITBLDsRQHTfvZzvh2",
+    "email": "ngoc.nh361104@gmail.com",
+    "fullName": "Ngọc Hữu",
+    "role": "user",
+    "teamName": "MAY08.01\tTrịnh Viết Thành",
+    "assignedProjects": []
+  },
+  {
+    "id": "PjfvlXGRT7hU9I0yGUrlfvzE50w1",
+    "uid": "PjfvlXGRT7hU9I0yGUrlfvzE50w1",
+    "email": "phambaonam064@gmail.com",
+    "fullName": "Phạm Văn Nam",
+    "role": "user",
+    "teamName": "MAY08.22\tPhạm Văn Nam",
+    "assignedProjects": []
+  },
+  {
+    "id": "MpiU2HmqB9OzWKbZZluamuCTEAf1",
+    "uid": "MpiU2HmqB9OzWKbZZluamuCTEAf1",
+    "email": "ledongtoan@gmail.com",
+    "fullName": "Lê Đồng Toàn",
+    "role": "user",
+    "teamName": "MAY12.55 Lê Minh Cường",
+    "assignedProjects": []
+  },
+  {
+    "id": "DfUt65oIdQbtYRzeVCruBotZ6Ao1",
+    "uid": "DfUt65oIdQbtYRzeVCruBotZ6Ao1",
+    "email": "phanhaison988@gmail.com",
+    "fullName": "Bùi Thị Thanh Huyền",
+    "role": "gd_khoi",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedBlock": "E39",
+    "assignedProjects": []
+  },
+  {
+    "id": "jZ0FYR4DqeMBByP6nGR0empPv7u2",
+    "uid": "jZ0FYR4DqeMBByP6nGR0empPv7u2",
+    "email": "linh.nd1910@gmail.com",
+    "fullName": "Nguyễn Tấn Duy Linh",
+    "role": "user",
+    "teamName": "MAY06.88\tNguyễn Tấn Duy Linh/Võ Phương Huy",
+    "assignedProjects": []
+  },
+  {
+    "id": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "uid": "iop6n8OHQThukPp0QA2XM9tkTrf1",
+    "email": "vuongps1402@gmail.com",
+    "fullName": "Phùng Sơn Vương",
+    "role": "gd_khoi",
+    "teamName": "MAY15.08\tĐặng Việt Dũng",
+    "assignedBlock": "E15",
+    "assignedProjects": []
+  },
+  {
+    "id": "81GV4TcWT2TmBlcQNcaZFGx2ijo2",
+    "uid": "81GV4TcWT2TmBlcQNcaZFGx2ijo2",
+    "email": "tuananh.laptoptna@gmail.com",
+    "fullName": "Nguyễn Tuấn Anh",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "FsWAeE30b6cDiL00ZfmrkFBIFvz2",
+    "uid": "FsWAeE30b6cDiL00ZfmrkFBIFvz2",
+    "email": "quyekaito@gmail.com",
+    "fullName": "Phùng Mạnh Quyết",
+    "role": "user",
+    "teamName": "MAY15.08\tĐặng Việt Dũng",
+    "assignedProjects": []
+  },
+  {
+    "id": "pbjiafxPG8cYyddjHqnT5e2iTZz2",
+    "uid": "pbjiafxPG8cYyddjHqnT5e2iTZz2",
+    "email": "bach40499@gmail.com",
+    "fullName": "Nguyễn Ngọc Bách",
+    "role": "user",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "AwDXkM51BKScJdEdbfLBv9qGAPo1",
+    "uid": "AwDXkM51BKScJdEdbfLBv9qGAPo1",
+    "email": "trongvinh0151@gmail.com",
+    "fullName": "Quản Trọng Vinh",
+    "role": "user",
+    "teamName": "MAY01.16\tQuản Trọng Vinh",
+    "assignedProjects": []
+  },
+  {
+    "id": "joua7eS1hhaZUlCUKG4Df0sJRHg2",
+    "uid": "joua7eS1hhaZUlCUKG4Df0sJRHg2",
+    "email": "congnd8338@gmail.com",
+    "fullName": "Nguyễn Đình Công",
+    "role": "user",
+    "teamName": "MAY04.19\tNguyễn Đình Công",
+    "assignedProjects": []
+  },
+  {
+    "id": "KXqISQitKUYsaLvA8DMszMzJKRk2",
+    "uid": "KXqISQitKUYsaLvA8DMszMzJKRk2",
+    "email": "ngoisaocam2007@gmail.com",
+    "fullName": "NGUYỄN QUÍ MỸ",
+    "role": "user",
+    "teamName": "MAY13.34\tNguyễn Quí Mỹ",
+    "assignedProjects": []
+  },
+  {
+    "id": "vSGPeCcBXVWkCxy4ddKeEFPBGjw1",
+    "uid": "vSGPeCcBXVWkCxy4ddKeEFPBGjw1",
+    "email": "quyethalongbds@gmail.com",
+    "fullName": "Phùng mạnh quyết",
+    "role": "user",
+    "teamName": "MAY15.08\tĐặng Việt Dũng",
+    "assignedProjects": []
+  },
+  {
+    "id": "sZuLiMs2GChP92B4Ys7sa8UPIrI3",
+    "uid": "sZuLiMs2GChP92B4Ys7sa8UPIrI3",
+    "email": "quan.mayhomes@gmail.com",
+    "fullName": "ĐỖ VĂN QUÂN",
+    "role": "user",
+    "teamName": "MAY13.58\tPhạm Thanh Tùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "lv0J6bJXkQUIED1VDmssXJgJDsb2",
+    "uid": "lv0J6bJXkQUIED1VDmssXJgJDsb2",
+    "email": "hoanghong180201@gmail.com",
+    "fullName": "Đặng Đình Hoàng",
+    "role": "gd_khoi",
+    "teamName": "MAY17\tĐặng Đình Hoàng",
+    "assignedBlock": "E17",
+    "assignedProjects": []
+  },
+  {
+    "id": "6zCtWvcNOROiIr5Kgi9UpGqR97m2",
+    "uid": "6zCtWvcNOROiIr5Kgi9UpGqR97m2",
+    "email": "huongsacvinhomes@gmail.com",
+    "fullName": "Nguyễn Thị Hướng",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "m3dCm2eDZYV8qFMZoDf2pYeyveT2",
+    "uid": "m3dCm2eDZYV8qFMZoDf2pYeyveT2",
+    "email": "thanhnguyendp56@gmail.com",
+    "fullName": "Trần Thị Linh Giang",
+    "role": "user",
+    "teamName": "MAY13.68\tNguyễn Đình Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "0hkJvdD8jmZxxMQK3aSQfzc4Gep1",
+    "uid": "0hkJvdD8jmZxxMQK3aSQfzc4Gep1",
+    "email": "thanhtung.kdvinhomes@gmail.com",
+    "fullName": "Phạm Thanh Tùng",
+    "role": "user",
+    "teamName": "MAY13.58\tPhạm Thanh Tùng",
+    "assignedProjects": []
+  },
+  {
+    "id": "Ew5jSuqG5OPGtDcy9mFyL381mK32",
+    "uid": "Ew5jSuqG5OPGtDcy9mFyL381mK32",
+    "email": "kmthanh1096@gmail.com",
+    "fullName": "Khổng Minh Thanh",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "677PDn9Pz0RQguvlyxH5xsIcFOW2",
+    "uid": "677PDn9Pz0RQguvlyxH5xsIcFOW2",
+    "email": "khiembds6868@gmail.com",
+    "fullName": "Bùi Đình Khiêm",
+    "role": "user",
+    "teamName": "MAY41.04 Bùi Đình Khiêm",
+    "assignedProjects": []
+  },
+  {
+    "id": "Pbhahee4fDh3hGvATXURTVFaPni2",
+    "uid": "Pbhahee4fDh3hGvATXURTVFaPni2",
+    "email": "qlspvhwc.mayhomes@gmail.com",
+    "fullName": "Nghiêm Thị Hoa",
+    "role": "user",
+    "teamName": "MAY13.11\tNghiêm Thị Hoa",
+    "assignedProjects": []
+  },
+  {
+    "id": "hdvd69f2zpNe5H0dpudUxi7xnXM2",
+    "uid": "hdvd69f2zpNe5H0dpudUxi7xnXM2",
+    "email": "thuatbt2808@gmail.com",
+    "fullName": "Đoàn Tất Thuật",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "BniELyTrHZefmEX9oCD0bPsun1x2",
+    "uid": "BniELyTrHZefmEX9oCD0bPsun1x2",
+    "email": "lamphongsapa@gmail.com",
+    "fullName": "phong lam",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "Njvf8Vo7l9dRaj5rcx0bEmZfNyn2",
+    "uid": "Njvf8Vo7l9dRaj5rcx0bEmZfNyn2",
+    "email": "phamanhminh181@gmail.com",
+    "fullName": "Phạm Anh Minh",
+    "role": "user",
+    "teamName": "MAY01.08\tAnh Minh / Thúy Hường",
+    "assignedProjects": []
+  },
+  {
+    "id": "MBGPED2eg4O32lMKgdEJ46bMF1m2",
+    "uid": "MBGPED2eg4O32lMKgdEJ46bMF1m2",
+    "email": "tuedat1102@gmail.com",
+    "fullName": "Trần Văn Trọng Đạt",
+    "role": "user",
+    "teamName": "MAY02.26\tPhạm Xim/Mai Hương",
+    "assignedProjects": []
+  },
+  {
+    "id": "InFAoLBzJudXE6ZLlhFF9UeV0oz1",
+    "uid": "InFAoLBzJudXE6ZLlhFF9UeV0oz1",
+    "email": "ceo.heritagevn@gmail.com",
+    "fullName": "Phan Đức Ngọc",
+    "role": "user",
+    "teamName": "MAY01.02\tPhan Phong/Vũ Trưởng",
+    "assignedProjects": []
+  },
+  {
+    "id": "gKysv1r3mZNjOrs9K1EGWEVkY3y1",
+    "uid": "gKysv1r3mZNjOrs9K1EGWEVkY3y1",
+    "email": "nguyenanhbds1103@gmail.com",
+    "fullName": "Nguyễn Việt Anh",
+    "role": "user",
+    "teamName": "MAY01.13\tNguyễn Việt Anh",
+    "assignedProjects": []
+  },
+  {
+    "id": "b9kz6TF4pDV6gZ3uTr3PGrgTXlZ2",
+    "uid": "b9kz6TF4pDV6gZ3uTr3PGrgTXlZ2",
+    "email": "minhhienbdsphongthuy@gmail.com",
+    "fullName": "hiền",
+    "role": "user",
+    "teamName": "MAY01.02\tPhan Phong/Vũ Trưởng",
+    "assignedProjects": []
+  },
+  {
+    "id": "SrbytLlzt8PwBIAznHoXeRuJicb2",
+    "uid": "SrbytLlzt8PwBIAznHoXeRuJicb2",
+    "email": "huyenvu25590@gmail.com",
+    "fullName": "Vũ Thanh Huyền",
+    "role": "user",
+    "teamName": "MAY01.02\tPhan Phong/Vũ Trưởng",
+    "assignedProjects": []
+  },
+  {
+    "id": "oafarHJV3NXXfmsRDMjW1UJZgs12",
+    "uid": "oafarHJV3NXXfmsRDMjW1UJZgs12",
+    "email": "thamdth.cengroup@gmail.com",
+    "fullName": "Đào Thị Hương Thắm",
+    "role": "gd_khoi",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedBlock": "E01",
+    "assignedProjects": []
+  },
+  {
+    "id": "thlGSjVpSkURRRO48a5BvF643B73",
+    "uid": "thlGSjVpSkURRRO48a5BvF643B73",
+    "email": "manhtran91.avh@gmail.com",
+    "fullName": "Trần văn mạnh",
+    "role": "user",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "52j1OftLXlen3DzYczg4SrTpFQ72",
+    "uid": "52j1OftLXlen3DzYczg4SrTpFQ72",
+    "email": "thanhnt.clh@gmail.com",
+    "fullName": "Ngô Tiến Thành",
+    "role": "user",
+    "teamName": "MAY01.09\tNgô Tiến Thành",
+    "assignedProjects": []
+  },
+  {
+    "id": "zVXtbfUjkJcjwZohcHYbYV92twS2",
+    "uid": "zVXtbfUjkJcjwZohcHYbYV92twS2",
+    "email": "ptvanh2394@gmail.com",
+    "fullName": "Phạm Thị Vân Anh",
+    "role": "user",
+    "teamName": "MAY12.02\tPhạm Thị Vân Anh",
+    "assignedProjects": []
+  },
+  {
+    "id": "6qbTOHRxKLPSReLa84CgxNGJYCu2",
+    "uid": "6qbTOHRxKLPSReLa84CgxNGJYCu2",
+    "email": "thanhhuyen.bg69@gmail.com",
+    "fullName": "Đồng Thu Huyền",
+    "role": "user",
+    "teamName": "MAY41.04 Bùi Đình Khiêm",
+    "assignedProjects": []
+  },
+  {
+    "id": "KeKYkBoSO6bOcoPk8xcCRv0drxg2",
+    "uid": "KeKYkBoSO6bOcoPk8xcCRv0drxg2",
+    "email": "hung.trinh201@gmail.com",
+    "fullName": "Thế Hưng BĐS",
+    "role": "user",
+    "teamName": "",
+    "assignedProjects": []
+  },
+  {
+    "id": "oFaRgbKlz4SQ40oZznI9daYbqNP2",
+    "uid": "oFaRgbKlz4SQ40oZznI9daYbqNP2",
+    "email": "kiettu9611@gmail.com",
+    "fullName": "NGÔ VĂN LÊ",
+    "role": "user",
+    "teamName": "MAY03.88\tNgô Văn Lê",
+    "assignedProjects": []
+  },
+  {
+    "id": "HSyyOMHnuDaAPLT0gdReC7GwGGF3",
+    "uid": "HSyyOMHnuDaAPLT0gdReC7GwGGF3",
+    "email": "duongtrongthang1992@gmail.com",
+    "fullName": "Dương Trọng Thắng",
+    "role": "user",
+    "teamName": "MAY39.55 Dương Trọng Thắng",
+    "assignedProjects": []
+  },
+  {
+    "id": "QmOCC60njDWT11Lrg22IIhBkuFe2",
+    "uid": "QmOCC60njDWT11Lrg22IIhBkuFe2",
+    "email": "tunglamvh9@gmail.com",
+    "fullName": "Vũ Văn Trưởng",
+    "role": "user",
+    "teamName": "MAY01.02\tPhan Phong/Vũ Trưởng",
+    "assignedProjects": []
+  },
+  {
+    "id": "ZaeiPG6MrngdW5dLjivcu1Zf9S93",
+    "uid": "ZaeiPG6MrngdW5dLjivcu1Zf9S93",
+    "email": "tonnycongvan@gmail.com",
+    "fullName": "Công Lương Văn",
+    "role": "user",
+    "teamName": "MAY09.01\tLương Văn Công",
+    "assignedProjects": []
+  },
+  {
+    "id": "jlElvjSRZbNxOHWLJL6IerKBKo43",
+    "uid": "jlElvjSRZbNxOHWLJL6IerKBKo43",
+    "email": "lu0nganhc0ng@gmail.com",
+    "fullName": "Công Lương Văn",
+    "role": "user",
+    "teamName": "MAY09.01\tLương Văn Công",
+    "assignedProjects": []
+  },
+  {
+    "id": "ZCpYqeHQGkSAaHw721f8C0hfo832",
+    "uid": "ZCpYqeHQGkSAaHw721f8C0hfo832",
+    "email": "phamxim.vud@gmail.com",
+    "fullName": "Phạm Thị Xim",
+    "role": "user",
+    "teamName": "MAY02.26\tPhạm Xim/Mai Hương",
+    "assignedProjects": []
+  },
+  {
+    "id": "taErbXF9rzTL5Es9YMEH2qMK0ck1",
+    "uid": "taErbXF9rzTL5Es9YMEH2qMK0ck1",
+    "email": "binhhaiphong2015@gmail.com",
+    "fullName": "NGUYEN HAI PHONG",
+    "role": "user",
+    "teamName": "MAY79.86\tNguyễn Chung Hiếu",
+    "assignedProjects": []
+  },
+  {
+    "id": "Sg83ARfP7ZN4m08tmIa1cheUzb53",
+    "uid": "Sg83ARfP7ZN4m08tmIa1cheUzb53",
+    "email": "thuynganha81@gmail.com",
+    "fullName": "Nguyễn Thị Thanh Thúy",
+    "role": "user",
+    "teamName": "MAY04.68\tNguyễn Thị Thu Hà",
+    "assignedProjects": []
+  },
+  {
+    "id": "Q72uJxIjt5Yxuwci1OGRWWlr82C3",
+    "uid": "Q72uJxIjt5Yxuwci1OGRWWlr82C3",
+    "email": "nguyentheanhdhv@gmail.com",
+    "fullName": "Nguyễn Thế Anh",
+    "role": "gd_khoi",
+    "teamName": "Team Khác",
+    "assignedBlock": "E48",
+    "assignedProjects": []
+  },
+  {
+    "id": "NBHx5KioyaZY63qdVABogyxXZJP2",
+    "uid": "NBHx5KioyaZY63qdVABogyxXZJP2",
+    "email": "trancuong0209@gmail.com",
+    "fullName": "TRẦN VĂN CƯỜNG",
+    "role": "user",
+    "teamName": "MAY79.27\tTrần Văn Cường",
+    "assignedProjects": []
+  },
+  {
+    "id": "JyExkCFEigUBu6UXZGPs46myNrR2",
+    "uid": "JyExkCFEigUBu6UXZGPs46myNrR2",
+    "email": "hieuvudy@gmail.com",
+    "fullName": "Vũ hải hiếu",
+    "role": "user",
+    "teamName": "MAY10.10\tVũ Hải Hiếu",
+    "assignedProjects": []
+  },
+  {
+    "id": "OIyMefb3XdgwWcbw5oB4c5a7HX43",
+    "uid": "OIyMefb3XdgwWcbw5oB4c5a7HX43",
+    "email": "dangmanh123@gmail.com",
+    "fullName": "Nguyễn Đăng Mạnh",
+    "role": "user",
+    "teamName": "MAY25.01\tNguyễn Việt Dũng",
+    "assignedProjects": []
+  },
+  {
+    "id": "Ep65g8jHtvScHmvyJsc5Hk49OC62",
+    "uid": "Ep65g8jHtvScHmvyJsc5Hk49OC62",
+    "email": "nhatphongland@gmail.com",
+    "fullName": "Phùng Văn Phong",
+    "role": "gd_khoi",
+    "teamName": "MAY01.28\tPhùng Văn Phong",
+    "assignedBlock": "E02",
+    "assignedProjects": []
+  },
+  {
+    "id": "RbO9LcZJ4VXUC61wjNe96ZoBJCa2",
+    "uid": "RbO9LcZJ4VXUC61wjNe96ZoBJCa2",
+    "email": "hieuvy1207@gmail.com",
+    "fullName": "Đồng Thị Minh Khuê",
+    "role": "user",
+    "teamName": "MAY39.28 Đổng Thị Minh Khuê",
+    "assignedProjects": []
+  },
+  {
+    "id": "Ep9RLLVGXjZkaQpUmYv4W0NRAU12",
+    "uid": "Ep9RLLVGXjZkaQpUmYv4W0NRAU12",
+    "email": "phuongthaob820@gmail.com",
+    "fullName": "Bùi Phương Thảo",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY39.89 Bùi Thị Thanh Huyền",
+    "assignedBlock": "E98",
+    "assignedBlocks": [
+      "E39",
+      "cRfDE2mfFWZB3H8u7TOW",
+      "E98",
+      "Ql43G7IA1lD182WlsaPp"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "QbEitSwMHKegPgqxhXzKSSOmsSk1",
+    "uid": "QbEitSwMHKegPgqxhXzKSSOmsSk1",
+    "email": "bietthulienkedep@gmail.com",
+    "fullName": "Nguyễn Hữu Tuân",
+    "role": "user",
+    "teamName": "MAY10.02\tNguyễn Hữu Tuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "zTmwqiyiNFh4QG4vRlWjy6fvuCd2",
+    "uid": "zTmwqiyiNFh4QG4vRlWjy6fvuCd2",
+    "email": "lelanhuong860@gmail.com",
+    "fullName": "Lan Huong",
+    "role": "tro_ly_khoi",
+    "teamName": "Team Khác",
+    "assignedBlock": "E86",
+    "assignedProjects": []
+  },
+  {
+    "id": "fjj6NFM2jMW0Je63EJ75f5MW6F02",
+    "uid": "fjj6NFM2jMW0Je63EJ75f5MW6F02",
+    "email": "tranngoctieuthi@gmail.com",
+    "fullName": "Trần Ngọc Tiểu Thi",
+    "role": "user",
+    "teamName": "MAY79.30\tTrần Ngọc Tiểu Thi",
+    "assignedProjects": []
+  },
+  {
+    "id": "a0LHIUZh3zaZZlrLHEUlss5srR23",
+    "uid": "a0LHIUZh3zaZZlrLHEUlss5srR23",
+    "email": "haanhvinhomes.95@gmail.com",
+    "fullName": "Nguyễn Thị Thu Hà",
+    "role": "user",
+    "teamName": "MAY25.05 Nguyễn Thị Thu Hà ",
+    "assignedProjects": []
+  },
+  {
+    "id": "isGMZEWCtwTixZNGVAZDU13qqBC2",
+    "uid": "isGMZEWCtwTixZNGVAZDU13qqBC2",
+    "email": "thuybds810@gmail.com",
+    "fullName": "Đỗ Thị Thuỷ",
+    "role": "user",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedProjects": []
+  },
+  {
+    "id": "VVKrVukOnYfpuKpy5TjuoHpRzrh1",
+    "uid": "VVKrVukOnYfpuKpy5TjuoHpRzrh1",
+    "email": "huuthang12021@gmail.com",
+    "fullName": "thủy đỗ",
+    "role": "user",
+    "teamName": "MAY12.05\tTrịnh Thị Thương",
+    "assignedProjects": []
+  },
+  {
+    "id": "2XO9QkCq2pRPp5bMh2L0Q6S6t3y2",
+    "uid": "2XO9QkCq2pRPp5bMh2L0Q6S6t3y2",
+    "email": "bdsvinhomesvn123@gmail.com",
+    "fullName": "Nguyễn Quốc Khánh",
+    "role": "user",
+    "teamName": "MAY13.03\tNguyễn Quốc Khánh",
+    "assignedProjects": []
+  },
+  {
+    "id": "VA2ZraM2GvNLAUvGYJRYEDjYiK12",
+    "uid": "VA2ZraM2GvNLAUvGYJRYEDjYiK12",
+    "email": "lathehung8686@gmail.com",
+    "fullName": "Lã Thế Hùng",
+    "role": "gd_khoi",
+    "teamName": "MAY04.07\tLã Thế Hùng",
+    "assignedBlock": "E46",
+    "assignedProjects": []
+  },
+  {
+    "id": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "uid": "orp0rmtR7WgMZCftBJtDdRwWhgR2",
+    "email": "linhphi.vip@gmail.com",
+    "fullName": "Lê Văn Quang",
+    "role": "gd_khoi",
+    "teamName": "MAY79.36\tLê Văn Quang",
+    "assignedBlock": "E36",
+    "assignedProjects": []
+  },
+  {
+    "id": "nH6gVMUxTCMu70nPd4mONploKG42",
+    "uid": "nH6gVMUxTCMu70nPd4mONploKG42",
+    "email": "cuongvan.vinhomes@gmail.com",
+    "fullName": "Văn Cường",
+    "role": "gd_khoi",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedBlock": "E41",
+    "assignedProjects": []
+  },
+  {
+    "id": "7gDonaqoajOYx5kUHyHuC53BQTx2",
+    "uid": "7gDonaqoajOYx5kUHyHuC53BQTx2",
+    "email": "ketoanmayhomes@gmail.com",
+    "fullName": "MH_MKT",
+    "role": "user",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "SsrgaFqTBraxnBj0URhQbMVWYsy1",
+    "uid": "SsrgaFqTBraxnBj0URhQbMVWYsy1",
+    "email": "vinpearlempire@gmail.com",
+    "fullName": "LÊ KIM XUÂN",
+    "role": "user",
+    "teamName": "MAY08.26\tLê Kim Xuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "7c0WX0wrAoVAHz2XALKwJ3Z7z9s2",
+    "uid": "7c0WX0wrAoVAHz2XALKwJ3Z7z9s2",
+    "email": "chaunguyen119@gmail.com",
+    "fullName": "Chau Nguyen",
+    "role": "admin",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "MkJ08WJly6WH4sZRvN6oLPrs2Ld2",
+    "uid": "MkJ08WJly6WH4sZRvN6oLPrs2Ld2",
+    "email": "nguyendung27121987@gmail.com",
+    "fullName": "Nguyễn Việt Dũng",
+    "role": "user",
+    "teamName": "MAY25.01\tNguyễn Việt Dũng",
+    "assignedProjects": []
+  },
+  {
+    "id": "bHUWXfZQ3TPkNNrwOGMdptQ9CTX2",
+    "uid": "bHUWXfZQ3TPkNNrwOGMdptQ9CTX2",
+    "email": "lengocphuong8xhn@gmail.com",
+    "fullName": "Lê Ngọc Phương",
+    "role": "user",
+    "teamName": "MAY04.44\tLê Xuân Hiệp",
+    "assignedProjects": []
+  },
+  {
+    "id": "MMrAckF3kya08qgeWDkC4W1GUy72",
+    "uid": "MMrAckF3kya08qgeWDkC4W1GUy72",
+    "email": "haisonbg1989@gmail.com",
+    "fullName": "Phạm Văn Sơn",
+    "role": "user",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedProjects": []
+  },
+  {
+    "id": "0mRWm269kOVbJMmdjYAMjsgy1pG2",
+    "uid": "0mRWm269kOVbJMmdjYAMjsgy1pG2",
+    "email": "aotrung3@gmail.com",
+    "fullName": "Đào Văn Trung",
+    "role": "user",
+    "teamName": "MAY03.28\tĐào Văn Trung",
+    "assignedProjects": []
+  },
+  {
+    "id": "SCF1Imx2mxfAoODLIlS6u0ovL3P2",
+    "uid": "SCF1Imx2mxfAoODLIlS6u0ovL3P2",
+    "email": "baogia.phongbanhang@gmail.com",
+    "fullName": "Phạm Văn Lam",
+    "role": "user",
+    "teamName": "MAY10.18\tPhạm Văn Lam",
+    "assignedProjects": []
+  },
+  {
+    "id": "lCh5FGSFcIfZc10bD9s0L9XsLwt1",
+    "uid": "lCh5FGSFcIfZc10bD9s0L9XsLwt1",
+    "email": "hy.tranthihaiyen@gmail.com",
+    "fullName": "Trần Thị Hải Yến",
+    "role": "user",
+    "teamName": "MAY03.03\tTrần Thị Hải Yến",
+    "assignedProjects": []
+  },
+  {
+    "id": "SzsFhf1gLhfN9WaWyJ2AWAy4kE53",
+    "uid": "SzsFhf1gLhfN9WaWyJ2AWAy4kE53",
+    "email": "thanh2000.thienloc.thienkhoi@gmail.com",
+    "fullName": "Đinh văn Thành",
+    "role": "user",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedProjects": []
+  },
+  {
+    "id": "dpsDpv7ahzOxOcDIp6Hxwag21tG2",
+    "uid": "dpsDpv7ahzOxOcDIp6Hxwag21tG2",
+    "email": "conganhbdsvn@gmail.com",
+    "fullName": "Lương Văn Công",
+    "role": "user",
+    "teamName": "MAY09.01\tLương Văn Công",
+    "assignedProjects": []
+  },
+  {
+    "id": "lWvQVxoXGQWaJ8GOln1sPErbYYF3",
+    "uid": "lWvQVxoXGQWaJ8GOln1sPErbYYF3",
+    "email": "ndk2408@gmail.com",
+    "fullName": "Nguyễn Duy Khánh",
+    "role": "user",
+    "teamName": "MAY79.52\tNguyễn Duy Khánh",
+    "assignedProjects": []
+  },
+  {
+    "id": "WR4iq7OAk8O91AaDZRWkL7wqKd23",
+    "uid": "WR4iq7OAk8O91AaDZRWkL7wqKd23",
+    "email": "tr.caocuong@gmail.com",
+    "fullName": "Trần Cao Cường",
+    "role": "gd_khoi",
+    "teamName": "MAY08.53\tTrần Cao Cường",
+    "assignedBlock": "E86",
+    "assignedProjects": []
+  },
+  {
+    "id": "hclAyBwK2yU0gCHFLOuyiHJm2782",
+    "uid": "hclAyBwK2yU0gCHFLOuyiHJm2782",
+    "email": "lequangvinhbds@gmail.com",
+    "fullName": "Lê Văn Vinh",
+    "role": "user",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": []
+  },
+  {
+    "id": "iSXEB2uuKna6owIn51y2kLzlwJh2",
+    "uid": "iSXEB2uuKna6owIn51y2kLzlwJh2",
+    "email": "ductaihn@gmail.com",
+    "fullName": "Lê Đức Tài",
+    "role": "user",
+    "teamName": "MAY02.20\tLê Đức Tài",
+    "assignedProjects": []
+  },
+  {
+    "id": "g7ZNLRzMfUgOQVk4wohexRGJe8m2",
+    "uid": "g7ZNLRzMfUgOQVk4wohexRGJe8m2",
+    "email": "maihuong.sec@gmail.com",
+    "fullName": "Nguyễn Thị Mai Hương",
+    "role": "user",
+    "teamName": "MAY08.53\tTrần Cao Cường",
+    "assignedProjects": []
+  },
+  {
+    "id": "RsDAtBmVncM7sfiKiOkiPlS27UL2",
+    "uid": "RsDAtBmVncM7sfiKiOkiPlS27UL2",
+    "email": "thuydtvn@gmail.com",
+    "fullName": "Đỗ Thị Thủy",
+    "role": "gd_khoi",
+    "teamName": "MAY18.06\tĐỗ Thị Thuỷ",
+    "assignedBlock": "E07",
+    "assignedProjects": []
+  },
+  {
+    "id": "oo7zA0MANoUVt7OSILfS5IJQeEi1",
+    "uid": "oo7zA0MANoUVt7OSILfS5IJQeEi1",
+    "email": "vuphuongdhxd@gmail.com",
+    "fullName": "Vũ Văn Phương",
+    "role": "user",
+    "teamName": "MAY04.04\tTừ Thị Thuỷ",
+    "assignedProjects": []
+  },
+  {
+    "id": "4vk4Eto4WjM4JUNXVjDovicSTlw2",
+    "uid": "4vk4Eto4WjM4JUNXVjDovicSTlw2",
+    "email": "dungbc.neu@gmail.com",
+    "fullName": "Bạch Công Dũng",
+    "role": "gd_khoi",
+    "teamName": "MAY09.09\tĐinh Hoàng Long",
+    "assignedBlock": "E09",
+    "assignedProjects": []
+  },
+  {
+    "id": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "uid": "4K0cEkhVgaRFKUyAzqBRz7Xxsf62",
+    "email": "anhvanpham92@gmail.com",
+    "fullName": "Phạm Anh Vân",
+    "role": "gd_khoi",
+    "teamName": "MAY99.02\tPhạm Anh Vân",
+    "assignedBlock": "E35",
+    "assignedProjects": []
+  },
+  {
+    "id": "rgnEGW6HJWepitgkoL2cOHfpEjr1",
+    "uid": "rgnEGW6HJWepitgkoL2cOHfpEjr1",
+    "email": "cnhatphuongbdscaocap@gmail.com",
+    "fullName": "Chương Nhật Phương",
+    "role": "user",
+    "teamName": "MAY79.56\tChương Nhật Phương",
+    "assignedProjects": []
+  },
+  {
+    "id": "s7T0o0TQq0clpTQsvBI5EiwayiT2",
+    "uid": "s7T0o0TQq0clpTQsvBI5EiwayiT2",
+    "email": "khanhnq.rbland@gmail.com",
+    "fullName": "Nguyễn Quốc Khánh",
+    "role": "user",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedProjects": []
+  },
+  {
+    "id": "6BKhPsyDEgVgztWHZFPEYvTqGwc2",
+    "uid": "6BKhPsyDEgVgztWHZFPEYvTqGwc2",
+    "email": "tuanthanh0622@gmail.com",
+    "fullName": "Đinh Văn Thành",
+    "role": "user",
+    "teamName": "MAY04.01\tĐỗ Văn Cường/ Đỗ Thị Tú",
+    "assignedProjects": []
+  },
+  {
+    "id": "umwxsML8sBS0RxyWhW30MKvYTt92",
+    "uid": "umwxsML8sBS0RxyWhW30MKvYTt92",
+    "email": "hanhung83@gmail.com",
+    "fullName": "Hà Hồng Nhung",
+    "role": "user",
+    "teamName": "MAY18. Phạm Thị Thu",
+    "assignedProjects": []
+  },
+  {
+    "id": "JoOniI99siQyOCPDkVWQgOADjWO2",
+    "uid": "JoOniI99siQyOCPDkVWQgOADjWO2",
+    "email": "linh.hoangdieu12@gmail.com",
+    "fullName": "Hoàng Diệu Linh",
+    "role": "user",
+    "teamName": "MAY08.56\tHoàng Diệu Linh",
+    "assignedProjects": []
+  },
+  {
+    "id": "55E83AFRGgYZ0eC4tcScetpX72p2",
+    "uid": "55E83AFRGgYZ0eC4tcScetpX72p2",
+    "email": "trinhphuongkt10@gmail.com",
+    "fullName": "Bích Phương",
+    "role": "user",
+    "teamName": "MAY08.09\tTrịnh Thị Bích Phương",
+    "assignedProjects": []
+  },
+  {
+    "id": "knOVgNszwzdJ26AohZpaWBWvoja2",
+    "uid": "knOVgNszwzdJ26AohZpaWBWvoja2",
+    "email": "vinhomeshoang9@gmail.com",
+    "fullName": "Hoàng Văn Điệp",
+    "role": "user",
+    "teamName": "MAY04.03\tHoàng Văn Điệp",
+    "assignedProjects": []
+  },
+  {
+    "id": "O80dvpGjPaN0hW2mfDjUZDd5K0n2",
+    "uid": "O80dvpGjPaN0hW2mfDjUZDd5K0n2",
+    "email": "thao.bds.vhop@gmail.com",
+    "fullName": "Lương Thị Thảo",
+    "role": "user",
+    "teamName": "MAY08.08\tLương Thị Thảo",
+    "assignedProjects": []
+  },
+  {
+    "id": "SIUFgmBdY7YG6iEk0GkUvQWk9962",
+    "uid": "SIUFgmBdY7YG6iEk0GkUvQWk9962",
+    "email": "tesscain2022@gmail.com",
+    "fullName": "Hải Nam",
+    "role": "accountant",
+    "teamName": "Team Khác",
+    "assignedProjects": []
+  },
+  {
+    "id": "kIGr6mlqljXYqGEJZAYKqfdxlXT2",
+    "uid": "kIGr6mlqljXYqGEJZAYKqfdxlXT2",
+    "email": "letungbdsvinhomes@gmail.com",
+    "fullName": "Lê Văn Tùng",
+    "role": "tro_ly_khoi",
+    "teamName": "MAY04.06\tĐào Thị Ly",
+    "assignedBlock": "E45",
+    "assignedBlocks": [
+      "E45",
+      "ozw7beeafcYdiKjLxtsr"
+    ],
+    "assignedProjects": []
+  },
+  {
+    "id": "Gqu9t7IGNBRXwwqDMQaA5qm4PTz1",
+    "uid": "Gqu9t7IGNBRXwwqDMQaA5qm4PTz1",
+    "email": "doxuanviet.hr@gmail.com",
+    "fullName": "Đỗ Xuân Việt",
+    "role": "user",
+    "teamName": "MAY19.02\tPhạm Văn Trìu",
+    "assignedProjects": []
+  },
+  {
+    "id": "rNIbMySwrLTlKwLjthzDArxxetw2",
+    "uid": "rNIbMySwrLTlKwLjthzDArxxetw2",
+    "email": "quang.lehuu93@gmail.com",
+    "fullName": "Lê Hữu Quang",
+    "role": "user",
+    "teamName": "MAY06.66\tLê Hữu Quang/Ngô Huy Hoàng",
+    "assignedProjects": []
+  },
+  {
+    "id": "y2QYlGnrfHgq8XRWg9ArI8D9p152",
+    "uid": "y2QYlGnrfHgq8XRWg9ArI8D9p152",
+    "email": "tamnguyen5297.vimaru@gmail.com",
+    "fullName": "Nguyễn Văn Tam",
+    "role": "gd_khoi",
+    "teamName": "MAY25.02\tNguyễn Văn Tam",
+    "assignedBlock": "E25",
+    "assignedProjects": []
+  },
+  {
+    "id": "e9Xy6a3SzOWsVDtvlngDdvVitxV2",
+    "uid": "e9Xy6a3SzOWsVDtvlngDdvVitxV2",
+    "email": "nglien1030@gmail.com",
+    "fullName": "Nguyễn  Thị Liên",
+    "role": "user",
+    "teamName": "MAY79.28\tĐoàn Tất Thuật",
+    "assignedProjects": []
+  },
+  {
+    "id": "A3ixFIiFsNa1PkJTILwaRSlGszD3",
+    "uid": "A3ixFIiFsNa1PkJTILwaRSlGszD3",
+    "email": "triuvc@gmail.com",
+    "fullName": "Phạm Văn Trìu",
+    "role": "user",
+    "teamName": "MAY19.02\tPhạm Văn Trìu",
+    "assignedProjects": []
+  },
+  {
+    "id": "K4n64kt5wTW8y9nYQlshBk9JNGz2",
+    "uid": "K4n64kt5wTW8y9nYQlshBk9JNGz2",
+    "email": "kimanhnguyen0824@gmail.com",
+    "fullName": "Nguyễn Kim Anh",
+    "role": "user",
+    "teamName": "MAY19.02\tPhạm Văn Trìu",
+    "assignedProjects": []
+  },
+  {
+    "id": "q1MuRpyB5TYOKljYcRHALoToALw1",
+    "uid": "q1MuRpyB5TYOKljYcRHALoToALw1",
+    "email": "nhaitran1109@gmail.com",
+    "fullName": "Trần Thị Nhài",
+    "role": "user",
+    "teamName": "MAY19.11\tTrần Thị Nhài",
+    "assignedProjects": []
+  },
+  {
+    "id": "0694x28RNPQZl9KJu1TgvY6J4rz1",
+    "uid": "0694x28RNPQZl9KJu1TgvY6J4rz1",
+    "email": "phuongtt.hus@gmail.com",
+    "fullName": "Trần Thị Phượng",
+    "role": "user",
+    "teamName": "MAY19.01\tTừ Cao Biền/Đặng Thị Thu Huyền",
+    "assignedProjects": []
+  },
+  {
+    "id": "tBmXcxaOPxRfOG4otwctzSlMoIG2",
+    "uid": "tBmXcxaOPxRfOG4otwctzSlMoIG2",
+    "email": "quyvu.ceo@gmail.com",
+    "fullName": "Vũ Đức Quý",
+    "role": "user",
+    "teamName": "MAY79.68\tVũ Đức Quý",
+    "assignedProjects": []
+  },
+  {
+    "id": "0zYkjij4i4aRhwwcKKjX51mjcU43",
+    "uid": "0zYkjij4i4aRhwwcKKjX51mjcU43",
+    "email": "vuanhthang4392@gmail.com",
+    "fullName": "Vũ Anh Thắng",
+    "role": "user",
+    "teamName": "MAY19.05\tAnh Thắng/ Minh Tuấn",
+    "assignedProjects": []
+  },
+  {
+    "id": "ggrcADw9YKWc6IpQcGPqcUO7NyC2",
+    "uid": "ggrcADw9YKWc6IpQcGPqcUO7NyC2",
+    "email": "thubds136@gmail.com",
+    "fullName": "Nguyễn Thị Hải Thư",
+    "role": "user",
+    "teamName": "MAY19.03\tNguyễn Thị Hải Thư",
+    "assignedProjects": []
+  },
+  {
+    "id": "EL8PerYYHlM81Rfgkv9QcuTqzcU2",
+    "uid": "EL8PerYYHlM81Rfgkv9QcuTqzcU2",
+    "email": "minhdacstda@gmail.com",
+    "fullName": "tào viễn Đắc",
+    "role": "user",
+    "teamName": "MAY06.68\tĐinh Thị Thuận/Tào Viễn Đắc",
+    "assignedProjects": []
+  },
+  {
+    "id": "bAhLmiH5LtNFDqmPHY9ad9UmsVk1",
+    "uid": "bAhLmiH5LtNFDqmPHY9ad9UmsVk1",
+    "email": "huythovinhomes@gmail.com",
+    "fullName": "VŨ VĂN THỌ",
+    "role": "gd_khoi",
+    "teamName": "MAY19.01\tTừ Cao Biền/Đặng Thị Thu Huyền",
+    "assignedBlock": "E19",
+    "assignedProjects": []
+  },
+  {
+    "id": "dxd7wMdzvJZZAWoN0XbrNKejBA73",
+    "uid": "dxd7wMdzvJZZAWoN0XbrNKejBA73",
+    "email": "vothanhtuan2705@gmail.com",
+    "fullName": "Nguyễn Hữu Tuân",
+    "role": "user",
+    "teamName": "MAY10.02\tNguyễn Hữu Tuân",
+    "assignedProjects": []
+  },
+  {
+    "id": "pDdNjMsdF8Yl4DXEEmbRmq1fsv42",
+    "uid": "pDdNjMsdF8Yl4DXEEmbRmq1fsv42",
+    "email": "duongca3868@gmail.com",
+    "fullName": "Thuỳ Dương",
+    "role": "user",
+    "teamName": "MAY21\tVũ Quang Duy",
+    "assignedProjects": []
+  },
+  {
+    "id": "dU5FfH8ZkpgNV3Vv8lsQMBcDmci2",
+    "uid": "dU5FfH8ZkpgNV3Vv8lsQMBcDmci2",
+    "email": "thiendinh2019.bds@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "mod",
+    "teamName": "MAY39 Nguyễn Mạnh Cường",
+    "assignedProjects": []
+  },
+  {
+    "id": "Tr7iaxcOrad6mGgeP3ClYvr4KuL2",
+    "uid": "Tr7iaxcOrad6mGgeP3ClYvr4KuL2",
+    "email": "trangntph48509@gmail.com",
+    "fullName": "Nguyễn Thu Trang",
+    "role": "user",
+    "teamName": "MAY84\tTrần Thị Hồng Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "ds2sBrMsmbgcOGRqCqPzx0TIPsJ3",
+    "uid": "ds2sBrMsmbgcOGRqCqPzx0TIPsJ3",
+    "email": "duyly161@gmail.com",
+    "fullName": "Lý duy",
+    "role": "user",
+    "teamName": "MAY79.39\tLý Thái Thiện",
+    "assignedProjects": []
+  },
+  {
+    "id": "yOxPFWdOXBdiIISeeANRupZIh1g1",
+    "uid": "yOxPFWdOXBdiIISeeANRupZIh1g1",
+    "email": "tumiminh1005@gmail.com",
+    "fullName": "Nguyễn TM",
+    "role": "user",
+    "teamName": "MAY55\tNguyễn Thị Hoà",
+    "assignedProjects": []
+  },
+  {
+    "id": "t2CFdP2ow7gIhnD6EgMPVUC67BC3",
+    "uid": "t2CFdP2ow7gIhnD6EgMPVUC67BC3",
+    "email": "quangkhanh2805@gmail.com",
+    "fullName": "Kim Ngan",
+    "role": "user",
+    "teamName": "MAY84\tTrần Thị Hồng Nhung",
+    "assignedProjects": []
+  },
+  {
+    "id": "V7Z3rhAMrIahld73otrIxKKjgJB2",
+    "uid": "V7Z3rhAMrIahld73otrIxKKjgJB2",
+    "email": "hangle08032003@gmail.com",
+    "fullName": "Lê Thị Hằng",
+    "role": "admin",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": [
+      "OmwNZpHXLkZjcdenuaBF",
+      "igqUmCivzJ3jT0gdiFXx",
+      "GHFOAC7G47Ghy5rW2LjS"
+    ]
+  },
+  {
+    "id": "QUBSV7O5rYXxXBKwUGiwgaM7AsW2",
+    "uid": "QUBSV7O5rYXxXBKwUGiwgaM7AsW2",
+    "email": "linhnguyen00021@gmail.com",
+    "fullName": "Thùy Linh",
+    "role": "user",
+    "teamName": "MAY04.96\tLê Xuân Hiệp",
+    "assignedProjects": []
+  },
+  {
+    "id": "h61H2ur2XcXpTHCrmco5LU3XClL2",
+    "uid": "h61H2ur2XcXpTHCrmco5LU3XClL2",
+    "email": "nguyenthanhchung.fb@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "user",
+    "teamName": "MAY04.02\tTrang Nhung/Bá Quý",
+    "assignedProjects": []
+  },
+  {
+    "id": "V0mcP3Uyr8gHsqknkv0MbrXvqQs2",
+    "uid": "V0mcP3Uyr8gHsqknkv0MbrXvqQs2",
+    "email": "lucazmoura.lm04@gmail.com",
+    "fullName": "Quý Mỹ",
+    "role": "assistant",
+    "teamName": "MAY13.34\tNguyễn Quí Mỹ",
+    "assignedProjects": []
+  },
+  {
+    "id": "5hUI0yd1i0McR4jWV0wF1ASQivf2",
+    "uid": "5hUI0yd1i0McR4jWV0wF1ASQivf2",
+    "email": "lucazmoura.lm01@gmail.com",
+    "fullName": "Test 2",
+    "role": "user",
+    "teamName": "MAY04.96\tLê Xuân Hiệp",
+    "assignedProjects": []
+  },
+  {
+    "id": "rRTWMaqn2OQkTNeMJpyFOvPK74t1",
+    "uid": "rRTWMaqn2OQkTNeMJpyFOvPK74t1",
+    "email": "jerry83891@gmail.com",
+    "fullName": "Jerry Jerry",
+    "role": "user",
+    "teamName": ""
+  },
+  {
+    "id": "2Y4kkVNum1WmUzeHMpunugMdedk2",
+    "uid": "2Y4kkVNum1WmUzeHMpunugMdedk2",
+    "email": "tuanhoangna.ads@gmail.com",
+    "fullName": "Tuấn Hoàng",
+    "role": "super_admin",
+    "teamName": "MAY99.01\tTrần Xuân Đức",
+    "assignedProjects": []
+  },
+  {
+    "id": "SI9H4lSUEfTmXk2D7qOcOrIFvYB3",
+    "uid": "SI9H4lSUEfTmXk2D7qOcOrIFvYB3",
+    "email": "tieupham.gamota@gmail.com",
+    "fullName": "Tieu Pham",
+    "role": "user",
+    "teamName": ""
+  },
+  {
+    "id": "ym3Vu1QVkQaRaV0k24PLIEo0GvW2",
+    "uid": "ym3Vu1QVkQaRaV0k24PLIEo0GvW2",
+    "email": "lucazmoura.lm03@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "assistant",
+    "teamName": "MAY99.01\tTrần Xuân Đức",
+    "assignedProjects": []
+  },
+  {
+    "id": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "uid": "mc6dR4iNC2XbW44pwpnxvlwr1Gd2",
+    "email": "thienvu1108@gmail.com",
+    "fullName": "Thiên Vũ",
+    "role": "super_admin",
+    "teamName": "MAY01.01\tĐỗ Triệu / Đào Thắm",
+    "assignedProjects": []
+  }
+]

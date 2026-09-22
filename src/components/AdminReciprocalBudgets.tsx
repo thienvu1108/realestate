@@ -65,6 +65,34 @@ type SortDirection = 'asc' | 'desc';
 
 export type PaymentStatusType = 'unpaid' | 'paid' | 'rejected';
 
+const isBlockRecordMatch = (record: any, block: any): boolean => {
+  if (!record || !block) return false;
+  if (record.blockId && block.id && record.blockId === block.id) return true;
+  const bId = (block.id || '').toLowerCase().trim();
+  const bCode = (block.blockCode || '').toLowerCase().trim();
+  const bName = (block.name || '').toLowerCase().trim();
+
+  const rId = (record.blockId || '').toLowerCase().trim();
+  const rCode = (record.blockCode || '').toLowerCase().trim();
+  const rName = (record.blockName || '').toLowerCase().trim();
+
+  if (rId && (rId === bId || (bCode && rId === bCode))) return true;
+  if (rCode && (rCode === bCode || (bId && rCode === bId))) return true;
+  if (rName && bName && rName === bName) return true;
+
+  const bDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  const rDigitList = [rCode, rName, rId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  for (const bd of bDigitList) {
+    for (const rd of rDigitList) {
+      if (bd === rd) return true;
+      const numB = parseInt(bd, 10);
+      const numR = parseInt(rd, 10);
+      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) return true;
+    }
+  }
+  return false;
+};
+
 export const getPaymentStatusInfo = (status?: string) => {
   if (status === 'paid' || status === 'Đã thanh toán') {
     return {
@@ -245,7 +273,12 @@ export function AdminReciprocalBudgets({
     return reciprocalBudgets.filter(rec => {
       // Filter Block
       if (filterBlock !== 'all') {
-        if (rec.blockId !== filterBlock && rec.blockCode !== filterBlock) return false;
+        const targetBlock = blocks.find(b => b.id === filterBlock || b.blockCode === filterBlock);
+        if (targetBlock) {
+          if (!isBlockRecordMatch(rec, targetBlock)) return false;
+        } else {
+          if (rec.blockId !== filterBlock && rec.blockCode !== filterBlock) return false;
+        }
       }
 
       // Filter Month

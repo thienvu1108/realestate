@@ -41,6 +41,8 @@ import { getPaymentStatusInfo, PaymentStatusType } from './AdminReciprocalBudget
 
 interface BlockReciprocalRegistrationProps {
   currentActiveBlock: any;
+  setSelectedBlockId?: (id: string) => void;
+  userAllowedBlocks?: any[];
   user: any;
   userProfile: any;
   isAdmin: boolean;
@@ -70,8 +72,38 @@ interface BlockReciprocalRegistrationProps {
   db: any;
 }
 
+const isBlockRecordMatch = (record: any, block: any): boolean => {
+  if (!record || !block) return false;
+  if (record.blockId && block.id && record.blockId === block.id) return true;
+  const bId = (block.id || '').toLowerCase().trim();
+  const bCode = (block.blockCode || '').toLowerCase().trim();
+  const bName = (block.name || '').toLowerCase().trim();
+
+  const rId = (record.blockId || '').toLowerCase().trim();
+  const rCode = (record.blockCode || '').toLowerCase().trim();
+  const rName = (record.blockName || '').toLowerCase().trim();
+
+  if (rId && (rId === bId || (bCode && rId === bCode))) return true;
+  if (rCode && (rCode === bCode || (bId && rCode === bId))) return true;
+  if (rName && bName && rName === bName) return true;
+
+  const bDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  const rDigitList = [rCode, rName, rId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  for (const bd of bDigitList) {
+    for (const rd of rDigitList) {
+      if (bd === rd) return true;
+      const numB = parseInt(bd, 10);
+      const numR = parseInt(rd, 10);
+      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) return true;
+    }
+  }
+  return false;
+};
+
 export function BlockReciprocalRegistration({
   currentActiveBlock,
+  setSelectedBlockId,
+  userAllowedBlocks,
   user,
   userProfile,
   isAdmin,
@@ -130,7 +162,7 @@ export function BlockReciprocalRegistration({
     // 1. Direct block budgets
     const directSum = blockBudgets
       .filter(bb => 
-        (bb.blockId === currentActiveBlock.id || bb.blockCode === currentActiveBlock.blockCode) && 
+        isBlockRecordMatch(bb, currentActiveBlock) && 
         bb.month === selectedMonth
       )
       .reduce((sum, bb) => sum + (bb.amount || 0), 0);
@@ -141,7 +173,7 @@ export function BlockReciprocalRegistration({
     const blockTeams = teams.filter(t => {
       if (t.blockId && t.blockId === currentActiveBlock.id) return true;
       if (t.blockCode && t.blockCode === currentActiveBlock.blockCode) return true;
-      const prefix = currentActiveBlock.teamPrefix || '';
+      const prefix = currentActiveBlock.teamPrefix || currentActiveBlock.blockCode || '';
       if (prefix && t.teamCode && t.teamCode.toUpperCase().startsWith(prefix.toUpperCase())) return true;
       return false;
     });
@@ -163,7 +195,7 @@ export function BlockReciprocalRegistration({
   const existingRecord = useMemo(() => {
     if (!currentActiveBlock || !selectedMonth) return null;
     return reciprocalBudgets.find(rb => 
-      (rb.blockId === currentActiveBlock.id || rb.blockCode === currentActiveBlock.blockCode) &&
+      isBlockRecordMatch(rb, currentActiveBlock) &&
       rb.month === selectedMonth
     ) || null;
   }, [currentActiveBlock, selectedMonth, reciprocalBudgets]);
@@ -203,7 +235,7 @@ export function BlockReciprocalRegistration({
   const blockHistory = useMemo(() => {
     if (!currentActiveBlock) return [];
     return reciprocalBudgets
-      .filter(rb => rb.blockId === currentActiveBlock.id || rb.blockCode === currentActiveBlock.blockCode)
+      .filter(rb => isBlockRecordMatch(rb, currentActiveBlock))
       .sort((a, b) => (b.month || '').localeCompare(a.month || ''));
   }, [currentActiveBlock, reciprocalBudgets]);
 
@@ -377,9 +409,30 @@ export function BlockReciprocalRegistration({
                 </Badge>
               )}
             </div>
-            <h2 className="text-2xl md:text-3xl font-black tracking-tight">
-              Đăng ký Ngân sách Đối ứng - {currentActiveBlock ? `${currentActiveBlock.name || currentActiveBlock.blockCode}` : 'Chưa chọn Khối'}
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+                Đăng ký Ngân sách Đối ứng - {currentActiveBlock ? `${currentActiveBlock.name || currentActiveBlock.blockCode}` : 'Chưa chọn Khối'}
+              </h2>
+              {userAllowedBlocks && userAllowedBlocks.length > 1 && setSelectedBlockId && (
+                <div className="min-w-[170px]">
+                  <Select
+                    value={currentActiveBlock?.id || userAllowedBlocks[0]?.id || ''}
+                    onValueChange={(val) => setSelectedBlockId(val)}
+                  >
+                    <SelectTrigger className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-xl font-bold h-8 text-xs backdrop-blur-sm">
+                      <SelectValue placeholder="Chuyển Khối..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      {userAllowedBlocks.map((b) => (
+                        <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans">
+                          {b.name || b.blockCode} ({b.blockCode})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
             <p className="text-amber-100 text-xs sm:text-sm font-medium leading-relaxed">
               Kê khai phân bổ ngân sách chạy qua thẻ công ty và ngân sách chạy ngoài. Ngân sách đối ứng sẽ được tính toán và phê duyệt dựa trên nguồn ngân sách tự chạy ngoài.
             </p>

@@ -1,4 +1,6 @@
 import * as firestore from 'firebase/firestore';
+import initialBlockBudgets from '@/backups/block_budgets.json';
+import initialReciprocalBudgets from '@/backups/reciprocal_budgets.json';
 
 // Global variable tracking quota exceedance state
 if (typeof window !== 'undefined') {
@@ -21,16 +23,14 @@ function setQuotaExceeded() {
 function isQuotaError(err: any): boolean {
   if (!err) return false;
   const msg = String(err.message || err).toLowerCase();
+  const code = String(err.code || '').toLowerCase();
+  // Only classify genuine Firestore resource exhaustion as quota errors.
+  // Never classify normal mobile network transitions, offline status, or transient connection delays as quota errors!
   return (
-    err.code === 'resource-exhausted' ||
-    err.code === 'unavailable' ||
-    err.code === 'failed-precondition' ||
+    code === 'resource-exhausted' ||
     msg.includes('quota') ||
     msg.includes('exhausted') ||
-    msg.includes('limit') ||
-    msg.includes('offline') ||
-    msg.includes('network') ||
-    msg.includes('connection')
+    msg.includes('daily limit')
   );
 }
 
@@ -296,6 +296,14 @@ function getInitialSeeds(collectionName: string): any[] {
     ];
   }
   
+  if (collectionName === 'block_budgets') {
+    return (initialBlockBudgets as any[]) || [];
+  }
+
+  if (collectionName === 'reciprocal_budgets') {
+    return (initialReciprocalBudgets as any[]) || [];
+  }
+
   return [];
 }
 
@@ -310,20 +318,24 @@ function getLocalDBCollection(collectionName: string): any[] {
   const key = cachePrefix + collectionName;
   let parsed: any[] = [];
   if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      try {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
         parsed = JSON.parse(stored);
-      } catch {
-        parsed = [];
       }
+    } catch {
+      parsed = [];
     }
   }
   
   if (parsed.length === 0) {
     parsed = getInitialSeeds(collectionName);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(key, JSON.stringify(parsed));
+      try {
+        localStorage.setItem(key, JSON.stringify(parsed));
+      } catch {
+        // Suppress QuotaExceededError on mobile browsers
+      }
     }
   }
   
@@ -334,9 +346,12 @@ function getLocalDBCollection(collectionName: string): any[] {
       if (updated[key] && typeof updated[key] === 'object' && updated[key].toDate) {
         // preserve it
       } else if (key === 'createdAt' || key === 'timestamp' || key === 'finalizedAt') {
+        const val = updated[key];
+        const ms = (val && typeof val === 'object' && val.seconds) ? val.seconds * 1000 : (val ? new Date(val).getTime() : Date.now());
         updated[key] = {
-          toDate: () => new Date(updated[key] || Date.now()),
-          toMillis: () => new Date(updated[key] || Date.now()).getTime()
+          toDate: () => new Date(ms),
+          toMillis: () => ms,
+          seconds: Math.floor(ms / 1000)
         };
       }
     }
@@ -350,8 +365,15 @@ function getLocalDBCollection(collectionName: string): any[] {
 function saveLocalDBCollection(collectionName: string, data: any[]) {
   memoryCollections[collectionName] = data;
   if (typeof window !== 'undefined') {
-    const key = cachePrefix + collectionName;
-    localStorage.setItem(key, JSON.stringify(data));
+    try {
+      const key = cachePrefix + collectionName;
+      // In mobile Safari, localStorage has a strict 5MB quota limit.
+      // Large collections like acceptances, budgets, etc. can exceed quota and throw QuotaExceededError.
+      // Wrapping in try/catch ensures mobile Safari never crashes or interrupts app flow.
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      // Gracefully handle storage quota limit on mobile devices
+    }
   }
 }
 
@@ -682,14 +704,24 @@ export function onSnapshot(ref: any, onNext: any, onError?: any) {
   }
   
   const unsubReal = firestore.onSnapshot(ref, (snap) => {
-    // Safely parse collection name
-    const path = getPathFromRef(ref);
-    const collectionName = path.split('/')[0];
-    const docs = snap.docs ? snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
-    if (docs.length > 0 && collectionName) {
-      saveLocalDBCollection(collectionName, docs);
+    // ALWAYS call onNext first so React updates immediately without being blocked
+    try {
+      onNext(snap);
+    } catch (cbErr) {
+      console.error("[FirestoreProxy] Error in onNext snapshot handler:", cbErr);
     }
-    onNext(snap);
+
+    // Safely cache collection in memory / localStorage
+    try {
+      const path = getPathFromRef(ref);
+      const collectionName = path.split('/')[0];
+      const docs = snap.docs ? snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+      if (docs.length > 0 && collectionName) {
+        saveLocalDBCollection(collectionName, docs);
+      }
+    } catch (saveErr) {
+      // Safe guard
+    }
   }, (err) => {
     if (isQuotaError(err)) {
       setQuotaExceeded();

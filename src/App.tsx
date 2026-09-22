@@ -40,6 +40,8 @@ import {
   limit,
   getDocs
 } from './firestore-proxy';
+import initialBlockBudgets from '@/backups/block_budgets.json';
+import initialReciprocalBudgets from '@/backups/reciprocal_budgets.json';
 import { auth, db, testConnection } from './firebase';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -829,8 +831,30 @@ const isBlockMatch = (b: any, block: any): boolean => {
       if (bt.length >= 2 && rt.length >= 2 && (bt.includes(rt) || rt.includes(bt))) {
         return true;
       }
+      if (/^\d+$/.test(bt) && /^\d+$/.test(rt)) {
+        const nB = parseInt(bt, 10);
+        const nR = parseInt(rt, 10);
+        if (!isNaN(nB) && !isNaN(nR) && nB > 0 && nB === nR) {
+          return true;
+        }
+      }
     }
   }
+
+  // Fallback: match numeric digits across all blocks (e.g. Khối 79 / K79, Khối 01 / K01 / 1, Khối 02 / K02 / 2, etc.)
+  const blockDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  const recDigitList = [recCode, recName, recId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
+  for (const bd of blockDigitList) {
+    for (const rd of recDigitList) {
+      if (bd === rd) return true;
+      const numB = parseInt(bd, 10);
+      const numR = parseInt(rd, 10);
+      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) {
+        return true;
+      }
+    }
+  }
+
   return false;
 };
 
@@ -1010,18 +1034,24 @@ const extractTeamCode = (name: string) => {
 };
 
 const getBlockPrefixes = (block: any): string[] => {
-  if (!block || !block.teamPrefix) return [];
-  if (block._cachedPrefixes && block._cachedPrefixesRaw === block.teamPrefix) {
+  if (!block) return [];
+  const rawPrefix = block.teamPrefix || '';
+  if (block._cachedPrefixes && block._cachedPrefixesRaw === rawPrefix) {
     return block._cachedPrefixes;
   }
-  const raw = String(block.teamPrefix).toUpperCase();
-  const prefixes = raw
-    .split(/[,;/|\s]+/)
-    .map(p => p.trim())
-    .map(p => (p === 'MH' ? 'MAY' : p))
-    .filter(Boolean);
+  let prefixes: string[] = [];
+  if (rawPrefix) {
+    prefixes = String(rawPrefix).toUpperCase()
+      .split(/[,;/|\s]+/)
+      .map(p => p.trim())
+      .map(p => (p === 'MH' ? 'MAY' : p))
+      .filter(Boolean);
+  } else if (block.blockCode) {
+    const cleanCode = String(block.blockCode).toUpperCase().trim();
+    if (cleanCode) prefixes = [cleanCode];
+  }
   block._cachedPrefixes = prefixes;
-  block._cachedPrefixesRaw = block.teamPrefix;
+  block._cachedPrefixesRaw = rawPrefix;
   return prefixes;
 };
 
@@ -1759,9 +1789,58 @@ export default function App() {
 
 
 
-  // Block management states
-  const [selectedBlockId, setSelectedBlockId] = useState<string>('');
-  const [activeTeamMgmtId, setActiveTeamMgmtId] = useState<string>('');
+  // Block management states with LocalStorage persistence for mobile & desktop
+  const [selectedBlockId, setSelectedBlockIdInternal] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('mayhomes_selected_block_id') || '';
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  });
+
+  const setSelectedBlockId = useCallback((val: string) => {
+    setSelectedBlockIdInternal(val);
+    if (typeof window !== 'undefined') {
+      try {
+        if (val) {
+          localStorage.setItem('mayhomes_selected_block_id', val);
+        } else {
+          localStorage.removeItem('mayhomes_selected_block_id');
+        }
+      } catch (e) {
+        console.error("Lỗi lưu mayhomes_selected_block_id:", e);
+      }
+    }
+  }, []);
+  const [activeTeamMgmtId, setActiveTeamMgmtIdInternal] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('mayhomes_active_team_mgmt_id');
+        if (saved) return saved;
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  });
+
+  const setActiveTeamMgmtId = useCallback((val: string) => {
+    setActiveTeamMgmtIdInternal(val);
+    if (typeof window !== 'undefined') {
+      try {
+        if (val) {
+          localStorage.setItem('mayhomes_active_team_mgmt_id', val);
+        } else {
+          localStorage.removeItem('mayhomes_active_team_mgmt_id');
+        }
+      } catch (e) {
+        console.error("Lỗi lưu mayhomes_active_team_mgmt_id:", e);
+      }
+    }
+  }, []);
   const [blockNameInput, setBlockNameInput] = useState('');
   const [blockCodeInput, setBlockCodeInput] = useState('');
   const [blockPrefixInput, setBlockPrefixInput] = useState('');
@@ -1861,12 +1940,72 @@ export default function App() {
 
   const currentActiveBlock = useMemo(() => {
     const list = (isAdmin || isSuperAdmin || isAccountant) ? blocks : (myBlocks.length > 0 ? myBlocks : blocks);
+    if (!list || list.length === 0) return null;
+
+    // 1. If selectedBlockId is specified, look for exact ID match or code match or normalized match
     if (selectedBlockId) {
-      const found = list.find(b => b.id === selectedBlockId || b.blockCode === selectedBlockId);
+      const found = list.find(b => 
+        b.id === selectedBlockId || 
+        b.blockCode === selectedBlockId ||
+        (b.id && b.id.toLowerCase() === selectedBlockId.toLowerCase()) ||
+        (b.blockCode && b.blockCode.toLowerCase() === selectedBlockId.toLowerCase())
+      );
       if (found) return found;
+
+      // Check token match (e.g. if saved value is '79' or 'k79' or 'khoi79')
+      const normSelected = normalizeBlockIdentifier(selectedBlockId);
+      if (normSelected) {
+        const foundNorm = list.find(b => {
+          const nbCode = normalizeBlockIdentifier(b.blockCode);
+          const nbName = normalizeBlockIdentifier(b.name);
+          const nbId = normalizeBlockIdentifier(b.id);
+          return nbCode === normSelected || nbName === normSelected || nbId === normSelected ||
+                 (nbCode.includes(normSelected) && normSelected.length >= 2) ||
+                 (nbName.includes(normSelected) && normSelected.length >= 2);
+        });
+        if (foundNorm) return foundNorm;
+      }
     }
+
+    // 2. If user is directly assigned to blocks (e.g. Khối 79 in myBlocks), prioritize myBlocks[0]!
+    if (myBlocks.length > 0) {
+      const myMatch = list.find(b => b.id === myBlocks[0].id || b.blockCode === myBlocks[0].blockCode);
+      if (myMatch) return myMatch;
+    }
+
+    // 3. Check if userProfile has assignedBlock (e.g. 'Khối 79' or '79' or 'K79')
+    const userBlockField = (userProfile?.assignedBlock || userProfile?.block || userProfile?.blockName || '').trim();
+    if (userBlockField) {
+      const normField = normalizeBlockIdentifier(userBlockField);
+      if (normField) {
+        const foundProfileBlock = list.find(b => {
+          const nbCode = normalizeBlockIdentifier(b.blockCode);
+          const nbName = normalizeBlockIdentifier(b.name);
+          return nbCode === normField || nbName === normField ||
+                 (nbName.includes(normField) && normField.length >= 2) ||
+                 (nbCode.includes(normField) && normField.length >= 2);
+        });
+        if (foundProfileBlock) return foundProfileBlock;
+      }
+    }
+
+    // 4. If no explicit block selected or assigned, prioritize any block with registered budgets
+    const blockWithBudgets = list.find(b => blockBudgets.some(bb => isBlockMatch(bb, b)));
+    if (blockWithBudgets) {
+      return blockWithBudgets;
+    }
+
     return list[0] || null;
-  }, [isAdmin, isSuperAdmin, isAccountant, selectedBlockId, blocks, myBlocks]);
+  }, [isAdmin, isSuperAdmin, isAccountant, selectedBlockId, blocks, myBlocks, userProfile, blockBudgets]);
+
+  // Keep selectedBlockId in sync when currentActiveBlock is resolved
+  useEffect(() => {
+    if (currentActiveBlock && (!selectedBlockId || selectedBlockId !== currentActiveBlock.id)) {
+      if (!selectedBlockId) {
+        setSelectedBlockId(currentActiveBlock.id);
+      }
+    }
+  }, [currentActiveBlock, selectedBlockId, setSelectedBlockId]);
 
   const isTeamInMyBlock = useCallback((teamId: string) => {
     if (isAdmin || isAccountant || isSuperAdmin) return true;
@@ -5341,7 +5480,20 @@ export default function App() {
     // Listen to block_budgets - block-level marketing budget registrations
     const qBlockBudgets = collection(db, 'block_budgets');
     const unsubBlockBudgets = onSnapshot(qBlockBudgets, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      if (data.length === 0 && Array.isArray(initialBlockBudgets) && initialBlockBudgets.length > 0) {
+        data = initialBlockBudgets.map((b: any) => {
+          const sec = b.createdAt?.seconds || (b.createdAt?.toMillis ? b.createdAt.toMillis() / 1000 : 0);
+          return {
+            ...b,
+            createdAt: {
+              toDate: () => new Date(sec * 1000),
+              toMillis: () => sec * 1000,
+              seconds: sec
+            }
+          };
+        });
+      }
       data.sort((a, b) => {
         const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
         const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
@@ -5353,7 +5505,20 @@ export default function App() {
     // Listen to reciprocal_budgets - block reciprocal budget registrations
     const qReciprocalBudgets = collection(db, 'reciprocal_budgets');
     const unsubReciprocalBudgets = onSnapshot(qReciprocalBudgets, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      if (data.length === 0 && Array.isArray(initialReciprocalBudgets) && initialReciprocalBudgets.length > 0) {
+        data = initialReciprocalBudgets.map((b: any) => {
+          const sec = b.createdAt?.seconds || (b.createdAt?.toMillis ? b.createdAt.toMillis() / 1000 : 0);
+          return {
+            ...b,
+            createdAt: {
+              toDate: () => new Date(sec * 1000),
+              toMillis: () => sec * 1000,
+              seconds: sec
+            }
+          };
+        });
+      }
       data.sort((a, b) => {
         const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
         const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
@@ -7155,6 +7320,20 @@ export default function App() {
     return list;
   }, [myActiveBlockBudgets, currentMarketingPeriod]);
 
+  // Auto-adjust month filter if current filter yields 0 records but block has existing budget records
+  useEffect(() => {
+    if (myActiveBlockBudgets.length > 0) {
+      const hasRecordsInCurrentFilter = myActiveBlockBudgets.some(b => normalizeMonth(b.month) === normalizeMonth(blockBudgetMonthFilter));
+      if (!hasRecordsInCurrentFilter) {
+        setHasUserManuallySetBlockBudgetMonthFilter(false);
+        const sortedMonths = Array.from(new Set(myActiveBlockBudgets.map(b => normalizeMonth(b.month)).filter((m): m is string => typeof m === 'string' && !!m))).sort().reverse();
+        if (sortedMonths.length > 0) {
+          setBlockBudgetMonthFilter(sortedMonths[0]);
+        }
+      }
+    }
+  }, [currentActiveBlock?.id, myActiveBlockBudgets, hasUserManuallySetBlockBudgetMonthFilter, blockBudgetMonthFilter]);
+
   const getBlockProjectAcceptanceCost = useCallback((projectId: string, month: string) => {
     if (!currentActiveBlock) return 0;
     const blockTeamIds = new Set(myBlockTeams.map(t => t.id));
@@ -7219,7 +7398,7 @@ export default function App() {
       const timeB = b.createdAt?.seconds || 0;
       return timeB - timeA;
     });
-  }, [blockBudgets, adminBlockBudgetFilterBlock, adminBlockBudgetFilterMonth, adminBlockBudgetFilterProject, adminBlockBudgetSearch]);
+  }, [blockBudgets, blocks, adminBlockBudgetFilterBlock, adminBlockBudgetFilterMonth, adminBlockBudgetFilterProject, adminBlockBudgetSearch]);
 
   const totalAdminBlockBudgetPages = Math.max(1, Math.ceil(filteredAdminBlockBudgets.length / 20));
   const paginatedAdminBlockBudgets = useMemo(() => {
@@ -14291,7 +14470,7 @@ export default function App() {
               })}
 
               {/* Collapsible Admin sub-tabs directly inside the mobile drawer menu! */}
-              {activeTab === 'admin' && (isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
+              {(activeTab === 'admin' || isAdmin || isMod || isAccountant || isGDDA || isInternalStaff) && (
                 <>
                   <div className="h-px bg-slate-100 my-3 mx-2" />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC QUẢN TRỊ</p>
@@ -14299,10 +14478,10 @@ export default function App() {
                   <div className="space-y-1 pl-1">
                     {(isAdmin || isSuperAdmin) && (
                       <button
-                        onClick={() => { setAdminSubTab('register'); setIsMobileMenuOpen(false); }}
+                        onClick={() => { setActiveTab('admin'); setAdminSubTab('register'); setIsMobileMenuOpen(false); }}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                          adminSubTab === 'register' ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          (activeTab === 'admin' && adminSubTab === 'register') ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                         )}
                       >
                         <Wallet className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
@@ -14313,10 +14492,10 @@ export default function App() {
                     {isInternalStaff && (
                       <>
                         <button
-                          onClick={() => { setAdminSubTab('budgets'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('budgets'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'budgets' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'budgets') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Wallet className="w-3.5 h-3.5 shrink-0" />
@@ -14324,10 +14503,10 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={() => { setAdminSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'block-budgets' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'block-budgets') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Layers className="w-3.5 h-3.5 shrink-0 text-purple-400" />
@@ -14336,10 +14515,10 @@ export default function App() {
 
                         {canViewReciprocalBudget && (
                           <button
-                            onClick={() => { setAdminSubTab('reciprocal-budgets'); setIsMobileMenuOpen(false); }}
+                            onClick={() => { setActiveTab('admin'); setAdminSubTab('reciprocal-budgets'); setIsMobileMenuOpen(false); }}
                             className={cn(
                               "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                              adminSubTab === 'reciprocal-budgets' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                              (activeTab === 'admin' && adminSubTab === 'reciprocal-budgets') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                             )}
                           >
                             <Receipt className="w-3.5 h-3.5 shrink-0 text-amber-500" />
@@ -14348,10 +14527,10 @@ export default function App() {
                         )}
 
                         <button
-                          onClick={() => { setAdminSubTab('projects'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('projects'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'projects' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'projects') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Building2 className="w-3.5 h-3.5 shrink-0" />
@@ -14359,10 +14538,10 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={() => { setAdminSubTab('teams'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('teams'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'teams' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'teams') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Users className="w-3.5 h-3.5 shrink-0" />
@@ -14370,10 +14549,10 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={() => { setAdminSubTab('acceptance'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('acceptance'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'acceptance' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'acceptance') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <FileCheck className="w-3.5 h-3.5 shrink-0" />
@@ -14385,10 +14564,10 @@ export default function App() {
                     {(isAdmin || isAccountant) && (
                       <>
                         <button
-                          onClick={() => { setAdminSubTab('users'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('users'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'users' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'users') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <UserCircle className="w-3.5 h-3.5 shrink-0" />
@@ -14396,10 +14575,10 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={() => { setAdminSubTab('settings'); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('settings'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            adminSubTab === 'settings' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'settings') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Settings className="w-3.5 h-3.5 shrink-0" />
@@ -14408,10 +14587,10 @@ export default function App() {
 
                         {hasPermission('history.view') && (
                           <button
-                            onClick={() => { setAdminSubTab('history'); setIsMobileMenuOpen(false); }}
+                            onClick={() => { setActiveTab('admin'); setAdminSubTab('history'); setIsMobileMenuOpen(false); }}
                             className={cn(
                               "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                              adminSubTab === 'history' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                              (activeTab === 'admin' && adminSubTab === 'history') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                             )}
                           >
                             <History className="w-3.5 h-3.5 shrink-0" />
@@ -14421,10 +14600,10 @@ export default function App() {
 
                         {(isAdmin || hasPermission('admin.permissions.edit')) && (
                           <button
-                            onClick={() => { setAdminSubTab('permissions'); setIsMobileMenuOpen(false); }}
+                            onClick={() => { setActiveTab('admin'); setAdminSubTab('permissions'); setIsMobileMenuOpen(false); }}
                             className={cn(
                               "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                              adminSubTab === 'permissions' ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                              (activeTab === 'admin' && adminSubTab === 'permissions') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                             )}
                           >
                             <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
@@ -14437,18 +14616,45 @@ export default function App() {
                 </>
               )}
 
-              {/* Collapsible Block Management sub-tabs directly inside the mobile drawer menu! */}
-              {activeTab === 'block-mgmt' && (
+              {/* Block Management sub-tabs directly inside the mobile drawer menu */}
+              {(activeTab === 'block-mgmt' || canViewBlockBudget || isAdmin || isAccountant || myBlocks.length > 0) && (
                 <>
                   <div className="h-px bg-slate-100 my-3 mx-2" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2.5 mb-1.5">DANH MỤC QUẢN LÝ KHỐI</p>
+                  <div className="flex items-center justify-between px-2.5 mb-1.5">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">QUẢN LÝ KHỐI</p>
+                    {currentActiveBlock && (
+                      <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                        {getBlockDisplayName(currentActiveBlock)}
+                      </span>
+                    )}
+                  </div>
+
+                  {userAllowedBlocks.length > 1 && (
+                    <div className="px-2.5 mb-2">
+                      <Select
+                        value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')}
+                        onValueChange={(val) => setSelectedBlockId(val)}
+                      >
+                        <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl font-bold h-8 text-[11px] shadow-none">
+                          <SelectValue placeholder="Chọn Khối..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {userAllowedBlocks.map((b) => (
+                            <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans">
+                              {getBlockDisplayName(b)} ({b.blockCode})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   
                   <div className="space-y-1 pl-1">
                     <button
-                      onClick={() => { setBlockSubTab('block-teams'); setIsMobileMenuOpen(false); }}
+                      onClick={() => { setActiveTab('block-mgmt'); setBlockSubTab('block-teams'); setIsMobileMenuOpen(false); }}
                       className={cn(
                         "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                        blockSubTab === 'block-teams' ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        (activeTab === 'block-mgmt' && blockSubTab === 'block-teams') ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                       )}
                     >
                       <Users className="w-3.5 h-3.5 shrink-0" />
@@ -14457,19 +14663,19 @@ export default function App() {
 
                     {canViewBlockBudget && (
                       <button
-                        onClick={() => { setBlockSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
+                        onClick={() => { setActiveTab('block-mgmt'); setBlockSubTab('block-budgets'); setIsMobileMenuOpen(false); }}
                         className={cn(
                           "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                          blockSubTab === 'block-budgets' ? "bg-purple-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          (activeTab === 'block-mgmt' && blockSubTab === 'block-budgets') ? "bg-purple-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                         )}
                       >
                         <div className="flex items-center gap-2.5">
-                          <Wallet className="w-3.5 h-3.5 shrink-0" />
+                          <Wallet className="w-3.5 h-3.5 shrink-0 text-purple-500" />
                           <span>Đăng ký Ngân sách Khối</span>
                         </div>
-                        {filteredActiveBlockBudgets.length > 0 && (
-                          <span className={cn("px-1.5 py-0.5 rounded-full text-[10px] font-black", blockSubTab === 'block-budgets' ? "bg-white/20 text-white" : "bg-purple-100 text-purple-700")}>
-                            {filteredActiveBlockBudgets.length}
+                        {myActiveBlockBudgets.length > 0 && (
+                          <span className={cn("px-1.5 py-0.5 rounded-full text-[10px] font-black", (activeTab === 'block-mgmt' && blockSubTab === 'block-budgets') ? "bg-white/20 text-white" : "bg-purple-100 text-purple-700")}>
+                            {myActiveBlockBudgets.length}
                           </span>
                         )}
                       </button>
@@ -14477,10 +14683,10 @@ export default function App() {
 
                     {canViewReciprocalBudget && (
                       <button
-                        onClick={() => { setBlockSubTab('block-reciprocal'); setIsMobileMenuOpen(false); }}
+                        onClick={() => { setActiveTab('block-mgmt'); setBlockSubTab('block-reciprocal'); setIsMobileMenuOpen(false); }}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                          blockSubTab === 'block-reciprocal' ? "bg-amber-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          (activeTab === 'block-mgmt' && blockSubTab === 'block-reciprocal') ? "bg-amber-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                         )}
                       >
                         <Receipt className="w-3.5 h-3.5 shrink-0" />
@@ -14489,14 +14695,84 @@ export default function App() {
                     )}
 
                     <button
-                      onClick={() => { setBlockSubTab('block-nt'); setIsMobileMenuOpen(false); }}
+                      onClick={() => { setActiveTab('block-mgmt'); setBlockSubTab('block-nt'); setIsMobileMenuOpen(false); }}
                       className={cn(
                         "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                        blockSubTab === 'block-nt' ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                        (activeTab === 'block-mgmt' && blockSubTab === 'block-nt') ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                       )}
                     >
                       <FileCheck className="w-3.5 h-3.5 shrink-0" />
                       <span>Nghiệm thu Chi phí MKT</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Team Management sub-tabs directly inside the mobile drawer menu */}
+              {(activeTab === 'team-mgmt' || hasPermission('team_mgmt.view') || isGDKD) && (
+                <>
+                  <div className="h-px bg-slate-100 my-3 mx-2" />
+                  <div className="flex items-center justify-between px-2.5 mb-1.5">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">QUẢN LÝ NHÓM / ĐỘI</p>
+                    {currentActiveTeam && (
+                      <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
+                        {currentActiveTeam.name || currentActiveTeam.teamCode}
+                      </span>
+                    )}
+                  </div>
+
+                  {teams.length > 1 && (
+                    <div className="px-2.5 mb-2">
+                      <Select
+                        value={activeTeamMgmtId || (teams[0]?.id || '')}
+                        onValueChange={(val) => setActiveTeamMgmtId(val)}
+                      >
+                        <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl font-bold h-8 text-[11px] shadow-none">
+                          <SelectValue placeholder="Chọn Team..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl max-h-56">
+                          {teams.map((t) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs font-bold font-sans">
+                              {t.name} ({t.teamCode || ''})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1 pl-1">
+                    <button
+                      onClick={() => { setActiveTab('team-mgmt'); setTeamSubTab('team-members'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        (activeTab === 'team-mgmt' && teamSubTab === 'team-members') ? "bg-teal-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <Users className="w-3.5 h-3.5 shrink-0" />
+                      <span>Danh sách nhân sự</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setActiveTab('team-mgmt'); setTeamSubTab('team-budgets'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        (activeTab === 'team-mgmt' && teamSubTab === 'team-budgets') ? "bg-teal-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <Wallet className="w-3.5 h-3.5 shrink-0" />
+                      <span>Hạn mức ngân sách</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setActiveTab('team-mgmt'); setTeamSubTab('team-costs'); setIsMobileMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                        (activeTab === 'team-mgmt' && teamSubTab === 'team-costs') ? "bg-teal-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <Receipt className="w-3.5 h-3.5 shrink-0" />
+                      <span>Chi phí thực tế</span>
                     </button>
                   </div>
                 </>
@@ -15144,7 +15420,10 @@ export default function App() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setActiveTab('block-mgmt')}
+                    onClick={() => {
+                      setActiveTab('block-mgmt');
+                      setBlockSubTab('block-budgets');
+                    }}
                     className="h-9 rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-bold gap-1.5"
                   >
                     <span>Quản lý Khối</span>
@@ -15166,7 +15445,12 @@ export default function App() {
                       return (
                       <div 
                         key={b.id}
-                        className="bg-gradient-to-b from-white to-purple-50/30 border border-purple-100/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative group"
+                        onClick={() => {
+                          setSelectedBlockId(b.id);
+                          setActiveTab('block-mgmt');
+                          setBlockSubTab('block-budgets');
+                        }}
+                        className="bg-gradient-to-b from-white to-purple-50/30 border border-purple-100/80 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative group cursor-pointer"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -15186,12 +15470,14 @@ export default function App() {
                           <Button
                             size="xs"
                             variant="ghost"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedBlockId(b.id);
                               setActiveTab('block-mgmt');
+                              setBlockSubTab('block-budgets');
                             }}
                             className="text-purple-600 hover:bg-purple-100/50 h-7 w-7 p-0 rounded-lg opacity-80 group-hover:opacity-100 transition-opacity"
-                            title="Đi tới quản lý khối"
+                            title="Xem chi tiết ngân sách Khối"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </Button>
@@ -16184,6 +16470,62 @@ export default function App() {
                     );
                   })()}
 
+                  {/* Dedicated Block Selector Banner inside Block Budgets Tab for quick switching on mobile & desktop */}
+                  <div className="bg-gradient-to-r from-purple-50/90 via-indigo-50/70 to-slate-50 border border-purple-200/80 p-3 sm:p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-200">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">Khối đang thao tác</span>
+                          {myActiveBlockBudgets.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-200 text-purple-800">
+                              {myActiveBlockBudgets.length} bản ghi
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">
+                          {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : 'Chưa chọn Khối'}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {userAllowedBlocks.length > 1 && (
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Select
+                          value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')}
+                          onValueChange={(val) => setSelectedBlockId(val)}
+                        >
+                          <SelectTrigger className="w-full sm:w-[260px] bg-white border-purple-200 text-purple-950 font-bold h-10 text-xs shadow-xs rounded-xl">
+                            <SelectValue placeholder="Chuyển Khối...">
+                              <span className="truncate font-sans">
+                                {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một Khối..."}
+                              </span>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl max-h-[280px]">
+                            {userAllowedBlocks.map((b) => {
+                              const count = blockBudgets.filter(bg => isBlockMatch(bg, b)).length;
+                              return (
+                                <SelectItem key={b.id} value={b.id} className="text-xs font-bold py-2 font-sans cursor-pointer">
+                                  <div className="flex items-center justify-between gap-3 w-full">
+                                    <span>{getBlockDisplayName(b)} ({b.blockCode})</span>
+                                    {count > 0 && (
+                                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-mono">
+                                        {count} bản ghi
+                                      </span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Đăng ký ngân sách theo Khối */}
                     <Card className="border-slate-100 shadow-md">
@@ -16420,6 +16762,31 @@ export default function App() {
                                   >
                                     <Calendar className="w-3.5 h-3.5 mr-1.5" /> Xem tất cả các kỳ ({myActiveBlockBudgets.length} bản ghi)
                                   </Button>
+                                </div>
+                              )}
+                              {myActiveBlockBudgets.length === 0 && blockBudgets.length > 0 && (
+                                <div className="mt-4 p-3 bg-purple-50/70 rounded-xl border border-purple-100 text-center space-y-2 max-w-lg mx-auto">
+                                  <p className="text-xs font-bold text-purple-900">
+                                    Khối hiện tại ({currentActiveBlock?.name || currentActiveBlock?.blockCode || 'này'}) chưa có ngân sách. Các Khối đang có bản ghi ngân sách trong hệ thống:
+                                  </p>
+                                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                    {userAllowedBlocks.filter(blk => blockBudgets.some(b => isBlockMatch(b, blk))).map(blk => {
+                                      const c = blockBudgets.filter(b => isBlockMatch(b, blk)).length;
+                                      return (
+                                        <Button
+                                          key={blk.id}
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setSelectedBlockId(blk.id)}
+                                          className="h-8 text-xs font-bold border-purple-200 text-purple-700 bg-white hover:bg-purple-100 rounded-xl gap-1.5 shadow-xs"
+                                        >
+                                          <Layers className="w-3.5 h-3.5 text-purple-600" />
+                                          <span>{getBlockDisplayName(blk)} ({blk.blockCode})</span>
+                                          <span className="text-[10px] bg-purple-100 px-1.5 py-0.2 rounded-full font-mono font-black">{c}</span>
+                                        </Button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                               {canCreateBlockBudget && (
@@ -16803,6 +17170,8 @@ export default function App() {
                   {blockSubTab === 'block-reciprocal' && (
                     <BlockReciprocalRegistration 
                       currentActiveBlock={currentActiveBlock}
+                      setSelectedBlockId={setSelectedBlockId}
+                      userAllowedBlocks={userAllowedBlocks}
                       user={user}
                       userProfile={userProfile}
                       isAdmin={isAdmin}

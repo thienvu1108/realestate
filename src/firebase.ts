@@ -44,8 +44,8 @@ const isIOSOrSafari = typeof navigator !== 'undefined' && (
 
 let firestoreDb;
 try {
-  // Use persistentSingleTabManager in iframes or on iOS/Safari to completely eliminate lease conflicts and clock skew warnings
-  const tabManager = (isIframe || isIOSOrSafari) ? persistentSingleTabManager({}) : persistentMultipleTabManager();
+  // Use persistentSingleTabManager with forceOwnership in iframes or on iOS/Safari to eliminate lease conflicts and deadlock
+  const tabManager = (isIframe || isIOSOrSafari) ? persistentSingleTabManager({ forceOwnership: true }) : persistentMultipleTabManager();
   firestoreDb = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
     localCache: persistentLocalCache({

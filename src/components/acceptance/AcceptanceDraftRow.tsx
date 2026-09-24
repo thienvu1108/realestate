@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Calculator, Save, Trash2, Loader2 } from 'lucide-react';
-import { getRowComputed, handleCostInputChange, resolveBlockForTeam } from './acceptanceUtils';
+import { getRowComputed, handleCostInputChange, resolveBlockForTeam, formatAcceptanceMonth } from './acceptanceUtils';
 import { AcceptanceSearchableSelect, SearchableItem } from './AcceptanceSearchableSelect';
 
 interface DraftRowProps {
@@ -179,20 +179,19 @@ export const AcceptanceDraftRow: React.FC<DraftRowProps> = React.memo(({
       {/* Col A: THÁNG */}
       <TableCell className="p-1 min-w-[110px]">
         <Select
-          value={localDraft.month || 'Kì 1 - Tháng 8'}
+          value={formatAcceptanceMonth(localDraft.month) || (monthsList && monthsList.length > 0 ? monthsList[0] : '')}
           onValueChange={(val) => handleUpdateLocalField('month', val)}
         >
           <SelectTrigger className="h-7 text-[11px] font-bold border-slate-200 bg-white rounded">
-            <SelectValue placeholder="Chọn tháng" />
+            <SelectValue placeholder="Chọn kỳ / tháng" />
           </SelectTrigger>
           <SelectContent className="max-h-56">
-            <SelectItem value="Kì 1 - Tháng 8">Kì 1 - Tháng 8</SelectItem>
-            <SelectItem value="Kì 2 - Tháng 8">Kì 2 - Tháng 8</SelectItem>
-            {monthsList
-              .filter(m => m !== 'Kì 1 - Tháng 8' && m !== 'Kì 2 - Tháng 8')
-              .map(m => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
-              ))}
+            {localDraft.month && !monthsList.includes(localDraft.month) && (
+              <SelectItem key={localDraft.month} value={localDraft.month}>{localDraft.month}</SelectItem>
+            )}
+            {monthsList.map(m => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </TableCell>

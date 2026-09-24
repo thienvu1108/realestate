@@ -52,7 +52,9 @@ import {
   getRowComputed, 
   getSortValue, 
   buildCostBreakdownsOfRecord,
-  resolveBlockForTeam
+  resolveBlockForTeam,
+  formatAcceptanceMonth,
+  isAcceptanceMonthMatch
 } from './acceptance/acceptanceUtils';
 
 export const AcceptanceManager = React.memo(({ 
@@ -115,37 +117,56 @@ export const AcceptanceManager = React.memo(({
   // Multi-select state
   const [selectedAcceptanceIds, setSelectedAcceptanceIds] = useState<string[]>([]);
 
+  // Helper to determine current month format (Rule: only Month 8 is split into 2 kì; all other months are MM.YYYY e.g. 09.2026)
+  const getCurrentDefaultMonth = useCallback(() => {
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    if (curMonth === 8) {
+      return now.getDate() > 15 ? 'Kì 2 - Tháng 8' : 'Kì 1 - Tháng 8';
+    }
+    const curM = String(curMonth).padStart(2, '0');
+    const curY = now.getFullYear();
+    return `${curM}.${curY}`;
+  }, []);
+
   // Helper to create a fresh draft row
-  const createNewDraftRow = (month?: string) => ({
-    id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    month: (month && month !== 'all') ? month : (acceptanceMonthFilter !== 'all' ? acceptanceMonthFilter : 'Kì 1 - Tháng 8'),
-    teamId: '',
-    teamCode: '',
-    teamName: '',
-    gdkdName: '',
-    implementerName: '',
-    projectId: '',
-    projectName: '',
-    projectCode: '',
-    digitalFb: '',
-    digitalZalo: '',
-    digitalTiktok: '',
-    digitalKhac: '',
-    visaFb: '',
-    visaZalo: '',
-    visaTiktok: '',
-    visaDangTin: '',
-    dangTinCtyChuaVat: '',
-    caNhanFb: '',
-    caNhanDangTin: '',
-    caNhanZalo: '',
-    caNhanGoogle: '',
-    caNhanTiktok: '',
-    caNhanNapTienQuaCty: '',
-    caNhanNopTien: '',
-    status: 'Đã nghiệm thu',
-    notes: ''
-  });
+  const createNewDraftRow = (month?: string) => {
+    const curDefault = getCurrentDefaultMonth();
+    const targetMonth = (month && month !== 'all') 
+      ? formatAcceptanceMonth(month) 
+      : (acceptanceMonthFilter !== 'all' ? formatAcceptanceMonth(acceptanceMonthFilter) : curDefault);
+
+    return {
+      id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      month: targetMonth,
+      teamId: '',
+      teamCode: '',
+      teamName: '',
+      gdkdName: '',
+      implementerName: '',
+      projectId: '',
+      projectName: '',
+      projectCode: '',
+      digitalFb: '',
+      digitalZalo: '',
+      digitalTiktok: '',
+      digitalKhac: '',
+      visaFb: '',
+      visaZalo: '',
+      visaTiktok: '',
+      visaDangTin: '',
+      dangTinCtyChuaVat: '',
+      caNhanFb: '',
+      caNhanDangTin: '',
+      caNhanZalo: '',
+      caNhanGoogle: '',
+      caNhanTiktok: '',
+      caNhanNapTienQuaCty: '',
+      caNhanNopTien: '',
+      status: 'Đã nghiệm thu',
+      notes: ''
+    };
+  };
 
   // Draft rows for inline addition - only initialized if user has canCreate permission
   const [draftRows, setDraftRows] = useState<any[]>(() => {
@@ -236,19 +257,83 @@ export const AcceptanceManager = React.memo(({
     return { findProject, byId, byCode, byName };
   }, [projects]);
 
-  // Unique months list with "Kì 1 - Tháng 8" & "Kì 2 - Tháng 8"
+  // Unique months list for dropdown selector & filters
+  // Rule: Only Month 8 has 2 periods: "Kì 1 - Tháng 8" & "Kì 2 - Tháng 8".
+  // All other months are displayed normally as MM.YYYY (e.g. 09.2026).
   const uniqueMonths = useMemo(() => {
     const set = new Set<string>();
-    set.add('Kì 1 - Tháng 8');
+    const now = new Date();
+    const curY = now.getFullYear();
+    const curM = now.getMonth() + 1;
+
+    // 1. Current month (e.g. 09.2026)
+    const curStr = curM === 8 
+      ? (now.getDate() > 15 ? 'Kì 2 - Tháng 8' : 'Kì 1 - Tháng 8') 
+      : `${String(curM).padStart(2, '0')}.${curY}`;
+    set.add(curStr);
+
+    // 2. Next month (e.g. 10.2026, 11.2026)
+    for (let offset = 1; offset <= 3; offset++) {
+      const d = new Date(curY, curM - 1 + offset, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      if (m === 8) {
+        set.add('Kì 1 - Tháng 8');
+        set.add('Kì 2 - Tháng 8');
+      } else {
+        set.add(`${String(m).padStart(2, '0')}.${y}`);
+      }
+    }
+
+    // 3. Month 8 specific periods (strictly 2 periods)
     set.add('Kì 2 - Tháng 8');
-    (acceptances || []).forEach((a: any) => { if (a.month) set.add(a.month); });
+    set.add('Kì 1 - Tháng 8');
+
+    // 4. Past months for current year (e.g. 07.2026, 06.2026, 05.2026, 04.2026, 03.2026, 02.2026, 01.2026)
+    for (let m = 7; m >= 1; m--) {
+      set.add(`${String(m).padStart(2, '0')}.${curY}`);
+    }
+
+    // 5. Existing months in Firestore acceptances (formatted with formatAcceptanceMonth)
+    (acceptances || []).forEach((a: any) => { 
+      if (a.month && typeof a.month === 'string' && a.month.trim()) {
+        const formatted = formatAcceptanceMonth(a.month.trim());
+        if (formatted) set.add(formatted);
+      }
+    });
+
+    // Custom sorting:
+    // 09.2026 (current month) first, then upcoming (10.2026...), then Kì 2 - Tháng 8, Kì 1 - Tháng 8, then past months in descending order
+    const priorityList = [
+      curStr,
+      `${String(curM + 1).padStart(2, '0')}.${curY}`,
+      'Kì 2 - Tháng 8',
+      'Kì 1 - Tháng 8',
+      '07.2026',
+      '06.2026',
+      '05.2026',
+      '04.2026',
+      '03.2026',
+      '02.2026',
+      '01.2026'
+    ];
+
+    const priorityMap = new Map<string, number>();
+    priorityList.forEach((item, index) => {
+      if (!priorityMap.has(item)) {
+        priorityMap.set(item, index);
+      }
+    });
 
     return Array.from(set).sort((a, b) => {
-      if (a === 'Kì 1 - Tháng 8') return -1;
-      if (b === 'Kì 1 - Tháng 8') return 1;
-      if (a === 'Kì 2 - Tháng 8') return -1;
-      if (b === 'Kì 2 - Tháng 8') return 1;
-      return b.localeCompare(a);
+      const pA = priorityMap.has(a) ? priorityMap.get(a)! : 999;
+      const pB = priorityMap.has(b) ? priorityMap.get(b)! : 999;
+      if (pA !== pB) return pA - pB;
+      const parseYM = (s: string) => {
+        const match = s.match(/^(\d{2})\.(\d{4})$/);
+        return match ? `${match[2]}-${match[1]}` : s;
+      };
+      return parseYM(b).localeCompare(parseYM(a));
     });
   }, [acceptances]);
 
@@ -337,17 +422,9 @@ export const AcceptanceManager = React.memo(({
     return (acceptances || []).filter((a: any) => {
       // Month match
       if (acceptanceMonthFilter !== 'all') {
-        if (acceptanceMonthFilter === 'Kì 1 - Tháng 8') {
-          const m = a.month || '';
-          if (m !== 'Kì 1 - Tháng 8' && m !== 'Kỳ 1 - Tháng 8' && !(m.includes('8') && (m.includes('1') || m.includes('K1')))) {
-            return false;
-          }
-        } else if (acceptanceMonthFilter === 'Kì 2 - Tháng 8') {
-          const m = a.month || '';
-          if (m !== 'Kì 2 - Tháng 8' && m !== 'Kỳ 2 - Tháng 8' && !(m.includes('8') && (m.includes('2') || m.includes('K2')))) {
-            return false;
-          }
-        } else if (a.month !== acceptanceMonthFilter) {
+        const m = (a.month || '').trim();
+        const f = acceptanceMonthFilter.trim();
+        if (m !== f && !isAcceptanceMonthMatch(m, f)) {
           return false;
         }
       }
@@ -556,7 +633,7 @@ export const AcceptanceManager = React.memo(({
       const resolvedBlock = resolveBlockForTeam(tm || draftRow, blocks, teams, teamLookup.findTeam);
 
       const payload: any = {
-        month: draftRow.month || 'Kì 1 - Tháng 8',
+        month: formatAcceptanceMonth(draftRow.month) || getCurrentDefaultMonth(),
         teamId: tm?.id || draftRow.teamId || '',
         teamName: resolvedTeamName,
         teamCode: resolvedTeamCode,
@@ -715,7 +792,7 @@ export const AcceptanceManager = React.memo(({
       const resolvedBlock = resolveBlockForTeam(tm || updatedState, blocks, teams, teamLookup.findTeam);
 
       const payload: any = {
-        month: updatedState.month || oldItem?.month || 'Kì 1 - Tháng 8',
+        month: formatAcceptanceMonth(updatedState.month) || formatAcceptanceMonth(oldItem?.month) || getCurrentDefaultMonth(),
         teamId: tm?.id || updatedState.teamId || oldItem?.teamId || '',
         teamName: resolvedTeamName,
         teamCode: resolvedTeamCode,
@@ -1074,7 +1151,7 @@ export const AcceptanceManager = React.memo(({
           return undefined;
         };
 
-        const month = String(getCol(['tháng', 'month']) || 'Kì 1 - Tháng 8').trim();
+        const month = formatAcceptanceMonth(String(getCol(['tháng', 'month']) || getCurrentDefaultMonth()).trim());
         const teamCode = String(getCol(['mã team', 'teamcode', 'team code', 'team']) || '').trim();
         const gdkdName = String(getCol(['gđkd', 'gdkd']) || '').trim();
         const implementerName = String(getCol(['người phụ trách', 'phụ trách', 'implementer']) || '').trim();
@@ -1381,7 +1458,7 @@ export const AcceptanceManager = React.memo(({
               </Badge>
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              Tách Kì 1 - Kì 2 Tháng 8 | Tự động tính VAT 10% (FB, Tiktok, Khác) & 8% (Zalo, Đăng tin) | Tổng cột K+Q+S+Y
+              Chỉ riêng Tháng 8 chia 2 kỳ (Kì 1 - Kì 2) | Các tháng khác hiển thị chuẩn MM.YYYY (VD: 09.2026) | VAT 10% & 8% | Tổng cột K+Q+S+Y
             </p>
           </div>
         </div>

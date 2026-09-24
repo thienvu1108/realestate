@@ -773,6 +773,18 @@ const normalizeMonth = (val: any): string => {
     return isNaN(d.getTime()) ? '' : safeFormat(d, 'yyyy-MM');
   }
   const str = String(val).trim().normalize('NFC').replace(/^\uFEFF/, '');
+  
+  // Support Vietnamese marketing periods like "Kì 1 - Tháng 9", "Kì 2 - Tháng 8", "Tháng 9-2026", "Tháng 9/2026"
+  const kiThangMatch = str.match(/(?:k[iìyỳ]\s*\d+\s*[-–]\s*)?th[aá]ng\s*(\d{1,2})(?:[-/.](\d{4}))?/i);
+  if (kiThangMatch) {
+    const m = kiThangMatch[1].padStart(2, '0');
+    const y = kiThangMatch[2] || '2026';
+    const numM = parseInt(m, 10);
+    if (numM >= 1 && numM <= 12) {
+      return `${y}-${m}`;
+    }
+  }
+
   const parts = str.split(/[-/.]/);
   if (parts.length === 2) {
     let year = '';

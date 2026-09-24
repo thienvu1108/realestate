@@ -385,3 +385,82 @@ export const buildCostBreakdownsOfRecord = (rowState: any) => {
   }
   return breakdowns;
 };
+
+/**
+ * Format month string for Acceptance Marketing (Nghiệm thu MKT).
+ * Rule: Only Month 8 is split into 2 periods: "Kì 1 - Tháng 8", "Kì 2 - Tháng 8".
+ * All other months are displayed normally as "MM.YYYY" (e.g. Month 9 is "09.2026").
+ */
+export const formatAcceptanceMonth = (val: any): string => {
+  if (!val) return '';
+  const str = String(val).trim().normalize('NFC');
+
+  // Month 8: Kì 1 or Kì 2
+  if (/k[iìyỳ]\s*1\s*[-–]\s*th[aá]ng\s*8/i.test(str)) {
+    return 'Kì 1 - Tháng 8';
+  }
+  if (/k[iìyỳ]\s*2\s*[-–]\s*th[aá]ng\s*8/i.test(str)) {
+    return 'Kì 2 - Tháng 8';
+  }
+
+  // If already MM.YYYY (e.g. 09.2026)
+  const dotMatch = str.match(/^(\d{1,2})\.(\d{4})$/);
+  if (dotMatch) {
+    return `${dotMatch[1].padStart(2, '0')}.${dotMatch[2]}`;
+  }
+
+  // YYYY-MM or YYYY.MM (e.g. 2026-09 -> 09.2026)
+  const ymMatch = str.match(/^(\d{4})[-/.](\d{1,2})$/);
+  if (ymMatch) {
+    return `${ymMatch[2].padStart(2, '0')}.${ymMatch[1]}`;
+  }
+
+  // MM-YYYY or MM/YYYY (e.g. 9-2026 -> 09.2026)
+  const myMatch = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (myMatch) {
+    return `${myMatch[1].padStart(2, '0')}.${myMatch[2]}`;
+  }
+
+  // Text like "Tháng 9-2026", "Tháng 9/2026", "Tháng 9", "Kì 1 - Tháng 9", "Kì 2 - Tháng 9"
+  const tmMatch = str.match(/(?:k[iìyỳ]\s*\d+\s*[-–]\s*)?th[aá]ng\s*(\d{1,2})(?:[-/. ](\d{4}))?/i);
+  if (tmMatch) {
+    const m = tmMatch[1].padStart(2, '0');
+    const y = tmMatch[2] || '2026';
+    return `${m}.${y}`;
+  }
+
+  return str;
+};
+
+/**
+ * Compare acceptance record month with active filter.
+ * Handles month 8 periods and regular MM.YYYY formats seamlessly.
+ */
+export const isAcceptanceMonthMatch = (recordMonth: string, filterMonth: string): boolean => {
+  if (!filterMonth || filterMonth === 'all') return true;
+  if (!recordMonth) return false;
+  if (recordMonth === filterMonth) return true;
+
+  const r = recordMonth.trim().toLowerCase().replace(/kỳ/g, 'kì');
+  const f = filterMonth.trim().toLowerCase().replace(/kỳ/g, 'kì');
+  if (r === f) return true;
+
+  const normR = formatAcceptanceMonth(recordMonth);
+  const normF = formatAcceptanceMonth(filterMonth);
+  if (normR && normF && normR === normF) return true;
+
+  // Month 8 specific periods
+  if (f.includes('tháng 8') && f.includes('kì')) {
+    const fKi = f.includes('1') ? '1' : f.includes('2') ? '2' : '';
+    const rKi = r.includes('1') ? '1' : r.includes('2') ? '2' : '';
+    if (fKi && rKi) return fKi === rKi && r.includes('8');
+    return false;
+  }
+
+  // If filter is 08.2026, match both periods of month 8 as well
+  if (normF === '08.2026' && (r.includes('8') || normR === '08.2026')) {
+    return true;
+  }
+
+  return false;
+};

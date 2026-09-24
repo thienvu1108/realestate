@@ -128,7 +128,8 @@ import {
   MapPin,
   Receipt,
   LayoutGrid,
-  Table as TableIcon
+  Table as TableIcon,
+  Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -138,6 +139,7 @@ import { MktEfficiencyManager } from './components/MktEfficiencyManager';
 import { AcceptanceManager } from './components/AcceptanceManager';
 import { BlockReciprocalRegistration } from './components/BlockReciprocalRegistration';
 import { AdminReciprocalBudgets } from './components/AdminReciprocalBudgets';
+import { BanKdManager, BanKd } from './components/BanKdManager';
 import { GitHubBackupManager } from './components/GitHubBackupManager';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -794,66 +796,62 @@ const normalizeBlockIdentifier = (val: string | undefined | null): string => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Strip accents (khối -> khoi)
     .replace(/^(khoi|block|k\.|k)\s*/i, '') // Strip prefix "khoi", "block", "k."
-    .replace(/[^a-z0-9]/gi, '') // Keep alphanumeric only
+    .replace(/[^a-z0-9.]/gi, '') // Keep alphanumeric and dot (distinguish 36.88, 99.01)
     .trim();
 };
 
 const isBlockMatch = (b: any, block: any): boolean => {
   if (!b || !block) return false;
-  if (b.blockId && block.id && b.blockId === block.id) return true;
 
-  const bId = (block.id || '').toLowerCase().trim();
-  const bCode = (block.blockCode || '').toLowerCase().trim();
-  const bName = (block.name || '').toLowerCase().trim();
+  const targetId = (block.id || '').trim();
+  const targetCode = (block.blockCode || '').trim().toLowerCase();
+  const targetName = (block.name || '').trim().toLowerCase();
 
-  const recId = (b.blockId || '').toLowerCase().trim();
-  const recCode = (b.blockCode || '').toLowerCase().trim();
-  const recName = (b.blockName || '').toLowerCase().trim();
+  const recBlockId = (b.blockId || '').trim();
+  const recCode = (b.blockCode || '').trim().toLowerCase();
+  const recName = (b.blockName || '').trim().toLowerCase();
 
-  if (recId && (recId === bId || (bCode && recId === bCode))) return true;
-  if (recCode && (recCode === bCode || (bId && recCode === bId))) return true;
-  if (recName && bName && recName === bName) return true;
-
-  const blockNormCode = normalizeBlockIdentifier(block.blockCode);
-  const blockNormName = normalizeBlockIdentifier(block.name);
-  const blockNormId = normalizeBlockIdentifier(block.id);
-
-  const recNormCode = normalizeBlockIdentifier(b.blockCode);
-  const recNormName = normalizeBlockIdentifier(b.blockName);
-  const recNormId = normalizeBlockIdentifier(b.blockId);
-
-  const blockTokens = [blockNormCode, blockNormName, blockNormId].filter(Boolean);
-  const recTokens = [recNormCode, recNormName, recNormId].filter(Boolean);
-
-  for (const bt of blockTokens) {
-    for (const rt of recTokens) {
-      if (bt === rt) return true;
-      if (bt.length >= 2 && rt.length >= 2 && (bt.includes(rt) || rt.includes(bt))) {
-        return true;
-      }
-      if (/^\d+$/.test(bt) && /^\d+$/.test(rt)) {
-        const nB = parseInt(bt, 10);
-        const nR = parseInt(rt, 10);
-        if (!isNaN(nB) && !isNaN(nR) && nB > 0 && nB === nR) {
-          return true;
-        }
-      }
-    }
+  // 1. Direct blockId match (strict equality)
+  if (recBlockId && targetId && recBlockId === targetId) {
+    return true;
   }
 
-  // Fallback: match numeric digits across all blocks (e.g. Khối 79 / K79, Khối 01 / K01 / 1, Khối 02 / K02 / 2, etc.)
-  const blockDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  const recDigitList = [recCode, recName, recId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  for (const bd of blockDigitList) {
-    for (const rd of recDigitList) {
-      if (bd === rd) return true;
-      const numB = parseInt(bd, 10);
-      const numR = parseInt(rd, 10);
-      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) {
-        return true;
-      }
-    }
+  // 2. Legacy: blockId was stored as blockCode
+  if (recBlockId && targetCode && recBlockId.toLowerCase() === targetCode) {
+    return true;
   }
+
+  // 3. If recBlockId is a valid Firestore ID (>= 15 chars) and doesn't match targetId,
+  // it belongs to a completely different block and MUST NOT match this block
+  if (recBlockId && recBlockId.length >= 15 && targetId && recBlockId !== targetId) {
+    return false;
+  }
+
+  // 4. Exact blockCode match (case-insensitive)
+  if (recCode && targetCode && recCode === targetCode) {
+    return true;
+  }
+
+  // 5. Exact blockName match (case-insensitive)
+  if (recName && targetName && recName === targetName) {
+    return true;
+  }
+
+  // If both have codes and they differ, do not cross-match different blocks
+  if (recCode && targetCode && recCode !== targetCode) {
+    return false;
+  }
+
+  // 6. Normalized code/name match (strict equality only, NO loose includes or partial digits)
+  const normTargetCode = normalizeBlockIdentifier(block.blockCode);
+  const normTargetName = normalizeBlockIdentifier(block.name);
+  const normRecCode = normalizeBlockIdentifier(b.blockCode);
+  const normRecName = normalizeBlockIdentifier(b.blockName);
+
+  if (normTargetCode && normRecCode && normTargetCode === normRecCode) return true;
+  if (normTargetName && normRecName && normTargetName === normRecName) return true;
+  if (normTargetCode && normRecName && normTargetCode === normRecName) return true;
+  if (normTargetName && normRecCode && normTargetName === normRecCode) return true;
 
   return false;
 };
@@ -1959,9 +1957,7 @@ export default function App() {
           const nbCode = normalizeBlockIdentifier(b.blockCode);
           const nbName = normalizeBlockIdentifier(b.name);
           const nbId = normalizeBlockIdentifier(b.id);
-          return nbCode === normSelected || nbName === normSelected || nbId === normSelected ||
-                 (nbCode.includes(normSelected) && normSelected.length >= 2) ||
-                 (nbName.includes(normSelected) && normSelected.length >= 2);
+          return nbCode === normSelected || nbName === normSelected || nbId === normSelected;
         });
         if (foundNorm) return foundNorm;
       }
@@ -1981,9 +1977,7 @@ export default function App() {
         const foundProfileBlock = list.find(b => {
           const nbCode = normalizeBlockIdentifier(b.blockCode);
           const nbName = normalizeBlockIdentifier(b.name);
-          return nbCode === normField || nbName === normField ||
-                 (nbName.includes(normField) && normField.length >= 2) ||
-                 (nbCode.includes(normField) && normField.length >= 2);
+          return nbCode === normField || nbName === normField;
         });
         if (foundProfileBlock) return foundProfileBlock;
       }
@@ -2006,6 +2000,29 @@ export default function App() {
       }
     }
   }, [currentActiveBlock, selectedBlockId, setSelectedBlockId]);
+
+  // Check if current user is authorized to edit/delete a specific block budget record
+  const isUserAuthorizedForBlockBudget = useCallback((b: any): boolean => {
+    if (!b) return false;
+    // Admins, super admins, accountant, or root admin have global management rights
+    if (isAdmin || isSuperAdmin || isAccountant || user?.email === 'thienvu1108@gmail.com') return true;
+    
+    // For GĐ Khối, Trợ lý Khối, or block users: they can ONLY edit/delete records of blocks they are assigned to
+    const allowed = (userAllowedBlocks && userAllowedBlocks.length > 0) ? userAllowedBlocks : myBlocks;
+    if (!allowed || allowed.length === 0) return false;
+    
+    return allowed.some(blk => isBlockMatch(b, blk));
+  }, [isAdmin, isSuperAdmin, isAccountant, user, userAllowedBlocks, myBlocks]);
+
+  const canEditSpecificBlockBudget = useCallback((b: any): boolean => {
+    if (!canEditBlockBudget) return false;
+    return isUserAuthorizedForBlockBudget(b);
+  }, [canEditBlockBudget, isUserAuthorizedForBlockBudget]);
+
+  const canDeleteSpecificBlockBudget = useCallback((b: any): boolean => {
+    if (!canDeleteBlockBudget) return false;
+    return isUserAuthorizedForBlockBudget(b);
+  }, [canDeleteBlockBudget, isUserAuthorizedForBlockBudget]);
 
   const isTeamInMyBlock = useCallback((teamId: string) => {
     if (isAdmin || isAccountant || isSuperAdmin) return true;
@@ -4793,6 +4810,11 @@ export default function App() {
   const [editBlockBudgetAmount, setEditBlockBudgetAmount] = useState('');
   const [editBlockBudgetMonth, setEditBlockBudgetMonth] = useState('');
   const [editBlockBudgetProjectId, setEditBlockBudgetProjectId] = useState('');
+  const [editBlockBudgetReason, setEditBlockBudgetReason] = useState('');
+
+  // History states for Block Budget
+  const [selectedBlockBudgetForHistory, setSelectedBlockBudgetForHistory] = useState<any | null>(null);
+  const [isBlockBudgetHistoryOpen, setIsBlockBudgetHistoryOpen] = useState(false);
 
   // Admin states for Block Budget
   const [adminBlockBudgetSearch, setAdminBlockBudgetSearch] = useState('');
@@ -4865,7 +4887,14 @@ export default function App() {
   }, [teams, teamSearch, adminTeamBlockFilter, adminTeamSort, teamMemberCounts]);
 
   // Project & Region sub-tab and dialog states
-  const [projectSubTab, setProjectSubTab] = useState<'project-list' | 'project-regions'>('project-list');
+  const [projectSubTab, setProjectSubTab] = useState<'project-list' | 'project-regions' | 'project-ban-kd'>('project-list');
+  const [banKdList, setBanKdList] = useState<BanKd[]>([]);
+  const [newProjectBanKdId, setNewProjectBanKdId] = useState('');
+  const [editingProjectBanKdId, setEditingProjectBanKdId] = useState('');
+  const [adminProjectBanKdFilter, setAdminProjectBanKdFilter] = useState('all');
+  const [selectedBanKdForBulk, setSelectedBanKdForBulk] = useState('');
+  const [isBulkUpdateBanKdDialogOpen, setIsBulkUpdateBanKdDialogOpen] = useState(false);
+  const [adminBlockBudgetFilterBanKd, setAdminBlockBudgetFilterBanKd] = useState('all');
   const [isAddRegionDialogOpen, setIsAddRegionDialogOpen] = useState(false);
 
   // Region management states
@@ -5607,6 +5636,12 @@ export default function App() {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'projects'));
 
+    // Listen to Ban KD (Business Divisions)
+    const qBanKd = query(collection(db, 'ban_kd'), orderBy('name', 'asc'));
+    const unsubBanKd = onSnapshot(qBanKd, (snapshot) => {
+      setBanKdList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BanKd)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'ban_kd'));
+
     // Listen to audit logs
     let unsubLogs = () => {};
     if (isAdmin || isMod || isAccountant) {
@@ -5752,6 +5787,7 @@ export default function App() {
 
     return () => {
       unsubProjects();
+      unsubBanKd();
       unsubLogs();
       unsubUsers();
       unsubEfficiency();
@@ -7107,6 +7143,8 @@ export default function App() {
       const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.projectCode || '').toLowerCase().includes(q);
       const matchRegion = adminProjectRegionFilter === 'all' || p.region === adminProjectRegionFilter;
       const matchType = adminProjectTypeFilter === 'all' || p.type === adminProjectTypeFilter;
+      const matchBanKd = adminProjectBanKdFilter === 'all' || 
+        (adminProjectBanKdFilter === 'none' ? (!p.banKdId && !p.banKdName) : (p.banKdId === adminProjectBanKdFilter || p.banKdName === adminProjectBanKdFilter));
       
       // Role-based filtering
       const isSuperAdmin = userRole === 'super_admin';
@@ -7115,10 +7153,10 @@ export default function App() {
       const isAccountant = userRole === 'accountant';
       const isUser = userRole === 'user';
 
-      if (isSuperAdmin || isAdmin || isAccountant || isUser) return matchSearch && matchRegion && matchType;
+      if (isSuperAdmin || isAdmin || isAccountant || isUser) return matchSearch && matchRegion && matchType && matchBanKd;
       if (isMod) {
         const isAssigned = userProfile?.assignedProjects?.includes(p.id);
-        return isAssigned && matchSearch && matchRegion && matchType;
+        return isAssigned && matchSearch && matchRegion && matchType && matchBanKd;
       }
       return false;
     });
@@ -7130,7 +7168,7 @@ export default function App() {
       if (aValue > bValue) return projectSort.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [projects, projectSort, debouncedProjectSearch, adminProjectRegionFilter, adminProjectTypeFilter, userRole, userProfile]);
+  }, [projects, projectSort, debouncedProjectSearch, adminProjectRegionFilter, adminProjectTypeFilter, adminProjectBanKdFilter, userRole, userProfile]);
 
   const paginatedProjects = useMemo(() => {
     const start = (projectPage - 1) * 20;
@@ -7382,6 +7420,14 @@ export default function App() {
     if (adminBlockBudgetFilterProject && adminBlockBudgetFilterProject !== 'all') {
       list = list.filter(b => b.projectId === adminBlockBudgetFilterProject);
     }
+    if (adminBlockBudgetFilterBanKd && adminBlockBudgetFilterBanKd !== 'all') {
+      list = list.filter(b => {
+        const proj = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+        const banId = b.banKdId || proj?.banKdId;
+        const banName = b.banKdName || proj?.banKdName;
+        return banId === adminBlockBudgetFilterBanKd || banName === adminBlockBudgetFilterBanKd;
+      });
+    }
     if (adminBlockBudgetSearch.trim()) {
       const q = adminBlockBudgetSearch.toLowerCase().trim();
       list = list.filter(b => {
@@ -7389,8 +7435,9 @@ export default function App() {
         const pCode = (b.projectCode || '').toLowerCase();
         const bName = (b.blockName || '').toLowerCase();
         const bCode = (b.blockCode || '').toLowerCase();
+        const banName = (b.banKdName || '').toLowerCase();
         const creator = (b.createdByName || b.createdByEmail || '').toLowerCase();
-        return pName.includes(q) || pCode.includes(q) || bName.includes(q) || bCode.includes(q) || creator.includes(q);
+        return pName.includes(q) || pCode.includes(q) || bName.includes(q) || bCode.includes(q) || banName.includes(q) || creator.includes(q);
       });
     }
     return list.sort((a, b) => {
@@ -7398,7 +7445,7 @@ export default function App() {
       const timeB = b.createdAt?.seconds || 0;
       return timeB - timeA;
     });
-  }, [blockBudgets, blocks, adminBlockBudgetFilterBlock, adminBlockBudgetFilterMonth, adminBlockBudgetFilterProject, adminBlockBudgetSearch]);
+  }, [blockBudgets, blocks, projects, adminBlockBudgetFilterBlock, adminBlockBudgetFilterMonth, adminBlockBudgetFilterProject, adminBlockBudgetFilterBanKd, adminBlockBudgetSearch]);
 
   const totalAdminBlockBudgetPages = Math.max(1, Math.ceil(filteredAdminBlockBudgets.length / 20));
   const paginatedAdminBlockBudgets = useMemo(() => {
@@ -7506,6 +7553,21 @@ export default function App() {
     const targetProj = projects.find(p => p.id === adminAddBlockBudgetProjectId);
 
     try {
+      const historyEntry = {
+        id: 'hist_' + Date.now(),
+        action: 'CREATE',
+        actionLabel: 'Đăng ký ngân sách ban đầu (Quản trị)',
+        amount: cleanAmount,
+        month: adminAddBlockBudgetMonth.trim(),
+        projectId: adminAddBlockBudgetProjectId,
+        projectName: targetProj?.name || '',
+        timestamp: new Date().toISOString(),
+        userId: user?.uid || '',
+        userEmail: user?.email || '',
+        userName: userProfile?.fullName || user?.displayName || user?.email || 'Admin',
+        note: 'Tạo trực tiếp bởi Ban quản trị'
+      };
+
       const docRef = await addDoc(collection(db, 'block_budgets'), {
         blockId: adminAddBlockBudgetBlockId,
         blockName: targetBlock?.name || '',
@@ -7516,10 +7578,11 @@ export default function App() {
         month: adminAddBlockBudgetMonth.trim(),
         amount: cleanAmount,
         createdBy: user?.uid || '',
-        createdByName: user?.displayName || user?.email || '',
+        createdByName: userProfile?.fullName || user?.displayName || user?.email || '',
         createdByEmail: user?.email || '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        editHistory: [historyEntry]
       });
 
       await logAction('CREATE', 'block_budgets', docRef.id, {
@@ -8290,10 +8353,22 @@ export default function App() {
       toast.error("Vui lòng chọn Khối trước khi đăng ký!");
       return;
     }
+
+    // Enforce role and assigned block authorization
+    if (!isAdmin && !isSuperAdmin && !isAccountant && user?.email !== 'thienvu1108@gmail.com') {
+      const allowed = (userAllowedBlocks && userAllowedBlocks.length > 0) ? userAllowedBlocks : myBlocks;
+      const isAllowed = allowed.some(blk => blk.id === block.id || blk.blockCode === block.blockCode);
+      if (!isAllowed) {
+        toast.error("Bạn chỉ có quyền đăng ký ngân sách cho Khối do bạn phụ trách!");
+        return;
+      }
+    }
+
     if (!blockBudgetProject || !blockBudgetAmount || !effectiveMonth) {
       toast.error("Vui lòng chọn Dự án, Tháng và nhập Mức ngân sách!");
       return;
     }
+
     const amt = parseVal(blockBudgetAmount);
     if (amt <= 0) {
       toast.error("Vui lòng nhập ngân sách lớn hơn 0!");
@@ -8302,9 +8377,9 @@ export default function App() {
     const selectedProject = projects.find(p => p.id === blockBudgetProject);
     
     const existsInBlock = blockBudgets.some(
-      b => (b.blockId === block.id || b.blockCode === block.blockCode) && 
+      b => isBlockMatch(b, block) && 
            b.projectId === blockBudgetProject && 
-           b.month === effectiveMonth
+           normalizeMonth(b.month) === normalizeMonth(effectiveMonth)
     );
     if (existsInBlock) {
       toast.error(`Khối "${block.name || block.blockCode}" đã đăng ký ngân sách cho dự án "${selectedProject?.name || 'N/A'}" trong kỳ ${effectiveMonth}. Vui lòng chỉnh sửa bản đăng ký hiện có nếu cần thay đổi.`);
@@ -8312,23 +8387,44 @@ export default function App() {
     }
     
     try {
+      const historyEntry = {
+        id: 'hist_' + Date.now(),
+        action: 'CREATE',
+        actionLabel: 'Đăng ký ngân sách ban đầu',
+        amount: amt,
+        month: effectiveMonth,
+        projectId: blockBudgetProject,
+        projectName: selectedProject?.name || 'N/A',
+        banKdId: selectedProject?.banKdId || '',
+        banKdName: selectedProject?.banKdName || '',
+        timestamp: new Date().toISOString(),
+        userId: user?.uid || '',
+        userEmail: user?.email?.toLowerCase() || '',
+        userName: userProfile?.fullName || user?.displayName || user?.email || 'N/A',
+        note: 'Đăng ký ngân sách Khối mới'
+      };
+
       const docRef = await addDoc(collection(db, 'block_budgets'), {
         blockId: block.id,
         blockCode: block.blockCode || '',
         blockName: block.name || '',
         projectId: blockBudgetProject,
         projectName: selectedProject?.name || 'N/A',
+        banKdId: selectedProject?.banKdId || '',
+        banKdName: selectedProject?.banKdName || '',
         month: effectiveMonth,
         amount: amt,
         createdAt: serverTimestamp(),
         createdBy: user?.uid,
         userEmail: user?.email?.toLowerCase(),
-        creatorName: user?.displayName || userProfile?.fullName || user?.email || 'N/A'
+        creatorName: userProfile?.fullName || user?.displayName || user?.email || 'N/A',
+        editHistory: [historyEntry]
       });
       await logAction('CREATE', 'block_budgets', docRef.id, { 
         blockId: block.id, 
         blockCode: block.blockCode, 
         projectName: selectedProject?.name, 
+        banKdName: selectedProject?.banKdName || '',
         amount: amt, 
         month: effectiveMonth 
       });
@@ -8344,6 +8440,10 @@ export default function App() {
       toast.error("Tài khoản của bạn không có quyền chỉnh sửa ngân sách Khối! Vui lòng liên hệ Admin.");
       return;
     }
+    if (!canEditSpecificBlockBudget(b)) {
+      toast.error("Bạn chỉ có quyền chỉnh sửa ngân sách thuộc Khối do bạn quản lý! Vui lòng kiểm tra lại quyền.");
+      return;
+    }
     const check = checkBlockBudgetActionAllowed(b.month);
     if (!check.allowed) {
       toast.error(check.reason);
@@ -8353,6 +8453,7 @@ export default function App() {
     setEditBlockBudgetAmount(b.amount !== undefined && b.amount !== null ? b.amount.toString() : '');
     setEditBlockBudgetMonth(b.month || '');
     setEditBlockBudgetProjectId(b.projectId || '');
+    setEditBlockBudgetReason('');
     setIsEditBlockBudgetOpen(true);
   };
 
@@ -8362,6 +8463,10 @@ export default function App() {
       return;
     }
     if (!editingBlockBudget) return;
+    if (!canEditSpecificBlockBudget(editingBlockBudget)) {
+      toast.error("Bạn chỉ có quyền chỉnh sửa ngân sách thuộc Khối do bạn quản lý! Vui lòng kiểm tra lại quyền.");
+      return;
+    }
 
     const checkOriginal = checkBlockBudgetActionAllowed(editingBlockBudget.month);
     if (!checkOriginal.allowed) {
@@ -8384,24 +8489,52 @@ export default function App() {
     }
     const selectedProject = projects.find(p => p.id === editBlockBudgetProjectId);
 
+    const historyEntry = {
+      id: 'hist_' + Date.now(),
+      action: 'UPDATE',
+      actionLabel: 'Chỉnh sửa ngân sách',
+      oldAmount: Number(editingBlockBudget.amount) || 0,
+      newAmount: amt,
+      diffAmount: amt - (Number(editingBlockBudget.amount) || 0),
+      oldMonth: editingBlockBudget.month || '',
+      newMonth: editBlockBudgetMonth,
+      oldProjectId: editingBlockBudget.projectId || '',
+      newProjectId: editBlockBudgetProjectId || editingBlockBudget.projectId,
+      oldProjectName: editingBlockBudget.projectName || '',
+      newProjectName: selectedProject?.name || editingBlockBudget.projectName,
+      banKdId: selectedProject?.banKdId || editingBlockBudget.banKdId || '',
+      banKdName: selectedProject?.banKdName || editingBlockBudget.banKdName || '',
+      timestamp: new Date().toISOString(),
+      userId: user?.uid || '',
+      userEmail: user?.email || '',
+      userName: userProfile?.fullName || user?.displayName || user?.email || 'N/A',
+      note: editBlockBudgetReason.trim() || 'Cập nhật ngân sách Khối'
+    };
+
     try {
       await updateDoc(doc(db, 'block_budgets', editingBlockBudget.id), {
         amount: amt,
         month: editBlockBudgetMonth,
         projectId: editBlockBudgetProjectId || editingBlockBudget.projectId,
         projectName: selectedProject?.name || editingBlockBudget.projectName,
+        banKdId: selectedProject?.banKdId || editingBlockBudget.banKdId || '',
+        banKdName: selectedProject?.banKdName || editingBlockBudget.banKdName || '',
         updatedAt: serverTimestamp(),
         updatedBy: user?.uid,
-        updatedByEmail: user?.email
+        updatedByEmail: user?.email,
+        lastEditorName: userProfile?.fullName || user?.displayName || user?.email,
+        editHistory: arrayUnion(historyEntry)
       });
       await logAction('UPDATE', 'block_budgets', editingBlockBudget.id, {
         previousAmount: editingBlockBudget.amount,
         newAmount: amt,
-        month: editBlockBudgetMonth
+        month: editBlockBudgetMonth,
+        reason: editBlockBudgetReason.trim()
       });
       toast.success("Cập nhật ngân sách Khối thành công!");
       setIsEditBlockBudgetOpen(false);
       setEditingBlockBudget(null);
+      setEditBlockBudgetReason('');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'block_budgets');
     }
@@ -8410,6 +8543,10 @@ export default function App() {
   const handleDeleteBlockBudget = async (b: any) => {
     if (!canDeleteBlockBudget) {
       toast.error("Tài khoản của bạn không có quyền xóa ngân sách Khối! Vui lòng liên hệ Admin.");
+      return;
+    }
+    if (!canDeleteSpecificBlockBudget(b)) {
+      toast.error("Bạn chỉ có quyền xóa ngân sách thuộc Khối do bạn quản lý! Vui lòng kiểm tra lại quyền.");
       return;
     }
     const check = checkBlockBudgetActionAllowed(b.month);
@@ -8427,6 +8564,118 @@ export default function App() {
       handleFirestoreError(err, OperationType.DELETE, 'block_budgets');
     }
   };
+
+  const handleOpenBlockBudgetHistory = (b: any) => {
+    setSelectedBlockBudgetForHistory(b);
+    setIsBlockBudgetHistoryOpen(true);
+  };
+
+  const getBlockBudgetHistoryList = useCallback((b: any) => {
+    if (!b) return [];
+    const list: any[] = [];
+
+    // 1. Lấy từ b.editHistory hoặc b.history được lưu trực tiếp trên bản ghi
+    const rawHistory = Array.isArray(b.editHistory) 
+      ? b.editHistory 
+      : (Array.isArray(b.history) ? b.history : []);
+
+    rawHistory.forEach((h: any, idx: number) => {
+      list.push({
+        id: h.id || `hist_${idx}_${h.timestamp || ''}`,
+        action: h.action || (h.actionType ? h.actionType.toUpperCase() : 'UPDATE'),
+        actionLabel: h.actionLabel || (h.action === 'CREATE' ? 'Đăng ký ngân sách ban đầu' : 'Chỉnh sửa ngân sách'),
+        timestamp: h.timestamp || h.createdAt || h.performedAt,
+        userName: h.userName || h.editorName || h.creatorName || h.userEmail || 'N/A',
+        userEmail: h.userEmail || h.editorEmail || '',
+        oldAmount: h.oldAmount !== undefined ? h.oldAmount : (h.previousAmount !== undefined ? h.previousAmount : null),
+        newAmount: h.newAmount !== undefined ? h.newAmount : (h.amount !== undefined ? h.amount : null),
+        diffAmount: h.diffAmount,
+        oldMonth: h.oldMonth,
+        newMonth: h.newMonth || h.month,
+        oldProjectName: h.oldProjectName,
+        newProjectName: h.newProjectName || h.projectName,
+        note: h.note || h.reason || '',
+        raw: h
+      });
+    });
+
+    // 2. Lấy thêm từ auditLogs hệ thống (nếu có bản ghi tương ứng)
+    if (Array.isArray(auditLogs) && auditLogs.length > 0) {
+      const relatedLogs = auditLogs.filter(log => 
+        log.collection === 'block_budgets' && 
+        (log.docId === b.id || log.data?.id === b.id || (log.data?.blockId === b.blockId && log.data?.projectId === b.projectId && log.data?.month === b.month))
+      );
+
+      relatedLogs.forEach((log, lIdx) => {
+        const logTime = log.timestamp?.toDate ? log.timestamp.toDate() : (log.timestamp?.seconds ? new Date(log.timestamp.seconds * 1000) : (log.timestamp ? new Date(log.timestamp) : null));
+        const alreadyExists = list.some(item => {
+          if (!item.timestamp || !logTime) return false;
+          const itemTime = item.timestamp?.toDate ? item.timestamp.toDate() : (item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date(item.timestamp));
+          return Math.abs(itemTime.getTime() - logTime.getTime()) < 3000;
+        });
+
+        if (!alreadyExists) {
+          const isCreate = log.action === 'CREATE' || log.action === 'REGISTER';
+          list.push({
+            id: `log_${log.id || lIdx}`,
+            action: log.action || 'UPDATE',
+            actionLabel: isCreate ? 'Đăng ký ngân sách ban đầu' : 'Chỉnh sửa ngân sách (Nhật ký hệ thống)',
+            timestamp: log.timestamp,
+            userName: log.userName || log.userEmail?.split('@')[0] || log.userEmail || 'Hệ thống',
+            userEmail: log.userEmail || '',
+            oldAmount: log.data?.previousAmount !== undefined ? log.data.previousAmount : null,
+            newAmount: log.data?.newAmount !== undefined ? log.data.newAmount : (log.data?.amount !== undefined ? log.data.amount : null),
+            diffAmount: (log.data?.newAmount && log.data?.previousAmount) ? (log.data.newAmount - log.data.previousAmount) : undefined,
+            oldMonth: log.data?.oldMonth,
+            newMonth: log.data?.month || log.data?.newMonth,
+            oldProjectName: log.data?.oldProjectName,
+            newProjectName: log.data?.projectName || log.data?.newProjectName,
+            note: log.data?.reason || log.data?.note || '',
+            raw: log
+          });
+        }
+      });
+    }
+
+    // 3. Nếu chưa có sự kiện Đăng ký ban đầu (CREATE), tổng hợp từ metadata gốc của bản ghi
+    const hasCreate = list.some(item => item.action === 'CREATE' || item.action === 'REGISTER' || item.actionLabel?.includes('Đăng ký'));
+    if (!hasCreate) {
+      list.push({
+        id: `init_doc_${b.id}`,
+        action: 'CREATE',
+        actionLabel: b.creatorName?.includes('Đồng bộ') ? 'Đồng bộ từ dữ liệu ngân sách cũ' : 'Đăng ký ngân sách ban đầu',
+        timestamp: b.createdAt || b.firstCreatedAt,
+        userName: b.creatorName || b.createdByName || b.userEmail || (b.createdBy ? 'Người dùng hệ thống' : 'Hệ thống'),
+        userEmail: b.userEmail || b.createdByEmail || '',
+        oldAmount: null,
+        newAmount: b.amount,
+        diffAmount: undefined,
+        oldMonth: null,
+        newMonth: b.month,
+        oldProjectName: null,
+        newProjectName: b.projectName,
+        note: b.creatorName?.includes('Đồng bộ') 
+          ? 'Bản ghi được tự động đồng bộ từ dữ liệu ngân sách cũ của các đội nhóm'
+          : 'Bản ghi đăng ký ngân sách Khối ban đầu trên hệ thống',
+        raw: null
+      });
+    }
+
+    // 4. Sắp xếp theo thứ tự mới nhất đứng trước
+    list.sort((a, b) => {
+      const getMillis = (t: any) => {
+        if (!t) return 0;
+        if (t.toMillis) return t.toMillis();
+        if (t.seconds) return t.seconds * 1000;
+        if (t instanceof Date) return t.getTime();
+        const d = new Date(t);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      };
+      return getMillis(b.timestamp) - getMillis(a.timestamp);
+    });
+
+    return list;
+  }, [auditLogs]);
 
   const syncOldBudgetsToBlockBudgets = async () => {
     if (!canCreateBlockBudget) {
@@ -8522,6 +8771,8 @@ export default function App() {
     }
     const exportRows = filteredActiveBlockBudgets.map((b, idx) => {
       const displayProj = resolveProjectName(b.projectId, b.projectName);
+      const proj = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+      const banKdName = b.banKdName || proj?.banKdName || '';
       const blkName = currentActiveBlock?.name || b.blockName || 'Khối';
       const blkCode = currentActiveBlock?.blockCode || b.blockCode || '';
       return {
@@ -8529,6 +8780,7 @@ export default function App() {
         "Khối Kinh Doanh": blkName,
         "Mã Khối": blkCode,
         "Dự Án": displayProj,
+        "Ban KD": banKdName,
         "Tháng MKT": b.month || '',
         "Hạn Mức Ngân Sách (VNĐ)": Number(b.amount || 0),
         "Thời Gian Đăng Ký": safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '',
@@ -8554,11 +8806,14 @@ export default function App() {
       const blk = blocks.find(bl => bl.id === b.blockId);
       const displayBlock = blk?.name || b.blockName || 'Khối';
       const displayProj = resolveProjectName(b.projectId, b.projectName);
+      const proj = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+      const banKdName = b.banKdName || proj?.banKdName || '';
       return {
         "STT": idx + 1,
         "Khối Kinh Doanh": displayBlock,
         "Mã Khối": blk?.blockCode || b.blockCode || '',
         "Dự Án": displayProj,
+        "Ban KD": banKdName,
         "Tháng MKT": b.month || '',
         "Hạn Mức Ngân Sách (VNĐ)": Number(b.amount || 0),
         "Thời Gian Đăng Ký": safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '',
@@ -8698,6 +8953,9 @@ export default function App() {
     let successCount = 0;
     let duplicateCount = 0;
     const existingNames = new Set(projects.map(p => p.name.toLowerCase()));
+    const matchedBan = newProjectBanKdId && newProjectBanKdId !== 'none' ? banKdList.find(b => b.id === newProjectBanKdId) : null;
+    const banKdId = matchedBan?.id || '';
+    const banKdName = matchedBan?.name || '';
 
     for (const name of names) {
       if (existingNames.has(name.toLowerCase())) {
@@ -8713,10 +8971,12 @@ export default function App() {
           projectCode,
           region: newProjectRegion || 'Chưa xác định',
           type: newProjectType,
+          banKdId,
+          banKdName,
           createdAt: serverTimestamp(),
           createdBy: user?.uid
         });
-        await logAction('CREATE', 'projects', docRef.id, { name, projectCode, region: newProjectRegion, type: newProjectType });
+        await logAction('CREATE', 'projects', docRef.id, { name, projectCode, region: newProjectRegion, type: newProjectType, banKdName });
         successCount++;
         existingNames.add(name.toLowerCase());
       } catch (error) {
@@ -8726,6 +8986,7 @@ export default function App() {
     
     setNewProjectName('');
     setNewProjectRegion('');
+    setNewProjectBanKdId('');
     if (successCount > 0) {
       toast.success(`Đã thêm ${successCount} dự án mới`);
     }
@@ -8782,6 +9043,7 @@ export default function App() {
           const code = String(getVal(['Mã Dự án', 'Mã', 'Code', 'Project Code', 'maduan', 'mã dự án']) || '').trim();
           const region = String(getVal(['Miền', 'Khu vực', 'Vùng', 'Region', 'mien', 'khuvuc', 'vùng']) || '').trim();
           const type = String(getVal(['Loại hình', 'Type', 'loaihinh', 'loại hình']) || '').trim();
+          const banKdRaw = String(getVal(['Ban KD', 'Ban kd', 'Ban kinh doanh', 'Ban KD phụ trách', 'bankd', 'ban_kd']) || '').trim();
 
           if (!name) {
             if (Object.values(row).some(v => v !== '')) {
@@ -8798,6 +9060,11 @@ export default function App() {
           }
 
           const projectCode = code || extractProjectCode(name);
+          let matchedBan = banKdRaw ? banKdList.find(b => 
+            (b.name && b.name.toLowerCase() === banKdRaw.toLowerCase()) || 
+            (b.code && b.code.toLowerCase() === banKdRaw.toLowerCase()) ||
+            (b.name && b.name.toLowerCase().includes(banKdRaw.toLowerCase()))
+          ) : null;
           
           const docRef = doc(collection(db, 'projects'));
           batch.set(docRef, {
@@ -8805,6 +9072,8 @@ export default function App() {
             projectCode,
             region: region || 'Chưa xác định',
             type: type || 'Chưa phân loại',
+            banKdId: matchedBan?.id || '',
+            banKdName: matchedBan?.name || banKdRaw || '',
             createdAt: serverTimestamp(),
             createdBy: user?.uid
           });
@@ -8994,7 +9263,7 @@ export default function App() {
     reader.readAsArrayBuffer(file);
   };
 
-  const handleUpdateProject = async (id: string, newName: string, newCode: string, region?: string, type?: string) => {
+  const handleUpdateProject = async (id: string, newName: string, newCode: string, region?: string, type?: string, banKdId?: string, banKdName?: string) => {
     if (!newName.trim()) return;
     try {
       const updateData: any = { 
@@ -9004,9 +9273,30 @@ export default function App() {
       };
       if (region !== undefined) updateData.region = region;
       if (type !== undefined) updateData.type = type;
+      if (banKdId !== undefined) {
+        updateData.banKdId = banKdId;
+        updateData.banKdName = banKdName || '';
+      }
       
       await updateDoc(doc(db, 'projects', id), updateData);
       await logAction('UPDATE', 'projects', id, updateData);
+
+      // Background batch sync to block_budgets if banKd changed
+      if (banKdId !== undefined) {
+        const matchedBBs = blockBudgets.filter(bb => bb.projectId === id);
+        if (matchedBBs.length > 0) {
+          const bbBatch = writeBatch(db);
+          matchedBBs.forEach(bb => {
+            bbBatch.update(doc(db, 'block_budgets', bb.id), {
+              banKdId: banKdId,
+              banKdName: banKdName || '',
+              updatedAt: serverTimestamp()
+            });
+          });
+          bbBatch.commit().catch(console.error);
+        }
+      }
+
       setEditingProjectId(null);
       toast.success('Đã cập nhật dự án');
     } catch (error) {
@@ -9238,6 +9528,50 @@ export default function App() {
       toast.success(`Đã cập nhật loại hình cho ${selectedProjectIds.length} dự án`);
       setSelectedProjectIds([]);
       setSelectedTypeForBulk('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    }
+  };
+
+  const handleBulkUpdateProjectBanKd = () => {
+    if (selectedProjectIds.length === 0 || !selectedBanKdForBulk) {
+      toast.error('Vui lòng chọn dự án và Ban KD');
+      return;
+    }
+    setIsBulkUpdateBanKdDialogOpen(true);
+  };
+
+  const confirmBulkUpdateProjectBanKd = async () => {
+    setIsBulkUpdateBanKdDialogOpen(false);
+    try {
+      const batch = writeBatch(db);
+      const matchedBan = selectedBanKdForBulk === 'none' ? null : banKdList.find(b => b.id === selectedBanKdForBulk);
+      const targetBanKdId = matchedBan ? matchedBan.id : '';
+      const targetBanKdName = matchedBan ? matchedBan.name : '';
+
+      selectedProjectIds.forEach(id => {
+        batch.update(doc(db, 'projects', id), { 
+          banKdId: targetBanKdId,
+          banKdName: targetBanKdName,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      // Also sync block_budgets
+      const affectedBlockBudgets = blockBudgets.filter(bb => selectedProjectIds.includes(bb.projectId));
+      affectedBlockBudgets.forEach(bb => {
+        batch.update(doc(db, 'block_budgets', bb.id), {
+          banKdId: targetBanKdId,
+          banKdName: targetBanKdName,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+      await logAction('UPDATE_BULK', 'projects', 'multiple', { count: selectedProjectIds.length, banKdId: targetBanKdId, banKdName: targetBanKdName });
+      toast.success(targetBanKdName ? `Đã gán Ban KD "${targetBanKdName}" cho ${selectedProjectIds.length} dự án` : `Đã hủy gán Ban KD cho ${selectedProjectIds.length} dự án`);
+      setSelectedProjectIds([]);
+      setSelectedBanKdForBulk('');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'projects');
     }
@@ -12055,6 +12389,7 @@ export default function App() {
       'ID': p.id,
       'Mã Dự án': p.projectCode || '',
       'Tên Dự án': p.name,
+      'Ban KD': p.banKdName || '',
       'Khu vực': p.region || 'N/A',
       'Loại hình': p.type || 'N/A',
       'Ngày tạo': safeFormat(p.createdAt, 'dd/MM/yyyy HH:mm:ss')
@@ -14530,11 +14865,22 @@ export default function App() {
                           onClick={() => { setActiveTab('admin'); setAdminSubTab('projects'); setIsMobileMenuOpen(false); }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
-                            (activeTab === 'admin' && adminSubTab === 'projects') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                            (activeTab === 'admin' && adminSubTab === 'projects' && projectSubTab !== 'project-ban-kd') ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
                           )}
                         >
                           <Building2 className="w-3.5 h-3.5 shrink-0" />
                           <span>Quản lý Dự án</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setActiveTab('admin'); setAdminSubTab('projects'); setProjectSubTab('project-ban-kd'); setIsMobileMenuOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all touch-manipulation",
+                            (activeTab === 'admin' && adminSubTab === 'projects' && projectSubTab === 'project-ban-kd') ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          <Briefcase className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                          <span>Quản lý Ban KD</span>
                         </button>
 
                         <button
@@ -14958,12 +15304,25 @@ export default function App() {
                         </Button>
                       )}
                       <Button 
-                        variant={adminSubTab === 'projects' ? 'secondary' : 'ghost'} 
+                        variant={(adminSubTab === 'projects' && projectSubTab !== 'project-ban-kd') ? 'secondary' : 'ghost'} 
                         size="sm"
-                        className={`rounded-xl h-10 px-4 font-bold ${adminSubTab === 'projects' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
-                        onClick={() => setAdminSubTab('projects')}
+                        className={`rounded-xl h-10 px-4 font-bold ${(adminSubTab === 'projects' && projectSubTab !== 'project-ban-kd') ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => { setAdminSubTab('projects'); setProjectSubTab('project-list'); }}
                       >
                         <Building2 className="mr-2 h-4 w-4" /> Dự án
+                      </Button>
+                      <Button 
+                        variant={(adminSubTab === 'projects' && projectSubTab === 'project-ban-kd') ? 'secondary' : 'ghost'} 
+                        size="sm"
+                        className={`rounded-xl h-10 px-4 font-bold ${(adminSubTab === 'projects' && projectSubTab === 'project-ban-kd') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}
+                        onClick={() => { setAdminSubTab('projects'); setProjectSubTab('project-ban-kd'); }}
+                      >
+                        <Briefcase className="mr-2 h-4 w-4 text-blue-500" /> Ban KD
+                        {banKdList.length > 0 && (
+                          <span className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold ${(adminSubTab === 'projects' && projectSubTab === 'project-ban-kd') ? 'bg-white text-blue-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {banKdList.length}
+                          </span>
+                        )}
                       </Button>
                       <Button 
                         variant={adminSubTab === 'teams' ? 'secondary' : 'ghost'} 
@@ -15558,51 +15917,86 @@ export default function App() {
                 <>
               {/* Header Info */}
               <div className="bg-gradient-to-r from-violet-600 to-indigo-700 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-100/30 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                 <div className="relative z-10 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div>
-                      <span className="bg-white/20 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full tracking-wider inline-block">
-                        Hệ thống Quản lý Khối
-                      </span>
-                      <h2 className="text-3xl font-black tracking-tight mt-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="bg-white/20 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full tracking-wider inline-block">
+                          Hệ thống Quản lý Khối
+                        </span>
+                        {myActiveBlockBudgets.length > 0 && (
+                          <span className="bg-emerald-400 text-slate-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm font-sans">
+                            {myActiveBlockBudgets.length} bản ghi ngân sách
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl font-black tracking-tight mt-1">
                         Quản lý Khối: <span className="underline decoration-indigo-300 decoration-3">{currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chưa chọn Khối"}</span>
                       </h2>
                     </div>
-                    {/* Block selector for Admin/Accountant or users managing multiple blocks */}
-                    {userAllowedBlocks.length > 0 && (
-                      <div className="min-w-[260px] bg-white/10 p-2.5 rounded-2xl backdrop-blur-md border border-white/20 font-sans">
-                        <div className="flex items-center justify-between mb-1.5 px-1">
-                          <Label className="text-[10px] text-indigo-200 uppercase font-black block">
-                            {userAllowedBlocks.length > 1 ? `Khối Quản Lý (${userAllowedBlocks.length} khối)` : "Khối Quản Lý"}
-                          </Label>
-                          {userAllowedBlocks.length > 1 && (
-                            <span className="bg-emerald-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
-                              Đa khối ({userAllowedBlocks.length})
-                            </span>
-                          )}
-                        </div>
-                        <Select 
-                          value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')} 
-                          onValueChange={(val) => setSelectedBlockId(val)}
-                        >
-                          <SelectTrigger className="bg-white text-slate-800 border-none rounded-xl font-bold h-9 text-xs shadow-sm">
-                            <SelectValue placeholder="Chọn một khối...">
-                              <span className="truncate block text-left flex-1 font-sans">
-                                {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một khối..."}
+                    {/* Bộ lựa chọn Khối thao tác duy nhất cho toàn bộ hệ thống Quản lý Khối */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {userAllowedBlocks.length > 0 && (
+                        <div className="w-full sm:w-[320px] bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/20 font-sans shadow-lg shadow-indigo-950/10">
+                          <div className="flex items-center justify-between mb-1.5 px-1">
+                            <Label className="text-[10px] text-indigo-200 uppercase font-black block">
+                              {userAllowedBlocks.length > 1 ? `Khối Thao Tác Quản Lý (${userAllowedBlocks.length} khối)` : "Khối Thao Tác Quản Lý"}
+                            </Label>
+                            {userAllowedBlocks.length > 1 && (
+                              <span className="bg-emerald-400 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                                Đa khối ({userAllowedBlocks.length})
                               </span>
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {userAllowedBlocks.map((b) => (
-                              <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans">
-                                {getBlockDisplayName(b)} ({b.blockCode})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                            )}
+                          </div>
+                          <Select 
+                            value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')} 
+                            onValueChange={(val) => setSelectedBlockId(val)}
+                          >
+                            <SelectTrigger className="bg-white text-slate-900 border-none rounded-xl font-bold h-10 text-xs shadow-sm hover:bg-slate-50 transition-colors">
+                              <SelectValue placeholder="Chọn khối quản lý...">
+                                <span className="truncate block text-left flex-1 font-sans">
+                                  {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một khối..."}
+                                </span>
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl max-h-[320px]">
+                              {userAllowedBlocks.map((b) => {
+                                const bBudgetsCount = blockBudgets.filter(bg => isBlockMatch(bg, b)).length;
+                                return (
+                                  <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans cursor-pointer py-2">
+                                    <div className="flex items-center justify-between gap-3 w-full">
+                                      <span>{getBlockDisplayName(b)} ({b.blockCode})</span>
+                                      {bBudgetsCount > 0 && (
+                                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-mono">
+                                          {bBudgetsCount} bản ghi
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {(isAdmin || isSuperAdmin) && (
+                        <Button
+                          onClick={() => {
+                            setBlockNameInput('');
+                            setBlockCodeInput('');
+                            setBlockPrefixInput('');
+                            setBlockDirectorUid('');
+                            setSelectedTeamIdsForNewBlock([]);
+                            setIsCreateBlockDialogOpen(true);
+                          }}
+                          className="bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-2xl font-bold h-11 px-4 text-xs shadow-md backdrop-blur-md flex items-center gap-1.5 self-center sm:self-end mb-0.5 transition-all"
+                        >
+                          <PlusCircle className="w-4 h-4" />
+                          <span>+ Tạo Khối Mới</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-indigo-100 text-sm max-w-2xl font-medium font-sans">
                     Xem & quản lý các nhóm trực thuộc khối, kiểm soát đăng ký ngân sách, và theo dõi báo cáo chi phí thực tế tự động cập nhật của các nhóm.
@@ -15657,212 +16051,6 @@ export default function App() {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Left Forms column */}
                     <div className="space-y-6">
-                      {/* System-wide Block List & Modal Trigger (For Admin / Accountant) */}
-                      {(isAdmin || isAccountant) && (
-                        <Card className="border-slate-100 shadow-md">
-                          <CardHeader className="pb-3 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                              <CardTitle className="text-sm font-black text-indigo-700 flex items-center gap-2 uppercase tracking-wider">
-                                <Layers className="w-4 h-4 text-indigo-600" /> Danh sách Khối ({blocks.length})
-                              </CardTitle>
-                              <CardDescription className="text-[11px] font-sans">Chọn Khối từ danh sách để xem dữ liệu bên dưới.</CardDescription>
-                            </div>
-                            {(isAdmin || isSuperAdmin) && (
-                              <Dialog open={isCreateBlockDialogOpen} onOpenChange={setIsCreateBlockDialogOpen}>
-                                <DialogTrigger asChild>
-                                  <Button 
-                                    onClick={() => {
-                                      setBlockNameInput('');
-                                      setBlockCodeInput('');
-                                      setBlockPrefixInput('');
-                                      setBlockDirectorUid('');
-                                      setSelectedTeamIdsForNewBlock([]);
-                                    }}
-                                    size="xs" 
-                                    className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold h-8 text-[11px] px-2.5"
-                                  >
-                                    + Tạo Khối
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl p-6 bg-white overflow-hidden scrollbar-none">
-                                  <DialogHeader>
-                                    <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
-                                      <PlusCircle className="w-5 h-5 text-violet-600" /> Tạo Khối Mới
-                                    </DialogTitle>
-                                    <DialogDescription className="text-slate-500 font-medium text-xs font-sans">
-                                      Nhập thông tin khởi tạo khối và gán các Phòng kinh doanh trực thuộc.
-                                    </DialogDescription>
-                                  </DialogHeader>
-
-                                  <div className="space-y-4 my-3 font-sans max-h-[55vh] overflow-y-auto pr-1">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1">
-                                        <Label className="text-xs font-bold text-slate-700">Mã Khối</Label>
-                                        <Input 
-                                          placeholder="VD: EG01, MB02"
-                                          value={blockCodeInput}
-                                          onChange={(e) => setBlockCodeInput(e.target.value.toUpperCase())}
-                                          className="h-9 text-xs rounded-xl border-slate-200 uppercase"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-xs font-bold text-slate-700">Tên Khối</Label>
-                                        <Input 
-                                          placeholder="VD: Khối EG01, Khối MB02"
-                                          value={blockNameInput}
-                                          onChange={(e) => setBlockNameInput(e.target.value)}
-                                          className="h-9 text-xs rounded-xl border-slate-200"
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <Label className="text-xs font-bold text-slate-700">Tiền tố Mã Team quy ước (Có thể nhập nhiều tiền tố cách nhau bởi dấu phẩy, VD: EG, MB, HN hoặc bỏ trống)</Label>
-                                      <Input 
-                                        placeholder="VD: EG hoặc EG, MB, HN (Tùy chọn - Tự động match các team có mã bắt đầu bằng tiền tố này)"
-                                        value={blockPrefixInput}
-                                        onChange={(e) => setBlockPrefixInput(e.target.value.toUpperCase())}
-                                        className="h-9 text-xs rounded-xl border-slate-200 uppercase font-mono"
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <Label className="text-xs font-bold text-slate-700">Phân Quyền Giám Đốc Khối</Label>
-                                      <SearchableBlockDirectorSelect 
-                                        value={blockDirectorUid} 
-                                        onValueChange={setBlockDirectorUid}
-                                        allUsers={allUsers}
-                                        emptyValue=""
-                                        emptyLabel="-- Chưa gán / Chọn sau --"
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <Label className="text-xs font-bold text-slate-700">Phân Quyền Trợ Lý Khối (Có thể chọn nhiều người)</Label>
-                                      <SearchableBlockAssistantsSelect
-                                        values={createBlockAssistantUids}
-                                        onValuesChange={setCreateBlockAssistantUids}
-                                        allUsers={allUsers}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                      <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-bold text-slate-700">Gán các Phòng kinh doanh (Team) vào Khối</Label>
-                                        <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">
-                                          Đã chọn: {selectedTeamIdsForNewBlock.length}
-                                        </span>
-                                      </div>
-                                      <div className="border border-slate-100 rounded-xl max-h-40 overflow-y-auto p-2 bg-slate-50/50 space-y-1.5">
-                                        {teams.length === 0 ? (
-                                          <p className="text-xs text-slate-400 text-center py-4 font-medium">Chưa có Team nào trên hệ thống</p>
-                                        ) : (
-                                          teams.map(team => {
-                                            const isChecked = selectedTeamIdsForNewBlock.includes(team.id);
-                                            return (
-                                              <label key={team.id} className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1.5 rounded-lg transition-colors border border-slate-100/30 bg-white">
-                                                <div className="flex items-center gap-2">
-                                                  <input 
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => {
-                                                      if (isChecked) {
-                                                        setSelectedTeamIdsForNewBlock(selectedTeamIdsForNewBlock.filter(id => id !== team.id));
-                                                      } else {
-                                                        setSelectedTeamIdsForNewBlock([...selectedTeamIdsForNewBlock, team.id]);
-                                                      }
-                                                    }}
-                                                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-400 h-3.5 w-3.5"
-                                                  />
-                                                  <span className="text-[11px] font-semibold text-slate-700 max-w-[150px] truncate">{team.name}</span>
-                                                </div>
-                                                <div className="flex gap-1 items-center">
-                                                  {team.teamCode && (
-                                                    <span className="text-[9px] bg-violet-50 text-violet-600 font-mono font-bold px-1.5 rounded">
-                                                      {team.teamCode}
-                                                    </span>
-                                                  )}
-                                                  {team.blockCode && (
-                                                    <span className="text-[9px] bg-amber-50 text-amber-600 font-bold px-1.5 rounded">
-                                                      {team.blockCode}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </label>
-                                            );
-                                          })
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-50">
-                                    <Button variant="ghost" onClick={() => {
-                                      setIsCreateBlockDialogOpen(false);
-                                      setSelectedTeamIdsForNewBlock([]);
-                                    }} className="rounded-xl font-bold text-xs h-9">
-                                      Hủy bỏ
-                                    </Button>
-                                    <Button 
-                                      onClick={handleCreateBlock}
-                                      className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-xs h-9"
-                                    >
-                                      Tạo Khối
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            )}
-                          </CardHeader>
-                          <CardContent className="pt-4 px-3">
-                            {blocks.length === 0 ? (
-                              <p className="text-xs text-slate-400 text-center py-4 font-medium">Chưa có khối nào được tạo</p>
-                            ) : (
-                              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                                {blocks.map((b) => {
-                                  const isSelected = currentActiveBlock?.id === b.id;
-                                  const director = allUsers.find(u => u.uid === b.directorUid || u.id === b.directorUid);
-                                  const blockTeams = teams.filter(t => isTeamInBlock(t, b));
-                                  
-                                  return (
-                                    <div 
-                                      key={b.id}
-                                      onClick={() => setSelectedBlockId(b.id)}
-                                      className={cn(
-                                        "p-2.5 rounded-xl border transition-all cursor-pointer text-left space-y-1 font-sans",
-                                        isSelected 
-                                          ? "bg-violet-50/70 border-violet-200 shadow-sm" 
-                                          : "bg-white border-slate-100 hover:bg-slate-50/50"
-                                      )}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <h4 className="text-xs font-black text-slate-800">{b.name}</h4>
-                                        <span className={cn(
-                                          "text-[9px] font-bold font-mono px-2 py-0.5 rounded-full",
-                                          isSelected ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600"
-                                        )}>
-                                          {b.blockCode}
-                                        </span>
-                                      </div>
-                                      
-                                      <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-2 gap-y-1">
-                                        <span className="flex items-center gap-0.5">
-                                          GĐ Khối: <strong className="text-slate-700">{director ? (director.displayName || director.fullName || director.email) : 'Chưa phân bổ'}</strong>
-                                        </span>
-                                        <span className="text-slate-300">|</span>
-                                        <span className="flex items-center gap-0.5">
-                                          Cơ cấu: <strong className="text-slate-700">{blockTeams.length} Chi nhánh</strong>
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      )}
-
                       {/* Chi tiết Khối hiện hành & Sửa cấu trúc Khối */}
                       {currentActiveBlock ? (
                         <div className="space-y-6">
@@ -16255,6 +16443,137 @@ export default function App() {
                     </DialogContent>
                   </Dialog>
 
+                  {/* Create Block Dialog */}
+                  <Dialog open={isCreateBlockDialogOpen} onOpenChange={setIsCreateBlockDialogOpen}>
+                    <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl p-6 bg-white overflow-hidden scrollbar-none">
+                      <DialogHeader>
+                        <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
+                          <PlusCircle className="w-5 h-5 text-violet-600" /> Tạo Khối Mới
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-500 font-medium text-xs font-sans">
+                          Nhập thông tin khởi tạo khối và gán các Phòng kinh doanh trực thuộc.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 my-3 font-sans max-h-[55vh] overflow-y-auto pr-1">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-bold text-slate-700">Mã Khối</Label>
+                            <Input 
+                              placeholder="VD: EG01, MB02"
+                              value={blockCodeInput}
+                              onChange={(e) => setBlockCodeInput(e.target.value.toUpperCase())}
+                              className="h-9 text-xs rounded-xl border-slate-200 uppercase"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs font-bold text-slate-700">Tên Khối</Label>
+                            <Input 
+                              placeholder="VD: Khối EG01, Khối MB02"
+                              value={blockNameInput}
+                              onChange={(e) => setBlockNameInput(e.target.value)}
+                              className="h-9 text-xs rounded-xl border-slate-200"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold text-slate-700">Tiền tố Mã Team quy ước (Có thể nhập nhiều tiền tố cách nhau bởi dấu phẩy, VD: EG, MB, HN hoặc bỏ trống)</Label>
+                          <Input 
+                            placeholder="VD: EG hoặc EG, MB, HN (Tùy chọn - Tự động match các team có mã bắt đầu bằng tiền tố này)"
+                            value={blockPrefixInput}
+                            onChange={(e) => setBlockPrefixInput(e.target.value.toUpperCase())}
+                            className="h-9 text-xs rounded-xl border-slate-200 uppercase font-mono"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold text-slate-700">Phân Quyền Giám Đốc Khối</Label>
+                          <SearchableBlockDirectorSelect 
+                            value={blockDirectorUid} 
+                            onValueChange={setBlockDirectorUid}
+                            allUsers={allUsers}
+                            emptyValue=""
+                            emptyLabel="-- Chưa gán / Chọn sau --"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold text-slate-700">Phân Quyền Trợ Lý Khối (Có thể chọn nhiều người)</Label>
+                          <SearchableBlockAssistantsSelect
+                            values={createBlockAssistantUids}
+                            onValuesChange={setCreateBlockAssistantUids}
+                            allUsers={allUsers}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-bold text-slate-700">Gán các Phòng kinh doanh (Team) vào Khối</Label>
+                            <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">
+                              Đã chọn: {selectedTeamIdsForNewBlock.length}
+                            </span>
+                          </div>
+                          <div className="border border-slate-100 rounded-xl max-h-40 overflow-y-auto p-2 bg-slate-50/50 space-y-1.5">
+                            {teams.length === 0 ? (
+                              <p className="text-xs text-slate-400 text-center py-4 font-medium">Chưa có Team nào trên hệ thống</p>
+                            ) : (
+                              teams.map(team => {
+                                const isChecked = selectedTeamIdsForNewBlock.includes(team.id);
+                                return (
+                                  <label key={team.id} className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1.5 rounded-lg transition-colors border border-slate-100/30 bg-white">
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {
+                                          if (isChecked) {
+                                            setSelectedTeamIdsForNewBlock(selectedTeamIdsForNewBlock.filter(id => id !== team.id));
+                                          } else {
+                                            setSelectedTeamIdsForNewBlock([...selectedTeamIdsForNewBlock, team.id]);
+                                          }
+                                        }}
+                                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-400 h-3.5 w-3.5"
+                                      />
+                                      <span className="text-[11px] font-semibold text-slate-700 max-w-[150px] truncate">{team.name}</span>
+                                    </div>
+                                    <div className="flex gap-1 items-center">
+                                      {team.teamCode && (
+                                        <span className="text-[9px] bg-violet-50 text-violet-600 font-mono font-bold px-1.5 rounded">
+                                          {team.teamCode}
+                                        </span>
+                                      )}
+                                      {team.blockCode && (
+                                        <span className="text-[9px] bg-amber-50 text-amber-600 font-bold px-1.5 rounded">
+                                          {team.blockCode}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-50">
+                        <Button variant="ghost" onClick={() => {
+                          setIsCreateBlockDialogOpen(false);
+                          setSelectedTeamIdsForNewBlock([]);
+                        }} className="rounded-xl font-bold text-xs h-9">
+                          Hủy bỏ
+                        </Button>
+                        <Button 
+                          onClick={handleCreateBlock}
+                          className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-xs h-9"
+                        >
+                          Tạo Khối
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                   {/* Edit Block Dialog */}
                   <Dialog open={isEditBlockDialogOpen} onOpenChange={setIsEditBlockDialogOpen}>
                     <DialogContent className="sm:max-w-[550px] rounded-3xl border-none shadow-2xl p-6 bg-white overflow-hidden scrollbar-none">
@@ -16469,62 +16788,6 @@ export default function App() {
                       </div>
                     );
                   })()}
-
-                  {/* Dedicated Block Selector Banner inside Block Budgets Tab for quick switching on mobile & desktop */}
-                  <div className="bg-gradient-to-r from-purple-50/90 via-indigo-50/70 to-slate-50 border border-purple-200/80 p-3 sm:p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-200">
-                        <Layers className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">Khối đang thao tác</span>
-                          {myActiveBlockBudgets.length > 0 && (
-                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-200 text-purple-800">
-                              {myActiveBlockBudgets.length} bản ghi
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">
-                          {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : 'Chưa chọn Khối'}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {userAllowedBlocks.length > 1 && (
-                      <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Select
-                          value={currentActiveBlock?.id || (userAllowedBlocks[0]?.id || '')}
-                          onValueChange={(val) => setSelectedBlockId(val)}
-                        >
-                          <SelectTrigger className="w-full sm:w-[260px] bg-white border-purple-200 text-purple-950 font-bold h-10 text-xs shadow-xs rounded-xl">
-                            <SelectValue placeholder="Chuyển Khối...">
-                              <span className="truncate font-sans">
-                                {currentActiveBlock ? `${getBlockDisplayName(currentActiveBlock)} (${currentActiveBlock.blockCode})` : "Chọn một Khối..."}
-                              </span>
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="rounded-2xl max-h-[280px]">
-                            {userAllowedBlocks.map((b) => {
-                              const count = blockBudgets.filter(bg => isBlockMatch(bg, b)).length;
-                              return (
-                                <SelectItem key={b.id} value={b.id} className="text-xs font-bold py-2 font-sans cursor-pointer">
-                                  <div className="flex items-center justify-between gap-3 w-full">
-                                    <span>{getBlockDisplayName(b)} ({b.blockCode})</span>
-                                    {count > 0 && (
-                                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-mono">
-                                        {count} bản ghi
-                                      </span>
-                                    )}
-                                  </div>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Đăng ký ngân sách theo Khối */}
@@ -16834,6 +17097,8 @@ export default function App() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                   {filteredActiveBlockBudgets.map((b) => {
                                     const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                    const matchedProject = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+                                    const displayBanKd = b.banKdName || matchedProject?.banKdName || '';
                                     const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
                                     const diff = (b.amount || 0) - acceptanceCost;
                                     const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
@@ -16843,6 +17108,11 @@ export default function App() {
                                           <div className="min-w-0">
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Dự án</span>
                                             <h4 className="font-black text-sm text-indigo-900 leading-tight mt-0.5 truncate" title={displayProj}>{displayProj}</h4>
+                                            {displayBanKd && (
+                                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-bold text-[10px] mt-1">
+                                                Ban KD: {displayBanKd}
+                                              </Badge>
+                                            )}
                                           </div>
                                           <div className="flex items-center gap-1 shrink-0">
                                             <Badge variant="outline" className="font-mono text-xs font-bold bg-slate-50 border-slate-200">
@@ -16883,38 +17153,50 @@ export default function App() {
                                             <span>{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
                                           </div>
                                           <div>
-                                            {(canEditBlockBudget || canDeleteBlockBudget) ? (
-                                              isRowEditable ? (
-                                                <div className="flex items-center gap-1.5">
-                                                  {canEditBlockBudget && (
-                                                    <Button
-                                                      size="sm"
-                                                      variant="outline"
-                                                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
-                                                      onClick={() => handleOpenEditBlockBudget(b)}
-                                                    >
-                                                      <Edit2 className="w-3.5 h-3.5" />
-                                                      <span>Sửa</span>
-                                                    </Button>
-                                                  )}
-                                                  {canDeleteBlockBudget && (
-                                                    <Button
-                                                      size="sm"
-                                                      variant="outline"
-                                                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
-                                                      onClick={() => handleDeleteBlockBudget(b)}
-                                                    >
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                      <span>Xóa</span>
-                                                    </Button>
-                                                  )}
-                                                </div>
+                                            <div className="flex items-center gap-1.5">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 border-purple-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
+                                                onClick={() => handleOpenBlockBudgetHistory(b)}
+                                                title="Xem lịch sử đăng ký và các lần chỉnh sửa"
+                                              >
+                                                <History className="w-3.5 h-3.5" />
+                                                <span>Lịch sử</span>
+                                              </Button>
+                                              {(canEditSpecificBlockBudget(b) || canDeleteSpecificBlockBudget(b)) ? (
+                                                isRowEditable ? (
+                                                  <>
+                                                    {canEditSpecificBlockBudget(b) && (
+                                                      <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
+                                                        onClick={() => handleOpenEditBlockBudget(b)}
+                                                      >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                        <span>Sửa</span>
+                                                      </Button>
+                                                    )}
+                                                    {canDeleteSpecificBlockBudget(b) && (
+                                                      <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2.5 rounded-xl text-xs font-bold gap-1 touch-manipulation cursor-pointer"
+                                                        onClick={() => handleDeleteBlockBudget(b)}
+                                                      >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        <span>Xóa</span>
+                                                      </Button>
+                                                    )}
+                                                  </>
+                                                ) : (
+                                                  <span className="text-[10px] text-slate-400 italic bg-slate-100 px-2 py-0.5 rounded-md">Đã khóa</span>
+                                                )
                                               ) : (
-                                                <span className="text-[10px] text-slate-400 italic bg-slate-100 px-2 py-0.5 rounded-md">Đã khóa</span>
-                                              )
-                                            ) : (
-                                              <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
-                                            )}
+                                                <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -16927,6 +17209,7 @@ export default function App() {
                                     <TableHeader className="bg-slate-50/70">
                                       <TableRow>
                                         <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                        <TableHead className="font-bold text-slate-800">Ban KD</TableHead>
                                         <TableHead className="font-bold text-slate-800">Tháng</TableHead>
                                         <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
                                         <TableHead className="font-bold text-right text-slate-800">Ngân sách cấp</TableHead>
@@ -16938,12 +17221,23 @@ export default function App() {
                                     <TableBody>
                                       {filteredActiveBlockBudgets.map((b) => {
                                         const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                        const matchedProject = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+                                        const displayBanKd = b.banKdName || matchedProject?.banKdName || '';
                                         const acceptanceCost = getBlockProjectAcceptanceCost(b.projectId, b.month);
                                         const diff = (b.amount || 0) - acceptanceCost;
                                         const isRowEditable = isAdmin || isSuperAdmin || firebaseUserEmail === 'thienvu1108@gmail.com' || (!!currentOpenBlockBudgetMonth && b.month === currentOpenBlockBudgetMonth);
                                         return (
                                           <TableRow key={b.id} className="hover:bg-slate-50/50">
                                             <TableCell className="font-bold text-xs text-indigo-700">{displayProj}</TableCell>
+                                            <TableCell className="text-xs font-semibold">
+                                              {displayBanKd ? (
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-bold text-[10px] px-2 py-0.5">
+                                                  {displayBanKd}
+                                                </Badge>
+                                              ) : (
+                                                <span className="text-slate-400 italic text-[10px]">Chưa gán</span>
+                                              )}
+                                            </TableCell>
                                             <TableCell className="font-mono text-xs font-semibold text-slate-700">
                                               <div className="flex items-center gap-1.5">
                                                 <span>{b.month}</span>
@@ -16971,35 +17265,45 @@ export default function App() {
                                               {new Intl.NumberFormat('vi-VN').format(diff)} đ
                                             </TableCell>
                                             <TableCell className="text-center">
-                                              {(canEditBlockBudget || canDeleteBlockBudget) ? (
-                                                isRowEditable ? (
-                                                  <div className="flex items-center justify-center gap-1.5">
-                                                    {canEditBlockBudget && (
-                                                      <Button 
-                                                        size="xs" 
-                                                        variant="outline" 
-                                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
-                                                        title="Chỉnh sửa ngân sách"
-                                                        onClick={() => handleOpenEditBlockBudget(b)}
-                                                      >
-                                                        <Edit2 className="w-3.5 h-3.5" />
-                                                        <span>Sửa</span>
-                                                      </Button>
-                                                    )}
-                                                    {canDeleteBlockBudget && (
-                                                      <Button 
-                                                        size="xs" 
-                                                        variant="outline" 
-                                                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
-                                                        title="Xóa đăng ký ngân sách"
-                                                        onClick={() => handleDeleteBlockBudget(b)}
-                                                      >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                      </Button>
-                                                    )}
-                                                  </div>
-                                                ) : (
-                                                  <div className="flex items-center justify-center">
+                                              <div className="flex items-center justify-center gap-1.5">
+                                                <Button 
+                                                  size="xs" 
+                                                  variant="outline" 
+                                                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 border-purple-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
+                                                  title="Xem lịch sử đăng ký và chỉnh sửa của bản ghi"
+                                                  onClick={() => handleOpenBlockBudgetHistory(b)}
+                                                >
+                                                  <History className="w-3.5 h-3.5" />
+                                                  <span>Lịch sử</span>
+                                                </Button>
+                                                {(canEditSpecificBlockBudget(b) || canDeleteSpecificBlockBudget(b)) ? (
+                                                  isRowEditable ? (
+                                                    <>
+                                                      {canEditSpecificBlockBudget(b) && (
+                                                        <Button 
+                                                          size="xs" 
+                                                          variant="outline" 
+                                                          className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200 h-8 px-2.5 rounded-lg text-xs font-bold gap-1 transition-colors"
+                                                          title="Chỉnh sửa ngân sách"
+                                                          onClick={() => handleOpenEditBlockBudget(b)}
+                                                        >
+                                                          <Edit2 className="w-3.5 h-3.5" />
+                                                          <span>Sửa</span>
+                                                        </Button>
+                                                      )}
+                                                      {canDeleteSpecificBlockBudget(b) && (
+                                                        <Button 
+                                                          size="xs" 
+                                                          variant="outline" 
+                                                          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 h-8 px-2 rounded-lg text-xs transition-colors"
+                                                          title="Xóa đăng ký ngân sách"
+                                                          onClick={() => handleDeleteBlockBudget(b)}
+                                                        >
+                                                          <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                      )}
+                                                    </>
+                                                  ) : (
                                                     <Button 
                                                       size="xs" 
                                                       variant="ghost" 
@@ -17013,11 +17317,11 @@ export default function App() {
                                                       <Lock className="w-3.5 h-3.5 text-slate-400" />
                                                       <span>Đã khóa</span>
                                                     </Button>
-                                                  </div>
-                                                )
-                                              ) : (
-                                                <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
-                                              )}
+                                                  )
+                                                ) : (
+                                                  <span className="text-[11px] text-slate-400 italic">Chỉ xem</span>
+                                                )}
+                                              </div>
                                             </TableCell>
                                           </TableRow>
                                         );
@@ -17087,6 +17391,16 @@ export default function App() {
                             className="rounded-xl font-semibold text-sm"
                           />
                         </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Lý do điều chỉnh / Ghi chú (không bắt buộc)</Label>
+                          <Input 
+                            value={editBlockBudgetReason}
+                            onChange={(e) => setEditBlockBudgetReason(e.target.value)}
+                            placeholder="Ví dụ: Bổ sung ngân sách cho chiến dịch mới..."
+                            className="rounded-xl text-xs"
+                          />
+                        </div>
                       </div>
 
                       <DialogFooter className="gap-2 sm:gap-0">
@@ -17102,6 +17416,237 @@ export default function App() {
                           className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-100"
                         >
                           Lưu Thay Đổi
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Modal Lịch Sử Đăng Ký & Chỉnh Sửa Ngân Sách Khối */}
+                  <Dialog open={isBlockBudgetHistoryOpen} onOpenChange={setIsBlockBudgetHistoryOpen}>
+                    <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-2xl">
+                      <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/60">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-purple-100 text-purple-700 rounded-xl shadow-xs">
+                            <History className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <DialogTitle className="text-base font-black text-slate-900">
+                              Lịch Sử Đăng Ký & Chỉnh Sửa Ngân Sách Khối
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                              Chi tiết các lần đăng ký, chỉnh sửa số tiền và biến động ngân sách qua từng kỳ
+                            </DialogDescription>
+                          </div>
+                        </div>
+
+                        {selectedBlockBudgetForHistory && (
+                          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-200/60">
+                            <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-xs font-bold gap-1 px-2.5 py-1">
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>{selectedBlockBudgetForHistory.blockName || selectedBlockBudgetForHistory.blockCode || 'Khối'}</span>
+                            </Badge>
+                            <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs font-bold gap-1 px-2.5 py-1">
+                              <Building2 className="w-3.5 h-3.5" />
+                              <span>{resolveProjectName(selectedBlockBudgetForHistory.projectId, selectedBlockBudgetForHistory.projectName)}</span>
+                            </Badge>
+                            <Badge variant="outline" className="font-mono text-xs font-bold bg-white text-slate-700 px-2.5 py-1">
+                              <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                              <span>Kỳ: {selectedBlockBudgetForHistory.month}</span>
+                            </Badge>
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-black font-mono ml-auto px-3 py-1">
+                              <span>Mức hiện tại: {new Intl.NumberFormat('vi-VN').format(selectedBlockBudgetForHistory.amount || 0)} đ</span>
+                            </Badge>
+                          </div>
+                        )}
+                      </DialogHeader>
+
+                      {/* Body: Timeline */}
+                      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                        {(() => {
+                          if (!selectedBlockBudgetForHistory) return null;
+                          const historyList = getBlockBudgetHistoryList(selectedBlockBudgetForHistory);
+
+                          return (
+                            <div className="space-y-4">
+                              {/* Quick summary stats */}
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-100">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">Tổng sự kiện</span>
+                                  <span className="text-base font-black text-purple-900 font-mono mt-0.5 block">
+                                    {historyList.length} lượt ghi nhận
+                                  </span>
+                                </div>
+                                <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-100">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block">Số lần điều chỉnh</span>
+                                  <span className="text-base font-black text-indigo-900 font-mono mt-0.5 block">
+                                    {historyList.filter(h => h.action === 'UPDATE' || h.actionLabel?.includes('Chỉnh sửa')).length} lần
+                                  </span>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Đăng ký ban đầu</span>
+                                  <span className="text-xs font-black text-slate-800 truncate block mt-0.5" title={selectedBlockBudgetForHistory.creatorName || selectedBlockBudgetForHistory.createdByName || selectedBlockBudgetForHistory.userEmail || 'Hệ thống'}>
+                                    {selectedBlockBudgetForHistory.creatorName || selectedBlockBudgetForHistory.createdByName || selectedBlockBudgetForHistory.userEmail || 'Hệ thống'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Timeline list */}
+                              <div className="relative pl-6 space-y-5 before:content-[''] before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                                {historyList.map((item, index) => {
+                                  const isCreate = item.action === 'CREATE' || item.actionLabel?.includes('Đăng ký') || item.actionLabel?.includes('ban đầu');
+                                  const diff = item.diffAmount !== undefined 
+                                    ? item.diffAmount 
+                                    : (item.newAmount !== null && item.oldAmount !== null ? item.newAmount - item.oldAmount : null);
+
+                                  return (
+                                    <div key={item.id || index} className="relative group">
+                                      {/* Node dot */}
+                                      <div className={`absolute -left-6 top-1.5 w-5 h-5 rounded-full border-2 bg-white flex items-center justify-center shadow-xs transition-all ${
+                                        isCreate 
+                                          ? 'border-emerald-500 text-emerald-600' 
+                                          : (diff !== null && diff > 0 
+                                              ? 'border-purple-500 text-purple-600' 
+                                              : 'border-amber-500 text-amber-600')
+                                      }`}>
+                                        <div className={`w-2 h-2 rounded-full ${
+                                          isCreate 
+                                            ? 'bg-emerald-500' 
+                                            : (diff !== null && diff > 0 ? 'bg-purple-500' : 'bg-amber-500')
+                                        }`} />
+                                      </div>
+
+                                      {/* Card */}
+                                      <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs hover:border-purple-200 transition-all space-y-2.5">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2">
+                                            <Badge className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                                              isCreate 
+                                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200' 
+                                                : 'bg-purple-100 text-purple-800 border-purple-200'
+                                            }`}>
+                                              {isCreate ? (
+                                                <span className="flex items-center gap-1">
+                                                  <PlusCircle className="w-3 h-3 text-emerald-600" />
+                                                  {item.actionLabel || 'Đăng ký ngân sách ban đầu'}
+                                                </span>
+                                              ) : (
+                                                <span className="flex items-center gap-1">
+                                                  <Edit2 className="w-3 h-3 text-purple-600" />
+                                                  {item.actionLabel || 'Chỉnh sửa ngân sách'}
+                                                </span>
+                                              )}
+                                            </Badge>
+                                            {index === 0 && (
+                                              <Badge variant="outline" className="bg-slate-50 text-[10px] text-slate-500 font-semibold">
+                                                Mới nhất
+                                              </Badge>
+                                            )}
+                                          </div>
+
+                                          <div className="flex items-center gap-1 text-xs font-mono text-slate-500">
+                                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>{safeFormat(item.timestamp, 'HH:mm:ss - dd/MM/yyyy') || 'N/A'}</span>
+                                          </div>
+                                        </div>
+
+                                        {/* User info */}
+                                        <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                                          <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                            {item.userName ? item.userName.charAt(0).toUpperCase() : 'U'}
+                                          </div>
+                                          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2">
+                                            <span className="font-bold text-slate-900 truncate">{item.userName || 'Người dùng'}</span>
+                                            {item.userEmail && (
+                                              <span className="text-[11px] text-slate-400 font-mono truncate">({item.userEmail})</span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Amount details */}
+                                        <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-2">
+                                          {isCreate ? (
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs text-slate-500 font-medium">Mức ngân sách đăng ký:</span>
+                                              <span className="text-sm font-black text-emerald-600 font-mono">
+                                                {new Intl.NumberFormat('vi-VN').format(item.newAmount || 0)} đ
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <div className="space-y-1.5">
+                                              <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                                                <span className="text-slate-500 font-medium">Biến động số tiền:</span>
+                                                <div className="flex items-center gap-1.5 font-mono">
+                                                  <span className="text-slate-400 line-through">
+                                                    {item.oldAmount !== null ? `${new Intl.NumberFormat('vi-VN').format(item.oldAmount)} đ` : 'N/A'}
+                                                  </span>
+                                                  <ArrowRight className="w-3 h-3 text-slate-400" />
+                                                  <span className="font-black text-slate-900">
+                                                    {item.newAmount !== null ? `${new Intl.NumberFormat('vi-VN').format(item.newAmount)} đ` : 'N/A'}
+                                                  </span>
+                                                </div>
+                                              </div>
+
+                                              {diff !== null && diff !== 0 && (
+                                                <div className="flex items-center justify-end">
+                                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md font-mono ${
+                                                    diff > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                                  }`}>
+                                                    {diff > 0 ? `Tăng +${new Intl.NumberFormat('vi-VN').format(diff)} đ` : `Giảm ${new Intl.NumberFormat('vi-VN').format(diff)} đ`}
+                                                  </span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          {/* Month/Project changes */}
+                                          {(item.oldMonth && item.newMonth && item.oldMonth !== item.newMonth) && (
+                                            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                                              <span className="text-slate-500">Kỳ marketing:</span>
+                                              <span className="font-mono font-bold text-slate-800">
+                                                {item.oldMonth} ➔ {item.newMonth}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {(item.oldProjectName && item.newProjectName && item.oldProjectName !== item.newProjectName) && (
+                                            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                                              <span className="text-slate-500">Dự án:</span>
+                                              <span className="font-bold text-indigo-700">
+                                                {item.oldProjectName} ➔ {item.newProjectName}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Note if any */}
+                                        {item.note && (
+                                          <div className="text-xs text-slate-600 bg-amber-50/60 border border-amber-100/80 p-2.5 rounded-lg flex items-start gap-1.5">
+                                            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                            <div>
+                                              <span className="font-bold text-amber-900 block text-[11px]">Ghi chú / Lý do điều chỉnh:</span>
+                                              <span className="text-slate-700 mt-0.5 block">{item.note}</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between sm:justify-between">
+                        <p className="text-[11px] text-slate-400 italic">
+                          * Dữ liệu lịch sử được ghi nhận tự động và đồng bộ trực tiếp với hệ thống kiểm toán Firestore.
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsBlockBudgetHistoryOpen(false)}
+                          className="rounded-xl text-xs font-bold"
+                        >
+                          Đóng
                         </Button>
                       </DialogFooter>
                     </DialogContent>
@@ -17170,7 +17715,6 @@ export default function App() {
                   {blockSubTab === 'block-reciprocal' && (
                     <BlockReciprocalRegistration 
                       currentActiveBlock={currentActiveBlock}
-                      setSelectedBlockId={setSelectedBlockId}
                       userAllowedBlocks={userAllowedBlocks}
                       user={user}
                       userProfile={userProfile}
@@ -18431,13 +18975,13 @@ export default function App() {
                     <TabsContent value="projects" className="space-y-6">
                       {adminSubTab === 'projects' && (
                         <>
-                          {/* Sub-tab Switcher: Projects vs Regions */}
+                          {/* Sub-tab Switcher: Projects vs Ban KD vs Regions */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 overflow-x-auto scroll-hide py-0.5">
                               <Button
                                 variant={projectSubTab === 'project-list' ? 'default' : 'ghost'}
                                 size="sm"
-                                className={`h-9 px-4 rounded-xl font-bold transition-all text-xs flex items-center gap-2 ${
+                                className={`h-9 px-4 rounded-xl font-bold transition-all text-xs flex items-center gap-2 shrink-0 ${
                                   projectSubTab === 'project-list'
                                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100'
                                     : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50/50'
@@ -18454,9 +18998,28 @@ export default function App() {
                               </Button>
 
                               <Button
+                                variant={projectSubTab === 'project-ban-kd' ? 'default' : 'ghost'}
+                                size="sm"
+                                className={`h-9 px-4 rounded-xl font-bold transition-all text-xs flex items-center gap-2 shrink-0 ${
+                                  projectSubTab === 'project-ban-kd'
+                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100'
+                                    : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+                                }`}
+                                onClick={() => setProjectSubTab('project-ban-kd')}
+                              >
+                                <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+                                <span>Quản lý Ban KD</span>
+                                <Badge variant="secondary" className={`ml-1 px-1.5 py-0 text-[10px] font-black rounded-md ${
+                                  projectSubTab === 'project-ban-kd' ? 'bg-indigo-500 text-white border-none' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {banKdList.length}
+                                </Badge>
+                              </Button>
+
+                              <Button
                                 variant={projectSubTab === 'project-regions' ? 'default' : 'ghost'}
                                 size="sm"
-                                className={`h-9 px-4 rounded-xl font-bold transition-all text-xs flex items-center gap-2 ${
+                                className={`h-9 px-4 rounded-xl font-bold transition-all text-xs flex items-center gap-2 shrink-0 ${
                                   projectSubTab === 'project-regions'
                                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100'
                                     : 'text-slate-600 hover:text-emerald-600 hover:bg-emerald-50/50'
@@ -18474,31 +19037,61 @@ export default function App() {
                             </div>
 
                             <div className="flex items-center gap-2 text-xs text-slate-500 font-medium px-1">
-                              {projectSubTab === 'project-list' ? (
+                              {projectSubTab === 'project-ban-kd' ? (
                                 <Button 
                                   variant="outline" 
-                                  size="sm"
-                                  className="h-8 rounded-xl border-emerald-200 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 transition-all font-bold text-xs"
-                                  onClick={() => setProjectSubTab('project-regions')}
-                                >
-                                  <MapPin className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                                  Chuyển sang Quản lý Vùng ({regions.length})
-                                </Button>
-                              ) : (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
+                                  size="sm" 
                                   className="h-8 rounded-xl border-blue-200 text-blue-700 bg-blue-50/60 hover:bg-blue-100/80 transition-all font-bold text-xs"
                                   onClick={() => setProjectSubTab('project-list')}
                                 >
                                   <Building2 className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
                                   Quay lại Danh mục Dự án ({projects.length})
                                 </Button>
+                              ) : projectSubTab === 'project-regions' ? (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8 rounded-xl border-blue-200 text-blue-700 bg-blue-50/60 hover:bg-blue-100/80 transition-all font-bold text-xs"
+                                  onClick={() => setProjectSubTab('project-list')}
+                                >
+                                  <Building2 className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                                  Quay lại Danh mục Dự án ({projects.length})
+                                </Button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 rounded-xl border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100/80 transition-all font-bold text-xs"
+                                    onClick={() => setProjectSubTab('project-ban-kd')}
+                                  >
+                                    <Briefcase className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+                                    Ban KD ({banKdList.length})
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 rounded-xl border-emerald-200 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 transition-all font-bold text-xs"
+                                    onClick={() => setProjectSubTab('project-regions')}
+                                  >
+                                    <MapPin className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                                    Vùng ({regions.length})
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           </div>
 
-                          {projectSubTab === 'project-regions' ? (
+                          {projectSubTab === 'project-ban-kd' ? (
+                            <BanKdManager
+                              banKdList={banKdList}
+                              projects={projects}
+                              isAdmin={isAdmin}
+                              isSuperAdmin={isSuperAdmin}
+                              user={user}
+                              logAction={logAction}
+                            />
+                          ) : projectSubTab === 'project-regions' ? (
                             renderRegionManagementContent()
                           ) : (
                       <div className="space-y-6">
@@ -18560,7 +19153,7 @@ export default function App() {
                                             onChange={e => setNewProjectName(e.target.value)} 
                                           />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                           <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Vùng / Khu vực</Label>
                                             <Select value={newProjectRegion} onValueChange={setNewProjectRegion}>
@@ -18580,6 +19173,18 @@ export default function App() {
                                               </SelectTrigger>
                                               <SelectContent className="rounded-xl border-none shadow-xl">
                                                 {types.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Ban KD phụ trách</Label>
+                                            <Select value={newProjectBanKdId} onValueChange={setNewProjectBanKdId}>
+                                              <SelectTrigger className="rounded-xl border-slate-100 bg-slate-50 h-11">
+                                                <SelectValue placeholder="Chọn Ban KD..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="rounded-xl border-none shadow-xl">
+                                                <SelectItem value="none">-- Không phân Ban KD --</SelectItem>
+                                                {banKdList.map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.code || 'N/A'})</SelectItem>)}
                                               </SelectContent>
                                             </Select>
                                           </div>
@@ -18634,6 +19239,23 @@ export default function App() {
                                   <SelectContent className="rounded-xl border-none shadow-xl">
                                     <SelectItem value="all">Tất cả loại hình</SelectItem>
                                     {types.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="w-[200px]">
+                                <Select value={adminProjectBanKdFilter} onValueChange={setAdminProjectBanKdFilter}>
+                                  <SelectTrigger className="h-11 bg-white border-none shadow-sm rounded-xl text-[13px] font-medium text-slate-600">
+                                    <div className="flex items-center gap-2">
+                                      <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+                                      <SelectValue placeholder="Tất cả Ban KD" />
+                                    </div>
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl border-none shadow-xl">
+                                    <SelectItem value="all">Tất cả Ban KD</SelectItem>
+                                    <SelectItem value="none">Chưa gán Ban KD</SelectItem>
+                                    {banKdList.map(b => (
+                                      <SelectItem key={b.id} value={b.id}>{b.name} ({b.code || 'N/A'})</SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -18738,6 +19360,46 @@ export default function App() {
                                   </DialogFooter>
                                 </DialogContent>
                               </Dialog>
+
+                              <div className="w-px h-4 bg-slate-200 mx-1" />
+
+                              <Dialog open={isBulkUpdateBanKdDialogOpen} onOpenChange={setIsBulkUpdateBanKdDialogOpen}>
+                                <DialogTrigger nativeButton={true} render={
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 text-[11px] font-bold text-slate-600 hover:text-blue-600 rounded-lg transition-all"
+                                    disabled={selectedProjectIds.length === 0}
+                                  />
+                                }>
+                                  <Briefcase className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> Ban KD ({selectedProjectIds.length})
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[400px] rounded-3xl border-none shadow-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle className="text-xl font-black text-slate-900">Gán Ban KD</DialogTitle>
+                                    <DialogDescription className="font-medium text-slate-500">Chọn Ban KD phụ trách mới cho {selectedProjectIds.length} dự án đã chọn.</DialogDescription>
+                                  </DialogHeader>
+                                  <div className="py-6 space-y-4">
+                                    <div className="space-y-2">
+                                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Ban KD phụ trách</Label>
+                                      <Select value={selectedBanKdForBulk} onValueChange={setSelectedBanKdForBulk}>
+                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-slate-100"><SelectValue placeholder="Chọn Ban KD..." /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
+                                          <SelectItem value="none">-- Không phân Ban KD (Hủy gán) --</SelectItem>
+                                          {banKdList.map(b => (
+                                            <SelectItem key={b.id} value={b.id}>{b.name} ({b.code || 'N/A'})</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <DialogFooter>
+                                    <Button onClick={confirmBulkUpdateProjectBanKd} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
+                                      Cập nhật cho {selectedProjectIds.length} dự án
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
                             </div>
 
                             <Button 
@@ -18821,6 +19483,11 @@ export default function App() {
                                     Khu vực <ArrowUpDown className="w-3 h-3" />
                                   </div>
                                 </TableHead>
+                                <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'banKdName', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
+                                  <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
+                                    Ban KD <ArrowUpDown className="w-3 h-3" />
+                                  </div>
+                                </TableHead>
                                 <TableHead className="cursor-pointer py-4 group" onClick={() => setProjectSort({ key: 'type', direction: projectSort.direction === 'asc' ? 'desc' : 'asc' })}>
                                   <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">
                                     Loại hình <ArrowUpDown className="w-3 h-3" />
@@ -18891,6 +19558,28 @@ export default function App() {
                                   </TableCell>
                                   <TableCell className="py-4">
                                     {editingProjectId === p.id ? (
+                                      <Select value={editingProjectBanKdId} onValueChange={setEditingProjectBanKdId}>
+                                        <SelectTrigger className="h-9 text-xs rounded-lg border-blue-100 bg-blue-50/30"><SelectValue placeholder="Chọn Ban KD..." /></SelectTrigger>
+                                        <SelectContent className="rounded-xl border-none shadow-xl">
+                                          <SelectItem value="none">-- Chưa gán --</SelectItem>
+                                          {banKdList.map(b => (
+                                            <SelectItem key={b.id} value={b.id}>{b.name} ({b.code || 'N/A'})</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      p.banKdName ? (
+                                        <Badge variant="outline" className="px-2.5 py-1 text-xs bg-blue-50 text-blue-700 border-blue-200 font-bold rounded-lg shadow-none">
+                                          <Briefcase className="w-3 h-3 mr-1 inline text-blue-500" />
+                                          {p.banKdName}
+                                        </Badge>
+                                      ) : (
+                                        <span className="text-xs text-slate-400 italic">Chưa gán</span>
+                                      )
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-4">
+                                    {editingProjectId === p.id ? (
                                       <Select value={editingProjectType} onValueChange={setEditingProjectType}>
                                         <SelectTrigger className="h-9 text-xs rounded-lg border-blue-100 bg-blue-50/30"><SelectValue /></SelectTrigger>
                                         <SelectContent className="rounded-xl border-none shadow-xl">
@@ -18917,7 +19606,18 @@ export default function App() {
                                       <div className="flex justify-end gap-1">
                                         {editingProjectId === p.id ? (
                                           <>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-lg shadow-sm" onClick={() => handleUpdateProject(p.id, editingProjectName, editingProjectCode, editingProjectRegion, editingProjectType)}>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-lg shadow-sm" onClick={() => {
+                                              const selectedBan = editingProjectBanKdId === 'none' ? null : banKdList.find(b => b.id === editingProjectBanKdId);
+                                              handleUpdateProject(
+                                                p.id, 
+                                                editingProjectName, 
+                                                editingProjectCode, 
+                                                editingProjectRegion, 
+                                                editingProjectType,
+                                                selectedBan ? selectedBan.id : '',
+                                                selectedBan ? selectedBan.name : ''
+                                              );
+                                            }}>
                                               <Check className="h-4 w-4" />
                                             </Button>
                                             <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-lg" onClick={() => setEditingProjectId(null)}>
@@ -18932,6 +19632,7 @@ export default function App() {
                                               setEditingProjectCode(p.projectCode || extractProjectCode(p.name));
                                               setEditingProjectRegion(p.region || '');
                                               setEditingProjectType(p.type || '');
+                                              setEditingProjectBanKdId(p.banKdId || 'none');
                                             }}>
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -18961,7 +19662,7 @@ export default function App() {
                               ))}
                               {sortedProjects.length === 0 && (
                                 <TableRow>
-                                  <TableCell colSpan={(isAdmin || isAccountant) ? 7 : 6} className="h-64 text-center">
+                                  <TableCell colSpan={(isAdmin || isAccountant) ? 8 : 7} className="h-64 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-4">
                                       <div className="bg-slate-50 p-4 rounded-full border border-slate-100">
                                         <Search className="h-8 w-8 text-slate-300" />
@@ -20505,7 +21206,7 @@ export default function App() {
                         </div>
 
                         {/* Search & Filters */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                           <div className="relative">
                             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                             <Input 
@@ -20582,6 +21283,28 @@ export default function App() {
                               </SelectContent>
                             </Select>
                           </div>
+
+                          <div>
+                            <Select 
+                              value={adminBlockBudgetFilterBanKd} 
+                              onValueChange={(val) => {
+                                setAdminBlockBudgetFilterBanKd(val);
+                                setAdminBlockBudgetPage(1);
+                              }}
+                            >
+                              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs bg-slate-50/50">
+                                <SelectValue placeholder="Lọc theo Ban KD" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl">
+                                <SelectItem value="all">Tất cả Ban KD</SelectItem>
+                                {banKdList.map(b => (
+                                  <SelectItem key={b.id} value={b.id}>
+                                    {b.name} ({b.code || 'N/A'})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
 
                         {/* Table */}
@@ -20597,6 +21320,8 @@ export default function App() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                             {paginatedAdminBlockBudgets.map((b) => {
                               const displayProj = resolveProjectName(b.projectId, b.projectName);
+                              const matchedProject = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+                              const displayBanKd = b.banKdName || matchedProject?.banKdName || '';
                               const displayBlock = blocks.find(blk => blk.id === b.blockId)?.name || b.blockName || b.blockCode || 'Khối N/A';
                               return (
                                 <div key={b.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-200 transition-all space-y-3">
@@ -20607,6 +21332,11 @@ export default function App() {
                                         <span className="text-xs font-black truncate">{displayBlock}</span>
                                       </div>
                                       <h4 className="font-bold text-sm text-indigo-950 mt-1 leading-tight truncate" title={displayProj}>{displayProj}</h4>
+                                      {displayBanKd && (
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-bold text-[10px] mt-1">
+                                          Ban KD: {displayBanKd}
+                                        </Badge>
+                                      )}
                                     </div>
                                     <Badge variant="outline" className="font-mono text-xs font-bold bg-slate-50 border-slate-200 shrink-0">
                                       {b.month}
@@ -20626,6 +21356,16 @@ export default function App() {
                                       <span>{safeFormat(b.createdAt, 'HH:mm dd/MM/yyyy') || '-'}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
+                                      <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 border-purple-200 h-7 px-2 rounded-lg text-xs font-bold gap-1"
+                                        title="Xem lịch sử đăng ký và chỉnh sửa"
+                                        onClick={() => handleOpenBlockBudgetHistory(b)}
+                                      >
+                                        <History className="w-3 h-3" />
+                                        <span>Lịch sử</span>
+                                      </Button>
                                       <Button 
                                         size="xs" 
                                         variant="outline" 
@@ -20658,6 +21398,7 @@ export default function App() {
                                 <TableRow>
                                   <TableHead className="font-bold text-slate-800">Khối</TableHead>
                                   <TableHead className="font-bold text-slate-800">Dự án</TableHead>
+                                  <TableHead className="font-bold text-slate-800">Ban KD</TableHead>
                                   <TableHead className="font-bold text-slate-800">Tháng MKT</TableHead>
                                   <TableHead className="font-bold text-slate-800">Thời gian đăng ký</TableHead>
                                   <TableHead className="font-bold text-slate-800">Người đăng ký</TableHead>
@@ -20668,6 +21409,8 @@ export default function App() {
                               <TableBody>
                                 {paginatedAdminBlockBudgets.map((b) => {
                                   const displayProj = resolveProjectName(b.projectId, b.projectName);
+                                  const matchedProject = projects.find(p => p.id === b.projectId || p.name === b.projectName);
+                                  const displayBanKd = b.banKdName || matchedProject?.banKdName || '';
                                   const displayBlock = blocks.find(blk => blk.id === b.blockId)?.name || b.blockName || b.blockCode || 'Khối N/A';
                                   return (
                                     <TableRow key={b.id} className="hover:bg-purple-50/30 transition-colors">
@@ -20679,6 +21422,15 @@ export default function App() {
                                       </TableCell>
                                       <TableCell className="font-bold text-xs text-indigo-700">
                                         {displayProj}
+                                      </TableCell>
+                                      <TableCell className="text-xs font-semibold">
+                                        {displayBanKd ? (
+                                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-bold text-[10px] px-2 py-0.5">
+                                            {displayBanKd}
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-slate-400 italic text-[10px]">Chưa gán</span>
+                                        )}
                                       </TableCell>
                                       <TableCell className="font-mono text-xs font-semibold text-slate-700">
                                         <Badge variant="outline" className="font-mono bg-slate-50 border-slate-200">
@@ -20696,6 +21448,15 @@ export default function App() {
                                       </TableCell>
                                       <TableCell className="text-center">
                                         <div className="flex items-center justify-center gap-1">
+                                          <Button 
+                                            size="xs" 
+                                            variant="ghost" 
+                                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 h-8 w-8 p-0"
+                                            title="Xem lịch sử đăng ký và chỉnh sửa"
+                                            onClick={() => handleOpenBlockBudgetHistory(b)}
+                                          >
+                                            <History className="w-3.5 h-3.5" />
+                                          </Button>
                                           <Button 
                                             size="xs" 
                                             variant="ghost" 

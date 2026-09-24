@@ -65,31 +65,69 @@ type SortDirection = 'asc' | 'desc';
 
 export type PaymentStatusType = 'unpaid' | 'paid' | 'rejected';
 
+const normalizeBlockIdentifier = (val: string | undefined | null): string => {
+  if (!val) return '';
+  return String(val)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/^(khoi|block|k\.|k)\s*/i, '')
+    .replace(/[^a-z0-9.]/gi, '')
+    .trim();
+};
+
 const isBlockRecordMatch = (record: any, block: any): boolean => {
   if (!record || !block) return false;
-  if (record.blockId && block.id && record.blockId === block.id) return true;
-  const bId = (block.id || '').toLowerCase().trim();
-  const bCode = (block.blockCode || '').toLowerCase().trim();
-  const bName = (block.name || '').toLowerCase().trim();
 
-  const rId = (record.blockId || '').toLowerCase().trim();
-  const rCode = (record.blockCode || '').toLowerCase().trim();
-  const rName = (record.blockName || '').toLowerCase().trim();
+  const targetId = (block.id || '').trim();
+  const targetCode = (block.blockCode || '').trim().toLowerCase();
+  const targetName = (block.name || '').trim().toLowerCase();
 
-  if (rId && (rId === bId || (bCode && rId === bCode))) return true;
-  if (rCode && (rCode === bCode || (bId && rCode === bId))) return true;
-  if (rName && bName && rName === bName) return true;
+  const recBlockId = (record.blockId || '').trim();
+  const recCode = (record.blockCode || '').trim().toLowerCase();
+  const recName = (record.blockName || '').trim().toLowerCase();
 
-  const bDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  const rDigitList = [rCode, rName, rId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  for (const bd of bDigitList) {
-    for (const rd of rDigitList) {
-      if (bd === rd) return true;
-      const numB = parseInt(bd, 10);
-      const numR = parseInt(rd, 10);
-      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) return true;
-    }
+  // 1. Exact blockId match
+  if (recBlockId && targetId && recBlockId === targetId) {
+    return true;
   }
+
+  // 2. Legacy: blockId was stored as blockCode
+  if (recBlockId && targetCode && recBlockId.toLowerCase() === targetCode) {
+    return true;
+  }
+
+  // 3. If recBlockId is a distinct Firestore ID (>= 15 chars) and doesn't match targetId, it's another block!
+  if (recBlockId && recBlockId.length >= 15 && targetId && recBlockId !== targetId) {
+    return false;
+  }
+
+  // 4. Exact code match
+  if (recCode && targetCode && recCode === targetCode) {
+    return true;
+  }
+
+  // 5. Exact name match
+  if (recName && targetName && recName === targetName) {
+    return true;
+  }
+
+  // If both have codes and they differ, do not cross-match different blocks
+  if (recCode && targetCode && recCode !== targetCode) {
+    return false;
+  }
+
+  // 6. Normalized match
+  const normTargetCode = normalizeBlockIdentifier(block.blockCode);
+  const normTargetName = normalizeBlockIdentifier(block.name);
+  const normRecCode = normalizeBlockIdentifier(record.blockCode);
+  const normRecName = normalizeBlockIdentifier(record.blockName);
+
+  if (normTargetCode && normRecCode && normTargetCode === normRecCode) return true;
+  if (normTargetName && normRecName && normTargetName === normRecName) return true;
+  if (normTargetCode && normRecName && normTargetCode === normRecName) return true;
+  if (normTargetName && normRecCode && normTargetName === normRecCode) return true;
+
   return false;
 };
 

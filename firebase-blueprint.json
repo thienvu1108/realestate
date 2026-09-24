@@ -48,6 +48,8 @@
         "description": { "type": "string", "description": "Project description" },
         "region": { "type": "string", "description": "Region name" },
         "type": { "type": "string", "description": "Project type" },
+        "banKdId": { "type": "string", "description": "ID of Ban KD (Business Division)" },
+        "banKdName": { "type": "string", "description": "Name of Ban KD (Business Division)" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
@@ -153,6 +155,8 @@
         "projectName": { "type": "string" },
         "month": { "type": "string", "description": "YYYY-MM" },
         "amount": { "type": "number" },
+        "banKdId": { "type": "string", "description": "ID of Ban KD" },
+        "banKdName": { "type": "string", "description": "Name of Ban KD" },
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
@@ -321,9 +325,46 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "message"]
+    },
+    "BanKD": {
+      "title": "Ban Kinh Doanh",
+      "description": "Business Division managing projects, assignments, and contact personnel",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of Ban KD" },
+        "code": { "type": "string", "description": "Unique code of Ban KD (e.g. BKD-01)" },
+        "description": { "type": "string", "description": "Description of Ban KD" },
+        "leaderName": { "type": "string", "description": "Leader / Head of Division name" },
+        "leaderPhone": { "type": "string", "description": "Leader phone number" },
+        "leaderEmail": { "type": "string", "description": "Leader email" },
+        "contacts": {
+          "type": "array",
+          "description": "List of personnel and positions in this Ban KD",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "title": { "type": "string" },
+              "phone": { "type": "string" },
+              "email": { "type": "string" },
+              "notes": { "type": "string" }
+            },
+            "required": ["name", "title"]
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
     }
   },
   "firestore": {
+    "/ban_kd/{banKdId}": {
+      "schema": "BanKD",
+      "description": "Ban Kinh Doanh (Business Divisions) collection"
+    },
     "/teamNotifications/{notifId}": {
       "schema": "TeamNotification",
       "description": "Team notifications for budget updates"

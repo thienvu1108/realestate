@@ -167,6 +167,17 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Ban Kinh Doanh (Ban KD)
+    // ===============================================================
+    match /ban_kd/{banKdId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isAdmin() || isAccountant() || isSuperAdmin();
+      allow update: if isAdmin() || isAccountant() || isSuperAdmin();
+      allow delete: if isAdmin() || isAccountant() || isSuperAdmin();
+    }
+
+    // ===============================================================
     // Teams
     // ===============================================================
     match /teams/{teamId} {

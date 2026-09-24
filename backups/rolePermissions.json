@@ -1,13 +1,13 @@
 [
   {
     "id": "assistant",
-    "updatedBy": "thienvu1108@gmail.com",
     "updatedAt": {
       "type": "firestore/timestamp/1.0",
       "seconds": 1781425473,
       "nanoseconds": 604000000
     },
     "role": "assistant",
+    "updatedBy": "thienvu1108@gmail.com",
     "permissions": [
       "home.view",
       "home.export",
@@ -28,13 +28,13 @@
   },
   {
     "id": "gd_khoi",
+    "updatedBy": "thienvu1108@gmail.com",
     "role": "gd_khoi",
     "updatedAt": {
       "type": "firestore/timestamp/1.0",
       "seconds": 1789618845,
       "nanoseconds": 889000000
     },
-    "updatedBy": "thienvu1108@gmail.com",
     "permissions": [
       "home.view",
       "block.view",
@@ -50,7 +50,6 @@
   },
   {
     "id": "gdda",
-    "role": "gdda",
     "updatedBy": "thienvu1108@gmail.com",
     "updatedAt": {
       "type": "firestore/timestamp/1.0",
@@ -71,10 +70,17 @@
       "support.create",
       "admin.budgets.view",
       "admin.costs.view"
-    ]
+    ],
+    "role": "gdda"
   },
   {
     "id": "mod",
+    "updatedBy": "thienvu1108@gmail.com",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1789618997,
+      "nanoseconds": 478000000
+    },
     "permissions": [
       "report_nt.view",
       "block.view",
@@ -86,21 +92,10 @@
       "report_nt.create",
       "report_nt.edit"
     ],
-    "role": "mod",
-    "updatedBy": "thienvu1108@gmail.com",
-    "updatedAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1789618997,
-      "nanoseconds": 478000000
-    }
+    "role": "mod"
   },
   {
     "id": "tro_ly_khoi",
-    "updatedAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1788617852,
-      "nanoseconds": 751000000
-    },
     "permissions": [
       "home.view",
       "report_nt.view",
@@ -121,8 +116,13 @@
       "team_mgmt.edit",
       "team_mgmt.approve"
     ],
-    "updatedBy": "thienvu1108@gmail.com",
-    "role": "tro_ly_khoi"
+    "role": "tro_ly_khoi",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1788617852,
+      "nanoseconds": 751000000
+    },
+    "updatedBy": "thienvu1108@gmail.com"
   },
   {
     "id": "user",
@@ -131,14 +131,14 @@
       "seconds": 1788573682,
       "nanoseconds": 378000000
     },
-    "updatedBy": "thienvu1108@gmail.com",
-    "role": "user",
     "permissions": [
       "support.create",
       "process_mkt.create",
       "process_mkt.approve",
       "process_doiung.approve",
       "process_doiung.create"
-    ]
+    ],
+    "role": "user",
+    "updatedBy": "thienvu1108@gmail.com"
   }
 ]

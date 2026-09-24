@@ -14,6 +14,8 @@ export interface AcceptanceRecord {
   projectId?: string;
   projectName?: string;
   projectCode?: string;
+  banKdId?: string;
+  banKdName?: string;
 
   // Group 1: DIGITAL CHẠY (Chưa VAT)
   digitalFb?: number;

@@ -1,33 +1,33 @@
 [
   {
     "id": "BD2u12mHfFuWIut8mMLw",
+    "priority": "Trung bình",
     "category": "Kỹ thuật",
+    "content": "Hỗ trợ sửa chi phí MKT xuống từ 40 triệu xuống 25 triệu cho tháng 7",
     "updatedAt": {
       "type": "firestore/timestamp/1.0",
       "seconds": 1783321413,
       "nanoseconds": 882000000
     },
-    "content": "Hỗ trợ sửa chi phí MKT xuống từ 40 triệu xuống 25 triệu cho tháng 7",
-    "repliedBy": "thienvu1108@gmail.com",
-    "userId": "r4wgMMZ3pbTJcoxUXV9v0yqclXj1",
-    "status": "Đã đóng",
-    "adminReply": "đã xử lý ",
-    "createdAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1783044195,
-      "nanoseconds": 255000000
-    },
-    "fullName": "Nguyễn Văn Viết",
-    "userEmail": "xuanviet95gocde@gmail.com",
-    "title": "Hỗ trợ sửa chi phí MKT",
     "repliedAt": {
       "type": "firestore/timestamp/1.0",
       "seconds": 1783321413,
       "nanoseconds": 882000000
     },
-    "priority": "Trung bình",
-    "department": "MH09.68\tNguyễn Văn Viết",
+    "userId": "r4wgMMZ3pbTJcoxUXV9v0yqclXj1",
+    "createdAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1783044195,
+      "nanoseconds": 255000000
+    },
     "userName": "Nguyễn Văn Viết",
+    "fullName": "Nguyễn Văn Viết",
+    "title": "Hỗ trợ sửa chi phí MKT",
+    "status": "Đã đóng",
+    "repliedBy": "thienvu1108@gmail.com",
+    "department": "MH09.68\tNguyễn Văn Viết",
+    "adminReply": "đã xử lý ",
+    "userEmail": "xuanviet95gocde@gmail.com",
     "teamName": "",
     "userTeam": ""
   }

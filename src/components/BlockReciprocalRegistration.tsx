@@ -63,6 +63,7 @@ interface BlockReciprocalRegistrationProps {
   budgets: any[];
   teams: any[];
   blocks: any[];
+  projects?: any[];
   allUsers: any[];
   formatCurrency: (val: number) => string;
   formatCurrencyInput: (val: string) => string;
@@ -72,31 +73,69 @@ interface BlockReciprocalRegistrationProps {
   db: any;
 }
 
+const normalizeBlockIdentifier = (val: string | undefined | null): string => {
+  if (!val) return '';
+  return String(val)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/^(khoi|block|k\.|k)\s*/i, '')
+    .replace(/[^a-z0-9.]/gi, '')
+    .trim();
+};
+
 const isBlockRecordMatch = (record: any, block: any): boolean => {
   if (!record || !block) return false;
-  if (record.blockId && block.id && record.blockId === block.id) return true;
-  const bId = (block.id || '').toLowerCase().trim();
-  const bCode = (block.blockCode || '').toLowerCase().trim();
-  const bName = (block.name || '').toLowerCase().trim();
 
-  const rId = (record.blockId || '').toLowerCase().trim();
-  const rCode = (record.blockCode || '').toLowerCase().trim();
-  const rName = (record.blockName || '').toLowerCase().trim();
+  const targetId = (block.id || '').trim();
+  const targetCode = (block.blockCode || '').trim().toLowerCase();
+  const targetName = (block.name || '').trim().toLowerCase();
 
-  if (rId && (rId === bId || (bCode && rId === bCode))) return true;
-  if (rCode && (rCode === bCode || (bId && rCode === bId))) return true;
-  if (rName && bName && rName === bName) return true;
+  const recBlockId = (record.blockId || '').trim();
+  const recCode = (record.blockCode || '').trim().toLowerCase();
+  const recName = (record.blockName || '').trim().toLowerCase();
 
-  const bDigitList = [bCode, bName, bId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  const rDigitList = [rCode, rName, rId].map(s => s ? s.replace(/\D/g, '') : '').filter(Boolean);
-  for (const bd of bDigitList) {
-    for (const rd of rDigitList) {
-      if (bd === rd) return true;
-      const numB = parseInt(bd, 10);
-      const numR = parseInt(rd, 10);
-      if (!isNaN(numB) && !isNaN(numR) && numB > 0 && numB === numR) return true;
-    }
+  // 1. Exact blockId match
+  if (recBlockId && targetId && recBlockId === targetId) {
+    return true;
   }
+
+  // 2. Legacy: blockId was stored as blockCode
+  if (recBlockId && targetCode && recBlockId.toLowerCase() === targetCode) {
+    return true;
+  }
+
+  // 3. If recBlockId is a distinct Firestore ID (>= 15 chars) and doesn't match targetId, it's another block!
+  if (recBlockId && recBlockId.length >= 15 && targetId && recBlockId !== targetId) {
+    return false;
+  }
+
+  // 4. Exact code match
+  if (recCode && targetCode && recCode === targetCode) {
+    return true;
+  }
+
+  // 5. Exact name match
+  if (recName && targetName && recName === targetName) {
+    return true;
+  }
+
+  // If both have codes and they differ, do not cross-match different blocks
+  if (recCode && targetCode && recCode !== targetCode) {
+    return false;
+  }
+
+  // 6. Normalized match
+  const normTargetCode = normalizeBlockIdentifier(block.blockCode);
+  const normTargetName = normalizeBlockIdentifier(block.name);
+  const normRecCode = normalizeBlockIdentifier(record.blockCode);
+  const normRecName = normalizeBlockIdentifier(record.blockName);
+
+  if (normTargetCode && normRecCode && normTargetCode === normRecCode) return true;
+  if (normTargetName && normRecName && normTargetName === normRecName) return true;
+  if (normTargetCode && normRecName && normTargetCode === normRecName) return true;
+  if (normTargetName && normRecCode && normTargetName === normRecCode) return true;
+
   return false;
 };
 
@@ -124,6 +163,7 @@ export function BlockReciprocalRegistration({
   budgets,
   teams,
   blocks,
+  projects = [],
   allUsers,
   formatCurrency,
   formatCurrencyInput,
@@ -190,6 +230,15 @@ export function BlockReciprocalRegistration({
 
     return teamSum;
   }, [currentActiveBlock, selectedMonth, blockBudgets, budgets, teams]);
+
+  // List of block budgets for this block in selectedMonth (with projects and Ban KD)
+  const relevantBlockBudgets = useMemo(() => {
+    if (!currentActiveBlock || !selectedMonth) return [];
+    return blockBudgets.filter(bb => 
+      isBlockRecordMatch(bb, currentActiveBlock) && 
+      bb.month === selectedMonth
+    );
+  }, [currentActiveBlock, selectedMonth, blockBudgets]);
 
   // Existing reciprocal record for currentActiveBlock and selectedMonth
   const existingRecord = useMemo(() => {
@@ -413,24 +462,10 @@ export function BlockReciprocalRegistration({
               <h2 className="text-2xl md:text-3xl font-black tracking-tight">
                 Đăng ký Ngân sách Đối ứng - {currentActiveBlock ? `${currentActiveBlock.name || currentActiveBlock.blockCode}` : 'Chưa chọn Khối'}
               </h2>
-              {userAllowedBlocks && userAllowedBlocks.length > 1 && setSelectedBlockId && (
-                <div className="min-w-[170px]">
-                  <Select
-                    value={currentActiveBlock?.id || userAllowedBlocks[0]?.id || ''}
-                    onValueChange={(val) => setSelectedBlockId(val)}
-                  >
-                    <SelectTrigger className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-xl font-bold h-8 text-xs backdrop-blur-sm">
-                      <SelectValue placeholder="Chuyển Khối..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      {userAllowedBlocks.map((b) => (
-                        <SelectItem key={b.id} value={b.id} className="text-xs font-bold font-sans">
-                          {b.name || b.blockCode} ({b.blockCode})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {currentActiveBlock && (
+                <Badge className="bg-white/20 text-white border-white/30 rounded-xl font-bold px-3 py-1 text-xs backdrop-blur-sm">
+                  {currentActiveBlock.blockCode || 'Khối'}
+                </Badge>
               )}
             </div>
             <p className="text-amber-100 text-xs sm:text-sm font-medium leading-relaxed">
@@ -527,8 +562,39 @@ export function BlockReciprocalRegistration({
                       <span>Chưa có hạn mức Ngân sách Khối được đăng ký trong kỳ {selectedMonth}.</span>
                     </div>
                   ) : (
-                    <div className="text-[10px] text-slate-500">
-                      Dữ liệu được lấy từ mục Ngân sách Khối tương ứng của tháng {selectedMonth}.
+                    <div className="space-y-2 pt-1">
+                      <div className="text-[10px] text-slate-500">
+                        Dữ liệu được lấy từ mục Ngân sách Khối tương ứng của tháng {selectedMonth}.
+                      </div>
+                      {relevantBlockBudgets.length > 0 && (
+                        <div className="pt-2 border-t border-amber-200/60 space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] font-black uppercase text-amber-900">
+                            <span>Dự án & Ban KD trong kỳ ({relevantBlockBudgets.length}):</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                            {relevantBlockBudgets.map((bb: any) => {
+                              const proj = projects.find(p => p.id === bb.projectId || p.name === bb.projectName);
+                              const banName = bb.banKdName || proj?.banKdName;
+                              return (
+                                <div 
+                                  key={bb.id}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-amber-200 text-xs text-slate-800 shadow-2xs"
+                                >
+                                  <span className="font-bold">{bb.projectName || proj?.name}</span>
+                                  {banName && (
+                                    <Badge variant="outline" className="px-1.5 py-0 text-[10px] bg-blue-50 text-blue-700 border-blue-200 font-bold">
+                                      {banName}
+                                    </Badge>
+                                  )}
+                                  <span className="font-mono font-bold text-amber-800 ml-1">
+                                    {formatCurrency(bb.amount || 0)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

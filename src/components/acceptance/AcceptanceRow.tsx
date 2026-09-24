@@ -351,7 +351,9 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
                 handleUpdateEditFields({
                   projectId: p.id,
                   projectName: p.name || '',
-                  projectCode: p.projectCode || ''
+                  projectCode: p.projectCode || '',
+                  banKdId: p.banKdId || '',
+                  banKdName: p.banKdName || ''
                 });
               } else {
                 handleUpdateEditField('projectId', projectId);
@@ -587,13 +589,21 @@ export const AcceptanceRow: React.FC<RowProps> = React.memo(({
 
       {/* Col E: DỰ ÁN */}
       <TableCell className="font-bold text-xs text-slate-800 min-w-[170px]" title={displayProjectName}>
-        <div className="flex items-center gap-1.5">
-          {displayProjectCode && (
-            <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0 font-bold">
-              {displayProjectCode}
-            </Badge>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            {displayProjectCode && (
+              <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0 font-bold">
+                {displayProjectCode}
+              </Badge>
+            )}
+            <span className="truncate">{displayProjectName}</span>
+          </div>
+          {(matchedProject?.banKdName || item.banKdName) && (
+            <div className="flex items-center gap-1 text-[10px] text-blue-600 font-semibold truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+              <span className="truncate">{matchedProject?.banKdName || item.banKdName}</span>
+            </div>
           )}
-          <span className="truncate">{displayProjectName}</span>
         </div>
       </TableCell>
 
